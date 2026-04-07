@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
 import { DashboardPage } from './pages/DashboardPage';
 import { ServiceWorkspacePage } from './pages/ServiceWorkspacePage';
 import { ArchitecturePage } from './pages/ArchitecturePage';
 import { SERVICES } from './data/services';
+import { ThemeToggle } from './components/ThemeToggle';
 
 const navItems = [
   { label: 'Dashboard', to: '/' },
@@ -10,16 +12,29 @@ const navItems = [
 ];
 
 export default function App() {
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const stored = window.localStorage.getItem('sns-theme');
+    return stored === 'dark' ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem('sns-theme', theme);
+  }, [theme]);
+
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand-card">
-          <img src="/logo-mark.svg" alt="S&S Design Build" className="brand-logo" />
-          <div>
-            <p className="eyebrow">Take-Off Studio</p>
-            <h1>S&S Design Build</h1>
-            <p className="muted">Fast estimating, layout visualization, and order prep.</p>
+        <div className="brand-card brand-panel">
+          <div className="brand-logo-wrap">
+            <img src="/ss-logo.png" alt="S&S Design Build" className="brand-logo" />
           </div>
+          <div>
+            <p className="eyebrow">Estimator Studio</p>
+            <h1>S&amp;S Design Build</h1>
+            <p className="muted">Fast take-offs, material grouping, and layout visualization for decks, patio covers, and screen systems.</p>
+          </div>
+          <ThemeToggle theme={theme} onToggle={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} />
         </div>
 
         <nav className="nav-group">
@@ -45,8 +60,8 @@ export default function App() {
         </nav>
 
         <div className="sidebar-footer">
-          <p className="eyebrow">Built for Netlify</p>
-          <p className="muted">React + TypeScript front end with rule-driven estimating and room to grow into Supabase.</p>
+          <p className="eyebrow">Current focus</p>
+          <p className="muted-light">Deck workflow now includes a footprint editor, dark/light views, and grouped order output built around your framing notes.</p>
         </div>
       </aside>
 

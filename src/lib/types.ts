@@ -12,3 +12,8 @@ export interface EstimateResult {
   materials: MaterialItem[];
   orderNotes: string[];
 }
+
+export interface DeckPoint {
+  x: number;
+  y: number;
+}

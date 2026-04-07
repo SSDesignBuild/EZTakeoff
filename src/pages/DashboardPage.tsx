@@ -3,23 +3,23 @@ import { SERVICES } from '../data/services';
 
 const workflowSteps = [
   {
-    title: '1. Start from the right service',
-    body: 'Decks, screen rooms, patio covers, and Renaissance screen rooms each have their own workflow and estimating rules.',
+    title: '1. Pick the service',
+    body: 'Each service keeps its own logic, terminology, and ordering structure so estimators are not forced through one generic spreadsheet flow.',
   },
   {
-    title: '2. Enter dimensions and build conditions',
-    body: 'Capture project width, height, openings, door conditions, cut-ins, and structural assumptions in one place.',
+    title: '2. Draw or define the layout',
+    body: 'Decks now start with an editable footprint so custom turns, cut-ins, and irregular shapes can be mapped before materials are counted.',
   },
   {
-    title: '3. Review layout + order summary',
-    body: 'See the footprint, validate take-off metrics, and hand off a material order list instead of rebuilding spreadsheets.',
+    title: '3. Review grouped materials',
+    body: 'Outputs are organized by family and board length so ordering is faster and easier to review with field crews and suppliers.',
   },
 ];
 
 const roadmap = [
-  'Rules engine can move from hard-coded demo formulas to a Supabase-backed product and logic table.',
-  'Project records can be saved by customer, estimator, and job stage once authentication is enabled.',
-  'PDF / CSV exports, purchase orders, and vendor-specific SKU mapping can be added without changing the UI shell.',
+  'Move service logic into configurable rule tables so your build methods can be updated without rewriting the UI.',
+  'Save projects by customer and job status with Supabase once you are ready for multi-user workflows.',
+  'Add PDF order sheets, vendor SKU mapping, and richer door/opening layout tools as the next layer.',
 ];
 
 export function DashboardPage() {
@@ -27,11 +27,11 @@ export function DashboardPage() {
     <div className="page-stack">
       <section className="hero-card">
         <div>
-          <p className="eyebrow">Estimator workspace</p>
-          <h2>Take-offs built for field speed and office accuracy.</h2>
+          <p className="eyebrow">S&amp;S estimator workspace</p>
+          <h2>Built to replace spreadsheet take-offs with faster, cleaner job planning.</h2>
           <p className="hero-copy">
-            This prototype turns S&S estimating into a service-based workflow with built-in layout previews,
-            quantity summaries, and order-ready material groupings.
+            This version leans into your brand, supports light and dark views, and starts shaping the deck workflow around the rules you shared:
+            drawn footprints, 12 in O.C. framing, grouped board lengths, and order-ready hardware bundles.
           </p>
           <div className="hero-actions">
             <Link to="/service/decks" className="primary-btn">
@@ -43,12 +43,12 @@ export function DashboardPage() {
           </div>
         </div>
         <div className="hero-panel">
-          <span>Why this structure works</span>
+          <span>What changed in this pass</span>
           <ul>
-            <li>Simple enough for non-technical team members</li>
-            <li>Fast inputs with saved local state</li>
-            <li>Scalable rule engine by service</li>
-            <li>Netlify-ready front end with room for Supabase</li>
+            <li>Real S&amp;S logo added to the shell</li>
+            <li>Light and dark theme toggle</li>
+            <li>Interactive deck footprint editor</li>
+            <li>Grouped board-length output for deck orders</li>
           </ul>
         </div>
       </section>
@@ -95,8 +95,8 @@ export function DashboardPage() {
       <section className="grid-section two-col">
         <article className="content-card">
           <div className="section-heading">
-            <p className="eyebrow">Roadmap</p>
-            <h3>Designed to grow with your logic and product data</h3>
+            <p className="eyebrow">Next refinements</p>
+            <h3>Ready for your construction logic</h3>
           </div>
           <ul className="plain-list">
             {roadmap.map((item) => (
@@ -107,14 +107,14 @@ export function DashboardPage() {
 
         <article className="content-card accent-card">
           <div className="section-heading">
-            <p className="eyebrow">Deployment</p>
-            <h3>Quick path to GitHub and Netlify</h3>
+            <p className="eyebrow">Deck logic in this pass</p>
+            <h3>Focused on the details you called out first</h3>
           </div>
           <ol className="ordered-list">
-            <li>Unzip the project and push the folder to a new GitHub repo.</li>
-            <li>Connect the repo to Netlify.</li>
-            <li>Use the default build command from <code>netlify.toml</code>.</li>
-            <li>When ready, layer in Supabase for auth, saved projects, and rule tables.</li>
+            <li>Deck boards are grouped by run direction and stock length.</li>
+            <li>Beam, post, joist, border, hardware, and stair logic follows your current framing notes.</li>
+            <li>Brick-wall projects automatically switch to freestanding behavior.</li>
+            <li>Railing output now changes based on aluminum vs wood/vinyl-composite systems.</li>
           </ol>
         </article>
       </section>

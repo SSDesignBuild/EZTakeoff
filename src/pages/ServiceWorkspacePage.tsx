@@ -4,6 +4,7 @@ import { FieldRenderer } from '../components/FieldRenderer';
 import { LayoutPreview } from '../components/LayoutPreview';
 import { MaterialTable } from '../components/MaterialTable';
 import { MetricCard } from '../components/MetricCard';
+import { DeckDesigner } from '../components/DeckDesigner';
 import { getServiceBySlug } from '../data/services';
 import { useLocalProjectState } from '../hooks/useLocalProjectState';
 import { calculateEstimate } from '../lib/estimate';
@@ -28,6 +29,13 @@ export function ServiceWorkspacePage() {
           ))}
         </div>
       </section>
+
+      {service.slug === 'decks' && (
+        <DeckDesigner
+          value={values.deckShape}
+          onChange={(next) => setValues((current) => ({ ...current, deckShape: next }))}
+        />
+      )}
 
       <section className="workspace-grid">
         <article className="content-card">
