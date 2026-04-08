@@ -40,7 +40,6 @@ export const SERVICES: ServiceDefinition[] = [
     defaults: {
       deckHeight: 8,
       attachment: 'siding',
-      elevation: 'second-story',
       boardRun: 'width',
       deckingType: 'composite',
       borderSameBoard: true,
@@ -74,21 +73,12 @@ export const SERVICES: ServiceDefinition[] = [
         ],
       },
       {
-        key: 'elevation',
-        label: 'Elevation',
-        type: 'select',
-        options: [
-          { label: 'Low to grade', value: 'low' },
-          { label: 'Second story / elevated', value: 'second-story' },
-        ],
-      },
-      {
         key: 'boardRun',
         label: 'Board run direction',
         type: 'select',
         options: [
-          { label: 'Run with width', value: 'width' },
-          { label: 'Run with projection', value: 'projection' },
+          { label: 'Parallel to house / run with width', value: 'width' },
+          { label: 'Perpendicular to house / run with projection', value: 'projection' },
         ],
       },
       {
@@ -198,14 +188,16 @@ export const SERVICES: ServiceDefinition[] = [
       metalGauge: '.26',
       foamDensity: 1,
       fanBeam: 'none',
+      fanBeamCount: 1,
       screenUnderneath: false,
       beamStyle: 'atlas',
+      postCount: 0,
     },
     fields: [
       { key: 'width', label: 'Width (ft)', type: 'number', min: 1, step: 0.1 },
       { key: 'projection', label: 'Projection (ft)', type: 'number', min: 1, step: 0.1 },
       { key: 'attachmentHeight', label: 'Attachment height (ft)', type: 'number', min: 1, step: 0.1 },
-      { key: 'lowSideHeight', label: 'Low-side height (ft)', type: 'number', min: 1, step: 0.1 },
+      { key: 'lowSideHeight', label: 'Low-side height (ft)', type: 'number', min: 1, step: 1 / 12, helper: 'Use decimal feet in 1 in increments; preview and summaries print as feet and inches.' },
       {
         key: 'structureType',
         label: 'Structure type',
@@ -217,11 +209,11 @@ export const SERVICES: ServiceDefinition[] = [
       },
       {
         key: 'panelWidth',
-        label: 'Panel width',
+        label: 'Preferred panel width',
         type: 'select',
         options: [
-          { label: '4 ft panels', value: '4' },
-          { label: '2 ft panels', value: '2' },
+          { label: '4 ft panels preferred', value: '4' },
+          { label: '2 ft panels preferred', value: '2' },
         ],
       },
       {
@@ -229,8 +221,8 @@ export const SERVICES: ServiceDefinition[] = [
         label: 'Panel thickness',
         type: 'select',
         options: [
-          { label: '3 in panel', value: '3' },
-          { label: '6 in panel', value: '6' },
+          { label: '3 in', value: '3' },
+          { label: '6 in', value: '6' },
         ],
       },
       {
@@ -238,8 +230,8 @@ export const SERVICES: ServiceDefinition[] = [
         label: 'Metal thickness',
         type: 'select',
         options: [
-          { label: '.26 standard', value: '.26' },
-          { label: '.32 upgraded', value: '.32' },
+          { label: '.26', value: '.26' },
+          { label: '.32', value: '.32' },
         ],
       },
       {
@@ -247,13 +239,13 @@ export const SERVICES: ServiceDefinition[] = [
         label: 'Foam density',
         type: 'select',
         options: [
-          { label: '1 lb foam', value: '1' },
-          { label: '2 lb foam', value: '2' },
+          { label: '1 lb', value: '1' },
+          { label: '2 lb', value: '2' },
         ],
       },
       {
         key: 'fanBeam',
-        label: 'Fan beam',
+        label: 'Fan beam style',
         type: 'select',
         options: [
           { label: 'No fan beam', value: 'none' },
@@ -262,32 +254,25 @@ export const SERVICES: ServiceDefinition[] = [
           { label: '1 ft from male side', value: 'male-offset' },
         ],
       },
-      { key: 'screenUnderneath', label: 'Planning to screen under this cover', type: 'boolean' },
-      {
-        key: 'beamStyle',
-        label: 'Front beam style',
-        type: 'select',
-        options: [
-          { label: 'Atlas beam (open cover)', value: 'atlas' },
-          { label: '3x3 beam for screened cover', value: '3x3' },
-        ],
-      },
+      { key: 'fanBeamCount', label: 'Fan beam count', type: 'number', min: 1, step: 1 },
+      { key: 'postCount', label: 'Front post count (0 = auto)', type: 'number', min: 0, step: 1 },
+      { key: 'screenUnderneath', label: 'Screen room below cover', type: 'boolean', helper: 'Uses 3x3 beam/post system with hidden brackets when checked.' },
     ],
     formulaNotes: [
-      '3 in panels are checked against your 15 ft rule with a 2 ft overhang assumption. Upgraded .32 metal with 2 lb foam can extend 3 in panels to about 19 ft, and 6 in upgraded panels can carry up to about 26 ft.',
-      'Standard non-upgraded covers add a support beam once the projection goes past 13 ft, and continue adding support at roughly each additional 13 ft of projection.',
+      'Panel projection logic follows your 3 in / upgraded 3 in / 6 in rules. Standard 3 in panels beyond 13 ft add intermediate support beams unless upgraded.',
+      'Centered fan beam layouts can force mixed 4 ft and 2 ft panel ordering to stay symmetrical. Offset fan beams are kept on valid panel positions only.',
       'Gutter, C-channel, and drip-edge fascia are grouped in 24 ft stock lengths. C-channel is attached jobs only, gutter is the front low side only, and every cover gets two downspout kits.',
     ],
   },
   {
     slug: 'renaissance-screen-rooms',
     label: 'Renaissance Screen Rooms',
-    intro: 'Use the same section-by-section workflow but calculate Renaissance-specific profiles, custom-sized members, decorative brackets, and the 3/4 in insulated panel system.',
-    highlights: ['Custom cut lengths', 'Decorative bracket counts', 'Door kits + astragal', 'Renaissance panel logic'],
+    intro: 'Use the same section editing flow with Renaissance-specific framing, custom cut sizes, and order-ready door/panel outputs.',
+    highlights: ['Custom cut lists', 'Renaissance framing colors', 'Door + picket logic', 'Panelized outputs'],
     defaults: {
       framingColor: 'white',
       panelColor: 'white',
-      screenType: 'tuff-screen',
+      screenType: 'suntex-80',
       mountingSurface: 'concrete',
       sections: sharedScreenDefaults,
     },
@@ -334,13 +319,13 @@ export const SERVICES: ServiceDefinition[] = [
       },
     ],
     formulaNotes: [
-      'Renaissance framing uses custom cut 1x2 7/8 and 2x2 7/8 pieces instead of only 24 ft stock grouping.',
-      'Decorative brackets with caps use four flush-mount screws each. Door openings add full 2x2 framing and French doors add an astragal.',
-      '3/4 in insulated panels are ordered from 4 ft x 10 ft sheets based on section width and kick height.',
+      'Renaissance framing is ordered as custom lengths: 1x2 7/8, 2x2 7/8 no groove, and 2x2 7/8 with groove are split apart in the cut list.',
+      'Door frames, chair rail only sections, and plain uprights use the no-groove member. Groove members are reserved for pickets and insulated kick panel conditions.',
+      'Screen rolls still use 10 ft x 100 ft stock, with spline switching from screen type.',
     ],
   },
 ];
 
-export function getServiceBySlug(slug: string | undefined) {
-  return SERVICES.find((service) => service.slug == slug) ?? SERVICES[0];
+export function getServiceBySlug(slug = '') {
+  return SERVICES.find((service) => service.slug === slug) ?? SERVICES[0];
 }

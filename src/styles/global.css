@@ -439,3 +439,48 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .beam-line.support { stroke-dasharray: 8 5; }
 .section-card { border: 1px solid var(--border); border-radius: 18px; padding: 1rem; background: color-mix(in srgb, var(--panel) 94%, transparent); display: grid; gap: 1rem; }
 .toggle-cluster { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.deck-board-line { stroke: rgba(169,109,67,0.85); stroke-width: 1.5; }
+.band-line { stroke: #7d6b5d; stroke-width: 3.5; }
+.band-line.secondary { stroke: #ad9684; stroke-width: 3; }
+.stair-edge-highlight { stroke: #c97d43; stroke-width: 4; }
+.stringer-line { stroke: #7b4e2f; stroke-width: 2.5; }
+.tread-line { stroke: #d2a071; stroke-width: 2; }
+.dimension-line { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.railing-post-node { fill: #6d87a8; stroke: var(--panel); stroke-width: 1.5; }
+.stair-rail-line { stroke: #7c5fb3; stroke-width: 3; stroke-dasharray: 5 4; }
+.locked-post { fill: #2f7d67; }
+.receiver-line { stroke: #d33f3f; stroke-width: 2.5; }
+.onebytwo-line { stroke: #ef8c2f; stroke-width: 2.5; }
+.twobytwo-line { stroke: #4d83d1; stroke-width: 3; }
+.u-channel-line { stroke: #7f52c4; stroke-width: 2.5; }
+.vgroove1-line { stroke: #e8c24e; stroke-width: 2.5; }
+.vgroove2-line { stroke: #e479b8; stroke-width: 3; }
+.reno-1x2-line { stroke: #d33f3f; stroke-width: 2.5; }
+.reno-2x2-line { stroke: #4d83d1; stroke-width: 3; }
+.reno-2x2-groove-line { stroke: #e8c24e; stroke-width: 3; }
+.picket-line { stroke: #7f52c4; stroke-width: 2; }
+.kick-panel-fill { fill: rgba(210,160,113,0.18); stroke: rgba(210,160,113,0.35); }
+.door-panel { fill: rgba(93,127,173,0.1); stroke: #5d7fad; stroke-width: 2; }
+.door-split-line { stroke: #5d7fad; stroke-width: 1.5; }
+.roof-panel { fill: rgba(77,131,209,0.12); stroke: #4d83d1; stroke-width: 1.5; }
+.fan-beam-panel { fill: rgba(124,95,179,0.16); stroke: #7c5fb3; stroke-width: 2; }
+.cut-panel { fill: rgba(201,125,67,0.16); stroke: #c97d43; stroke-width: 2; }
+.preview-toolbar { display:flex; gap:0.5rem; flex-wrap:wrap; }
+.small-btn { padding:0.45rem 0.7rem; }
+.active-chip { background: var(--accent-soft); }
+.wrap-legend { flex-wrap: wrap; }
+.deck-board-swatch { background: rgba(169,109,67,0.85); }
+.band-line-swatch { background: #7d6b5d; }
+.stair-line-swatch { background: #c97d43; }
+.receiver-swatch { background: #d33f3f; }
+.onebytwo-swatch { background: #ef8c2f; }
+.twobytwo-swatch { background: #4d83d1; }
+.vgroove1-swatch { background: #e8c24e; }
+.vgroove2-swatch { background: #e479b8; }
+.picket-swatch { background: #7f52c4; }
+.reno-1x2-swatch { background: #d33f3f; }
+.reno-2x2-swatch { background: #4d83d1; }
+.reno-2x2-groove-swatch { background: #e8c24e; }
+.roof-panel-swatch { background: #4d83d1; }
+.fan-panel-swatch { background: #7c5fb3; }
+.cut-panel-swatch { background: #c97d43; }
