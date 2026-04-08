@@ -312,13 +312,14 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const supportBeamCount = standard3In && projection > 13 ? Math.ceil(projection / 13) - 1 : 0;
 
   const panelLayout = buildPatioPanelLayout(width, fanBeam, panelWidth);
-  const panelMix4 = panelLayout.regular4;
-  const panelMix2 = panelLayout.regular2;
-  const cutPanelCount = panelLayout.cut2Equivalent;
   const fanBeamPanels = panelLayout.fanBeamPanels;
   const notes = panelLayout.notes.join(' ');
   const panelCount = panelLayout.pieces.length;
   const panelLength = Math.ceil(projection);
+  const regular4Count = panelLayout.pieces.filter((piece) => piece.kind === 'regular' && piece.panelWidth === 4).length;
+  const regular2Count = panelLayout.pieces.filter((piece) => piece.kind === 'regular' && piece.panelWidth === 2).length;
+  const cutPanels = panelLayout.pieces.filter((piece) => piece.kind === 'cut');
+  const fanPanels = panelLayout.pieces.filter((piece) => piece.kind === 'fan-beam');
   const frontPostCount = Math.max(2, Math.ceil(width / 6) + 1);
   const hiddenBracketPerPost = beamStyle === '3x3' ? 2 : 1;
   const hiddenBracketCount = frontPostCount * hiddenBracketPerPost;
@@ -337,8 +338,9 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const postStockPieces = Math.ceil((frontPostCount * Math.ceil(lowSideHeight + 1)) / 24);
 
   const materials: MaterialItem[] = [
-    toMaterial('4 ft insulated roof panels', 'Roof system', panelMix4, 'panels', `${panelLength} ft custom length`, `${panelThickness} in panel · ${metalGauge} skin · ${foamDensity} lb foam`),
-    toMaterial('2 ft insulated roof panels', 'Roof system', panelMix2 + cutPanelCount, 'panels', `${panelLength} ft custom length`, notes || '2 ft stock and cut pieces as needed for symmetry'),
+    toMaterial('4 ft regular roof panels', 'Roof system', regular4Count, 'panels', `${panelLength} ft custom length`, `${panelThickness} in panel · ${metalGauge} skin · ${foamDensity} lb foam`),
+    toMaterial('2 ft regular roof panels', 'Roof system', regular2Count, 'panels', `${panelLength} ft custom length`, 'Standard full-width 2 ft panels'),
+    toMaterial('2 ft cut closure panels', 'Roof system', cutPanels.length, 'panels', `${panelLength} ft custom length`, cutPanels.map((piece) => `${piece.widthFt} ft closure`).join(' · ') || 'Rip-cut from 2 ft stock'),
     toMaterial('Front gutter', 'Trim', gutterPieces, 'sticks', '24 ft sections', 'Front lower side only'),
     toMaterial('Drip-edge fascia', 'Trim', fasciaPieces, 'sticks', '24 ft sections', `${fasciaLf.toFixed(1)} lf including 5 in gutter cap return on both sides`),
     toMaterial('C-channel', 'Trim', cChannelPieces, 'sticks', '24 ft sections', 'Attached conditions only'),
@@ -350,13 +352,13 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
     toMaterial('Tek screws', 'Hardware', tekScrews, 'ea', 'Approx. every 6 in', 'For C-channel, gutter, and fascia'),
     toMaterial('Sealant / NovaFlex', 'Hardware', sealantTubes, 'tubes', 'Approx. 24 lf per tube', `Snap-lock seams + full perimeter + behind C-channel = ${sealantLf.toFixed(1)} lf`),
   ].filter((item) => item.quantity > 0);
-  if (fanBeamPanels > 0) materials.push(toMaterial('Fan beam panel', 'Roof system', fanBeamPanels, 'ea', fanBeam === 'centered' ? 'Centered' : fanBeam === 'female-offset' ? '1 ft from female side' : '1 ft from male side', 'Panel mix adjusts to accommodate fan beam landing rules'));
+  if (fanBeamPanels > 0) materials.push(toMaterial('Fan-beam roof panel', 'Roof system', fanPanels.length, 'ea', fanBeam === 'centered' ? 'Centered fan-beam panel' : fanBeam === 'female-offset' ? '1 ft from female side' : '1 ft from male side', fanPanels.map((piece) => piece.panelWidth === 4 ? '4 ft fan-beam panel' : '2 ft fan-beam panel').join(' · '))); 
   if (supportBeamCount > 0) materials.push(toMaterial(beamStyle === '3x3' ? 'Intermediate 3x3 support beam' : 'Intermediate support beam', 'Structure', supportBeamCount, 'lines', `${width.toFixed(1)} ft each`, 'Added because projection exceeds 13 ft without the full upgrade package'));
 
   return {
     summary: [
       { label: 'Roof area', value: `${(width * projection).toFixed(1)} sq ft` },
-      { label: 'Panel mix', value: `${panelMix4}x4' + ${panelMix2 + cutPanelCount}x2'${fanBeamPanels ? ' + fan beam' : ''}` },
+      { label: 'Panel mix', value: `${regular4Count} regular 4' + ${regular2Count} regular 2' + ${cutPanels.length} cut${fanBeamPanels ? ' + fan beam' : ''}` },
       { label: 'Slope drop', value: feetAndInches(Math.max(slopeDrop, projection * (0.5 / 12))) },
       { label: 'Projection check', value: overLimit ? `Over ${maxProjection} ft rule` : `Within ${maxProjection} ft rule` },
     ],

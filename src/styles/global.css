@@ -391,3 +391,51 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
   .shell { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; }
 }
+
+.preview-toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.small-btn { padding: 0.45rem 0.8rem; border-radius: 999px; }
+.active-chip { background: var(--accent-soft); border-color: var(--accent); }
+.muted-fill { fill: color-mix(in srgb, var(--svg-soft) 70%, transparent); }
+.deck-board-line { stroke: color-mix(in srgb, var(--accent) 55%, white 15%); stroke-width: 1.4; }
+.band-line { stroke: #6b4e39; stroke-width: 4; }
+.band-line.secondary { stroke: #90705a; stroke-width: 3; }
+.locked-post { fill: #d46c49; }
+.railing-post-node { fill: #8c5d39; stroke: var(--panel); stroke-width: 1.25; }
+.stair-edge-highlight { stroke: #8c4cff; stroke-width: 4; }
+.stringer-line { stroke: #7e5a43; stroke-width: 3; }
+.tread-line { stroke: #d9a647; stroke-width: 2.4; }
+.dimension-line { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.deck-board-swatch { background: color-mix(in srgb, var(--accent) 55%, white 15%); }
+.band-line-swatch { background: #6b4e39; }
+.stair-line-swatch { background: #8c4cff; }
+.receiver-line { stroke: #d74a4a; stroke-width: 3; }
+.onebytwo-line { stroke: #f08c2e; stroke-width: 3; }
+.twobytwo-line { stroke: #3378ff; stroke-width: 3.4; }
+.vgroove1-line { stroke: #f2c94c; stroke-width: 3; }
+.vgroove2-line { stroke: #ef77b9; stroke-width: 3.4; }
+.picket-line { stroke: #7b3fd4; stroke-width: 1.8; }
+.reno-1x2-line { stroke: #d74a4a; stroke-width: 3; }
+.reno-2x2-line { stroke: #3378ff; stroke-width: 3.2; }
+.reno-2x2-groove-line { stroke: #e5b91e; stroke-width: 3.2; }
+.kick-panel-fill { fill: rgba(180, 191, 205, 0.24); stroke: rgba(127, 140, 160, 0.5); stroke-width: 1.2; }
+.door-panel { fill: rgba(255,255,255,0.22); stroke: var(--green-strong); stroke-width: 2; }
+.door-split-line { stroke: var(--green-strong); stroke-width: 1.5; }
+.receiver-swatch { background: #d74a4a; }
+.onebytwo-swatch { background: #f08c2e; }
+.twobytwo-swatch { background: #3378ff; }
+.picket-swatch { background: #7b3fd4; }
+.vgroove1-swatch { background: #f2c94c; }
+.vgroove2-swatch { background: #ef77b9; }
+.reno-1x2-swatch { background: #d74a4a; }
+.reno-2x2-swatch { background: #3378ff; }
+.reno-2x2-groove-swatch { background: #e5b91e; }
+.wrap-legend { row-gap: 0.6rem; }
+.roof-panel { fill: rgba(176, 190, 197, 0.22); stroke: rgba(93, 109, 126, 0.75); stroke-width: 1.4; }
+.fan-beam-panel { fill: rgba(238, 180, 75, 0.28); stroke: rgba(189, 136, 22, 0.9); stroke-width: 1.8; }
+.cut-panel { fill: rgba(203, 132, 80, 0.18); stroke: rgba(179, 94, 41, 0.9); stroke-width: 1.8; stroke-dasharray: 6 4; }
+.roof-panel-swatch { background: rgba(93, 109, 126, 0.75); }
+.fan-panel-swatch { background: rgba(189, 136, 22, 0.9); }
+.cut-panel-swatch { background: rgba(179, 94, 41, 0.9); }
+.beam-line.support { stroke-dasharray: 8 5; }
+.section-card { border: 1px solid var(--border); border-radius: 18px; padding: 1rem; background: color-mix(in srgb, var(--panel) 94%, transparent); display: grid; gap: 1rem; }
+.toggle-cluster { display: flex; flex-wrap: wrap; gap: 0.75rem; }

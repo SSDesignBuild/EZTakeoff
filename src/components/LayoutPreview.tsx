@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { buildDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout } from '../lib/patioLayout';
 import { parseSections } from '../lib/sectioning';
@@ -8,10 +9,12 @@ interface LayoutPreviewProps {
   values: Record<string, string | number | boolean>;
 }
 
+type DeckLayer = 'overview' | 'boards' | 'framing' | 'railing' | 'stairs';
+
 const feetAndInches = (feet: number) => {
-  const inchesTotal = Math.round(feet * 12);
-  const ft = Math.floor(inchesTotal / 12);
-  const inches = inchesTotal % 12;
+  const totalInches = Math.round(feet * 12);
+  const ft = Math.floor(totalInches / 12);
+  const inches = totalInches % 12;
   return inches ? `${ft}' ${inches}"` : `${ft}'`;
 };
 
@@ -68,7 +71,8 @@ function offsetSegment(segment: DeckEdgeSegment, distance: number) {
 
 function DeckPreview({ values }: { values: Record<string, string | number | boolean> }) {
   const deck = buildDeckModel(values);
-  const scale = Math.min(520 / Math.max(deck.width, 1), 360 / Math.max(deck.depth, 1));
+  const [layer, setLayer] = useState<DeckLayer>('overview');
+  const scale = Math.min(560 / Math.max(deck.width, 1), 380 / Math.max(deck.depth, 1));
   const pad = 70;
   const toSvg = (x: number, y: number) => ({ x: pad + (x - deck.minX) * scale, y: pad + (y - deck.minY) * scale });
   const pointString = deck.points.map((point) => {
@@ -76,56 +80,70 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
     return `${svgPoint.x},${svgPoint.y}`;
   }).join(' ');
 
+  const showBoards = layer === 'overview' || layer === 'boards';
+  const showFraming = layer === 'overview' || layer === 'framing';
+  const showRailing = layer === 'overview' || layer === 'railing';
+  const showStairs = layer === 'overview' || layer === 'stairs';
+
   const boardScanlines = deck.boardRun === 'width'
-    ? Array.from({ length: Math.max(1, Math.floor(deck.depth / 0.75)) }, (_, index) => deck.minY + 0.25 + index * 0.75)
-    : Array.from({ length: Math.max(1, Math.floor(deck.width / 0.75)) }, (_, index) => deck.minX + 0.25 + index * 0.75);
+    ? Array.from({ length: Math.max(1, Math.floor(deck.depth / 0.47)) }, (_, index) => deck.minY + 0.22 + index * 0.47)
+    : Array.from({ length: Math.max(1, Math.floor(deck.width / 0.47)) }, (_, index) => deck.minX + 0.22 + index * 0.47);
   const joistScanlines = deck.joistDirection === 'vertical'
-    ? Array.from({ length: Math.max(1, Math.floor(deck.width)) }, (_, index) => deck.minX + 0.5 + index)
-    : Array.from({ length: Math.max(1, Math.floor(deck.depth)) }, (_, index) => deck.minY + 0.5 + index);
+    ? Array.from({ length: Math.max(1, Math.floor(deck.width / 1) + 1) }, (_, index) => deck.minX + index)
+    : Array.from({ length: Math.max(1, Math.floor(deck.depth / 1) + 1) }, (_, index) => deck.minY + index);
 
   const stairStart = deck.stairPlacement.start ? toSvg(deck.stairPlacement.start.x, deck.stairPlacement.start.y) : null;
   const stairEnd = deck.stairPlacement.end ? toSvg(deck.stairPlacement.end.x, deck.stairPlacement.end.y) : null;
   const stairDx = stairStart && stairEnd ? stairEnd.x - stairStart.x : 0;
   const stairDy = stairStart && stairEnd ? stairEnd.y - stairStart.y : 0;
   const stairLen = Math.hypot(stairDx, stairDy) || 1;
-  const stairNx = stairLen ? -stairDy / stairLen : 0;
-  const stairNy = stairLen ? stairDx / stairLen : 0;
+  const stairNx = -stairDy / stairLen;
+  const stairNy = stairDx / stairLen;
 
   return (
     <div className="visual-card">
       <div className="visual-header">
-        <h3>Layout preview</h3>
-        <span>Print-oriented framing plan with separate board, joist, beam, band, post, railing, and stair layers.</span>
+        <div>
+          <h3>Layout preview</h3>
+          <span>Print-oriented plan with clickable layers for board-by-board decking, framing, railing, and stair layout.</span>
+        </div>
+        <div className="preview-toolbar">
+          {(['overview', 'boards', 'framing', 'railing', 'stairs'] as DeckLayer[]).map((item) => (
+            <button key={item} type="button" className={layer === item ? 'ghost-btn small-btn active-chip' : 'ghost-btn small-btn'} onClick={() => setLayer(item)}>
+              {item}
+            </button>
+          ))}
+        </div>
       </div>
-      <svg viewBox={`0 0 ${deck.width * scale + pad * 2} ${deck.depth * scale + pad * 2 + 80}`} className="layout-svg">
-        <polygon points={pointString} className="deck-polygon" />
+      <svg viewBox={`0 0 ${deck.width * scale + pad * 2} ${deck.depth * scale + pad * 2 + 90}`} className="layout-svg">
+        <polygon points={pointString} className="deck-polygon muted-fill" />
 
-        {boardScanlines.map((value) => (
+        {showBoards && boardScanlines.map((value) => (
           deck.boardRun === 'width'
             ? scanlineIntersections(deck.points, 'horizontal', value).map((pair, index) => {
-                const a = toSvg(pair.start, value);
-                const b = toSvg(pair.end, value);
-                return <line key={`board-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="deck-board-line" />;
-              })
+              const a = toSvg(pair.start, value);
+              const b = toSvg(pair.end, value);
+              return <line key={`board-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="deck-board-line" />;
+            })
             : scanlineIntersections(deck.points, 'vertical', value).map((pair, index) => {
-                const a = toSvg(value, pair.start);
-                const b = toSvg(value, pair.end);
-                return <line key={`board-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="deck-board-line" />;
-              })
+              const a = toSvg(value, pair.start);
+              const b = toSvg(value, pair.end);
+              return <line key={`board-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="deck-board-line" />;
+            })
         ))}
 
-        {joistScanlines.map((value) => (
+        {showFraming && joistScanlines.map((value) => (
           deck.joistDirection === 'vertical'
             ? scanlineIntersections(deck.points, 'vertical', value).map((pair, index) => {
-                const a = toSvg(value, pair.start);
-                const b = toSvg(value, pair.end);
-                return <line key={`joist-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="joist-line" />;
-              })
+              const a = toSvg(value, pair.start);
+              const b = toSvg(value, pair.end);
+              return <line key={`joist-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="joist-line" />;
+            })
             : scanlineIntersections(deck.points, 'horizontal', value).map((pair, index) => {
-                const a = toSvg(pair.start, value);
-                const b = toSvg(pair.end, value);
-                return <line key={`joist-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="joist-line" />;
-              })
+              const a = toSvg(pair.start, value);
+              const b = toSvg(pair.end, value);
+              return <line key={`joist-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="joist-line" />;
+            })
         ))}
 
         {!deck.isFreestanding && (
@@ -135,9 +153,9 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
           </>
         )}
 
-        {deck.edgeSegments.map((segment) => {
-          const outer = offsetSegment(segment, 0.02);
-          const inner = offsetSegment(segment, -0.14);
+        {showFraming && deck.edgeSegments.map((segment) => {
+          const outer = offsetSegment(segment, 0.03);
+          const inner = offsetSegment(segment, -0.18);
           const a1 = toSvg(outer.start.x, outer.start.y);
           const b1 = toSvg(outer.end.x, outer.end.y);
           const a2 = toSvg(inner.start.x, inner.start.y);
@@ -150,7 +168,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
           );
         })}
 
-        {deck.beamLines.map((beam, index) => (
+        {showFraming && deck.beamLines.map((beam, index) => (
           <g key={`beam-${index}`}>
             {beam.segments.map((segment, segIndex) => {
               const y = toSvg(segment.startX, beam.y).y;
@@ -170,62 +188,208 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
           </g>
         ))}
 
-        {deck.exposedSegments.map((segment) => {
-          const rail = offsetSegment(segment, 0.2);
+        {showRailing && deck.exposedSegments.map((segment) => {
+          const rail = offsetSegment(segment, 0.28);
           const a = toSvg(rail.start.x, rail.start.y);
           const b = toSvg(rail.end.x, rail.end.y);
           return <line key={`railing-${segment.index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="railing-line" />;
         })}
-        {deck.exposedSegments.flatMap((segment) => {
+        {showRailing && deck.exposedSegments.flatMap((segment) => {
           const postCount = Math.max(2, Math.ceil(segment.length / 6) + 1);
           return Array.from({ length: postCount }, (_, index) => {
             const ratio = postCount === 1 ? 0 : index / (postCount - 1);
             const x = segment.start.x + (segment.end.x - segment.start.x) * ratio;
             const y = segment.start.y + (segment.end.y - segment.start.y) * ratio;
-            const shifted = offsetSegment({ ...segment, start: { x, y }, end: { x, y } }, 0.26).start;
+            const shifted = offsetSegment({ ...segment, start: { x, y }, end: { x, y } }, 0.34).start;
             const p = toSvg(shifted.x, shifted.y);
             return <circle key={`railpost-${segment.index}-${index}`} cx={p.x} cy={p.y} r="4" className="railing-post-node" />;
           });
         })}
 
-        {stairStart && stairEnd && (
+        {showStairs && stairStart && stairEnd && (
           <>
             <line x1={stairStart.x} y1={stairStart.y} x2={stairEnd.x} y2={stairEnd.y} className="stair-edge-highlight" />
-            {Array.from({ length: Math.max(deck.stairRisers, 1) }, (_, index) => {
-              const ratio = (index + 1) / Math.max(deck.stairRisers + 1, 2);
+            {Array.from({ length: Math.max(deck.stairStringers, 0) }, (_, index) => {
+              const ratio = deck.stairStringers <= 1 ? 0.5 : index / (deck.stairStringers - 1);
               const sx = stairStart.x + stairDx * ratio;
               const sy = stairStart.y + stairDy * ratio;
-              return <line key={`stringer-${index}`} x1={sx} y1={sy} x2={sx + stairNx * 56} y2={sy + stairNy * 56} className="stringer-line" />;
+              const ex = sx + stairNx * (deck.stairRunFt * scale);
+              const ey = sy + stairNy * (deck.stairRunFt * scale);
+              return <line key={`stringer-${index}`} x1={sx} y1={sy} x2={ex} y2={ey} className="stringer-line" />;
             })}
             {Array.from({ length: Math.max(deck.stairTreadsPerRun, 0) }, (_, index) => {
-              const t = (index + 1) / Math.max(deck.stairTreadsPerRun + 1, 2);
-              const aX = stairStart.x + stairDx * 0 + stairNx * (t * 56);
-              const aY = stairStart.y + stairDy * 0 + stairNy * (t * 56);
-              const bX = stairEnd.x + stairNx * (t * 56);
-              const bY = stairEnd.y + stairNy * (t * 56);
-              return <line key={`tread-${index}`} x1={aX} y1={aY} x2={bX} y2={bY} className="stair-tread-line" />;
+              const offset = ((index + 1) * deck.stairRunFt * scale) / Math.max(deck.stairTreadsPerRun + 1, 1);
+              return <line key={`tread-${index}`} x1={stairStart.x + stairNx * offset} y1={stairStart.y + stairNy * offset} x2={stairEnd.x + stairNx * offset} y2={stairEnd.y + stairNy * offset} className="tread-line" />;
             })}
-            <text x={(stairStart.x + stairEnd.x) / 2 - 36} y={(stairStart.y + stairEnd.y) / 2 - 12} className="svg-note">
-              {`${deck.stairRisers} risers · ${deck.stairTreadsPerRun} treads · ${deck.stairStringers} total stringers`}
-            </text>
+            <text x={Math.min(stairStart.x, stairEnd.x) + 6} y={Math.min(stairStart.y, stairEnd.y) - 10} className="svg-note">{`${deck.stairRisers} risers · ${deck.stairTreadsPerRun} treads · ${deck.stairStringers} stringers`}</text>
           </>
         )}
 
-        <line x1={pad} y1={pad + deck.depth * scale + 30} x2={pad + deck.width * scale} y2={pad + deck.depth * scale + 30} className="dimension-line" />
-        <text x={pad + deck.width * scale / 2 - 20} y={pad + deck.depth * scale + 25} className="svg-note">{feetAndInches(deck.width)}</text>
-        <line x1={pad - 28} y1={pad} x2={pad - 28} y2={pad + deck.depth * scale} className="dimension-line" />
-        <text x={pad - 58} y={pad + deck.depth * scale / 2} className="svg-note">{feetAndInches(deck.depth)}</text>
-        <text x={pad} y={pad + deck.depth * scale + 56} className="svg-note">
-          {`Boards ${deck.boardRun === 'width' ? 'parallel with house' : 'perpendicular to house'} · Joists ${deck.joistDirection === 'vertical' ? 'perpendicular to house' : 'parallel with house'} · ${deck.beamLines.length} beam line(s)`}
-        </text>
+        <line x1={pad} y1={pad + deck.depth * scale + 28} x2={pad + deck.width * scale} y2={pad + deck.depth * scale + 28} className="dimension-line" />
+        <text x={pad + (deck.width * scale) / 2 - 16} y={pad + deck.depth * scale + 22} className="svg-note">{feetAndInches(deck.width)}</text>
+        <line x1={pad - 24} y1={pad} x2={pad - 24} y2={pad + deck.depth * scale} className="dimension-line" />
+        <text x={pad - 58} y={pad + (deck.depth * scale) / 2} className="svg-note">{feetAndInches(deck.depth)}</text>
       </svg>
       <div className="legend-row">
-        <span><i className="legend-swatch deck-board-line-swatch" />Deck boards</span>
-        <span><i className="legend-swatch joist-line-swatch" />Joists</span>
-        <span><i className="legend-swatch beam-line-swatch" />Double beam</span>
-        <span><i className="legend-swatch band-line-swatch" />Double band</span>
-        <span><i className="legend-swatch railing-line-swatch" />Railing</span>
-        <span><i className="legend-swatch railing-post-line-swatch" />4x4 railing posts</span>
+        <span><i className="legend-swatch deck-board-swatch" /> deck boards</span>
+        <span><i className="legend-swatch joist-line-swatch" /> joists</span>
+        <span><i className="legend-swatch beam-line-swatch" /> doubled beam</span>
+        <span><i className="legend-swatch band-line-swatch" /> double band</span>
+        <span><i className="legend-swatch railing-line-swatch" /> railing</span>
+        <span><i className="legend-swatch stair-line-swatch" /> stairs</span>
+      </div>
+    </div>
+  );
+}
+
+function sectionGeometry(section: SectionConfig, renaissance: boolean) {
+  const doorWidth = section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
+  const doorLeft = sectionDoorLeft(section) / 12;
+  const doorRight = doorLeft + doorWidth;
+  const usableWidth = Math.max(0, section.width - doorWidth);
+  const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
+  const chairY = section.chairRail ? Math.max(kickHeight + 3, section.height * 0.55) : 0;
+  const uprightXs = Array.from({ length: section.uprights }, (_, index) => ((index + 1) * section.width) / (section.uprights + 1))
+    .filter((x) => x < doorLeft || x > doorRight);
+
+  const picketHeight = chairY > 0 ? chairY - kickHeight : 0;
+  const picketCount = section.pickets && picketHeight > 0 ? Math.max(0, Math.floor((usableWidth * 12 + 4) / 4)) : 0;
+  const picketSpacing = picketCount > 1 ? usableWidth / picketCount : 0;
+
+  return { doorWidth, doorLeft, doorRight, kickHeight, chairY, uprightXs, picketCount, picketSpacing, usableWidth, renaissance };
+}
+
+function drawVerticalLane(x: number, top: number, bottom: number, cls: string, key: string) {
+  return <line key={key} x1={x} y1={top} x2={x} y2={bottom} className={cls} />;
+}
+
+function ScreenPreview({ values, renaissance }: { values: Record<string, string | number | boolean>; renaissance: boolean }) {
+  const sections = parseSections(values.sections, 3);
+  const scale = 32;
+  const x0 = 42;
+  const y0 = 40;
+  const totalW = sections.reduce((sum, section) => sum + section.width * scale, 0) + (sections.length - 1) * 18;
+  const totalH = Math.max(...sections.map((section) => section.height * scale), 220);
+  let runningX = x0;
+
+  return (
+    <div className="visual-card">
+      <div className="visual-header">
+        <h3>Layout preview</h3>
+        <span>Separated material lanes for installer printing. Door framing, pickets, kick panels, receivers, and 1x/2x members are drawn as distinct lines instead of stacked paths.</span>
+      </div>
+      <svg viewBox={`0 0 ${totalW + 120} ${totalH + 120}`} className="layout-svg">
+        {sections.map((section, sectionIndex) => {
+          const geom = sectionGeometry(section, renaissance);
+          const sectionW = section.width * scale;
+          const sectionH = section.height * scale;
+          const currentX = runningX;
+          runningX += sectionW + 18;
+          const left = currentX;
+          const right = currentX + sectionW;
+          const top = y0;
+          const bottom = y0 + sectionH;
+          const kickY = bottom - geom.kickHeight * scale;
+          const chairY = geom.chairY > 0 ? bottom - geom.chairY * scale : 0;
+          const doorLeft = left + geom.doorLeft * scale;
+          const doorRight = left + geom.doorRight * scale;
+          const doorTop = top + Math.max(sectionH * 0.16, 16);
+          const doorBottom = bottom;
+          const receiverInset = 0;
+          const oneByTwoInset = renaissance ? 8 : 16;
+          const twoByTwoInset = renaissance ? 24 : 30;
+          return (
+            <g key={section.id}>
+              <rect x={left} y={top} width={sectionW} height={sectionH} className="screen-box" rx="8" />
+              <text x={left} y={top - 10} className="svg-note">{`${section.label} · ${feetAndInches(section.width)} x ${feetAndInches(section.height)}`}</text>
+
+              {!renaissance && (
+                <>
+                  {drawVerticalLane(left + receiverInset, top, bottom, 'receiver-line', `rx-left-${section.id}`)}
+                  {drawVerticalLane(right - receiverInset, top, bottom, 'receiver-line', `rx-right-${section.id}`)}
+                  <line x1={left} y1={top} x2={right} y2={top} className="receiver-line" />
+                  <line x1={left} y1={bottom} x2={right} y2={bottom} className="receiver-line" />
+                  <line x1={left + oneByTwoInset} y1={top + 6} x2={right - oneByTwoInset} y2={top + 6} className={section.kickPanel === 'trim-coil' ? 'vgroove1-line' : 'onebytwo-line'} />
+                </>
+              )}
+
+              {renaissance && (
+                <>
+                  {drawVerticalLane(left + 8, top, bottom, 'reno-1x2-line', `r-left-${section.id}`)}
+                  {drawVerticalLane(right - 8, top, bottom, 'reno-1x2-line', `r-right-${section.id}`)}
+                  <line x1={left + 8} y1={top + 6} x2={right - 8} y2={top + 6} className="reno-1x2-line" />
+                  <line x1={left + 8} y1={bottom - 6} x2={right - 8} y2={bottom - 6} className="reno-1x2-line" />
+                </>
+              )}
+
+              {section.kickPanel !== 'none' && (
+                <>
+                  <rect x={left + 10} y={kickY} width={sectionW - 20} height={bottom - kickY} className="kick-panel-fill" rx="4" />
+                  <line x1={left + oneByTwoInset} y1={kickY} x2={right - oneByTwoInset} y2={kickY} className={renaissance ? 'reno-2x2-groove-line' : section.kickPanel === 'trim-coil' ? 'vgroove2-line' : 'twobytwo-line'} />
+                  {!renaissance && section.kickPanel === 'trim-coil' && (
+                    <line x1={left + oneByTwoInset} y1={bottom - 8} x2={right - oneByTwoInset} y2={bottom - 8} className="vgroove1-line" />
+                  )}
+                  {!renaissance && section.kickPanel === 'insulated' && (
+                    <line x1={left + 6} y1={kickY + 8} x2={right - 6} y2={kickY + 8} className="receiver-line" />
+                  )}
+                </>
+              )}
+
+              {section.chairRail && chairY > 0 && (
+                <line x1={left + twoByTwoInset} y1={chairY} x2={right - twoByTwoInset} y2={chairY} className={renaissance ? (section.pickets || section.kickPanel === 'insulated' ? 'reno-2x2-groove-line' : 'reno-2x2-line') : 'twobytwo-line'} />
+              )}
+
+              {geom.uprightXs.map((x, index) => {
+                const xPos = left + x * scale;
+                const cls = renaissance
+                  ? (section.pickets || section.kickPanel === 'insulated' ? 'reno-2x2-groove-line' : 'reno-2x2-line')
+                  : 'twobytwo-line';
+                const topY = top + 10;
+                const bottomY = section.kickPanel !== 'none' ? kickY : bottom - 10;
+                return drawVerticalLane(xPos, topY, bottomY, cls, `upright-${section.id}-${index}`);
+              })}
+
+              {section.pickets && geom.picketCount > 0 && Array.from({ length: geom.picketCount }, (_, index) => {
+                const x = left + ((index + 0.5) * geom.picketSpacing * scale);
+                return <line key={`p-${section.id}-${index}`} x1={x} y1={chairY - 6} x2={x} y2={kickY + 6} className="picket-line" />;
+              })}
+
+              {section.doorType !== 'none' && (
+                <>
+                  <rect x={doorLeft} y={doorTop} width={(geom.doorRight - geom.doorLeft) * scale} height={doorBottom - doorTop} className="door-panel" rx="6" />
+                  <line x1={doorLeft} y1={doorTop} x2={doorLeft} y2={doorBottom} className={renaissance ? 'reno-2x2-line' : 'twobytwo-line'} />
+                  <line x1={doorRight} y1={doorTop} x2={doorRight} y2={doorBottom} className={renaissance ? 'reno-2x2-line' : 'twobytwo-line'} />
+                  <line x1={doorLeft} y1={doorTop} x2={doorRight} y2={doorTop} className={renaissance ? 'reno-2x2-line' : 'twobytwo-line'} />
+                  {section.doorType === 'french' && <line x1={(doorLeft + doorRight) / 2} y1={doorTop + 6} x2={(doorLeft + doorRight) / 2} y2={doorBottom - 6} className="door-split-line" />}
+                  <text x={doorLeft + 6} y={doorTop + 16} className="svg-note">{`${feetAndInches(section.doorWidth)} ${section.dogDoor !== 'none' ? `· ${section.dogDoor} dog door` : ''}`}</text>
+                </>
+              )}
+
+              <line x1={left} y1={bottom + 26} x2={right} y2={bottom + 26} className="dimension-line" />
+              <text x={left + sectionW / 2 - 16} y={bottom + 20} className="svg-note">{feetAndInches(section.width)}</text>
+              {sectionIndex === 0 && <text x={left - 28} y={top + sectionH / 2} className="svg-note">{feetAndInches(section.height)}</text>}
+            </g>
+          );
+        })}
+      </svg>
+      <div className="legend-row wrap-legend">
+        {renaissance ? (
+          <>
+            <span><i className="legend-swatch reno-1x2-swatch" /> 1x2 7/8</span>
+            <span><i className="legend-swatch reno-2x2-swatch" /> 2x2 7/8 no groove</span>
+            <span><i className="legend-swatch reno-2x2-groove-swatch" /> 2x2 7/8 with groove</span>
+            <span><i className="legend-swatch picket-swatch" /> pickets</span>
+          </>
+        ) : (
+          <>
+            <span><i className="legend-swatch receiver-swatch" /> receiver</span>
+            <span><i className="legend-swatch onebytwo-swatch" /> 1x2</span>
+            <span><i className="legend-swatch twobytwo-swatch" /> 2x2</span>
+            <span><i className="legend-swatch picket-swatch" /> pickets</span>
+            <span><i className="legend-swatch vgroove1-swatch" /> 1x2 v-groove</span>
+            <span><i className="legend-swatch vgroove2-swatch" /> 2x2 v-groove</span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -233,44 +397,46 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
 
 function PatioPreview({ values }: { values: Record<string, string | number | boolean> }) {
   const width = Number(values.width ?? 21);
-  const projection = Number(values.projection ?? 8);
+  const projection = Number(values.projection ?? 10);
   const structureType = String(values.structureType ?? 'attached');
+  const panelWidth = Number(values.panelWidth ?? 4);
   const fanBeam = String(values.fanBeam ?? 'none');
   const screenUnderneath = Boolean(values.screenUnderneath ?? false);
-  const panelLayout = buildPatioPanelLayout(width, fanBeam, Number(values.panelWidth ?? 4));
-  const panelThickness = Number(values.panelThickness ?? 3);
-  const metalGauge = String(values.metalGauge ?? '.26');
-  const foamDensity = Number(values.foamDensity ?? 1);
-  const standard3In = panelThickness === 3 && !(metalGauge === '.32' && foamDensity === 2);
-  const supportBeamCount = standard3In && projection > 13 ? Math.ceil(projection / 13) - 1 : 0;
-  const frontPostCount = Math.max(2, Math.ceil(width / 6) + 1);
-  const scale = 26;
-  const x0 = 60;
-  const y0 = 62;
+  const layout = useMemo(() => buildPatioPanelLayout(width, fanBeam, panelWidth), [width, fanBeam, panelWidth]);
+  const supportBeamCount = (Number(values.panelThickness ?? 3) === 3 && !(String(values.metalGauge ?? '.26') === '.32' && Number(values.foamDensity ?? 1) === 2) && projection > 13)
+    ? Math.ceil(projection / 13) - 1
+    : 0;
+  const scale = Math.min(560 / Math.max(width, 1), 340 / Math.max(projection, 1));
+  const x0 = 42;
+  const y0 = 42;
   const roofW = width * scale;
   const roofD = projection * scale;
-  let runningX = x0;
+  const frontPostCount = Math.max(2, Math.ceil(width / 6) + 1);
 
+  let cursor = x0;
   return (
     <div className="visual-card">
       <div className="visual-header">
         <h3>Layout preview</h3>
-        <span>Symmetry-aware panel plan with fan-beam placement, cut-piece callouts, posts, beams, and printable dimensions.</span>
+        <span>Factory-style panel ordering view with fan-beam placement, cut closures, support beams, posts, and printable dimensions.</span>
       </div>
-      <svg viewBox={`0 0 ${roofW + 140} ${roofD + 170}`} className="layout-svg">
-        <rect x={x0} y={y0} width={roofW} height={roofD} className="roof-box" rx="10" />
-        {panelLayout.pieces.map((piece, index) => {
-          const panelW = piece.widthFt * scale;
-          const currentX = runningX;
-          runningX += panelW;
+      <svg viewBox={`0 0 ${roofW + 120} ${roofD + 130}`} className="layout-svg">
+        <rect x={x0} y={y0} width={roofW} height={roofD} className="roof-box" rx="8" />
+        {layout.pieces.map((piece, index) => {
+          const pieceW = piece.widthFt * scale;
+          const x = cursor;
+          cursor += pieceW;
+          const cls = piece.kind === 'fan-beam' ? 'fan-beam-panel' : piece.kind === 'cut' ? 'cut-panel' : 'roof-panel';
+          const note = piece.kind === 'fan-beam' ? 'fan beam' : piece.kind === 'cut' ? `${piece.widthFt} ft cut` : `${piece.panelWidth} ft panel`;
           return (
             <g key={`panel-${index}`}>
-              <rect x={currentX} y={y0} width={panelW} height={roofD} className={piece.kind === 'fan-beam' ? 'fan-panel-box' : piece.kind === 'cut' ? 'cut-panel-box' : 'roof-bay-panel'} rx="6" />
-              <text x={currentX + panelW / 2 - 16} y={y0 + 18} className="svg-note">{feetAndInches(piece.widthFt)}</text>
-              {piece.note && <text x={currentX + 6} y={y0 + roofD - 10} className="svg-note">{piece.note}</text>}
+              <rect x={x} y={y0} width={pieceW} height={roofD} className={cls} />
+              <line x1={x} y1={y0} x2={x} y2={y0 + roofD} className="roof-bay" />
+              <text x={x + 6} y={y0 + 16} className="svg-note">{note}</text>
             </g>
           );
         })}
+        <line x1={x0 + roofW} y1={y0} x2={x0 + roofW} y2={y0 + roofD} className="roof-bay" />
         <line x1={x0} y1={y0 + roofD} x2={x0 + roofW} y2={y0 + roofD} className="beam-line" />
         {Array.from({ length: supportBeamCount }, (_, index) => {
           const y = y0 + (((index + 1) * roofD) / (supportBeamCount + 1));
@@ -280,129 +446,17 @@ function PatioPreview({ values }: { values: Record<string, string | number | boo
           const x = x0 + (roofW * index) / Math.max(frontPostCount - 1, 1);
           return <rect key={`post-${index}`} x={x - 5} y={y0 + roofD - 5} width="10" height="10" className="post-node" rx="2" />;
         })}
-        <line x1={x0} y1={y0 + roofD + 30} x2={x0 + roofW} y2={y0 + roofD + 30} className="dimension-line" />
-        <text x={x0 + roofW / 2 - 16} y={y0 + roofD + 24} className="svg-note">{feetAndInches(width)}</text>
-        <line x1={x0 - 26} y1={y0} x2={x0 - 26} y2={y0 + roofD} className="dimension-line" />
+        <line x1={x0} y1={y0 + roofD + 28} x2={x0 + roofW} y2={y0 + roofD + 28} className="dimension-line" />
+        <text x={x0 + roofW / 2 - 16} y={y0 + roofD + 22} className="svg-note">{feetAndInches(width)}</text>
+        <line x1={x0 - 24} y1={y0} x2={x0 - 24} y2={y0 + roofD} className="dimension-line" />
         <text x={x0 - 58} y={y0 + roofD / 2} className="svg-note">{feetAndInches(projection)}</text>
         <text x={x0} y={y0 - 14} className="svg-note">{structureType === 'attached' ? 'House / C-channel side' : 'Freestanding back side'}</text>
         <text x={x0} y={y0 + roofD + 54} className="svg-note">{`${screenUnderneath ? '3x3 screened-under beam' : 'Atlas beam'} · ${frontPostCount} posts · ${supportBeamCount} intermediate beam(s)`}</text>
       </svg>
-    </div>
-  );
-}
-
-function ScreenPreview({ values, renaissance }: { values: Record<string, string | number | boolean>; renaissance: boolean }) {
-  const sections = parseSections(values.sections, 3);
-  const scale = 30;
-  const x0 = 36;
-  const y0 = 36;
-  const totalW = sections.reduce((sum, section) => sum + section.width * scale, 0);
-  const totalH = Math.max(...sections.map((section) => section.height * scale), 190);
-  let runningX = x0;
-
-  return (
-    <div className="visual-card">
-      <div className="visual-header">
-        <h3>Layout preview</h3>
-        <span>Installer drawing with separated material lanes so receiver, 1x2, 2x2, pickets, kick panels, and door framing read clearly on print.</span>
-      </div>
-      <svg viewBox={`0 0 ${totalW + 120} ${totalH + 120}`} className="layout-svg">
-        {sections.map((section) => {
-          const sectionW = section.width * scale;
-          const sectionH = section.height * scale;
-          const currentX = runningX;
-          runningX += sectionW + 12;
-          const doorLeft = (sectionDoorLeft(section) / 12) * scale;
-          const doorWidth = Math.min(section.doorWidth, section.width) * scale;
-          const hasDoor = section.doorType !== 'none';
-          const kickHeight = (section.kickPanel === 'none' ? 0 : section.kickPanelHeight) * scale;
-          const chairY = y0 + sectionH * 0.55;
-          const top = y0;
-          const bottom = y0 + sectionH;
-          const left = currentX;
-          const right = currentX + sectionW;
-          const doorL = left + doorLeft;
-          const doorR = doorL + doorWidth;
-          const activeNoGroove = renaissance ? 'two-by-two-no-groove-line' : 'two-by-two-line';
-          const activeGroove = renaissance ? 'channel-2x2-line' : 'two-by-two-line';
-
-          return (
-            <g key={section.id}>
-              <rect x={left} y={top} width={sectionW} height={sectionH} className="screen-box" rx="8" />
-
-              <line x1={left} y1={top + 2} x2={right} y2={top + 2} className="receiver-line" />
-              <line x1={left} y1={bottom - 2} x2={right} y2={bottom - 2} className="receiver-line" />
-              <line x1={left + 2} y1={top} x2={left + 2} y2={bottom} className="receiver-line" />
-              <line x1={right - 2} y1={top} x2={right - 2} y2={bottom} className="receiver-line" />
-
-              {!renaissance && section.kickPanel !== 'insulated' && (
-                <>
-                  <line x1={left + 10} y1={top + 10} x2={right - 10} y2={top + 10} className="one-by-two-line" />
-                  <line x1={left + 10} y1={bottom - 10} x2={right - 10} y2={bottom - 10} className={section.kickPanel === 'trim-coil' ? 'vgroove-top-line' : 'one-by-two-line'} />
-                  <line x1={left + 10} y1={top + 10} x2={left + 10} y2={bottom - 10} className="one-by-two-line" />
-                  <line x1={right - 10} y1={top + 10} x2={right - 10} y2={bottom - 10} className="one-by-two-line" />
-                </>
-              )}
-
-              {renaissance && (
-                <>
-                  <line x1={left + 10} y1={top + 10} x2={right - 10} y2={top + 10} className="receiver-line" />
-                  <line x1={left + 10} y1={bottom - 10} x2={right - 10} y2={bottom - 10} className="receiver-line" />
-                  <line x1={left + 10} y1={top + 10} x2={left + 10} y2={bottom - 10} className="receiver-line" />
-                  <line x1={right - 10} y1={top + 10} x2={right - 10} y2={bottom - 10} className="receiver-line" />
-                </>
-              )}
-
-              {Array.from({ length: section.uprights }, (_, index) => {
-                const x = left + ((index + 1) * sectionW) / (section.uprights + 1);
-                const y1 = top + 18;
-                const y2 = bottom - 18;
-                return <line key={`upright-${index}`} x1={x} y1={y1} x2={x} y2={y2} className={activeNoGroove} />;
-              })}
-
-              {section.chairRail && (
-                <line x1={hasDoor ? left + 18 : left + 14} y1={chairY} x2={hasDoor ? doorL - 6 : right - 14} y2={chairY} className={section.pickets || section.kickPanel === 'insulated' ? activeGroove : activeNoGroove} />
-              )}
-              {section.chairRail && hasDoor && <line x1={doorR + 6} y1={chairY} x2={right - 14} y2={chairY} className={section.pickets || section.kickPanel === 'insulated' ? activeGroove : activeNoGroove} />}
-
-              {section.kickPanel !== 'none' && (
-                <>
-                  <rect x={left + 16} y={bottom - kickHeight} width={sectionW - 32} height={kickHeight - 8} className={section.kickPanel === 'insulated' ? 'insulated-panel-box' : 'kick-panel-box'} rx="4" />
-                  <line x1={left + 12} y1={bottom - kickHeight} x2={right - 12} y2={bottom - kickHeight} className={section.kickPanel === 'trim-coil' ? 'vgroove-top-line' : activeGroove} />
-                </>
-              )}
-
-              {section.pickets && Array.from({ length: Math.max(1, Math.floor(((section.width - (hasDoor ? Math.min(section.doorWidth, section.width) : 0)) * 12) / 8)) }, (_, index) => {
-                const clearWidth = section.width * 12 - (hasDoor ? section.doorWidth * 12 : 0);
-                const offset = 10 + (index * Math.max(8, (clearWidth * scale / 12) / Math.max(1, Math.floor(clearWidth / 8))));
-                const x = left + Math.min(offset, sectionW - 16);
-                const insideDoor = hasDoor && x > doorL - 4 && x < doorR + 4;
-                if (insideDoor) return null;
-                return <line key={`pick-${index}`} x1={x} y1={chairY + 8} x2={x} y2={bottom - 14} className="picket-line" />;
-              })}
-
-              {hasDoor && (
-                <>
-                  <rect x={doorL} y={top + 24} width={doorWidth} height={sectionH - 30} className="door-box" rx="4" />
-                  <line x1={doorL} y1={top + 18} x2={doorL} y2={bottom - 12} className={activeNoGroove} />
-                  <line x1={doorR} y1={top + 18} x2={doorR} y2={bottom - 12} className={activeNoGroove} />
-                  <line x1={doorL} y1={top + 24} x2={doorR} y2={top + 24} className={activeNoGroove} />
-                  <text x={doorL + 6} y={top + 20} className="svg-note">{`${feetAndInches(section.doorWidth)} ${section.doorPlacement}`}</text>
-                </>
-              )}
-
-              <text x={left + 8} y={bottom + 20} className="svg-note">{`${section.label} · ${feetAndInches(section.width)} × ${feetAndInches(section.height)}`}</text>
-            </g>
-          );
-        })}
-      </svg>
-      <div className="legend-row">
-        <span><i className="legend-swatch receiver-line-swatch" />{renaissance ? '1x2 7/8' : 'Receiver'}</span>
-        {!renaissance && <span><i className="legend-swatch one-by-two-line-swatch" />1x2</span>}
-        <span><i className="legend-swatch two-by-two-no-groove-line-swatch" />{renaissance ? '2x2 7/8 no groove' : '2x2 / door frame'}</span>
-        <span><i className="legend-swatch two-by-two-line-swatch" />{renaissance ? '2x2 7/8 groove' : '2x2'}</span>
-        <span><i className="legend-swatch picket-line-swatch" />Pickets</span>
-        {!renaissance && <span><i className="legend-swatch vgroove-line-swatch" />V-groove</span>}
+      <div className="legend-row wrap-legend">
+        <span><i className="legend-swatch roof-panel-swatch" /> regular panel</span>
+        <span><i className="legend-swatch fan-panel-swatch" /> fan-beam panel</span>
+        <span><i className="legend-swatch cut-panel-swatch" /> cut closure panel</span>
       </div>
     </div>
   );
@@ -411,5 +465,6 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
 export function LayoutPreview({ serviceSlug, values }: LayoutPreviewProps) {
   if (serviceSlug === 'decks') return <DeckPreview values={values} />;
   if (serviceSlug === 'patio-covers') return <PatioPreview values={values} />;
-  return <ScreenPreview values={values} renaissance={serviceSlug === 'renaissance-screen-rooms'} />;
+  if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />;
+  return <ScreenPreview values={values} renaissance />;
 }
