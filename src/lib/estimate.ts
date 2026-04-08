@@ -1,19 +1,7 @@
-import { DeckPoint, EstimateResult, MaterialItem } from './types';
+import { buildDeckModel } from './deckModel';
+import { EstimateResult, MaterialItem } from './types';
 
 export type EstimateInputs = Record<string, string | number | boolean>;
-
-const STOCK_LENGTHS = [8, 10, 12, 16, 20];
-const DECK_BOARD_COVERAGE_FT = 5.5 / 12;
-const DECK_BOARD_GAP_FT = 0.125 / 12;
-const EFFECTIVE_BOARD_COVERAGE = DECK_BOARD_COVERAGE_FT + DECK_BOARD_GAP_FT;
-const JOIST_SPACING_FT = 1;
-const POST_TARGET_SPACING = 6.5;
-const POST_MAX_SPACING = 7.5;
-
-const roundUp = (value: number, precision = 0) => {
-  const factor = 10 ** precision;
-  return Math.ceil(value * factor) / factor;
-};
 
 const toMaterial = (
   name: string,
@@ -31,72 +19,19 @@ const toMaterial = (
   notes,
 });
 
-const chooseStockLength = (required: number, available: number[] = STOCK_LENGTHS) => {
-  const found = available.find((length) => length >= required);
-  return found ?? available[available.length - 1];
-};
-
-const parseDeckShape = (raw: string | number | boolean | undefined): DeckPoint[] => {
-  if (typeof raw !== 'string') {
-    return [
-      { x: 0, y: 0 },
-      { x: 16, y: 0 },
-      { x: 16, y: 12 },
-      { x: 0, y: 12 },
-    ];
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as DeckPoint[];
-    if (Array.isArray(parsed) && parsed.length >= 3) {
-      return parsed.map((point) => ({ x: Number(point.x), y: Number(point.y) }));
+const addBoardGroups = (
+  materials: MaterialItem[],
+  category: string,
+  prefix: string,
+  groups: { length: number; count: number }[],
+  notes: string,
+) => {
+  groups.forEach((group) => {
+    if (group.count > 0) {
+      materials.push(toMaterial(`${prefix} ${group.length}'`, category, group.count, 'boards', `${group.length} ft stock`, notes));
     }
-  } catch {
-    return [
-      { x: 0, y: 0 },
-      { x: 16, y: 0 },
-      { x: 16, y: 12 },
-      { x: 0, y: 12 },
-    ];
-  }
-
-  return [
-    { x: 0, y: 0 },
-    { x: 16, y: 0 },
-    { x: 16, y: 12 },
-    { x: 0, y: 12 },
-  ];
+  });
 };
-
-const polygonArea = (points: DeckPoint[]) => {
-  let sum = 0;
-  for (let i = 0; i < points.length; i += 1) {
-    const current = points[i];
-    const next = points[(i + 1) % points.length];
-    sum += current.x * next.y - next.x * current.y;
-  }
-  return Math.abs(sum / 2);
-};
-
-const polygonPerimeter = (points: DeckPoint[]) => {
-  let sum = 0;
-  for (let i = 0; i < points.length; i += 1) {
-    const current = points[i];
-    const next = points[(i + 1) % points.length];
-    sum += Math.hypot(next.x - current.x, next.y - current.y);
-  }
-  return sum;
-};
-
-const polygonBounds = (points: DeckPoint[]) => {
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  return {
-    width: Math.max(...xs) - Math.min(...xs),
-    depth: Math.max(...ys) - Math.min(...ys),
-  };
-};
-
 
 export function calculateEstimate(serviceSlug: string, inputs: EstimateInputs): EstimateResult {
   switch (serviceSlug) {
@@ -114,144 +49,103 @@ export function calculateEstimate(serviceSlug: string, inputs: EstimateInputs): 
 }
 
 function estimateDeck(inputs: EstimateInputs): EstimateResult {
-  const deckShape = parseDeckShape(inputs.deckShape);
-  const attachment = String(inputs.attachment ?? 'siding');
-  const boardRun = String(inputs.boardRun ?? 'width');
-  const deckingType = String(inputs.deckingType ?? 'composite');
-  const borderSameBoard = Boolean(inputs.borderSameBoard);
-  const deckHeight = Number(inputs.deckHeight ?? 0);
-  const railingRun = Number(inputs.perimeterRailingFt ?? 0);
+  const deck = buildDeckModel(inputs);
   const railingType = String(inputs.railingType ?? 'aluminum');
-  const stairCount = Number(inputs.stairCount ?? 0);
-  const stairWidth = Number(inputs.stairWidth ?? 0);
-  const stairRise = Number(inputs.stairRise ?? 0);
 
-  const area = polygonArea(deckShape);
-  const perimeter = polygonPerimeter(deckShape);
-  const { width, depth } = polygonBounds(deckShape);
-  const boardLengthRequired = boardRun === 'width' ? depth : width;
-  const boardStockLength = chooseStockLength(boardLengthRequired, [8, 12, 16, 20]);
-  const boardCount = Math.ceil((boardRun === 'width' ? width : depth) / EFFECTIVE_BOARD_COVERAGE);
-  const stairRisers = stairCount > 0 ? Math.ceil((stairRise * 12) / 7.5) : 0;
-  const stairTreadsPerRun = stairCount > 0 ? Math.max(stairRisers - 1, 1) : 0;
-  const stairTreadBoards = stairCount > 0 ? Math.ceil((stairWidth * stairTreadsPerRun * stairCount * 2) / chooseStockLength(stairWidth, [8, 12, 16])) : 0;
+  const materials: MaterialItem[] = [];
+  addBoardGroups(
+    materials,
+    'Decking',
+    'Field deck board',
+    deck.boardGroups,
+    deck.boardRun === 'width'
+      ? 'Boards run out from the house; counts are grouped by stock length from the drawn footprint.'
+      : 'Boards run parallel to the house; counts are grouped by stock length from the drawn footprint.',
+  );
+  addBoardGroups(
+    materials,
+    'Decking',
+    'Border / picture-frame board',
+    deck.borderGroups,
+    'Border boards grouped from exposed perimeter segments only.',
+  );
+  addBoardGroups(
+    materials,
+    'Stairs',
+    'Stair tread board',
+    deck.stairTreadGroups,
+    'Two boards per tread, grouped by stair width.',
+  );
+  addBoardGroups(
+    materials,
+    'Framing',
+    `${deck.joistSize} joist`,
+    deck.joistLengthGroups,
+    '12 in on-center joists from the drawn footprint.',
+  );
+  addBoardGroups(
+    materials,
+    'Framing',
+    `${deck.beamMemberSize} beam ply`,
+    deck.beamBoardGroups,
+    'Double beam, one size larger than joists.',
+  );
+  addBoardGroups(
+    materials,
+    'Framing',
+    `${deck.joistSize} double band / rim board`,
+    deck.doubleBandGroups,
+    'Double band all around for strength.',
+  );
 
-  const joistSpanTarget = attachment === 'siding'
-    ? Math.max(depth - 2, depth / 2)
-    : depth <= 14
-      ? depth / 2
-      : Math.min(depth / 2, 14);
+  materials.push(
+    toMaterial(`${deck.joistSize} blocking`, 'Framing', deck.blockingBoardCount, 'boards', '8 ft stock', 'Blocking added on left and right sides for border support.'),
+    toMaterial('6x6 posts', 'Foundation + posts', deck.postCount, 'posts', `${deck.postLength} ft stock`, 'Notched posts with beam sitting on post.'),
+    toMaterial('80 lb concrete bags', 'Foundation + posts', deck.concreteBags, 'bags', '3 bags per post', 'Footer standard: 3 bags per post.'),
+    toMaterial('Post brackets', 'Foundation + posts', deck.postBases, 'ea', 'One per post', 'Each bracket anchored to footing.'),
+    toMaterial('1/2 in concrete anchors', 'Foundation + posts', deck.concreteAnchors, 'ea', 'One per bracket', 'One concrete anchor per post bracket.'),
+    toMaterial('Joist hangers', 'Hardware', deck.joistHangers, 'ea', `${deck.joistSize} hangers`, deck.isFreestanding ? 'Freestanding condition counts house-side and outer-side hangers.' : 'Attached ledger counts one hanger per joist.'),
+    toMaterial('Rafter ties', 'Hardware', deck.rafterTies, 'ea', 'One per joist at each beam line', 'Attached with 1-1/2 in nails.'),
+    toMaterial('1/2 in carriage bolts', 'Hardware', deck.carriageBolts, 'ea', 'Beam/post and railing posts', 'Two per beam post connection and two per wood/vinyl railing post.'),
+    toMaterial('1/2 in washers', 'Hardware', deck.carriageBolts, 'ea', 'Match carriage bolts', undefined),
+    toMaterial('1/2 in nuts', 'Hardware', deck.carriageBolts, 'ea', 'Match carriage bolts', undefined),
+    toMaterial('3 in framing screws', 'Hardware', Math.max(1, Math.ceil(deck.width / 2) + deck.blockingCount), 'ea', 'Front framing + blocking', 'Used for the front of the deck and blocking assembly.'),
+    toMaterial('3 in hanger / bracket nails', 'Hardware', deck.joistHangers + deck.postBases, 'ea', 'Hangers and post brackets', 'Used for hangers and post brackets.'),
+    toMaterial('1-1/2 in tie nails', 'Hardware', deck.rafterTies * 4, 'ea', 'Rafter tie install', 'Used for rafter ties.'),
+    toMaterial('Lateral load brackets', 'Hardware', deck.lateralLoadBrackets, 'ea', 'Every 2 ft on ledger', 'Ledger-only hardware. Omitted on freestanding/brick conditions.'),
+    toMaterial('Structural SDS screws', 'Hardware', deck.sdsCorners, 'ea', 'Band board corners', 'One at each band corner.'),
+    toMaterial(deck.fastenerType === 'top screws' ? 'Top-mount deck screw boxes' : '2-3/8 in CAMO screw boxes', 'Hardware', deck.deckFastenerBoxes, 'boxes', deck.fastenerType === 'top screws' ? '365 screws / box' : '1750 screws / box', 'Two fasteners per joist intersection.'),
+    toMaterial('Joist tape', 'Hardware', Math.ceil(deck.joistTapeLf), 'lf', 'Linear footage', 'Covers joists and band boards.'),
+    toMaterial("Fascia board 12'", 'Trim', deck.fasciaPieces, 'boards', '12 ft stock', 'Includes band board fascia plus stair sides and risers.'),
+    toMaterial('Color matching fascia screw boxes', 'Trim', Math.max(1, Math.ceil(deck.fasciaPieces / 8)), 'boxes', '75 / box', 'For fascia install.'),
+    toMaterial('2x12 stair stringers', 'Stairs', deck.stairStringers, 'boards', `${deck.stairStringerLength} ft stock`, 'Stringers built on site at 12 in on-center.'),
+    toMaterial('8 ft railing sections', 'Railing', deck.railingSections8, 'sections', '8 ft kits', `Railing type: ${railingType}.`),
+    toMaterial('6 ft railing sections', 'Railing', deck.railingSections6, 'sections', '6 ft kits', `Railing type: ${railingType}.`),
+    toMaterial('4x4 railing posts', 'Railing', deck.railingPosts, 'posts', 'PT 4x4 stock', 'Required for wood, vinyl, and composite railing systems.'),
+  );
 
-  const joistSize = joistSpanTarget <= 12 ? '2x8' : joistSpanTarget <= 14 ? '2x10' : '2x12';
-  const joistStockLength = chooseStockLength(Math.min(depth, joistSize === '2x8' ? 12 : joistSize === '2x10' ? 14 : 16));
-  const joistCount = Math.max(2, Math.floor(width / JOIST_SPACING_FT) + 1);
-  const joistLinearFeet = joistCount * joistStockLength;
-
-  const beamRows = attachment === 'siding' ? 1 : depth > 14 ? 2 : 2;
-  const beamSize = joistSize === '2x8' ? '2x10' : joistSize === '2x10' ? '2x12' : 'PSL';
-  const frontBeamSpan = width;
-  const postsPerBeam = Math.max(3, Math.ceil(frontBeamSpan / POST_TARGET_SPACING) + 1);
-  const actualPostSpacing = frontBeamSpan / Math.max(postsPerBeam - 1, 1);
-  const postsPerBeamAdjusted = actualPostSpacing > POST_MAX_SPACING ? postsPerBeam + 1 : postsPerBeam;
-  const postCount = beamRows * postsPerBeamAdjusted;
-  const postStockLength = chooseStockLength(deckHeight + 2, [8, 10, 12, 16]);
-  const beamStockLength = beamSize === 'PSL'
-    ? 20
-    : chooseStockLength(Math.min(frontBeamSpan / Math.max(postsPerBeamAdjusted - 1, 1) + 1, beamSize === '2x10' ? 7 : 9), [8, 10, 12, 16]);
-  const beamSegmentsPerRow = Math.ceil(frontBeamSpan / (beamSize === '2x10' ? 7 : beamSize === '2x12' ? 9 : 13));
-
-  const deckBoardWasteFactor = 1.08;
-  const deckBoardPieces = Math.ceil(boardCount * deckBoardWasteFactor);
-  const borderLf = borderSameBoard ? perimeter : 0;
-  const borderPieces = borderSameBoard ? Math.ceil(borderLf / boardStockLength) : 0;
-  const houseSideLength = width;
-  const doubleBandLf = perimeter + houseSideLength;
-  const bandBoardSize = joistSize;
-  const bandBoardStock = chooseStockLength(Math.max(width, depth), [8, 10, 12, 16, 20]);
-  const bandBoardPieces = Math.ceil((doubleBandLf * 2) / bandBoardStock);
-  const blockingRows = 2;
-  const blockingCount = joistCount * blockingRows;
-  const blockingStockPieces = Math.ceil((blockingCount * 1.5) / 8);
-
-  const joistTapeLf = joistLinearFeet + doubleBandLf;
-  const joistHangers = attachment === 'siding' ? joistCount : joistCount * 2;
-  const rafterTies = joistCount * beamRows;
-  const postBases = postCount;
-  const concreteBags = postCount * 3;
-  const concreteAnchors = postCount;
-  const carriageBolts = postCount * 2 + (railingType === 'wood' || railingType === 'vinyl-composite' ? Math.max(2, Math.ceil(railingRun / 6) + 1) * 2 : 0);
-  const washers = carriageBolts;
-  const nuts = carriageBolts;
-  const lateralLoadBrackets = attachment === 'siding' ? Math.max(2, Math.ceil(width / 2)) : 0;
-  const sdsCorners = 4;
-  const framingScrews3In = Math.ceil(width / 2) + blockingCount;
-  const hangerNails3In = joistHangers + postBases;
-  const rafterTieNails = rafterTies * 4;
-  const fastenerIntersections = deckBoardPieces * joistCount;
-  const deckFastenerBoxes = deckingType === 'pressure-treated'
-    ? Math.ceil((fastenerIntersections * 2) / 365)
-    : Math.ceil((fastenerIntersections * 2) / 1750);
-
-  const fasciaLf = perimeter + (stairCount > 0 ? stairWidth * stairCount * 2 + stairRisers * stairWidth * stairCount : 0);
-  const fasciaStockLength = 12;
-  const fasciaPieces = Math.ceil(fasciaLf / fasciaStockLength);
-
-  const stairStringersPerRun = stairCount > 0 ? Math.max(2, Math.floor((stairWidth * 12) / 12) + 1) : 0;
-  const stringerStockLength = chooseStockLength(Math.max(stairRise * 1.5, 12), [12, 16, 20]);
-  const stairStringers = stairStringersPerRun * stairCount;
-
-  const railingSections6 = Math.floor(railingRun / 8) === 0 ? Math.ceil(railingRun / 6) : Math.max(0, Math.ceil((railingRun % 8) / 6));
-  const railingSections8 = Math.floor(railingRun / 8);
-  const railingPosts = railingType === 'aluminum' ? 0 : Math.max(2, Math.ceil(railingRun / 6) + 1);
-
-  const materials: MaterialItem[] = [
-    toMaterial(`Deck board ${boardStockLength}'`, 'Decking', deckBoardPieces, 'boards', `${boardStockLength} ft stock`, `Board run set to ${boardRun}; includes 8% waste.`),
-    borderSameBoard ? toMaterial(`Border / picture-frame board ${boardStockLength}'`, 'Decking', borderPieces, 'boards', `${boardStockLength} ft stock`, 'Same decking style/color as main field boards.') : null,
-    stairTreadBoards > 0 ? toMaterial(`Stair tread board ${chooseStockLength(stairWidth, [8, 12, 16])}'`, 'Decking', stairTreadBoards, 'boards', `${chooseStockLength(stairWidth, [8, 12, 16])} ft stock`, 'Assumes two tread boards per tread.') : null,
-    toMaterial(`${joistSize} joists`, 'Framing', joistCount, 'boards', `${joistStockLength} ft stock`, '12 in on-center joists.'),
-    toMaterial(`${beamSize} beam boards`, 'Framing', beamRows * beamSegmentsPerRow * 2, 'boards', `${beamStockLength} ft stock`, 'Double beam with one size larger member than joists.'),
-    toMaterial(`${bandBoardSize} double band / rim boards`, 'Framing', bandBoardPieces, 'boards', `${bandBoardStock} ft stock`, 'Includes double band for strength.'),
-    toMaterial(`${joistSize} border blocking`, 'Framing', blockingStockPieces, 'boards', '8 ft stock', 'Blocking at both sides to support border boards.'),
-    toMaterial('6x6 posts', 'Foundation + posts', postCount, 'posts', `${postStockLength} ft stock`, 'Post length includes trim/notch allowance.'),
-    toMaterial('80 lb concrete bags', 'Foundation + posts', concreteBags, 'bags', '3 bags per post', 'Based on your footer standard.'),
-    toMaterial('Post brackets', 'Foundation + posts', postBases, 'ea', 'One per post', 'Beam sits on notched post above bracket.'),
-    toMaterial('1/2 in concrete anchors', 'Foundation + posts', concreteAnchors, 'ea', 'One per bracket', 'Anchor each post bracket to footing.'),
-    toMaterial('Joist hangers', 'Hardware', joistHangers, 'ea', `${joistSize} hanger`, attachment === 'siding' ? 'Ledger-mounted joists.' : 'Freestanding condition counts both ends.'),
-    toMaterial('Rafter ties', 'Hardware', rafterTies, 'ea', 'One per joist at beam', 'Installed at beam line.'),
-    attachment === 'siding' ? toMaterial('Lateral load brackets', 'Hardware', lateralLoadBrackets, 'ea', 'Every 2 ft on ledger', 'Attached decks only.') : null,
-    toMaterial('Structural SDS screws', 'Hardware', sdsCorners, 'ea', 'Corners of band board', 'One at each corner.'),
-    toMaterial('1/2 in carriage bolts', 'Hardware', carriageBolts, 'ea', 'Beam/post + railing posts', 'Includes nuts and washers in separate lines.'),
-    toMaterial('1/2 in washers', 'Hardware', washers, 'ea', 'Match carriage bolts', undefined),
-    toMaterial('1/2 in nuts', 'Hardware', nuts, 'ea', 'Match carriage bolts', undefined),
-    toMaterial('3 in exterior screws', 'Hardware', framingScrews3In, 'ea', 'Front framing / blocking', 'Used for front of deck assembly.'),
-    toMaterial('3 in hanger / bracket nails', 'Hardware', hangerNails3In, 'ea', 'For hangers and post brackets', undefined),
-    toMaterial('1-1/2 in rafter tie nails', 'Hardware', rafterTieNails, 'ea', 'Rafter tie install', undefined),
-    deckingType === 'pressure-treated'
-      ? toMaterial('Top-mount deck screw boxes', 'Hardware', deckFastenerBoxes, 'boxes', '365 screws / box', 'Two screws per joist intersection.')
-      : toMaterial('2-3/8 in CAMO screw boxes', 'Hardware', deckFastenerBoxes, 'boxes', '1750 screws / box', 'Two hidden screws per joist intersection.'),
-    toMaterial('Joist tape', 'Hardware', roundUp(joistTapeLf, 0), 'lf', 'Rolls by linear footage', 'Covers joists and band boards.'),
-    toMaterial(`Fascia board ${fasciaStockLength}'`, 'Trim', fasciaPieces, 'boards', `${fasciaStockLength} ft stock`, 'Includes band board fascia plus stair sides/risers.'),
-    stairStringers > 0 ? toMaterial('2x12 stair stringers', 'Stairs', stairStringers, 'boards', `${stringerStockLength} ft stock`, 'Site-built stringers at 12 in O.C.') : null,
-    railingSections8 > 0 ? toMaterial('8 ft railing sections', 'Railing', railingSections8, 'sections', '8 ft kits', `Railing type: ${railingType}.`) : null,
-    railingSections6 > 0 ? toMaterial('6 ft railing sections', 'Railing', railingSections6, 'sections', '6 ft kits', `Railing type: ${railingType}.`) : null,
-    railingPosts > 0 ? toMaterial('4x4 railing posts', 'Railing', railingPosts, 'posts', '4x4 PT posts', 'Used for wood, vinyl, or composite railing systems.') : null,
-  ].filter(Boolean) as MaterialItem[];
+  const filteredMaterials = materials.filter((item) => item.quantity > 0);
 
   return {
     summary: [
-      { label: 'Deck area', value: `${area.toFixed(1)} sq ft` },
-      { label: 'Perimeter', value: `${perimeter.toFixed(1)} lf` },
-      { label: 'Joists', value: `${joistCount} @ ${joistSize}` },
-      { label: 'Posts', value: `${postCount}` },
-      { label: 'Beam rows', value: `${beamRows}` },
-      { label: 'Board stock', value: `${boardStockLength} ft` },
+      { label: 'Deck area', value: `${deck.area.toFixed(1)} sq ft` },
+      { label: 'Exposed perimeter', value: `${deck.exposedPerimeter.toFixed(1)} lf` },
+      { label: 'Joist package', value: `${deck.joistCount} @ ${deck.joistSize}` },
+      { label: 'Beam lines', value: `${deck.beamLines.length}` },
+      { label: 'Posts', value: `${deck.postCount}` },
+      { label: 'Stair risers', value: `${deck.stairRisers}` },
     ],
-    materials,
+    materials: filteredMaterials,
     orderNotes: [
-      `${attachment === 'brick' ? 'Brick wall condition is treated as freestanding, so the deck adds the house-side beam/post row.' : 'Attached siding condition keeps the house side on a ledger and moves the main beam to allow up to 2 ft joist cantilever where possible.'}`,
-      `Post layout targets about ${POST_TARGET_SPACING.toFixed(1)} ft spacing to stay comfortably inside the ${POST_MAX_SPACING.toFixed(1)} ft max you gave, rather than designing right at the limit.`,
-      `Deck boards are grouped by stock length, with border boards and stair tread boards split into separate order lines so the crew can see exactly where each board family is used.`,
-      'This pass is a strong starting ruleset, but beam layout on irregular shapes should still be field-checked until we add beam-line editing directly into the footprint tool.',
+      deck.attachment === 'brick'
+        ? 'Brick wall decks are treated as freestanding, so the house side gets its own beam and post line instead of a ledger.'
+        : deck.attachment === 'siding'
+          ? 'Attached siding decks keep the ledger at the house and work backward from a 2 ft front cantilever with roughly 10 ft max support spacing.'
+          : 'Freestanding decks receive beam/post support at the house side and the front side.',
+      `Post layout targets about 6 ft spacing so the design stays comfortably inside your 7.5 ft maximum and avoids designing at the limit.`,
+      `Beam package uses ${deck.beamMemberSize} because the widest clear post span in this layout is about ${Math.max(0, ...deck.beamLines.flatMap((line) => line.postXs.slice(1).map((x, index) => x - line.postXs[index]))).toFixed(2)} ft.`,
+      'Deck boards, border boards, stair treads, and framing members are grouped by stock length so the order sheet reads more like how your crew buys and stages materials.',
+      'Irregular shapes are read from the footprint drawing, but stair placement and exact beam offsets should still be field-checked until we add direct beam and stair editing.',
     ],
   };
 }

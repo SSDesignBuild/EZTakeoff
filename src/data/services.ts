@@ -25,7 +25,7 @@ export const SERVICES: ServiceDefinition[] = [
     slug: 'decks',
     label: 'Decks',
     intro: 'Draw the deck footprint, define structural conditions, and generate a grouped take-off that follows S&S framing habits instead of spreadsheet guesswork.',
-    highlights: ['Interactive footprint editor', '12 in O.C. framing logic', 'Grouped deck board and stair counts', 'Attached vs brick/freestanding framing'],
+    highlights: ['Interactive footprint editor', 'Beam + post layout preview', 'Deck boards grouped by stock length', 'Attached vs brick/freestanding framing'],
     defaults: {
       deckHeight: 8,
       attachment: 'siding',
@@ -103,7 +103,7 @@ export const SERVICES: ServiceDefinition[] = [
     formulaNotes: [
       'Joists are calculated at 12 in on-center and sized from the span table you provided: 2x8 to 12 ft, 2x10 to 14 ft, and 2x12 to 16 ft.',
       'Attached siding decks assume the first beam can sit at projection minus 2 ft when that fits the joist span. Brick conditions are treated as freestanding against the house.',
-      'Take-off groups decking by length, includes border boards, stair tread boards, double band boards, blocking, beam hardware, fascia, and fastening bundles.',
+      'Take-off groups decking by stock length and splits field boards, border boards, stair tread boards, double band boards, fascia, and hardware bundles.',
     ],
   },
   {

@@ -1,90 +1,95 @@
-import { DeckPoint } from '../lib/types';
+import { buildDeckModel } from '../lib/deckModel';
 
 interface LayoutPreviewProps {
   serviceSlug: string;
   values: Record<string, string | number | boolean>;
 }
 
-const parseDeckShape = (raw: string | number | boolean | undefined): DeckPoint[] => {
-  if (typeof raw !== 'string') {
-    return [
-      { x: 0, y: 0 },
-      { x: 16, y: 0 },
-      { x: 16, y: 12 },
-      { x: 0, y: 12 },
-    ];
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as DeckPoint[];
-    if (Array.isArray(parsed) && parsed.length >= 3) {
-      return parsed.map((point) => ({ x: Number(point.x), y: Number(point.y) }));
-    }
-  } catch {
-    return [
-      { x: 0, y: 0 },
-      { x: 16, y: 0 },
-      { x: 16, y: 12 },
-      { x: 0, y: 12 },
-    ];
-  }
-
-  return [
-    { x: 0, y: 0 },
-    { x: 16, y: 0 },
-    { x: 16, y: 12 },
-    { x: 0, y: 12 },
-  ];
-};
-
 export function LayoutPreview({ serviceSlug, values }: LayoutPreviewProps) {
   if (serviceSlug === 'decks') {
-    const points = parseDeckShape(values.deckShape);
-    const xs = points.map((point) => point.x);
-    const ys = points.map((point) => point.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    const spanX = Math.max(maxX - minX, 1);
-    const spanY = Math.max(maxY - minY, 1);
-    const boardRun = String(values.boardRun ?? 'width');
-    const scale = Math.min(340 / spanX, 260 / spanY);
-    const x0 = 30;
-    const y0 = 30;
+    const deck = buildDeckModel(values);
+    const scale = Math.min(360 / Math.max(deck.width, 1), 260 / Math.max(deck.depth, 1));
+    const x0 = 36;
+    const y0 = 42;
 
-    const svgPoints = points.map((point) => ({
-      x: x0 + (point.x - minX) * scale,
-      y: y0 + (point.y - minY) * scale,
-    }));
+    const pointString = deck.points.map((point) => `${x0 + (point.x - deck.minX) * scale},${y0 + (point.y - deck.minY) * scale}`).join(' ');
 
-    const joistCount = Math.max(2, Math.ceil(((boardRun === 'width' ? spanX : spanY) * 12) / 12) + 1);
+    const joistLines = deck.joistDirection === 'vertical'
+      ? Array.from({ length: Math.max(0, Math.floor(deck.width)) }, (_, index) => deck.minX + 0.5 + index)
+      : Array.from({ length: Math.max(0, Math.floor(deck.depth)) }, (_, index) => deck.minY + 0.5 + index);
 
     return (
       <div className="visual-card">
         <div className="visual-header">
           <h3>Layout preview</h3>
-          <span>Deck shape with joist orientation and house edge reference</span>
+          <span>House, beam lines, posts, joists, and footprint</span>
         </div>
-        <svg viewBox={`0 0 ${spanX * scale + 80} ${spanY * scale + 80}`} className="layout-svg">
-          <polygon
-            points={svgPoints.map((point) => `${point.x},${point.y}`).join(' ')}
-            fill="rgba(178, 124, 76, 0.18)"
-            stroke="var(--accent)"
-            strokeWidth="4"
-          />
-          {Array.from({ length: joistCount }, (_, index) => {
-            if (boardRun === 'width') {
-              const x = x0 + 8 + (index * (spanX * scale - 16)) / Math.max(joistCount - 1, 1);
-              return <line key={index} x1={x} y1={y0 + 10} x2={x} y2={y0 + spanY * scale - 10} className="joist-line" />;
-            }
+        <svg viewBox={`0 0 ${deck.width * scale + 84} ${deck.depth * scale + 96}`} className="layout-svg">
+          <polygon points={pointString} className="deck-polygon" />
 
-            const y = y0 + 8 + (index * (spanY * scale - 16)) / Math.max(joistCount - 1, 1);
-            return <line key={index} x1={x0 + 10} y1={y} x2={x0 + spanX * scale - 10} y2={y} className="joist-line" />;
+          {!deck.isFreestanding && (
+            <>
+              <line x1={x0} y1={y0 - 16} x2={x0 + deck.width * scale} y2={y0 - 16} className="house-line" />
+              <text x={x0} y={y0 - 22} className="svg-note">House / ledger side</text>
+            </>
+          )}
+
+          {joistLines.map((lineValue) => {
+            if (deck.joistDirection === 'vertical') {
+              const x = x0 + (lineValue - deck.minX) * scale;
+              return <line key={lineValue} x1={x} y1={y0 + 6} x2={x} y2={y0 + deck.depth * scale - 6} className="joist-line" />;
+            }
+            const y = y0 + (lineValue - deck.minY) * scale;
+            return <line key={lineValue} x1={x0 + 6} y1={y} x2={x0 + deck.width * scale - 6} y2={y} className="joist-line" />;
           })}
-          <line x1={x0} y1={y0 - 14} x2={x0 + spanX * scale} y2={y0 - 14} className="house-line" />
-          <text x={x0} y={y0 - 20} className="svg-note">House / ledger side</text>
+
+          {deck.beamLines.map((beam, index) => (
+            <g key={`${beam.y}-${index}`}>
+              {beam.segments.map((segment) => (
+                <line
+                  key={`${segment.startX}-${segment.endX}`}
+                  x1={x0 + (segment.startX - deck.minX) * scale}
+                  y1={y0 + (beam.y - deck.minY) * scale}
+                  x2={x0 + (segment.endX - deck.minX) * scale}
+                  y2={y0 + (beam.y - deck.minY) * scale}
+                  className="beam-line"
+                />
+              ))}
+              {beam.postXs.map((postX) => (
+                <rect
+                  key={`${postX}-${beam.y}`}
+                  x={x0 + (postX - deck.minX) * scale - 4}
+                  y={y0 + (beam.y - deck.minY) * scale - 4}
+                  width="8"
+                  height="8"
+                  className="post-node"
+                  rx="2"
+                />
+              ))}
+            </g>
+          ))}
+
+          {deck.exposedSegments.map((segment, index) => (
+            <line
+              key={`${segment.length}-${index}`}
+              x1={x0 + (segment.start.x - deck.minX) * scale}
+              y1={y0 + (segment.start.y - deck.minY) * scale}
+              x2={x0 + (segment.end.x - deck.minX) * scale}
+              y2={y0 + (segment.end.y - deck.minY) * scale}
+              className="railing-line"
+            />
+          ))}
+
+          <text x={x0} y={y0 + deck.depth * scale + 24} className="svg-note">
+            {`Joists ${deck.joistSize} @ 12 in O.C. · ${deck.beamLines.length} beam line${deck.beamLines.length === 1 ? '' : 's'} · ${deck.postCount} posts`}
+          </text>
         </svg>
+        <div className="legend-row">
+          <span><i className="legend-swatch joist-line-swatch" />Joists</span>
+          <span><i className="legend-swatch beam-line-swatch" />Beams</span>
+          <span><i className="legend-swatch post-node-swatch" />Posts</span>
+          <span><i className="legend-swatch railing-line-swatch" />Exposed edge / railing</span>
+        </div>
       </div>
     );
   }

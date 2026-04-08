@@ -194,6 +194,17 @@ button, input, select { font: inherit; }
 .screen-divider { stroke: var(--accent); stroke-width: 4; }
 .screen-chair-rail { stroke: color-mix(in srgb, var(--green-strong) 60%, transparent); stroke-width: 4; stroke-dasharray: 10 6; }
 
+.beam-line { stroke: var(--green-strong); stroke-width: 4; stroke-linecap: round; }
+.post-node { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+.railing-line { stroke: color-mix(in srgb, var(--accent) 72%, transparent); stroke-width: 3; stroke-dasharray: 8 5; }
+.legend-row { display: flex; flex-wrap: wrap; gap: 0.9rem; margin-top: 0.85rem; color: var(--muted); font-size: 0.9rem; }
+.legend-row span { display: inline-flex; align-items: center; gap: 0.45rem; }
+.legend-swatch { width: 18px; height: 4px; border-radius: 999px; display: inline-block; }
+.joist-line-swatch { background: color-mix(in srgb, var(--green-strong) 65%, transparent); }
+.beam-line-swatch { background: var(--green-strong); }
+.post-node-swatch { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+.railing-line-swatch { background: color-mix(in srgb, var(--accent) 72%, transparent); }
+
 .deck-designer-card { padding: 1.35rem; }
 .deck-designer-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr); gap: 1rem; }
 .deck-canvas-wrap { padding: 1rem; border-radius: 20px; background: color-mix(in srgb, var(--panel-strong) 84%, transparent); border: 1px solid var(--border); }
