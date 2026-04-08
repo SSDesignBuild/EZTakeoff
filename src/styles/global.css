@@ -183,8 +183,10 @@ button, input, select { font: inherit; }
 .layout-svg, .deck-canvas { width: 100%; height: auto; display: block; }
 .grid-line { stroke: var(--grid-line); stroke-width: 1; }
 .deck-polygon { fill: var(--svg-soft); stroke: var(--accent); stroke-width: 3; }
+.deck-polyline { stroke: var(--accent); stroke-width: 3; stroke-dasharray: 10 8; }
 .deck-point { fill: var(--green-strong); stroke: var(--panel); stroke-width: 3; cursor: pointer; }
 .deck-point.active { fill: var(--accent); }
+.deck-point.close-target { fill: var(--danger); }
 .deck-point-label, .svg-note { font-size: 12px; fill: var(--muted); }
 .joist-line { stroke: color-mix(in srgb, var(--green-strong) 65%, transparent); stroke-width: 2; }
 .house-line { stroke: var(--accent); stroke-width: 5; }
@@ -207,7 +209,8 @@ button, input, select { font: inherit; }
 
 .deck-designer-card { padding: 1.35rem; }
 .deck-designer-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.9fr); gap: 1rem; }
-.deck-canvas-wrap { padding: 1rem; border-radius: 20px; background: color-mix(in srgb, var(--panel-strong) 84%, transparent); border: 1px solid var(--border); }
+.deck-canvas-wrap { padding: 1rem; border-radius: 20px; background: color-mix(in srgb, var(--panel-strong) 84%, transparent); border: 1px solid var(--border); position: relative; }
+.drawing-hint { position: absolute; top: 1rem; left: 1rem; right: 1rem; z-index: 2; pointer-events: none; background: color-mix(in srgb, var(--panel) 92%, transparent); }
 .deck-designer-controls { display: grid; gap: 1rem; }
 .metrics-mini-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.9rem; }
 .metrics-mini-grid strong { display: block; margin-top: 0.2rem; }
