@@ -198,6 +198,8 @@ export const SERVICES: ServiceDefinition[] = [
       metalGauge: '.26',
       foamDensity: 1,
       fanBeam: 'none',
+      screenUnderneath: false,
+      beamStyle: 'atlas',
     },
     fields: [
       { key: 'width', label: 'Width (ft)', type: 'number', min: 1, step: 0.1 },
@@ -256,14 +258,25 @@ export const SERVICES: ServiceDefinition[] = [
         options: [
           { label: 'No fan beam', value: 'none' },
           { label: 'Centered fan beam', value: 'centered' },
-          { label: 'Fan beam 1 ft from male / female side', value: 'offset' },
+          { label: '1 ft from female side', value: 'female-offset' },
+          { label: '1 ft from male side', value: 'male-offset' },
+        ],
+      },
+      { key: 'screenUnderneath', label: 'Planning to screen under this cover', type: 'boolean' },
+      {
+        key: 'beamStyle',
+        label: 'Front beam style',
+        type: 'select',
+        options: [
+          { label: 'Atlas beam (open cover)', value: 'atlas' },
+          { label: '3x3 beam for screened cover', value: '3x3' },
         ],
       },
     ],
     formulaNotes: [
-      '3 in panels are checked against a 15 ft projection limit with a 2 ft overhang assumption. Upgraded .32 metal with 2 lb foam can extend that to about 19 ft, and 6 in upgraded panels can carry longer projections.',
-      'Gutter is only used on the front low side. C-channel only appears on attached jobs. Drip-edge fascia caps the left and right sides.',
-      'Gutter, C-channel, and fascia are grouped in 24 ft stock lengths for ordering.',
+      '3 in panels are checked against your 15 ft rule with a 2 ft overhang assumption. Upgraded .32 metal with 2 lb foam can extend 3 in panels to about 19 ft, and 6 in upgraded panels can carry up to about 26 ft.',
+      'Standard non-upgraded covers add a support beam once the projection goes past 13 ft, and continue adding support at roughly each additional 13 ft of projection.',
+      'Gutter, C-channel, and drip-edge fascia are grouped in 24 ft stock lengths. C-channel is attached jobs only, gutter is the front low side only, and every cover gets two downspout kits.',
     ],
   },
   {

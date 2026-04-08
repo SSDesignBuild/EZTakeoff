@@ -46,6 +46,14 @@ export function LayoutPreview({ serviceSlug, values }: LayoutPreviewProps) {
     const projection = Number(values.projection ?? 8);
     const panelWidth = Number(values.panelWidth ?? 4);
     const panelCount = Math.ceil(width / panelWidth);
+    const structureType = String(values.structureType ?? 'attached');
+    const fanBeam = String(values.fanBeam ?? 'none');
+    const beamStyle = String(values.beamStyle ?? 'atlas');
+    const panelThickness = Number(values.panelThickness ?? 3);
+    const metalGauge = String(values.metalGauge ?? '.26');
+    const foamDensity = Number(values.foamDensity ?? 1);
+    const standard3In = panelThickness === 3 && metalGauge !== '.32' && foamDensity < 2;
+    const supportBeamCount = standard3In && projection > 13 ? Math.ceil(projection / 13) - 1 : 0;
     const scale = 20;
     const x0 = 40;
     const y0 = 60;
@@ -53,18 +61,24 @@ export function LayoutPreview({ serviceSlug, values }: LayoutPreviewProps) {
     const roofD = projection * scale;
     return (
       <div className="visual-card">
-        <div className="visual-header"><h3>Layout preview</h3><span>Top view with panel bays and trim zones</span></div>
+        <div className="visual-header"><h3>Layout preview</h3><span>Top view with panel bays, front beam, support beam checks, and trim zones</span></div>
         <svg viewBox={`0 0 ${roofW + 80} ${roofD + 120}`} className="layout-svg">
           <rect x={x0} y={y0} width={roofW} height={roofD} className="roof-box" rx="10" />
           {Array.from({ length: panelCount - 1 }, (_, index) => {
             const x = x0 + ((index + 1) * roofW) / panelCount;
             return <line key={index} x1={x} y1={y0} x2={x} y2={y0 + roofD} className="roof-bay" />;
           })}
-          <line x1={x0} y1={y0 + roofD + 18} x2={x0 + roofW} y2={y0 + roofD + 18} className="house-line" />
-          <text x={x0} y={y0 - 12} className="svg-note">House / C-channel side</text>
-          <text x={x0 + roofW / 2 - 30} y={y0 + roofD + 38} className="svg-note">Front gutter</text>
+          {Array.from({ length: supportBeamCount }, (_, index) => {
+            const y = y0 + (((index + 1) * roofD) / (supportBeamCount + 1));
+            return <line key={`support-${index}`} x1={x0} y1={y} x2={x0 + roofW} y2={y} className="beam-line" />;
+          })}
+          {fanBeam !== 'none' && <line x1={fanBeam === 'centered' ? x0 + roofW / 2 : fanBeam === 'female-offset' ? x0 + 20 : x0 + roofW - 20} y1={y0} x2={fanBeam === 'centered' ? x0 + roofW / 2 : fanBeam === 'female-offset' ? x0 + 20 : x0 + roofW - 20} y2={y0 + roofD} className="stair-edge-highlight" />}
+          {structureType === 'attached' && <text x={x0} y={y0 - 12} className="svg-note">House / C-channel side</text>}
+          {structureType !== 'attached' && <text x={x0} y={y0 - 12} className="svg-note">Freestanding back side</text>}
+          <text x={x0 + roofW / 2 - 32} y={y0 + roofD + 38} className="svg-note">Front gutter + beam</text>
           <text x={x0 - 12} y={y0 + roofD / 2} className="svg-note">Fascia</text>
           <text x={x0 + roofW + 8} y={y0 + roofD / 2} className="svg-note">Fascia</text>
+          <text x={x0} y={y0 + roofD + 56} className="svg-note">{`${beamStyle === '3x3' ? '3x3 beam' : 'Atlas beam'} · ${panelCount} panel bay${panelCount === 1 ? '' : 's'}${supportBeamCount ? ` · ${supportBeamCount} mid support` : ''}`}</text>
         </svg>
       </div>
     );
