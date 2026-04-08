@@ -9,9 +9,15 @@ export const DEFAULT_SCREEN_SECTION: SectionConfig = {
   chairRail: true,
   pickets: false,
   kickPanel: 'none',
+  kickPanelHeight: 2,
   doorType: 'none',
   doorPlacement: 'center',
+  doorOffsetInches: 0,
+  doorWidth: 3,
   doorSwing: 'outswing',
+  dogDoor: 'none',
+  floorMount: 'concrete',
+  wallMount: 'wood',
 };
 
 export function createSection(index: number, overrides: Partial<SectionConfig> = {}): SectionConfig {
@@ -39,13 +45,19 @@ export function parseSections(raw: string | number | boolean | undefined, count 
           chairRail: Boolean(item.chairRail),
           pickets: Boolean(item.pickets),
           kickPanel: (item.kickPanel ?? 'none') as SectionConfig['kickPanel'],
+          kickPanelHeight: Number(item.kickPanelHeight ?? DEFAULT_SCREEN_SECTION.kickPanelHeight),
           doorType: (item.doorType ?? 'none') as SectionConfig['doorType'],
           doorPlacement: (item.doorPlacement ?? 'center') as SectionConfig['doorPlacement'],
+          doorOffsetInches: Number(item.doorOffsetInches ?? DEFAULT_SCREEN_SECTION.doorOffsetInches),
+          doorWidth: Number(item.doorWidth ?? DEFAULT_SCREEN_SECTION.doorWidth),
           doorSwing: (item.doorSwing ?? 'outswing') as SectionConfig['doorSwing'],
+          dogDoor: (item.dogDoor ?? 'none') as SectionConfig['dogDoor'],
+          floorMount: (item.floorMount ?? 'concrete') as SectionConfig['floorMount'],
+          wallMount: (item.wallMount ?? 'wood') as SectionConfig['wallMount'],
         }));
       }
     } catch {
-      // ignore
+      // ignore parse failure
     }
   }
 

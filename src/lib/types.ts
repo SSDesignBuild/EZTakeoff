@@ -40,7 +40,13 @@ export interface SectionConfig {
   chairRail: boolean;
   pickets: boolean;
   kickPanel: 'none' | 'trim-coil' | 'insulated';
+  kickPanelHeight: number;
   doorType: 'none' | 'single' | 'french';
-  doorPlacement: 'left' | 'center' | 'right';
+  doorPlacement: 'left' | 'center' | 'right' | 'custom';
+  doorOffsetInches: number;
+  doorWidth: number;
   doorSwing: 'inswing' | 'outswing';
+  dogDoor: 'none' | 'small' | 'medium' | 'large';
+  floorMount: 'concrete' | 'wood';
+  wallMount: 'concrete' | 'wood';
 }

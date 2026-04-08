@@ -313,3 +313,36 @@ th { color: var(--muted); font-size: 0.85rem; }
 .toggle-cluster { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; align-items: end; }
 .small-btn { padding: 0.55rem 0.85rem; }
 .ghost-btn:disabled, .secondary-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* v7 polish */
+body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.content-card, .visual-card, .table-card, .hero-card { border-radius: 20px; }
+.tag, .nav-link, .toggle-field, .service-card, .step-card, .callout-box, .metric-card { border-radius: 16px; }
+.primary-btn, .secondary-btn, .ghost-btn, .theme-toggle { border-radius: 14px; padding: 0.75rem 1rem; }
+.tag { padding: 0.45rem 0.7rem; font-size: 0.82rem; }
+.form-field input, .form-field select { min-height: 44px; }
+.section-card { padding: 1rem; border: 1px solid var(--border); border-radius: 18px; background: color-mix(in srgb, var(--panel) 95%, transparent); }
+.toggle-cluster { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
+.band-line { stroke: #6b7280; stroke-width: 4; }
+.band-line.secondary { stroke: #9ca3af; stroke-width: 2.5; stroke-dasharray: 8 6; }
+.dimension-line { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.stair-tread-line { stroke: #f59e0b; stroke-width: 2; }
+.stringer-line { stroke: #ef4444; stroke-width: 2.5; }
+.railing-post-node { fill: #111827; stroke: white; stroke-width: 1.5; }
+.receiver-line { stroke: #ef4444; stroke-width: 3; }
+.one-by-two-line-swatch { background: #f97316; }
+.two-by-two-line-swatch { background: #2563eb; }
+.receiver-line-swatch { background: #ef4444; }
+.picket-line-swatch { background: #7c3aed; }
+.vgroove-line-swatch { background: #ec4899; }
+.two-by-two-line { stroke: #2563eb; stroke-width: 3; }
+.two-by-two-no-groove-line { stroke: #2563eb; stroke-width: 3; }
+.channel-2x2-line { stroke: #eab308; stroke-width: 3; }
+.picket-line { stroke: #7c3aed; stroke-width: 2; }
+.vgroove-top-line { stroke: #ec4899; stroke-width: 3; }
+.kick-panel-box { fill: rgba(236,72,153,0.12); stroke: #ec4899; stroke-width: 1.5; }
+.insulated-panel-box { fill: rgba(14,165,233,0.14); stroke: #0ea5e9; stroke-width: 1.5; }
+.door-box { fill: rgba(16,185,129,0.15); stroke: #10b981; stroke-width: 2; }
+.roof-bay-panel { fill: rgba(34,197,94,0.08); stroke: rgba(34,197,94,0.4); stroke-width: 1.5; }
+.fan-panel-box { fill: rgba(245,158,11,0.18); stroke: #f59e0b; stroke-width: 2; }
+.locked-post { fill: #111827; }
