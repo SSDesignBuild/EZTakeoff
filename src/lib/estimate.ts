@@ -205,19 +205,20 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     else oneByTwoLf += Math.max(0, perimeter1x2Lf);
     tekScrewCount += Math.ceil(perimeter1x2Lf / 2);
 
-    const chairRailLength = section.chairRail ? wallWidthExcludingDoor : 0;
+    const chairRailOnlyLength = section.chairRail && !section.pickets ? wallWidthExcludingDoor : 0;
+    const picketRailLength = section.pickets ? wallWidthExcludingDoor : 0;
     const uprightCount = Math.max(0, section.uprights);
     const uprightsLf = uprightCount * section.height;
     const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
 
     if (renaissance) {
       for (let i = 0; i < uprightCount; i += 1) twoByTwoCustomNoGroove.push(section.height);
-      if (chairRailLength > 0) twoByTwoCustomNoGroove.push(chairRailLength);
+      if (chairRailOnlyLength > 0) twoByTwoCustomNoGroove.push(chairRailOnlyLength);
       if (section.kickPanel === 'insulated') twoByTwoCustomGroove.push(wallWidthExcludingDoor);
-      if (section.pickets) twoByTwoCustomGroove.push(chairRailLength);
+      if (picketRailLength > 0) twoByTwoCustomGroove.push(picketRailLength);
     } else {
-      twoByTwoLf += uprightsLf + chairRailLength;
-      capriClips += uprightCount + (section.chairRail ? 2 : 0) + (section.doorType !== 'none' ? 3 : 0) + (section.kickPanel === 'insulated' ? 2 : 0);
+      twoByTwoLf += uprightsLf + chairRailOnlyLength + picketRailLength;
+      capriClips += uprightCount + ((section.chairRail || section.pickets) ? 2 : 0) + (section.doorType !== 'none' ? 3 : 0) + (section.kickPanel === 'insulated' ? 2 : 0);
       tekScrewCount += capriClips * 4;
     }
 
@@ -262,7 +263,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     }
 
     if (renaissance) {
-      const clips = Math.max(0, uprightCount) + (section.chairRail ? 2 : 0) + (section.pickets ? 2 : 0) + (section.kickPanel === 'insulated' ? 2 : 0) + (section.doorType !== 'none' ? 3 : 0);
+      const clips = Math.max(0, uprightCount) + ((section.chairRail || section.pickets) ? 2 : 0) + (section.kickPanel === 'insulated' ? 2 : 0) + (section.doorType !== 'none' ? 3 : 0);
       bracketCount += clips;
       flushMountScrews += clips * 4;
     }

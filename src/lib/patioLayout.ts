@@ -5,6 +5,7 @@ export interface PatioPanelPiece {
   panelWidth: 2 | 4;
   note?: string;
   positionIn: number;
+  fanPlacement?: 'centered' | 'female-offset' | 'male-offset';
 }
 
 export interface PatioPanelLayout {
@@ -38,8 +39,8 @@ function expandWidths(widths: number[]) {
       widthIn: width,
       widthFt: widthFootage(width),
       panelWidth: width <= 24 ? 2 : 4,
-      kind: width % 24 === 0 ? 'regular' : 'cut',
-      note: width % 24 === 0 ? undefined : 'closure piece',
+      kind: width === 24 || width === 48 ? 'regular' : 'cut',
+      note: width === 24 || width === 48 ? undefined : 'closure piece',
       positionIn: position,
     };
     position += width;
@@ -49,13 +50,16 @@ function expandWidths(widths: number[]) {
 
 function buildWidthCombos(totalIn: number) {
   const combos: number[][] = [];
-  for (let cutLeft = 0; cutLeft <= 24; cutLeft += 12) {
-    for (let cutRight = 0; cutRight <= 24; cutRight += 12) {
-      for (let fourCount = 0; fourCount <= Math.ceil(totalIn / 48) + 1; fourCount += 1) {
-        for (let twoCount = 0; twoCount <= Math.ceil(totalIn / 24) + 2; twoCount += 1) {
-          if ((fourCount * 48) + (twoCount * 24) + cutLeft + cutRight !== totalIn) continue;
-          const widths = [cutLeft, ...Array(fourCount).fill(48), ...Array(twoCount).fill(24), cutRight].filter(Boolean) as number[];
-          combos.push(widths);
+  const maxFours = Math.ceil(totalIn / 48) + 2;
+  const maxTwos = Math.ceil(totalIn / 24) + 2;
+  for (let leftCut = 0; leftCut <= 24; leftCut += 6) {
+    for (let rightCut = 0; rightCut <= 24; rightCut += 6) {
+      for (let fourCount = 0; fourCount <= maxFours; fourCount += 1) {
+        for (let twoCount = 0; twoCount <= maxTwos; twoCount += 1) {
+          const total = leftCut + rightCut + (fourCount * 48) + (twoCount * 24);
+          if (total !== totalIn) continue;
+          const widths = [leftCut, ...Array(fourCount).fill(48), ...Array(twoCount).fill(24), rightCut].filter(Boolean) as number[];
+          if (widths.length) combos.push(widths);
         }
       }
     }
@@ -63,73 +67,107 @@ function buildWidthCombos(totalIn: number) {
   return combos.length ? combos : [[totalIn]];
 }
 
-function pieceSupportsStyle(piece: PatioPanelPiece, style: string) {
-  if (style === 'none') return false;
-  if (style === 'centered') return piece.widthIn >= 24;
+function supportsFanPlacement(piece: PatioPanelPiece, placement: string) {
+  if (placement === 'none') return false;
+  if (placement === 'centered') return piece.widthIn >= 24;
   return piece.widthIn === 48;
 }
 
-function chooseFanIndices(pieces: PatioPanelPiece[], count: number, style: string, placementMode: string) {
-  const eligible = pieces.map((piece, index) => ({ piece, index })).filter(({ piece }) => pieceSupportsStyle(piece, style));
-  if (!eligible.length) return [];
-  const total = pieces.reduce((sum, piece) => sum + piece.widthIn, 0);
-  const scored = eligible.map((entry) => ({ ...entry, center: entry.piece.positionIn + entry.piece.widthIn / 2, dist: Math.abs((entry.piece.positionIn + entry.piece.widthIn / 2) - total / 2) }));
-  if (placementMode === 'cluster-center' || placementMode === 'inner-pair') scored.sort((a, b) => a.dist - b.dist || a.center - b.center);
-  else if (placementMode === 'female-bias') scored.sort((a, b) => a.center - b.center);
-  else if (placementMode === 'male-bias' || placementMode === 'outer-pair') scored.sort((a, b) => b.dist - a.dist || a.center - b.center);
-  else scored.sort((a, b) => a.center - b.center);
-  const picks:number[] = [];
-  const targetCount = Math.min(count, scored.length);
-  if (placementMode === 'spread' || placementMode === 'outer-pair' || placementMode === 'inner-pair') {
-    for (let i = 0; i < targetCount; i += 1) {
-      const spreadFactor = placementMode === 'inner-pair' ? (targetCount === 1 ? 0.5 : 0.35 + (0.3 * (i / Math.max(1, targetCount - 1)))) : (targetCount === 1 ? 0.5 : i / (targetCount - 1));
-      const slot = Math.round(spreadFactor * (scored.length - 1));
-      let candidate = slot;
-      while (picks.includes(scored[candidate].index) && candidate < scored.length - 1) candidate += 1;
-      while (picks.includes(scored[candidate].index) && candidate > 0) candidate -= 1;
-      picks.push(scored[candidate].index);
-    }
-  } else {
-    scored.slice(0, targetCount).forEach((item) => picks.push(item.index));
+function targetCenters(totalIn: number, count: number, placementMode: string) {
+  if (count <= 1) {
+    if (placementMode === 'female-bias') return [totalIn * 0.3];
+    if (placementMode === 'male-bias') return [totalIn * 0.7];
+    return [totalIn / 2];
   }
-  return picks.sort((a,b)=>a-b);
+  if (placementMode === 'cluster-center') {
+    const gap = Math.min(48, totalIn / (count + 1));
+    const start = totalIn / 2 - (gap * (count - 1)) / 2;
+    return Array.from({ length: count }, (_, index) => start + index * gap);
+  }
+  if (placementMode === 'inner-pair') {
+    const start = totalIn * 0.38;
+    const end = totalIn * 0.62;
+    return Array.from({ length: count }, (_, index) => start + ((end - start) * index) / Math.max(1, count - 1));
+  }
+  if (placementMode === 'outer-pair') {
+    const start = totalIn * 0.22;
+    const end = totalIn * 0.78;
+    return Array.from({ length: count }, (_, index) => start + ((end - start) * index) / Math.max(1, count - 1));
+  }
+  if (placementMode === 'female-bias') {
+    const start = totalIn * 0.2;
+    const end = totalIn * 0.55;
+    return Array.from({ length: count }, (_, index) => start + ((end - start) * index) / Math.max(1, count - 1));
+  }
+  if (placementMode === 'male-bias') {
+    const start = totalIn * 0.45;
+    const end = totalIn * 0.8;
+    return Array.from({ length: count }, (_, index) => start + ((end - start) * index) / Math.max(1, count - 1));
+  }
+  return Array.from({ length: count }, (_, index) => totalIn * ((index + 1) / (count + 1)));
+}
+
+function chooseFanIndices(pieces: PatioPanelPiece[], count: number, placement: string, placementMode: string) {
+  const eligible = pieces.map((piece, index) => ({ piece, index, center: piece.positionIn + piece.widthIn / 2 })).filter(({ piece }) => supportsFanPlacement(piece, placement));
+  if (!eligible.length || count <= 0) return [] as number[];
+  const targets = targetCenters(pieces.reduce((sum, piece) => sum + piece.widthIn, 0), Math.min(count, eligible.length), placementMode);
+  const picks: number[] = [];
+  targets.forEach((target) => {
+    const sorted = [...eligible].sort((a, b) => Math.abs(a.center - target) - Math.abs(b.center - target) || a.center - b.center);
+    const match = sorted.find((item) => !picks.includes(item.index));
+    if (match) picks.push(match.index);
+  });
+  return picks.sort((a, b) => a - b);
+}
+
+function comboScore(pieces: PatioPanelPiece[], preferredPanelFt: number, fanPlacement: string, fanCount: number, placementMode: string) {
+  const cuts = pieces.filter((piece) => piece.kind === 'cut');
+  const edgeLeft = pieces[0]?.widthIn ?? 0;
+  const edgeRight = pieces[pieces.length - 1]?.widthIn ?? 0;
+  const symmetryPenalty = Math.abs(edgeLeft - edgeRight);
+  const preferencePenalty = preferredPanelFt === 4 ? pieces.filter((piece) => piece.panelWidth === 2 && piece.kind !== 'cut').length * 8 : pieces.filter((piece) => piece.panelWidth === 4 && piece.kind !== 'cut').length * 4;
+  const interiorCutPenalty = pieces.slice(1, -1).filter((piece) => piece.kind === 'cut').length * 200;
+  const cutPenalty = cuts.length * 22 + cuts.reduce((sum, piece) => sum + Math.abs(24 - piece.widthIn), 0) * 0.8;
+  const fanIndices = chooseFanIndices(pieces, fanPlacement === 'none' ? 0 : Math.max(1, fanCount), fanPlacement, placementMode);
+  const fanPenalty = fanPlacement === 'none' ? 0 : (fanIndices.length < Math.max(1, fanCount) ? 2000 : 0);
+  const mirrorBonus = cuts.length === 2 && Math.abs(edgeLeft - edgeRight) < 0.01 ? -10 : 0;
+  return preferencePenalty + interiorCutPenalty + cutPenalty + symmetryPenalty * 1.8 + pieces.length + fanPenalty + mirrorBonus;
 }
 
 export function buildPatioPanelLayout(widthFt: number, fanBeam: string, preferredPanelFt: number, fanBeamCount = 1, placementMode = 'spread'): PatioPanelLayout {
   const totalIn = inchesFromFeet(widthFt);
   const combos = buildWidthCombos(totalIn);
-  let best = combos[0];
+  let bestPieces = expandWidths(combos[0]);
   let bestScore = Number.POSITIVE_INFINITY;
   for (const combo of combos) {
     const pieces = expandWidths(combo);
-    const cuts = pieces.filter((piece) => piece.kind === 'cut').length;
-    const regular4 = pieces.filter((piece) => piece.panelWidth === 4).length;
-    const regular2 = pieces.filter((piece) => piece.panelWidth === 2).length;
-    const edgePenalty = pieces.length > 1 ? Math.abs(pieces[0].widthIn - pieces[pieces.length - 1].widthIn) : 0;
-    const fanEligible = chooseFanIndices(pieces, Math.max(1, fanBeamCount), fanBeam, placementMode).length;
-    const preferencePenalty = preferredPanelFt === 4 ? regular2 * 5 : regular4 * 3;
-    const fanPenalty = fanBeam === 'none' ? 0 : (fanEligible < Math.max(1, fanBeamCount) ? 1000 : 0);
-    const score = fanPenalty + cuts * 20 + edgePenalty + preferencePenalty + pieces.length;
+    const score = comboScore(pieces, preferredPanelFt, fanBeam, fanBeamCount, placementMode);
     if (score < bestScore) {
-      best = combo;
       bestScore = score;
+      bestPieces = pieces;
     }
   }
-  const pieces = expandWidths(best).map((piece) => ({ ...piece }));
+  const pieces = bestPieces.map((piece) => ({ ...piece }));
   const fanIndices = chooseFanIndices(pieces, fanBeam === 'none' ? 0 : Math.max(1, fanBeamCount), fanBeam, placementMode);
   fanIndices.forEach((index) => {
+    const piece = pieces[index];
     pieces[index] = {
-      ...pieces[index],
+      ...piece,
       kind: 'fan-beam',
       note: fanBeam === 'centered' ? 'Centered fan beam' : fanBeam === 'female-offset' ? '1 ft from female side' : '1 ft from male side',
+      fanPlacement: fanBeam as 'centered' | 'female-offset' | 'male-offset',
     };
   });
-  const notes:string[] = [];
-  const cutPieces = pieces.filter((piece) => piece.kind === 'cut');
-  if (cutPieces.length) {
-    notes.push(`Cut closure panels required: ${cutPieces.map((piece) => `${piece.widthFt} ft`).join(', ')}.`);
+  const notes: string[] = [];
+  const cuts = pieces.filter((piece) => piece.kind === 'cut');
+  if (cuts.length) notes.push(`Closure pieces: ${cuts.map((piece) => `${piece.widthFt} ft`).join(', ')}.`);
+  if (fanBeam === 'none') notes.push('No fan beam selected.');
+  else {
+    notes.push(`${fanIndices.length} fan-beam panel(s) placed with ${placementMode.replace(/-/g, ' ')} strategy.`);
+    notes.push(`Panel positions: ${fanIndices.map((value) => value + 1).join(', ')}.`);
   }
-  notes.push(fanBeam === 'none' ? 'No fan beam selected.' : `${fanIndices.length} fan-beam panel(s) laid out with ${placementMode.replace('-', ' ')} placement.`);
-  if (fanIndices.length) notes.push(`Fan-beam panel positions: ${fanIndices.map((index) => index + 1).join(', ')}.`);
+  const left = pieces[0];
+  const right = pieces[pieces.length - 1];
+  if (left && right && left.kind === 'cut' && right.kind === 'cut' && Math.abs(left.widthIn - right.widthIn) < 0.01) notes.push(`Symmetric end cuts: ${left.widthFt} ft left and right.`);
   return summarize(pieces, notes);
 }

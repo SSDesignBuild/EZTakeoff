@@ -63,7 +63,7 @@ export function SectionEditor({ renaissance = false, values, onValuesChange }: S
 
             <div className="toggle-cluster">
               <label className="toggle-field"><input type="checkbox" checked={section.chairRail} onChange={(event) => updateSection(section.id, { chairRail: event.target.checked })} /><div><span>Chair rail</span></div></label>
-              <label className="toggle-field"><input type="checkbox" checked={section.pickets} onChange={(event) => updateSection(section.id, { pickets: event.target.checked, chairRail: event.target.checked ? true : section.chairRail })} /><div><span>Pickets with chair rail</span></div></label>
+              <label className="toggle-field"><input type="checkbox" checked={section.pickets} onChange={(event) => updateSection(section.id, { pickets: event.target.checked })} /><div><span>Pickets with chair rail</span></div></label>
             </div>
             <p className="muted">{renaissance ? 'Custom cut 1x2 7/8 and separate 2x2 7/8 with/without groove.' : '24 ft stock receiver, 1x2, 2x2, U-channel, pickets, and kick-panel parts.'} Doors cut material out of the wall layout automatically, and new sections copy the first section for faster fill-out.</p>
           </div>

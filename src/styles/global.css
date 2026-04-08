@@ -489,3 +489,13 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .beam-edit-grid { display:grid; grid-template-columns:auto auto 1fr 1fr auto; gap:0.5rem; align-items:end; }
 .inline-mini-field { display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem; }
 .inline-mini-field input { min-width: 5rem; }
+
+.svg-grid { stroke: color-mix(in srgb, var(--muted) 18%, transparent); stroke-width: 1; }
+.svg-guide { stroke: color-mix(in srgb, var(--foreground) 40%, transparent); stroke-width: 1.25; stroke-dasharray: 4 3; }
+.detail-inset { fill: color-mix(in srgb, var(--panel) 96%, transparent); stroke: color-mix(in srgb, var(--border) 85%, transparent); stroke-width: 1.5; }
+.u-channel-line { stroke: #8b5cf6; stroke-width: 2.4; }
+.trim-line { stroke: #9ca3af; stroke-width: 3; }
+.gutter-line { stroke: #0f766e; stroke-width: 4; }
+.fascia-line { stroke: #b45309; stroke-width: 4; }
+.fan-axis-line { stroke: #f59e0b; stroke-width: 2.2; stroke-dasharray: 7 4; }
+.beam-line.secondary { stroke: color-mix(in srgb, var(--green-strong) 82%, white 18%); stroke-width: 4; }
