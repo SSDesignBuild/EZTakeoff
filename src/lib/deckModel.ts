@@ -291,7 +291,16 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const borderGroups = inputs.borderSameBoard ? accumulateGroups(exposedSegments.map((segment) => segment.length)) : [];
 
   const rawCustomBeams = parseNumberArray(inputs.customBeamYs).map((value) => clamp(value, 0, depth)).filter((value) => isFreestanding ? value >= 0 && value <= depth : value > 0.2 && value < depth - 0.2);
-  const notchBeamOffsets = attachment === 'brick' ? uniqueSorted(segments.filter((segment) => segment.orientation === 'horizontal' && segment.start.y > minY + 0.2 && segment.start.y < maxY - 0.2 && Math.min(segment.start.x, segment.end.x) > minX + 0.2 && Math.max(segment.start.x, segment.end.x) < maxX - 0.2).map((segment) => round2(segment.start.y - minY))) : [];
+  const notchBeamOffsets = attachment === 'brick'
+    ? uniqueSorted([
+        ...segments
+          .filter((segment) => segment.orientation === 'horizontal' && segment.start.y > minY + 0.2 && segment.start.y < maxY - 0.2)
+          .map((segment) => round2(segment.start.y - minY)),
+        ...points
+          .map((point) => round2(point.y - minY))
+          .filter((value) => value > 0.2 && value < depth - 0.2),
+      ])
+    : [];
   const beamOffsets = uniqueSorted((rawCustomBeams.length > 0 ? uniqueSorted(rawCustomBeams) : (() => {
     if (depth <= FRONT_CANTILEVER) return isFreestanding ? [0] : [depth];
     const positions: number[] = [];
@@ -329,12 +338,15 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     }).filter((segment) => segment.length > 0.25);
     const postXs: number[] = [];
     segmentsAtBeam.forEach((segment) => {
-      const count = Math.max(2, Math.ceil(segment.length / POST_TARGET_SPACING) + 1);
-      const spacing = segment.length / Math.max(1, count - 1);
-      const adjustedCount = spacing > POST_MAX_SPACING ? count + 1 : count;
+      const preferredCount = Math.max(2, Math.ceil(segment.length / POST_TARGET_SPACING) + 1);
+      const spacing = segment.length / Math.max(1, preferredCount - 1);
+      const adjustedCount = spacing > POST_MAX_SPACING ? preferredCount + 1 : preferredCount;
       for (let index = 0; index < adjustedCount; index += 1) {
         const x = round2(segment.startX + (segment.length * index) / Math.max(1, adjustedCount - 1));
         if (!postXs.some((value) => Math.abs(value - x) < 0.1)) postXs.push(x);
+      }
+      if (attachment === 'brick' && segment.length > 14 && !postXs.some((value) => Math.abs(value - (segment.startX + segment.length / 2)) < 0.1)) {
+        postXs.push(round2(segment.startX + segment.length / 2));
       }
     });
     const lockedForBeam = lockedPosts.filter((item) => item.beamIndex === beamIndex && segmentsAtBeam.some((segment) => item.x >= segment.startX - 0.01 && item.x <= segment.endX + 0.01)).map((item) => item.x);

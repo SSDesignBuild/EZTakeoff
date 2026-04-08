@@ -259,6 +259,8 @@ export const SERVICES: ServiceDefinition[] = [
       { key: 'fanBeamPlacementMode', label: 'Fan beam placement', type: 'select', options: [
         { label: 'Spread symmetrically', value: 'spread' },
         { label: 'Cluster near center', value: 'cluster-center' },
+        { label: 'Inner pair focus', value: 'inner-pair' },
+        { label: 'Outer pair focus', value: 'outer-pair' },
         { label: 'Bias toward female side', value: 'female-bias' },
         { label: 'Bias toward male side', value: 'male-bias' },
       ] },

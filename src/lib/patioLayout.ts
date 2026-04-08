@@ -74,15 +74,16 @@ function chooseFanIndices(pieces: PatioPanelPiece[], count: number, style: strin
   if (!eligible.length) return [];
   const total = pieces.reduce((sum, piece) => sum + piece.widthIn, 0);
   const scored = eligible.map((entry) => ({ ...entry, center: entry.piece.positionIn + entry.piece.widthIn / 2, dist: Math.abs((entry.piece.positionIn + entry.piece.widthIn / 2) - total / 2) }));
-  if (placementMode === 'cluster-center') scored.sort((a, b) => a.dist - b.dist || a.center - b.center);
+  if (placementMode === 'cluster-center' || placementMode === 'inner-pair') scored.sort((a, b) => a.dist - b.dist || a.center - b.center);
   else if (placementMode === 'female-bias') scored.sort((a, b) => a.center - b.center);
-  else if (placementMode === 'male-bias') scored.sort((a, b) => b.center - a.center);
+  else if (placementMode === 'male-bias' || placementMode === 'outer-pair') scored.sort((a, b) => b.dist - a.dist || a.center - b.center);
   else scored.sort((a, b) => a.center - b.center);
   const picks:number[] = [];
   const targetCount = Math.min(count, scored.length);
-  if (placementMode === 'spread') {
+  if (placementMode === 'spread' || placementMode === 'outer-pair' || placementMode === 'inner-pair') {
     for (let i = 0; i < targetCount; i += 1) {
-      const slot = Math.round((targetCount === 1 ? 0.5 : i / (targetCount - 1)) * (scored.length - 1));
+      const spreadFactor = placementMode === 'inner-pair' ? (targetCount === 1 ? 0.5 : 0.35 + (0.3 * (i / Math.max(1, targetCount - 1)))) : (targetCount === 1 ? 0.5 : i / (targetCount - 1));
+      const slot = Math.round(spreadFactor * (scored.length - 1));
       let candidate = slot;
       while (picks.includes(scored[candidate].index) && candidate < scored.length - 1) candidate += 1;
       while (picks.includes(scored[candidate].index) && candidate > 0) candidate -= 1;
@@ -129,5 +130,6 @@ export function buildPatioPanelLayout(widthFt: number, fanBeam: string, preferre
     notes.push(`Cut closure panels required: ${cutPieces.map((piece) => `${piece.widthFt} ft`).join(', ')}.`);
   }
   notes.push(fanBeam === 'none' ? 'No fan beam selected.' : `${fanIndices.length} fan-beam panel(s) laid out with ${placementMode.replace('-', ' ')} placement.`);
+  if (fanIndices.length) notes.push(`Fan-beam panel positions: ${fanIndices.map((index) => index + 1).join(', ')}.`);
   return summarize(pieces, notes);
 }
