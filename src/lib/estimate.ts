@@ -145,7 +145,13 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       `Post layout targets about 6 ft spacing so the design stays comfortably inside your 7.5 ft maximum and avoids designing at the limit.`,
       `Beam package uses ${deck.beamMemberSize} because the widest clear post span in this layout is about ${Math.max(0, ...deck.beamLines.flatMap((line) => line.postXs.slice(1).map((x, index) => x - line.postXs[index]))).toFixed(2)} ft.`,
       'Deck boards, border boards, stair treads, and framing members are grouped by stock length so the order sheet reads more like how your crew buys and stages materials.',
-      'Irregular shapes are read from the footprint drawing, but stair placement and exact beam offsets should still be field-checked until we add direct beam and stair editing.',
+      deck.stairPlacement.edgeIndex !== null
+        ? `Stairs are assigned to edge P${deck.stairPlacement.edgeIndex + 1} with about ${deck.stairPlacement.offset.toFixed(1)} ft offset from the start of that edge.`
+        : 'No stair edge is assigned yet in the drawing tool.',
+      deck.manualRailingEdges.length > 0
+        ? `Manual railing selection is active on ${deck.manualRailingEdges.length} edge${deck.manualRailingEdges.length === 1 ? '' : 's'}.`
+        : 'Railing defaults to all exposed edges until you manually override it in the drawing tool.',
+      'Beam lines can now be dragged in the drawing tool, but the final framing should still be field-checked before ordering.',
     ],
   };
 }

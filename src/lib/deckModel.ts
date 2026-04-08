@@ -1,4 +1,4 @@
-import { DeckPoint } from './types';
+import { DeckEdgeSegment, DeckPoint } from './types';
 
 export interface DeckInputs {
   deckShape?: string | number | boolean;
@@ -12,17 +12,16 @@ export interface DeckInputs {
   railingType?: string | number | boolean;
   deckingType?: string | number | boolean;
   borderSameBoard?: string | number | boolean;
-}
-
-export interface DeckSegment {
-  start: DeckPoint;
-  end: DeckPoint;
-  length: number;
-  orientation: 'horizontal' | 'vertical';
+  customBeamYs?: string | number | boolean;
+  stairEdgeIndex?: string | number | boolean;
+  stairOffset?: string | number | boolean;
+  stairLandingWidth?: string | number | boolean;
+  manualRailingEdges?: string | number | boolean;
 }
 
 export interface BeamLine {
   y: number;
+  offsetFromHouse: number;
   segments: { startX: number; endX: number; length: number }[];
   postXs: number[];
 }
@@ -30,6 +29,15 @@ export interface BeamLine {
 export interface BoardGroup {
   length: number;
   count: number;
+}
+
+export interface StairPlacement {
+  edgeIndex: number | null;
+  offset: number;
+  width: number;
+  landingProjection: number;
+  start: DeckPoint | null;
+  end: DeckPoint | null;
 }
 
 export interface DeckModel {
@@ -93,7 +101,10 @@ export interface DeckModel {
   railingSections6: number;
   railingSections8: number;
   railingPosts: number;
-  exposedSegments: DeckSegment[];
+  edgeSegments: DeckEdgeSegment[];
+  exposedSegments: DeckEdgeSegment[];
+  manualRailingEdges: number[];
+  stairPlacement: StairPlacement;
 }
 
 const DEFAULT_SHAPE: DeckPoint[] = [
@@ -131,6 +142,21 @@ function round2(value: number) {
 function chooseStockLength(required: number, stock = STOCK_LENGTHS) {
   const found = stock.find((item) => item >= required - 1e-6);
   return found ?? stock[stock.length - 1];
+}
+
+function parseNumberArray(raw: string | number | boolean | undefined) {
+  if (typeof raw !== 'string' || !raw.trim()) return [] as number[];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item) => round2(Number(item))).filter((item) => Number.isFinite(item));
+  } catch {
+    return [];
+  }
+}
+
+function parseIndexArray(raw: string | number | boolean | undefined) {
+  return Array.from(new Set(parseNumberArray(raw).map((item) => Math.round(item)).filter((item) => item >= 0)));
 }
 
 export function parseDeckShape(raw: string | number | boolean | undefined): DeckPoint[] {
@@ -177,7 +203,7 @@ function getBounds(points: DeckPoint[]) {
   };
 }
 
-function edgeSegments(points: DeckPoint[]): DeckSegment[] {
+function edgeSegments(points: DeckPoint[]): DeckEdgeSegment[] {
   return points.map((point, index) => {
     const next = points[(index + 1) % points.length];
     return {
@@ -185,6 +211,7 @@ function edgeSegments(points: DeckPoint[]): DeckSegment[] {
       end: next,
       length: Math.hypot(next.x - point.x, next.y - point.y),
       orientation: Math.abs(point.y - next.y) < 1e-6 ? 'horizontal' : 'vertical',
+      index,
     };
   });
 }
@@ -250,6 +277,18 @@ function uniqueSorted(values: number[]) {
   return Array.from(new Set(values.map((value) => round2(value)))).sort((a, b) => a - b);
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function segmentPointAtOffset(segment: DeckEdgeSegment, offset: number) {
+  const ratio = segment.length <= 0 ? 0 : clamp(offset / segment.length, 0, 1);
+  return {
+    x: round2(segment.start.x + (segment.end.x - segment.start.x) * ratio),
+    y: round2(segment.start.y + (segment.end.y - segment.start.y) * ratio),
+  };
+}
+
 export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const points = parseDeckShape(inputs.deckShape);
   const { minX, minY, maxX, maxY } = getBounds(points);
@@ -265,9 +304,14 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     ? segments.filter((segment) => segment.orientation === 'horizontal' && Math.abs(segment.start.y - minY) < 1e-6 && Math.abs(segment.end.y - minY) < 1e-6)
     : [];
   const houseContactLength = round2(houseSegments.reduce((sum, segment) => sum + segment.length, 0));
-  const exposedSegments = isFreestanding
+
+  const manualRailingEdges = parseIndexArray(inputs.manualRailingEdges).filter((index) => index < segments.length);
+  const defaultExposedSegments = isFreestanding
     ? segments
     : segments.filter((segment) => !(segment.orientation === 'horizontal' && Math.abs(segment.start.y - minY) < 1e-6 && Math.abs(segment.end.y - minY) < 1e-6));
+  const exposedSegments = manualRailingEdges.length > 0
+    ? segments.filter((segment) => manualRailingEdges.includes(segment.index))
+    : defaultExposedSegments;
   const exposedPerimeter = round2(exposedSegments.reduce((sum, segment) => sum + segment.length, 0));
 
   const boardLengths: number[] = [];
@@ -283,10 +327,13 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     }
   }
   const boardGroups = accumulateGroups(boardLengths);
-
   const borderGroups = inputs.borderSameBoard ? accumulateGroups(exposedSegments.map((segment) => segment.length)) : [];
 
-  const beamYs = (() => {
+  const rawCustomBeams = parseNumberArray(inputs.customBeamYs)
+    .map((value) => clamp(value, 0, depth))
+    .filter((value) => isFreestanding ? value >= 0 && value <= depth : value > 0.2 && value < depth - 0.2);
+
+  const beamOffsets = rawCustomBeams.length > 0 ? uniqueSorted(rawCustomBeams) : (() => {
     if (depth <= FRONT_CANTILEVER) return isFreestanding ? [0] : [depth];
     const positions: number[] = [];
     const frontBeam = Math.max(0, round2(depth - FRONT_CANTILEVER));
@@ -298,28 +345,29 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     return uniqueSorted(positions);
   })();
 
-  const supportAnchors = uniqueSorted([isFreestanding ? 0 : minY, ...beamYs.map((value) => value + minY), maxY]);
+  const supportAnchors = uniqueSorted([isFreestanding ? minY : minY, ...beamOffsets.map((value) => value + minY), maxY]);
   const supportSpans = supportAnchors.slice(1).map((value, index) => round2(value - supportAnchors[index]));
   const maxSpan = Math.max(...supportSpans, 0);
   const joistSize: DeckModel['joistSize'] = maxSpan <= JOIST_SPAN_LIMITS['2x8'] ? '2x8' : maxSpan <= JOIST_SPAN_LIMITS['2x10'] ? '2x10' : '2x12';
-  const joistLengthGroupsRaw: number[] = [];
+
+  const joistLengthsRaw: number[] = [];
   if (joistDirection === 'vertical') {
     for (let x = minX + JOIST_SPACING / 2; x < maxX; x += JOIST_SPACING) {
       const pairs = scanlineIntersections(points, 'vertical', x);
-      pairs.forEach((pair) => joistLengthGroupsRaw.push(pair.length));
+      pairs.forEach((pair) => joistLengthsRaw.push(pair.length));
     }
   } else {
     for (let y = minY + JOIST_SPACING / 2; y < maxY; y += JOIST_SPACING) {
       const pairs = scanlineIntersections(points, 'horizontal', y);
-      pairs.forEach((pair) => joistLengthGroupsRaw.push(pair.length));
+      pairs.forEach((pair) => joistLengthsRaw.push(pair.length));
     }
   }
-  const joistCount = Math.max(2, joistLengthGroupsRaw.length);
-  const joistLengthGroups = accumulateGroups(joistLengthGroupsRaw);
-  const joistStockLength = chooseStockLength(Math.min(Math.max(...joistLengthGroupsRaw, maxSpan), JOIST_SPAN_LIMITS[joistSize]));
+  const joistCount = Math.max(2, joistLengthsRaw.length);
+  const joistLengthGroups = accumulateGroups(joistLengthsRaw);
+  const joistStockLength = chooseStockLength(Math.min(Math.max(...joistLengthsRaw, maxSpan), JOIST_SPAN_LIMITS[joistSize]));
 
-  const beamLines: BeamLine[] = beamYs.map((offsetY) => {
-    const y = offsetY + minY;
+  const beamLines: BeamLine[] = beamOffsets.map((offsetY) => {
+    const y = round2(offsetY + minY);
     const segmentsAtBeam = scanlineIntersections(points, 'horizontal', y + 0.0001).map((pair) => ({
       startX: pair.start,
       endX: pair.end,
@@ -339,6 +387,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
 
     return {
       y,
+      offsetFromHouse: round2(offsetY),
       segments: segmentsAtBeam,
       postXs: postXs.sort((a, b) => a - b),
     };
@@ -363,13 +412,14 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const blockingRows = 2;
   const blockingCount = joistCount * 2;
   const blockingBoardCount = Math.ceil((blockingCount * 1.5) / 8);
-  const joistTapeLf = round2(joistLengthGroupsRaw.reduce((sum, length) => sum + length, 0) + doubleBandLf / 2);
+  const joistTapeLf = round2(joistLengthsRaw.reduce((sum, length) => sum + length, 0) + doubleBandLf / 2);
   const joistHangers = isFreestanding ? joistCount * 2 : joistCount;
   const rafterTies = joistCount * Math.max(1, beamLines.length);
   const postLength = chooseStockLength(Number(inputs.deckHeight ?? 8) + 2, [8, 10, 12, 16]);
   const concreteBags = postCount * 3;
   const postBases = postCount;
   const concreteAnchors = postCount;
+
   const stairCount = Math.max(0, Number(inputs.stairCount ?? 0));
   const stairWidth = Number(inputs.stairWidth ?? 4);
   const stairRiseFt = Number(inputs.stairRise ?? 0) > 0 ? Number(inputs.stairRise ?? 0) : Number(inputs.deckHeight ?? 0);
@@ -390,6 +440,21 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const riserFascia = stairCount * stairRisers * stairWidth;
   const fasciaLf = round2(exposedPerimeter + stairSideFascia + riserFascia);
   const fasciaPieces = Math.ceil(fasciaLf / 12);
+
+  const stairEdgeIndexValue = Number(inputs.stairEdgeIndex ?? -1);
+  const stairEdge = stairCount > 0 && stairEdgeIndexValue >= 0 && stairEdgeIndexValue < segments.length ? segments[stairEdgeIndexValue] : null;
+  const stairOffset = stairEdge ? clamp(Number(inputs.stairOffset ?? 0), 0, Math.max(0, stairEdge.length - stairWidth)) : 0;
+  const stairStart = stairEdge ? segmentPointAtOffset(stairEdge, stairOffset) : null;
+  const stairEnd = stairEdge ? segmentPointAtOffset(stairEdge, stairOffset + Math.min(stairWidth, stairEdge.length)) : null;
+  const stairPlacement: StairPlacement = {
+    edgeIndex: stairEdge ? stairEdge.index : null,
+    offset: stairOffset,
+    width: stairWidth,
+    landingProjection: stairRunFt,
+    start: stairStart,
+    end: stairEnd,
+  };
+
   const railingRunInput = Number(inputs.perimeterRailingFt ?? 0);
   const railingRun = round2(railingRunInput || exposedPerimeter);
   const railingSections8 = Math.floor(railingRun / 8);
@@ -398,8 +463,8 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const railingPosts = railingType === 'aluminum' ? 0 : Math.max(2, Math.ceil(railingRun / 6) + 1);
   const carriageBolts = postCount * 2 + (railingPosts > 0 ? railingPosts * 2 : 0);
   const lateralLoadBrackets = isFreestanding ? 0 : Math.max(2, Math.ceil(houseContactLength / 2));
-  const sdsCorners = 4;
-  const screwCount = joistLengthGroupsRaw.reduce((sum, length) => sum + Math.ceil(length / JOIST_SPACING) * 2, 0);
+  const sdsCorners = Math.max(4, segments.length);
+  const screwCount = joistLengthsRaw.reduce((sum, length) => sum + Math.ceil(length / JOIST_SPACING) * 2, 0);
   const deckFastenerCount = screwCount;
   const deckFastenerBoxes = String(inputs.deckingType ?? 'composite') === 'pressure-treated'
     ? Math.ceil(deckFastenerCount / 365)
@@ -467,6 +532,9 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     railingSections6,
     railingSections8,
     railingPosts,
+    edgeSegments: segments,
     exposedSegments,
+    manualRailingEdges,
+    stairPlacement,
   };
 }

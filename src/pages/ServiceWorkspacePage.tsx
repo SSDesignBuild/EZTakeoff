@@ -32,8 +32,8 @@ export function ServiceWorkspacePage() {
 
       {service.slug === 'decks' && (
         <DeckDesigner
-          value={values.deckShape}
-          onChange={(next) => setValues((current) => ({ ...current, deckShape: next }))}
+          values={values}
+          onValuesChange={setValues}
         />
       )}
 

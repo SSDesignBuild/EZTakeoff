@@ -12,7 +12,15 @@ export function LayoutPreview({ serviceSlug, values }: LayoutPreviewProps) {
     const x0 = 36;
     const y0 = 42;
 
-    const pointString = deck.points.map((point) => `${x0 + (point.x - deck.minX) * scale},${y0 + (point.y - deck.minY) * scale}`).join(' ');
+    const toSvg = (x: number, y: number) => ({
+      x: x0 + (x - deck.minX) * scale,
+      y: y0 + (y - deck.minY) * scale,
+    });
+
+    const pointString = deck.points.map((point) => {
+      const svgPoint = toSvg(point.x, point.y);
+      return `${svgPoint.x},${svgPoint.y}`;
+    }).join(' ');
 
     const joistLines = deck.joistDirection === 'vertical'
       ? Array.from({ length: Math.max(0, Math.floor(deck.width)) }, (_, index) => deck.minX + 0.5 + index)
@@ -22,7 +30,7 @@ export function LayoutPreview({ serviceSlug, values }: LayoutPreviewProps) {
       <div className="visual-card">
         <div className="visual-header">
           <h3>Layout preview</h3>
-          <span>House, beam lines, posts, joists, and footprint</span>
+          <span>Footprint, beam edits, posts, joists, railing, and stair location</span>
         </div>
         <svg viewBox={`0 0 ${deck.width * scale + 84} ${deck.depth * scale + 96}`} className="layout-svg">
           <polygon points={pointString} className="deck-polygon" />
@@ -48,18 +56,18 @@ export function LayoutPreview({ serviceSlug, values }: LayoutPreviewProps) {
               {beam.segments.map((segment) => (
                 <line
                   key={`${segment.startX}-${segment.endX}`}
-                  x1={x0 + (segment.startX - deck.minX) * scale}
-                  y1={y0 + (beam.y - deck.minY) * scale}
-                  x2={x0 + (segment.endX - deck.minX) * scale}
-                  y2={y0 + (beam.y - deck.minY) * scale}
+                  x1={toSvg(segment.startX, beam.y).x}
+                  y1={toSvg(segment.startX, beam.y).y}
+                  x2={toSvg(segment.endX, beam.y).x}
+                  y2={toSvg(segment.endX, beam.y).y}
                   className="beam-line"
                 />
               ))}
               {beam.postXs.map((postX) => (
                 <rect
                   key={`${postX}-${beam.y}`}
-                  x={x0 + (postX - deck.minX) * scale - 4}
-                  y={y0 + (beam.y - deck.minY) * scale - 4}
+                  x={toSvg(postX, beam.y).x - 4}
+                  y={toSvg(postX, beam.y).y - 4}
                   width="8"
                   height="8"
                   className="post-node"
@@ -69,16 +77,35 @@ export function LayoutPreview({ serviceSlug, values }: LayoutPreviewProps) {
             </g>
           ))}
 
-          {deck.exposedSegments.map((segment, index) => (
+          {deck.exposedSegments.map((segment) => (
             <line
-              key={`${segment.length}-${index}`}
-              x1={x0 + (segment.start.x - deck.minX) * scale}
-              y1={y0 + (segment.start.y - deck.minY) * scale}
-              x2={x0 + (segment.end.x - deck.minX) * scale}
-              y2={y0 + (segment.end.y - deck.minY) * scale}
+              key={`railing-${segment.index}`}
+              x1={toSvg(segment.start.x, segment.start.y).x}
+              y1={toSvg(segment.start.x, segment.start.y).y}
+              x2={toSvg(segment.end.x, segment.end.y).x}
+              y2={toSvg(segment.end.x, segment.end.y).y}
               className="railing-line"
             />
           ))}
+
+          {deck.stairPlacement.start && deck.stairPlacement.end && (
+            <>
+              <line
+                x1={toSvg(deck.stairPlacement.start.x, deck.stairPlacement.start.y).x}
+                y1={toSvg(deck.stairPlacement.start.x, deck.stairPlacement.start.y).y}
+                x2={toSvg(deck.stairPlacement.end.x, deck.stairPlacement.end.y).x}
+                y2={toSvg(deck.stairPlacement.end.x, deck.stairPlacement.end.y).y}
+                className="stair-edge-highlight"
+              />
+              <text
+                x={(toSvg(deck.stairPlacement.start.x, deck.stairPlacement.start.y).x + toSvg(deck.stairPlacement.end.x, deck.stairPlacement.end.y).x) / 2}
+                y={(toSvg(deck.stairPlacement.start.x, deck.stairPlacement.start.y).y + toSvg(deck.stairPlacement.end.x, deck.stairPlacement.end.y).y) / 2 - 10}
+                className="svg-note"
+              >
+                Stairs
+              </text>
+            </>
+          )}
 
           <text x={x0} y={y0 + deck.depth * scale + 24} className="svg-note">
             {`Joists ${deck.joistSize} @ 12 in O.C. · ${deck.beamLines.length} beam line${deck.beamLines.length === 1 ? '' : 's'} · ${deck.postCount} posts`}
@@ -88,7 +115,8 @@ export function LayoutPreview({ serviceSlug, values }: LayoutPreviewProps) {
           <span><i className="legend-swatch joist-line-swatch" />Joists</span>
           <span><i className="legend-swatch beam-line-swatch" />Beams</span>
           <span><i className="legend-swatch post-node-swatch" />Posts</span>
-          <span><i className="legend-swatch railing-line-swatch" />Exposed edge / railing</span>
+          <span><i className="legend-swatch railing-line-swatch" />Railing edge</span>
+          <span><i className="legend-swatch stair-swatch" />Stair edge</span>
         </div>
       </div>
     );

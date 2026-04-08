@@ -17,3 +17,11 @@ export interface DeckPoint {
   x: number;
   y: number;
 }
+
+export interface DeckEdgeSegment {
+  start: DeckPoint;
+  end: DeckPoint;
+  length: number;
+  orientation: 'horizontal' | 'vertical';
+  index: number;
+}

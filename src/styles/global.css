@@ -227,3 +227,77 @@ th { color: var(--muted); font-size: 0.85rem; }
   .compact-grid { grid-template-columns: 1fr; }
   .workspace-header, .inline-heading, .visual-header, .material-group-header { flex-direction: column; }
 }
+
+.designer-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.mode-btn.active {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+}
+
+.interactive-edge {
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
+
+.active-railing {
+  stroke: color-mix(in srgb, var(--accent) 36%, transparent);
+}
+
+.active-stair {
+  stroke: color-mix(in srgb, var(--green-strong) 26%, transparent);
+}
+
+.edge-midpoint {
+  fill: var(--panel);
+  stroke: var(--border);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.beam-line-editable {
+  cursor: ns-resize;
+}
+
+.beam-handle {
+  fill: var(--green-strong);
+  stroke: var(--panel);
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.stair-edge-highlight {
+  stroke: var(--accent);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.stair-swatch {
+  background: var(--accent);
+  height: 5px;
+}
+
+.small-btn {
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+}
+
+.beam-editor-list {
+  margin-top: 0.85rem;
+}
+
+.beam-editor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+}

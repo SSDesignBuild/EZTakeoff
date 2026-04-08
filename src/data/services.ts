@@ -25,7 +25,7 @@ export const SERVICES: ServiceDefinition[] = [
     slug: 'decks',
     label: 'Decks',
     intro: 'Draw the deck footprint, define structural conditions, and generate a grouped take-off that follows S&S framing habits instead of spreadsheet guesswork.',
-    highlights: ['Interactive footprint editor', 'Beam + post layout preview', 'Deck boards grouped by stock length', 'Attached vs brick/freestanding framing'],
+    highlights: ['Drag-to-edit footprint', 'Manual beam + stair placement', 'Railing edge selection', 'Deck boards grouped by stock length'],
     defaults: {
       deckHeight: 8,
       attachment: 'siding',
@@ -38,6 +38,10 @@ export const SERVICES: ServiceDefinition[] = [
       stairCount: 1,
       railingType: 'aluminum',
       perimeterRailingFt: 24,
+      stairEdgeIndex: 2,
+      stairOffset: 0,
+      customBeamYs: JSON.stringify([]),
+      manualRailingEdges: JSON.stringify([]),
       deckShape: JSON.stringify([
         { x: 0, y: 0 },
         { x: 16, y: 0 },
@@ -104,6 +108,7 @@ export const SERVICES: ServiceDefinition[] = [
       'Joists are calculated at 12 in on-center and sized from the span table you provided: 2x8 to 12 ft, 2x10 to 14 ft, and 2x12 to 16 ft.',
       'Attached siding decks assume the first beam can sit at projection minus 2 ft when that fits the joist span. Brick conditions are treated as freestanding against the house.',
       'Take-off groups decking by stock length and splits field boards, border boards, stair tread boards, double band boards, fascia, and hardware bundles.',
+      'The deck drawing tool now supports dragging points, clicking edges to insert corners, manual railing edge selection, stair edge selection, and beam-line overrides.',
     ],
   },
   {
