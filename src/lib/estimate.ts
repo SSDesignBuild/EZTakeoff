@@ -1,16 +1,10 @@
+import { parseSections } from './sectioning';
 import { buildDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem } from './types';
 
 export type EstimateInputs = Record<string, string | number | boolean>;
 
-const toMaterial = (
-  name: string,
-  category: string,
-  quantity: number,
-  unit: string,
-  stockRecommendation: string,
-  notes?: string,
-): MaterialItem => ({
+const toMaterial = (name: string, category: string, quantity: number, unit: string, stockRecommendation: string, notes?: string): MaterialItem => ({
   name,
   category,
   quantity: Number(quantity.toFixed(2)),
@@ -19,18 +13,15 @@ const toMaterial = (
   notes,
 });
 
-const addBoardGroups = (
-  materials: MaterialItem[],
-  category: string,
-  prefix: string,
-  groups: { length: number; count: number }[],
-  notes: string,
-) => {
+const addBoardGroups = (materials: MaterialItem[], category: string, prefix: string, groups: { length: number; count: number }[], notes: string) => {
   groups.forEach((group) => {
-    if (group.count > 0) {
-      materials.push(toMaterial(`${prefix} ${group.length}'`, category, group.count, 'boards', `${group.length} ft stock`, notes));
-    }
+    if (group.count > 0) materials.push(toMaterial(`${prefix} ${group.length}'`, category, group.count, 'boards', `${group.length} ft stock`, notes));
   });
+};
+
+const add24FtStock = (materials: MaterialItem[], name: string, category: string, lf: number, notes?: string) => {
+  if (lf <= 0) return;
+  materials.push(toMaterial(name, category, Math.ceil(lf / 24), 'sticks', '24 ft stock', `${lf.toFixed(1)} lf total${notes ? ` · ${notes}` : ''}`));
 };
 
 export function calculateEstimate(serviceSlug: string, inputs: EstimateInputs): EstimateResult {
@@ -51,151 +42,187 @@ export function calculateEstimate(serviceSlug: string, inputs: EstimateInputs): 
 function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const deck = buildDeckModel(inputs);
   const railingType = String(inputs.railingType ?? 'aluminum');
-
   const materials: MaterialItem[] = [];
-  addBoardGroups(
-    materials,
-    'Decking',
-    'Field deck board',
-    deck.boardGroups,
-    deck.boardRun === 'width'
-      ? 'Boards run out from the house; counts are grouped by stock length from the drawn footprint.'
-      : 'Boards run parallel to the house; counts are grouped by stock length from the drawn footprint.',
-  );
-  addBoardGroups(
-    materials,
-    'Decking',
-    'Border / picture-frame board',
-    deck.borderGroups,
-    'Border boards grouped from exposed perimeter segments only.',
-  );
-  addBoardGroups(
-    materials,
-    'Stairs',
-    'Stair tread board',
-    deck.stairTreadGroups,
-    'Two boards per tread, grouped by stair width.',
-  );
-  addBoardGroups(
-    materials,
-    'Framing',
-    `${deck.joistSize} joist`,
-    deck.joistLengthGroups,
-    '12 in on-center joists from the drawn footprint.',
-  );
-  addBoardGroups(
-    materials,
-    'Framing',
-    `${deck.beamMemberSize} beam ply`,
-    deck.beamBoardGroups,
-    'Double beam, one size larger than joists.',
-  );
-  addBoardGroups(
-    materials,
-    'Framing',
-    `${deck.joistSize} double band / rim board`,
-    deck.doubleBandGroups,
-    'Double band all around for strength.',
-  );
+
+  addBoardGroups(materials, 'Decking', 'Field deck board', deck.boardGroups, deck.boardRun === 'width' ? 'Boards run out from the house.' : 'Boards run parallel to the house.');
+  addBoardGroups(materials, 'Decking', 'Border / picture-frame board', deck.borderGroups, 'Border boards grouped from exposed perimeter segments only.');
+  addBoardGroups(materials, 'Stairs', 'Stair tread board', deck.stairTreadGroups, 'Two tread boards per tread.');
+  addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.');
+  addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members.');
+  addBoardGroups(materials, 'Framing', 'Double band / rim board', deck.doubleBandGroups, 'Double band applied to full perimeter.');
 
   materials.push(
-    toMaterial(`${deck.joistSize} blocking`, 'Framing', deck.blockingBoardCount, 'boards', '8 ft stock', 'Blocking added on left and right sides for border support.'),
-    toMaterial('6x6 posts', 'Foundation + posts', deck.postCount, 'posts', `${deck.postLength} ft stock`, 'Notched posts with beam sitting on post.'),
-    toMaterial('80 lb concrete bags', 'Foundation + posts', deck.concreteBags, 'bags', '3 bags per post', 'Footer standard: 3 bags per post.'),
-    toMaterial('Post brackets', 'Foundation + posts', deck.postBases, 'ea', 'One per post', 'Each bracket anchored to footing.'),
-    toMaterial('1/2 in concrete anchors', 'Foundation + posts', deck.concreteAnchors, 'ea', 'One per bracket', 'One concrete anchor per post bracket.'),
-    toMaterial('Joist hangers', 'Hardware', deck.joistHangers, 'ea', `${deck.joistSize} hangers`, deck.isFreestanding ? 'Freestanding condition counts house-side and outer-side hangers.' : 'Attached ledger counts one hanger per joist.'),
-    toMaterial('Rafter ties', 'Hardware', deck.rafterTies, 'ea', 'One per joist at each beam line', 'Attached with 1-1/2 in nails.'),
-    toMaterial('1/2 in carriage bolts', 'Hardware', deck.carriageBolts, 'ea', 'Beam/post and railing posts', 'Two per beam post connection and two per wood/vinyl railing post.'),
-    toMaterial('1/2 in washers', 'Hardware', deck.carriageBolts, 'ea', 'Match carriage bolts', undefined),
-    toMaterial('1/2 in nuts', 'Hardware', deck.carriageBolts, 'ea', 'Match carriage bolts', undefined),
-    toMaterial('3 in framing screws', 'Hardware', Math.max(1, Math.ceil(deck.width / 2) + deck.blockingCount), 'ea', 'Front framing + blocking', 'Used for the front of the deck and blocking assembly.'),
-    toMaterial('3 in hanger / bracket nails', 'Hardware', deck.joistHangers + deck.postBases, 'ea', 'Hangers and post brackets', 'Used for hangers and post brackets.'),
-    toMaterial('1-1/2 in tie nails', 'Hardware', deck.rafterTies * 4, 'ea', 'Rafter tie install', 'Used for rafter ties.'),
-    toMaterial('Lateral load brackets', 'Hardware', deck.lateralLoadBrackets, 'ea', 'Every 2 ft on ledger', 'Ledger-only hardware. Omitted on freestanding/brick conditions.'),
-    toMaterial('Structural SDS screws', 'Hardware', deck.sdsCorners, 'ea', 'Band board corners', 'One at each band corner.'),
-    toMaterial(deck.fastenerType === 'top screws' ? 'Top-mount deck screw boxes' : '2-3/8 in CAMO screw boxes', 'Hardware', deck.deckFastenerBoxes, 'boxes', deck.fastenerType === 'top screws' ? '365 screws / box' : '1750 screws / box', 'Two fasteners per joist intersection.'),
-    toMaterial('Joist tape', 'Hardware', Math.ceil(deck.joistTapeLf), 'lf', 'Linear footage', 'Covers joists and band boards.'),
-    toMaterial("Fascia board 12'", 'Trim', deck.fasciaPieces, 'boards', '12 ft stock', 'Includes band board fascia plus stair sides and risers.'),
-    toMaterial('Color matching fascia screw boxes', 'Trim', Math.max(1, Math.ceil(deck.fasciaPieces / 8)), 'boxes', '75 / box', 'For fascia install.'),
-    toMaterial('2x12 stair stringers', 'Stairs', deck.stairStringers, 'boards', `${deck.stairStringerLength} ft stock`, 'Stringers built on site at 12 in on-center.'),
-    toMaterial('8 ft railing sections', 'Railing', deck.railingSections8, 'sections', '8 ft kits', `Railing type: ${railingType}.`),
-    toMaterial('6 ft railing sections', 'Railing', deck.railingSections6, 'sections', '6 ft kits', `Railing type: ${railingType}.`),
-    toMaterial('4x4 railing posts', 'Railing', deck.railingPosts, 'posts', 'PT 4x4 stock', 'Required for wood, vinyl, and composite railing systems.'),
+    toMaterial('Blocking', 'Framing', deck.blockingBoardCount, 'boards', '8 ft stock', `${deck.blockingCount} blocks across ${deck.blockingRows} rows`),
+    toMaterial('Posts', 'Structure', deck.postCount, 'ea', `${deck.postLength} ft stock`, deck.lockedPosts.length ? `${deck.lockedPosts.length} post position(s) manually locked` : 'Auto-spaced with optional manual locks'),
+    toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', '3 bags per post footing'),
+    toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined),
+    toMaterial('Concrete anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined),
+    toMaterial('Joist hangers', 'Hardware', deck.joistHangers, 'ea', 'Match joist size', undefined),
+    toMaterial('Rafter ties', 'Hardware', deck.rafterTies, 'ea', '1 per joist to beam condition', undefined),
+    toMaterial('Carriage bolt sets', 'Hardware', deck.carriageBolts, 'sets', 'Bolt + washer + nut', undefined),
+    toMaterial('Ledger lateral load brackets', 'Hardware', deck.lateralLoadBrackets, 'ea', 'Every 2 ft on ledger', undefined),
+    toMaterial('SDS structural screws', 'Hardware', deck.sdsCorners, 'ea', 'Corners of band board', undefined),
+    toMaterial('Joist tape', 'Hardware', deck.joistTapeLf, 'lf', 'Match roll coverage', undefined),
+    toMaterial(deck.fastenerType === 'top screws' ? '3 in deck screws' : '2-3/8 in CAMO screws', 'Hardware', deck.deckFastenerBoxes, 'boxes', deck.fastenerType === 'top screws' ? '365 per box' : '1750 per box', undefined),
+    toMaterial('3 in framing nails', 'Hardware', Math.ceil((deck.joistHangers + deck.postBases) / 50), 'boxes', '50 ct box', 'For hangers and post brackets'),
+    toMaterial('1-1/2 in nails', 'Hardware', Math.ceil(deck.rafterTies / 120), 'boxes', '120 ct box', 'For rafter ties'),
+    toMaterial('Fascia', 'Trim', deck.fasciaPieces, 'boards', '12 ft fascia boards', `${deck.fasciaLf.toFixed(1)} lf including stair sides and risers`),
   );
 
-  const filteredMaterials = materials.filter((item) => item.quantity > 0);
+  if (deck.stairStringers > 0) materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringers, 'boards', `${deck.stairStringerLength} ft stock`, 'Stringers cut on site at 12 in. O.C.'));
+  if (railingType === 'aluminum') {
+    if (deck.railingSections8) materials.push(toMaterial('8 ft aluminum railing sections', 'Railing', deck.railingSections8, 'sections', '8 ft sections', undefined));
+    if (deck.railingSections6) materials.push(toMaterial('6 ft aluminum railing sections', 'Railing', deck.railingSections6, 'sections', '6 ft sections', undefined));
+  } else {
+    materials.push(toMaterial('4x4 railing posts', 'Railing', deck.railingPosts, 'ea', 'Match railing height stock', 'For wood, vinyl, or composite railing systems'));
+    if (deck.railingSections8) materials.push(toMaterial('8 ft railing infill sections', 'Railing', deck.railingSections8, 'sections', '8 ft sections', undefined));
+    if (deck.railingSections6) materials.push(toMaterial('6 ft railing infill sections', 'Railing', deck.railingSections6, 'sections', '6 ft sections', undefined));
+  }
 
   return {
     summary: [
       { label: 'Deck area', value: `${deck.area.toFixed(1)} sq ft` },
-      { label: 'Exposed perimeter', value: `${deck.exposedPerimeter.toFixed(1)} lf` },
-      { label: 'Joist package', value: `${deck.joistCount} @ ${deck.joistSize}` },
-      { label: 'Beam lines', value: `${deck.beamLines.length}` },
-      { label: 'Posts', value: `${deck.postCount}` },
-      { label: 'Stair risers', value: `${deck.stairRisers}` },
+      { label: 'Joists', value: `${deck.joistSize} @ 12 in O.C.` },
+      { label: 'Beam lines / posts', value: `${deck.beamLines.length} / ${deck.postCount}` },
+      { label: 'Railing run', value: `${deck.railingRun.toFixed(1)} lf` },
     ],
-    materials: filteredMaterials,
+    materials: materials.filter((item) => item.quantity > 0),
     orderNotes: [
-      deck.attachment === 'brick'
-        ? 'Brick wall decks are treated as freestanding, so the house side gets its own beam and post line instead of a ledger.'
-        : deck.attachment === 'siding'
-          ? 'Attached siding decks keep the ledger at the house and work backward from a 2 ft front cantilever with roughly 10 ft max support spacing.'
-          : 'Freestanding decks receive beam/post support at the house side and the front side.',
-      `Post layout targets about 6 ft spacing so the design stays comfortably inside your 7.5 ft maximum and avoids designing at the limit.`,
-      `Beam package uses ${deck.beamMemberSize} because the widest clear post span in this layout is about ${Math.max(0, ...deck.beamLines.flatMap((line) => line.postXs.slice(1).map((x, index) => x - line.postXs[index]))).toFixed(2)} ft.`,
-      'Deck boards, border boards, stair treads, and framing members are grouped by stock length so the order sheet reads more like how your crew buys and stages materials.',
-      deck.stairPlacement.edgeIndex !== null
-        ? `Stairs are assigned to edge P${deck.stairPlacement.edgeIndex + 1} with about ${deck.stairPlacement.offset.toFixed(1)} ft offset from the start of that edge.`
-        : 'No stair edge is assigned yet in the drawing tool.',
-      deck.manualRailingEdges.length > 0
-        ? `Manual railing selection is active on ${deck.manualRailingEdges.length} edge${deck.manualRailingEdges.length === 1 ? '' : 's'}.`
-        : 'Railing defaults to all exposed edges until you manually override it in the drawing tool.',
-      'Beam lines can now be dragged in the drawing tool, but the final framing should still be field-checked before ordering.',
+      deck.attachment === 'brick' ? 'Brick attachment is treated as freestanding, so the house side still needs beam and post support.' : 'Siding attachment keeps ledger logic active unless the deck is marked freestanding.',
+      deck.stairPlacement.edgeIndex !== null ? `Stairs are assigned to edge ${deck.stairPlacement.edgeIndex + 1} and can be dragged along that edge in the drawing tool.` : 'No stair edge is assigned yet in the drawing tool.',
+      deck.manualRailingEdges.length > 0 ? `Manual railing selection is active on ${deck.manualRailingEdges.length} edge(s).` : 'Railing defaults to exposed edges until you override them in the drawing tool.',
+      deck.lockedPosts.length > 0 ? 'Locked posts stay in the take-off even after beam edits so you can preserve preferred field locations.' : 'Use post lock mode when you want to hold a post location while still letting the app auto-space the rest.',
     ],
   };
 }
 
 function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): EstimateResult {
-  const openingCount = Number(inputs.openingCount ?? 0);
-  const openingWidth = Number(inputs.openingWidth ?? 0);
-  const openingHeight = Number(inputs.openingHeight ?? 0);
-  const uprightsPerOpening = Number(inputs.uprightsPerOpening ?? 0);
-  const doorCount = Number(inputs.doorCount ?? 0);
-  const doorType = String(inputs.doorType ?? 'single');
+  const sections = parseSections(inputs.sections, 3);
   const screenType = String(inputs.screenType ?? 'suntex-80');
-  const chairRailMode = String(inputs.chairRailMode ?? 'chair-rail');
-  const picketSections = Number(inputs.picketSections ?? 0);
-
-  const perimeterLf = openingCount * openingWidth;
-  const totalScreenSf = openingCount * openingWidth * openingHeight;
-  const screenRolls = Math.max(1, Math.ceil((totalScreenSf * 1.12) / 100));
-  const doorKits = doorType === 'french' ? doorCount * 2 : doorCount;
-  const uprightCount = openingCount * uprightsPerOpening;
-
+  const mountingSurface = String(inputs.mountingSurface ?? 'concrete');
+  const framingColor = String(inputs.framingColor ?? 'white');
+  const panelColor = String(inputs.panelColor ?? 'white');
   const prefix = renaissance ? 'Renaissance' : 'Standard';
-  const materials = [
-    toMaterial(`${prefix} receiver`, 'Extrusions', perimeterLf * 2, 'lf', '10 ft / 12 ft stock', 'Top + bottom runs'),
-    toMaterial(`${prefix} posts`, 'Extrusions', openingCount + 1, 'ea', `${Math.ceil(openingHeight + 1)} ft post stock`, undefined),
-    toMaterial(`${prefix} uprights`, 'Extrusions', uprightCount, 'ea', `${Math.ceil(openingHeight)} ft stock`, undefined),
-    toMaterial('Chair rail members', 'Infill', chairRailMode === 'chair-rail' || chairRailMode === 'pickets-chair-rail' ? openingCount : 0, 'ea', `${Math.ceil(openingWidth)} ft stock`, undefined),
-    toMaterial('Picket packages', 'Infill', chairRailMode === 'pickets-chair-rail' ? Math.max(picketSections, openingCount) : 0, 'sections', 'Match opening widths', undefined),
-    toMaterial('Door kits', 'Doors', doorKits, 'kits', doorType === 'french' ? 'French door package' : 'Single door package', undefined),
-    toMaterial('Screen rolls', 'Screening', screenRolls, 'rolls', screenType === 'suntex-80' ? '100 lf Suntex 80' : '100 lf 17/20 Tuff Screen', undefined),
-    toMaterial('Spline / fastener bundle', 'Accessories', openingCount, 'bundles', '.285 / .310 spline + screws', 'Bundle logic should map to exact vendor SKUs later'),
-  ].filter((item) => item.quantity > 0);
+  const totalWidth = sections.reduce((sum, section) => sum + section.width, 0);
+  const totalScreenSf = sections.reduce((sum, section) => {
+    const kickHeight = section.kickPanel === 'none' ? 0 : 3;
+    return sum + section.width * Math.max(section.height - kickHeight, 0);
+  }, 0);
+  const screenRolls = Math.max(1, Math.ceil(totalScreenSf / 1000));
+  const spline = screenType === 'suntex-80' ? '.285 spline' : '.315 spline';
+
+  let receiverLf = 0;
+  let oneByTwoLf = 0;
+  let twoByTwoLf = 0;
+  let chairRailLf = 0;
+  let uChannelLf = 0;
+  let picketCount = 0;
+  let picketSpacerCount = 0;
+  let tekScrewCount = 0;
+  let capriClips = 0;
+  let bracketCount = 0;
+  let kick1x2Lf = 0;
+  let kick2x2Lf = 0;
+  let panelSqFt = 0;
+  let singleDoors = 0;
+  let frenchDoors = 0;
+  let inswingKits = 0;
+  let astragals = 0;
+
+  sections.forEach((section) => {
+    const perimeterLf = (section.width * 2) + (section.height * 2);
+    receiverLf += perimeterLf;
+    oneByTwoLf += renaissance ? perimeterLf : section.kickPanel === 'insulated' ? perimeterLf - section.width : perimeterLf;
+    if (!renaissance && section.kickPanel === 'insulated') receiverLf += section.width;
+
+    twoByTwoLf += section.uprights * section.height;
+    if (section.chairRail) {
+      twoByTwoLf += section.width;
+      chairRailLf += section.width;
+    }
+
+    if (section.pickets) {
+      const sectionPickets = Math.ceil((section.width * 12) / 4);
+      picketCount += sectionPickets;
+      picketSpacerCount += Math.max(sectionPickets - 1, 0);
+      uChannelLf += section.width * 2;
+    }
+
+    if (section.kickPanel === 'trim-coil') {
+      kick1x2Lf += section.width;
+      kick2x2Lf += section.width;
+    }
+    if (section.kickPanel === 'insulated') panelSqFt += section.width * 3;
+
+    if (section.doorType !== 'none') {
+      twoByTwoLf += 2 * section.height + 3;
+      if (section.doorType === 'single') singleDoors += 1;
+      if (section.doorType === 'french') {
+        frenchDoors += 1;
+        astragals += 1;
+      }
+      if (section.doorSwing === 'inswing') inswingKits += 1;
+    }
+
+    const connectionPieces = section.uprights * 2 + (section.chairRail ? 2 : 0) + (section.doorType !== 'none' ? 6 : 0);
+    if (renaissance) bracketCount += connectionPieces;
+    else capriClips += connectionPieces;
+  });
+
+  const concreteOrWoodFasteners = Math.max(1, Math.ceil((receiverLf / 2) / 100));
+  tekScrewCount = renaissance ? bracketCount * 4 : Math.ceil(oneByTwoLf / 2) + capriClips * 4 + picketCount * 2;
+  const tekBags = Math.max(1, Math.ceil(tekScrewCount / 250));
+  const novaflex = Math.max(1, Math.ceil((renaissance ? oneByTwoLf : receiverLf) / 24));
+  const panelSheets = panelSqFt > 0 ? Math.ceil(panelSqFt / 40) : 0;
+  const trimCoilRolls = kick1x2Lf > 0 ? Math.max(1, Math.ceil(totalWidth / 100)) : 0;
+  const materials: MaterialItem[] = [];
+
+  if (renaissance) {
+    materials.push(
+      toMaterial(`${framingColor} 1x2 7/8 custom cuts`, 'Frame', oneByTwoLf, 'lf', 'Custom cut lengths', 'Perimeter framing'),
+      toMaterial(`${framingColor} 2x2 7/8 custom cuts`, 'Frame', twoByTwoLf, 'lf', 'Custom cut lengths', 'Uprights, chair rail, and door framing'),
+      toMaterial('L brackets with decorative caps', 'Hardware', bracketCount, 'ea', '4 flush-mount screws each', undefined),
+    );
+    if (picketCount) materials.push(toMaterial('Renaissance pickets', 'Railing', picketCount, 'ea', '36 in pickets', undefined));
+    if (picketSpacerCount) materials.push(toMaterial('Picket spacers', 'Railing', picketSpacerCount, 'ea', 'Match picket count', undefined));
+  } else {
+    add24FtStock(materials, `${framingColor} receiver`, 'Frame', receiverLf, 'Perimeter receiver');
+    add24FtStock(materials, `${framingColor} 1x2`, 'Frame', oneByTwoLf, sections.some((section) => section.kickPanel === 'insulated') ? 'Bottom 1x2 removed where insulated panel slides into receiver' : 'Full perimeter infill');
+    add24FtStock(materials, `${framingColor} 2x2`, 'Frame', twoByTwoLf, 'Uprights, chair rail, and door framing');
+    if (uChannelLf) add24FtStock(materials, 'U-channel', 'Railing', uChannelLf, 'Top and bottom for picket sections');
+    if (capriClips) materials.push(toMaterial('Capri clips', 'Hardware', Math.ceil(capriClips / 50), 'packs', '50 per pack', `${capriClips} clips total`));
+    if (kick1x2Lf) add24FtStock(materials, '1x2 V-groove', 'Kick panel', kick1x2Lf, 'Trim coil kick panel');
+    if (kick2x2Lf) add24FtStock(materials, '2x2 V-groove', 'Kick panel', kick2x2Lf, 'Trim coil kick panel');
+  }
+
+  if (chairRailLf) materials.push(toMaterial('Chair rail run', 'Railing', chairRailLf, 'lf', renaissance ? 'Included in custom 2x2 7/8 cuts' : 'Included in 2x2 stock', undefined));
+  if (picketCount) materials.push(toMaterial('Pickets', 'Railing', picketCount, 'ea', '36 in pickets', renaissance ? 'Slides into center channels with spacers' : 'Screwed top and bottom to U-channel'));
+  if (panelSheets) materials.push(toMaterial(`${panelColor} insulated panels`, 'Kick panel', panelSheets, 'sheets', renaissance ? '4 ft x 10 ft x 3/4 in' : '4 ft x 10 ft x 2 in', undefined));
+  if (trimCoilRolls) materials.push(toMaterial('24 in trim coil', 'Kick panel', trimCoilRolls, 'rolls', '2 ft x 100 ft roll', undefined));
+  if (singleDoors) materials.push(toMaterial('Single doors', 'Doors', singleDoors, 'ea', renaissance ? '36x80 Renaissance door' : '3x6-8 door', undefined));
+  if (frenchDoors) materials.push(toMaterial('French doors', 'Doors', frenchDoors, 'ea', renaissance ? 'Renaissance French doors' : 'French door package', undefined));
+  if (inswingKits) materials.push(toMaterial('Inswing kits', 'Doors', inswingKits, 'kits', '1 per inswing door set', undefined));
+  if (astragals) materials.push(toMaterial('Astragals', 'Doors', astragals, 'ea', '1 per French door set', undefined));
+  materials.push(
+    toMaterial(mountingSurface === 'concrete' ? 'Concrete screw bags' : '3 in wood screw bags', 'Hardware', concreteOrWoodFasteners, 'bags', 'Receiver fasteners', undefined),
+    toMaterial('Tek screw bags', 'Hardware', tekBags, 'bags', 'Approx. 250 per bag', `${tekScrewCount} screws estimated`),
+    toMaterial(spline, 'Screening', Math.max(1, screenRolls), 'rolls', 'Match screen rolls', undefined),
+    toMaterial(screenType === 'suntex-80' ? 'Suntex 80 screen' : '17/20 tuff screen', 'Screening', screenRolls, 'rolls', '10 ft x 100 ft', `${totalScreenSf.toFixed(1)} sq ft of screen area`),
+    toMaterial('NovaFlex', 'Accessories', novaflex, 'tubes', '1 tube per 24 lf', undefined),
+  );
 
   return {
     summary: [
-      { label: 'Opening run', value: `${perimeterLf.toFixed(1)} lf` },
+      { label: 'Sections', value: `${sections.length}` },
+      { label: 'Frontage', value: `${totalWidth.toFixed(1)} lf` },
       { label: 'Screen area', value: `${totalScreenSf.toFixed(1)} sq ft` },
-      { label: 'Door kits', value: `${doorKits}` },
-      { label: 'System', value: renaissance ? 'Renaissance' : 'Standard' },
+      { label: 'System', value: prefix },
     ],
-    materials,
+    materials: materials.filter((item) => item.quantity > 0),
     orderNotes: [
-      'All extrusion counts are split from accessories so S&S can swap in exact vendor product codes later.',
-      'Door placement, individual opening widths, and mixed opening layouts can be layered into the next rule iteration.',
+      'Each section can be edited independently, including width, height, uprights, chair rail, pickets, kick panel type, and door placement.',
+      renaissance ? 'Renaissance output keeps frame members as custom-cut lengths instead of collapsing everything into 24 ft sticks.' : 'Standard screen room output groups frame members into 24 ft stock to match your ordering workflow.',
+      `Screen type is ${screenType === 'suntex-80' ? 'Suntex 80 with .285 spline' : 'standard tuff screen with .315 spline'}.`,
     ],
   };
 }
@@ -206,32 +233,41 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const attachmentHeight = Number(inputs.attachmentHeight ?? 0);
   const lowSideHeight = Number(inputs.lowSideHeight ?? 0);
   const structureType = String(inputs.structureType ?? 'attached');
-  const beamCount = Number(inputs.beamCount ?? 0);
+  const panelWidth = Number(inputs.panelWidth ?? 4);
+  const panelThickness = Number(inputs.panelThickness ?? 3);
+  const metalGauge = String(inputs.metalGauge ?? '.26');
+  const foamDensity = Number(inputs.foamDensity ?? 1);
+  const fanBeam = String(inputs.fanBeam ?? 'none');
   const slopeDrop = Math.max(attachmentHeight - lowSideHeight, 0);
-  const panelCount = Math.ceil(width);
-  const postCount = structureType === 'freestanding' ? Math.max(4, Math.ceil(width / 10) + 1) : Math.max(2, Math.ceil(width / 10));
-  const trussSpacing = width / Math.max(panelCount - 1, 1);
-
-  const materials = [
-    toMaterial('Roof panels', 'Roof System', panelCount, 'ea', `${Math.ceil(projection)} ft panel length`, 'Assumes ~12 in module widths'),
-    toMaterial('Front beam', 'Structure', beamCount, 'ea', `${Math.ceil(width)} ft stock or segmented beam`, undefined),
-    toMaterial('Posts', 'Structure', postCount, 'ea', `${Math.ceil(lowSideHeight + 1)} ft stock`, undefined),
-    toMaterial('Attachment channel', 'Structure', structureType === 'attached' ? 1 : 0, 'ea', `${Math.ceil(width)} ft channel`, undefined),
-    toMaterial('Gutter / fascia trim', 'Trim', Math.ceil(width), 'lf', '10 ft sections', undefined),
-    toMaterial('Anchor + fastener package', 'Hardware', postCount, 'kits', 'Per-post hardware bundle', undefined),
+  const panelCount = Math.ceil(width / panelWidth);
+  const panelLength = Math.ceil(projection);
+  const gutterPieces = Math.ceil(width / 24);
+  const fasciaPieces = Math.ceil((projection * 2) / 24);
+  const cChannelPieces = structureType === 'attached' ? Math.ceil(width / 24) : 0;
+  const postCount = structureType === 'freestanding' ? Math.max(4, Math.ceil(width / 8) + 1) : Math.max(2, Math.ceil(width / 10));
+  const maxProjection = panelThickness === 6 ? 26 : metalGauge === '.32' && foamDensity === 2 ? 19 : 15;
+  const overLimit = projection > maxProjection;
+  const materials: MaterialItem[] = [
+    toMaterial(`${panelWidth} ft insulated roof panels`, 'Roof system', panelCount, 'panels', `${panelLength} ft custom length`, `${panelThickness} in panel · ${metalGauge} skin · ${foamDensity} lb foam`),
+    toMaterial('Front gutter', 'Trim', gutterPieces, 'sticks', '24 ft sections', 'Used on front low side only'),
+    toMaterial('Drip-edge fascia', 'Trim', fasciaPieces, 'sticks', '24 ft sections', 'Left and right sides'),
+    toMaterial('C-channel', 'Trim', cChannelPieces, 'sticks', '24 ft sections', 'Attached conditions only'),
+    toMaterial('Front beam line', 'Structure', 1, 'ea', `${width.toFixed(1)} ft total`, fanBeam !== 'none' ? `Fan beam: ${fanBeam}` : 'No fan beam'),
+    toMaterial('Posts', 'Structure', postCount, 'ea', `${Math.ceil(lowSideHeight + 1)} ft stock`, structureType === 'freestanding' ? 'Freestanding cover' : 'Front support line'),
   ].filter((item) => item.quantity > 0);
 
   return {
     summary: [
       { label: 'Roof area', value: `${(width * projection).toFixed(1)} sq ft` },
+      { label: 'Panel count', value: `${panelCount}` },
       { label: 'Slope drop', value: `${slopeDrop.toFixed(2)} ft` },
-      { label: 'Estimated posts', value: `${postCount}` },
-      { label: 'Avg. truss spacing', value: `${trussSpacing.toFixed(2)} ft` },
+      { label: 'Projection check', value: overLimit ? `Over ${maxProjection} ft rule` : `Within ${maxProjection} ft rule` },
     ],
     materials,
     orderNotes: [
-      'Current panel logic uses width modules; replace with manufacturer-specific panel widths and frame member tables when provided.',
-      'The patio cover view can expand to support integrated screen room conversion later without reworking the UI shell.',
+      `This selection checks against an approximate ${maxProjection} ft max projection based on panel thickness, metal thickness, and foam density.`,
+      structureType === 'attached' ? 'Attached jobs include C-channel where panels slide into the house connection and get screwed from the top.' : 'Freestanding jobs remove the house C-channel and need full support framing.',
+      fanBeam === 'none' ? 'No fan beam selected.' : `Fan beam selected: ${fanBeam}.`,
     ],
   };
 }
