@@ -54,12 +54,7 @@ export const SERVICES: ServiceDefinition[] = [
       manualRailingEdges: JSON.stringify([]),
       lockedPosts: JSON.stringify([]),
       beamEdits: JSON.stringify([]),
-      deckShape: JSON.stringify([
-        { x: 0, y: 0 },
-        { x: 16, y: 0 },
-        { x: 16, y: 12 },
-        { x: 0, y: 12 },
-      ]),
+      deckShape: JSON.stringify([]),
     },
     fields: [
       { key: 'deckHeight', label: 'Deck height (ft)', type: 'number', min: 0, step: 0.1 },
@@ -190,6 +185,9 @@ export const SERVICES: ServiceDefinition[] = [
       foamDensity: 1,
       fanBeam: 'none',
       fanBeamCount: 1,
+      fanBeamShift: 0,
+      frontOverhang: 1,
+      extraBeamCount: 0,
       screenUnderneath: false,
       beamStyle: 'atlas',
       postCount: 0,
@@ -256,6 +254,8 @@ export const SERVICES: ServiceDefinition[] = [
         ],
       },
       { key: 'fanBeamCount', label: 'Fan beam count', type: 'number', min: 1, step: 1 },
+      { key: 'frontOverhang', label: 'Front beam overhang (ft)', type: 'number', min: 0, step: 1, helper: '0, 1, or 2 ft typical' },
+      { key: 'extraBeamCount', label: 'Extra support beams', type: 'number', min: 0, step: 1 },
       { key: 'fanBeamPlacementMode', label: 'Fan beam placement', type: 'select', options: [
         { label: 'Spread symmetrically', value: 'spread' },
         { label: 'Cluster near center', value: 'cluster-center' },

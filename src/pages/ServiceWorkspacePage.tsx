@@ -53,7 +53,7 @@ export function ServiceWorkspacePage() {
         </article>
 
         <div className="workspace-right-col">
-          <LayoutPreview serviceSlug={service.slug} values={values} />
+          <LayoutPreview serviceSlug={service.slug} values={values} onValuesChange={setValues} />
           <div className="metrics-grid">
             {estimate.summary.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} />)}
           </div>

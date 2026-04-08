@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { buildDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout } from '../lib/patioLayout';
 import { parseSections } from '../lib/sectioning';
@@ -7,6 +7,7 @@ import { DeckEdgeSegment, DeckPoint, SectionConfig } from '../lib/types';
 interface LayoutPreviewProps {
   serviceSlug: string;
   values: Record<string, string | number | boolean>;
+  onValuesChange?: React.Dispatch<React.SetStateAction<Record<string, string | number | boolean>>>;
 }
 
 type DeckLayer = 'overview' | 'boards' | 'framing' | 'exploded' | 'railing' | 'stairs';
@@ -381,8 +382,87 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
     </div>
   );
 }
-function PatioPreview({ values }: { values: Record<string, string | number | boolean> }) {
-  const width = Number(values.width ?? 21); const projection = Number(values.projection ?? 10); const structureType = String(values.structureType ?? 'attached'); const panelWidth = Number(values.panelWidth ?? 4); const fanBeam = String(values.fanBeam ?? 'none'); const fanBeamCount = Math.max(1, Number(values.fanBeamCount ?? 1)); const screenUnderneath = Boolean(values.screenUnderneath ?? false); const fanBeamPlacementMode = String(values.fanBeamPlacementMode ?? 'spread'); const layout = useMemo(() => buildPatioPanelLayout(width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode), [width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode]); const panelThickness = Number(values.panelThickness ?? 3); const upgraded3 = String(values.metalGauge ?? '.26') === '.32' && Number(values.foamDensity ?? 1) === 2; const supportBeamCount = (panelThickness === 3 && !upgraded3 && projection > 13) ? Math.ceil(projection / 13) - 1 : 0; const scale = Math.min(560 / Math.max(width, 1), 340 / Math.max(projection, 1)); const x0 = 48; const y0 = 48; const roofW = width * scale; const roofD = projection * scale; const beamStyle = screenUnderneath ? '3x3' : 'Atlas'; const autoPostCount = beamStyle === 'Atlas' ? (width <= 16 ? 2 : width <= 24 ? 3 : Math.max(4, Math.ceil((width - 2) / 8))) : (width <= 12 ? 2 : width <= 18 ? 3 : width <= 24 ? 4 : Math.max(4, Math.ceil((width - 2) / 6))); const frontPostCount = Math.max(2, Number(values.postCount ?? 0) > 0 ? Number(values.postCount) : autoPostCount); const postXs = Array.from({ length: frontPostCount }, (_, index) => x0 + (roofW * index) / Math.max(frontPostCount - 1, 1)); let cursor = x0;
-  return <div className="visual-card"><div className="visual-header"><h3>Layout preview</h3><span>Scaled roof plan with panel bays, cut closures, fan-beam panels, front gutter, side fascia, beam lines, and post layout.</span></div><svg viewBox={`0 0 ${roofW + 130} ${roofD + 170}`} className="layout-svg">{Array.from({ length: Math.ceil(width) + 2 }, (_, index) => <line key={`px-${index}`} x1={x0 + index * scale} y1={y0 - 20} x2={x0 + index * scale} y2={y0 + roofD + 40} className="svg-grid" />)}{Array.from({ length: Math.ceil(projection) + 2 }, (_, index) => <line key={`py-${index}`} x1={x0 - 20} y1={y0 + index * scale} x2={x0 + roofW + 20} y2={y0 + index * scale} className="svg-grid" />)}<rect x={x0} y={y0} width={roofW} height={roofD} className="roof-box" rx="8" />{layout.pieces.map((piece, index) => { const pieceW = piece.widthFt * scale; const x = cursor; cursor += pieceW; const cls = piece.kind === 'fan-beam' ? 'fan-beam-panel' : piece.kind === 'cut' ? 'cut-panel' : 'roof-panel'; const note = piece.kind === 'fan-beam' ? piece.note ?? 'fan beam' : piece.kind === 'cut' ? `${piece.widthFt} ft cut` : `${piece.panelWidth} ft panel`; const fanLineX = piece.kind === 'fan-beam' ? piece.fanPlacement === 'female-offset' ? x + scale : piece.fanPlacement === 'male-offset' ? x + pieceW - scale : x + pieceW / 2 : null; return <g key={`panel-${index}`}><rect x={x} y={y0} width={pieceW} height={roofD} className={cls} /><line x1={x} y1={y0} x2={x} y2={y0 + roofD} className="roof-bay" />{fanLineX !== null && <line x1={fanLineX} y1={y0 + 8} x2={fanLineX} y2={y0 + roofD - 8} className="fan-axis-line" />}<text x={x + 6} y={y0 + 16} className="svg-note">{note}</text></g>; })}<line x1={x0 + roofW} y1={y0} x2={x0 + roofW} y2={y0 + roofD} className="roof-bay" /><line x1={x0} y1={y0 - 10} x2={x0 + roofW} y2={y0 - 10} className="trim-line" /><text x={x0 + 6} y={y0 - 14} className="svg-note">{structureType === 'attached' ? 'C-channel / house side' : 'Freestanding back edge'}</text><line x1={x0} y1={y0 + roofD + 10} x2={x0 + roofW} y2={y0 + roofD + 10} className="gutter-line" /><text x={x0 + 6} y={y0 + roofD + 26} className="svg-note">5 in gutter</text><line x1={x0 - 10} y1={y0} x2={x0 - 10} y2={y0 + roofD + 10} className="fascia-line" /><line x1={x0 + roofW + 10} y1={y0} x2={x0 + roofW + 10} y2={y0 + roofD + 10} className="fascia-line" /><line x1={x0} y1={y0 + roofD} x2={x0 + roofW} y2={y0 + roofD} className="beam-line" />{Array.from({ length: supportBeamCount }, (_, index) => { const y = y0 + (((index + 1) * roofD) / (supportBeamCount + 1)); return <line key={`support-${index}`} x1={x0} y1={y} x2={x0 + roofW} y2={y} className="beam-line support" />; })}{postXs.map((x, index) => <g key={`post-${index}`}><rect x={x - 6} y={y0 + roofD - 6} width="12" height="12" className="post-node" rx="2" /><text x={x - 10} y={y0 + roofD + 22} className="svg-note">P{index + 1}</text></g>)}<line x1={x0} y1={y0 + roofD + 40} x2={x0 + roofW} y2={y0 + roofD + 40} className="dimension-line" /><text x={x0 + roofW / 2 - 16} y={y0 + roofD + 34} className="svg-note">{feetAndInches(width)}</text><line x1={x0 - 28} y1={y0} x2={x0 - 28} y2={y0 + roofD} className="dimension-line" /><text x={x0 - 62} y={y0 + roofD / 2} className="svg-note">{feetAndInches(projection)}</text><text x={x0} y={y0 + roofD + 62} className="svg-note">{`${beamStyle} beam · ${frontPostCount} posts · ${supportBeamCount} intermediate beam(s)`}</text></svg><div className="legend-row wrap-legend"><span><i className="legend-swatch roof-panel-swatch" /> regular panel</span><span><i className="legend-swatch fan-panel-swatch" /> fan-beam panel</span><span><i className="legend-swatch cut-panel-swatch" /> cut closure panel</span><span><i className="legend-swatch beam-line-swatch" /> beam</span></div></div>;
+function PatioPreview({ values, onValuesChange }: { values: Record<string, string | number | boolean>; onValuesChange?: React.Dispatch<React.SetStateAction<Record<string, string | number | boolean>>> }) {
+  const width = Number(values.width ?? 21);
+  const projection = Number(values.projection ?? 10);
+  const structureType = String(values.structureType ?? 'attached');
+  const panelWidth = Number(values.panelWidth ?? 4);
+  const fanBeam = String(values.fanBeam ?? 'none');
+  const fanBeamCount = Math.max(1, Number(values.fanBeamCount ?? 1));
+  const fanBeamPlacementMode = String(values.fanBeamPlacementMode ?? 'spread');
+  const fanShift = Number(values.fanBeamShift ?? 0);
+  const screenUnderneath = Boolean(values.screenUnderneath ?? false);
+  const layout = useMemo(() => buildPatioPanelLayout(width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode, fanShift), [width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode, fanShift]);
+  const panelThickness = Number(values.panelThickness ?? 3);
+  const upgraded3 = String(values.metalGauge ?? '.26') === '.32' && Number(values.foamDensity ?? 1) === 2;
+  const extraBeams = Math.max(0, Number(values.extraBeamCount ?? 0));
+  const supportBeamCount = ((panelThickness === 3 && !upgraded3 && projection > 13) ? Math.ceil(projection / 13) - 1 : 0) + extraBeams;
+  const scale = Math.min(560 / Math.max(width, 1), 340 / Math.max(projection, 1));
+  const x0 = 48;
+  const y0 = 48;
+  const roofW = width * scale;
+  const roofD = projection * scale;
+  const beamStyle = screenUnderneath ? '3x3' : 'Atlas';
+  const frontOverhang = Number(values.frontOverhang ?? 1);
+  const beamLeft = x0 + frontOverhang * scale;
+  const beamRight = x0 + roofW - frontOverhang * scale;
+  const spanWidth = Math.max(0, width - frontOverhang * 2);
+  const autoPostCount = beamStyle === 'Atlas' ? (spanWidth <= 14 ? 2 : spanWidth <= 22 ? 3 : Math.max(4, Math.ceil(spanWidth / 8))) : (spanWidth <= 10 ? 2 : spanWidth <= 16 ? 3 : spanWidth <= 22 ? 4 : Math.max(4, Math.ceil(spanWidth / 6)));
+  const frontPostCount = Math.max(2, Number(values.postCount ?? 0) > 0 ? Number(values.postCount) : autoPostCount);
+  const postXs = Array.from({ length: frontPostCount }, (_, index) => beamLeft + ((beamRight - beamLeft) * index) / Math.max(frontPostCount - 1, 1));
+  const supportYs = Array.from({ length: supportBeamCount }, (_, index) => y0 + (((index + 1) * roofD) / (supportBeamCount + 1)));
+  let cursor = x0;
+
+  const shiftFan = (dir: -1 | 1) => {
+    if (!onValuesChange) return;
+    const count = Math.max(layout.fanOptions.length, 1);
+    onValuesChange((current) => ({ ...current, fanBeamShift: (Number(current.fanBeamShift ?? 0) + dir + count) % count }));
+  };
+
+  return <div className="visual-card">
+    <div className="visual-header">
+      <div>
+        <h3>Layout preview</h3>
+        <span>Scaled roof plan with beam line, support beams, post layout, gutter, fascia, and strategic fan-beam placement.</span>
+      </div>
+      {fanBeam !== 'none' && onValuesChange && <div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => shiftFan(-1)}>← Fan beam</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftFan(1)}>Fan beam →</button></div>}
+    </div>
+    <svg viewBox={`0 0 ${roofW + 130} ${roofD + 180}`} className="layout-svg patio-sheet-svg">
+      {Array.from({ length: Math.ceil(width) + 2 }, (_, index) => <line key={`px-${index}`} x1={x0 + index * scale} y1={y0 - 20} x2={x0 + index * scale} y2={y0 + roofD + 40} className="svg-grid" />)}
+      {Array.from({ length: Math.ceil(projection) + 2 }, (_, index) => <line key={`py-${index}`} x1={x0 - 20} y1={y0 + index * scale} x2={x0 + roofW + 20} y2={y0 + index * scale} className="svg-grid" />)}
+      <rect x={x0} y={y0} width={roofW} height={roofD} className="roof-box" rx="8" />
+      {layout.pieces.map((piece, index) => {
+        const pieceW = piece.widthFt * scale;
+        const x = cursor;
+        cursor += pieceW;
+        const cls = piece.kind === 'fan-beam' ? 'fan-beam-panel' : piece.kind === 'cut' ? 'cut-panel' : 'roof-panel';
+        const note = piece.kind === 'fan-beam' ? piece.note ?? 'fan beam' : piece.kind === 'cut' ? `${piece.widthFt} ft cut` : `${piece.panelWidth} ft panel`;
+        const fanLineX = piece.kind === 'fan-beam' ? piece.fanPlacement === 'female-offset' ? x + scale : piece.fanPlacement === 'male-offset' ? x + pieceW - scale : x + pieceW / 2 : null;
+        return <g key={`panel-${index}`}>
+          <rect x={x} y={y0} width={pieceW} height={roofD} className={cls} />
+          <line x1={x} y1={y0} x2={x} y2={y0 + roofD} className="roof-bay" />
+          {fanLineX !== null && <line x1={fanLineX} y1={y0 + 8} x2={fanLineX} y2={y0 + roofD - 8} className="fan-axis-line" />}
+          <text x={x + 6} y={y0 + 16} className="svg-note">{note}</text>
+        </g>;
+      })}
+      <line x1={x0 + roofW} y1={y0} x2={x0 + roofW} y2={y0 + roofD} className="roof-bay" />
+      <line x1={x0} y1={y0 - 10} x2={x0 + roofW} y2={y0 - 10} className="trim-line" />
+      <text x={x0 + 6} y={y0 - 14} className="svg-note">{structureType === 'attached' ? 'C-channel / house side' : 'Freestanding back edge'}</text>
+      <line x1={x0} y1={y0 + roofD + 10} x2={x0 + roofW} y2={y0 + roofD + 10} className="gutter-line" />
+      <text x={x0 + 6} y={y0 + roofD + 26} className="svg-note">5 in gutter</text>
+      <line x1={x0 - 10} y1={y0} x2={x0 - 10} y2={y0 + roofD + 10} className="fascia-line" />
+      <line x1={x0 + roofW + 10} y1={y0} x2={x0 + roofW + 10} y2={y0 + roofD + 10} className="fascia-line" />
+      <line x1={beamLeft} y1={y0 + roofD} x2={beamRight} y2={y0 + roofD} className="beam-line" />
+      {supportYs.map((y, index) => <line key={`support-${index}`} x1={beamLeft} y1={y} x2={beamRight} y2={y} className="beam-line support" />)}
+      {postXs.map((x, index) => <g key={`post-${index}`}><rect x={x - 6} y={y0 + roofD - 6} width="12" height="12" className="post-node" rx="2" /><text x={x - 10} y={y0 + roofD + 22} className="svg-note">P{index + 1}</text></g>)}
+      <line x1={x0} y1={y0 + roofD + 40} x2={x0 + roofW} y2={y0 + roofD + 40} className="dimension-line" />
+      <text x={x0 + roofW / 2 - 16} y={y0 + roofD + 34} className="svg-note">{feetAndInches(width)}</text>
+      <line x1={x0 - 28} y1={y0} x2={x0 - 28} y2={y0 + roofD} className="dimension-line" />
+      <text x={x0 - 62} y={y0 + roofD / 2} className="svg-note">{feetAndInches(projection)}</text>
+      <text x={x0} y={y0 + roofD + 62} className="svg-note">{`${beamStyle} beam · ${frontPostCount} posts · ${supportBeamCount} intermediate beam(s) · ${frontOverhang}' overhang each side`}</text>
+    </svg>
+    <div className="legend-row wrap-legend"><span><i className="legend-swatch roof-panel-swatch" /> regular panel</span><span><i className="legend-swatch fan-panel-swatch" /> fan-beam panel</span><span><i className="legend-swatch cut-panel-swatch" /> cut closure panel</span><span><i className="legend-swatch beam-line-swatch" /> beam</span></div>
+  </div>;
 }
-export function LayoutPreview({ serviceSlug, values }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; return <ScreenPreview values={values} renaissance />; }
+
+export function LayoutPreview({ serviceSlug, values, onValuesChange }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; return <ScreenPreview values={values} renaissance />; }

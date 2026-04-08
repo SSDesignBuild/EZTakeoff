@@ -7,12 +7,8 @@ const VIEW_SIZE = 520;
 const PADDING = 28;
 const SNAP_TOLERANCE = 0.75;
 
-const defaultShape: DeckPoint[] = [
-  { x: 0, y: 0 },
-  { x: 16, y: 0 },
-  { x: 16, y: 12 },
-  { x: 0, y: 12 },
-];
+const defaultShape: DeckPoint[] = [];
+const starterPoints: DeckPoint[] = [{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 10 }];
 
 type EditMode = 'points' | 'railing' | 'stairs' | 'beams' | 'posts';
 type BeamEdit = { beamIndex: number; startTrim: number; endTrim: number };
@@ -46,7 +42,15 @@ interface DeckDesignerProps {
 }
 
 export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
-  const points = useMemo(() => parseDeckShape(values.deckShape), [values.deckShape]);
+  const points = useMemo(() => {
+    if (typeof values.deckShape === 'string') {
+      try {
+        const parsed = JSON.parse(values.deckShape);
+        if (Array.isArray(parsed)) return parsed as DeckPoint[];
+      } catch {}
+    }
+    return parseDeckShape(values.deckShape);
+  }, [values.deckShape]);
   const model = useMemo(() => buildDeckModel(values), [values]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [mode, setMode] = useState<EditMode>('points');
@@ -54,7 +58,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const [draggingBeamIndex, setDraggingBeamIndex] = useState<number | null>(null);
   const [draggingStair, setDraggingStair] = useState(false);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const limits = bounds(points);
+  const limits = points.length ? bounds(points) : { minX: 0, maxX: 16, minY: 0, maxY: 12 };
   const spanX = Math.max(limits.maxX - limits.minX, 1);
   const spanY = Math.max(limits.maxY - limits.minY, 1);
   const scale = Math.min((VIEW_SIZE - PADDING * 2) / spanX, (VIEW_SIZE - PADDING * 2) / spanY);
@@ -214,6 +218,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       </div>
       <div className="deck-designer-grid">
         <div className="deck-canvas-wrap">
+          {points.length < 3 && <div className="empty-designer-state"><p>Start the footprint by adding the first points.</p><div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => updateShape([{ x: 0, y: 0 }])}>Add first point</button><button type="button" className="ghost-btn small-btn" onClick={() => updateShape(starterPoints)}>Load starter triangle</button></div></div>}
           <svg ref={svgRef} viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} className="deck-canvas" onPointerMove={handlePointerMove} onPointerUp={() => { setDraggingIndex(null); setDraggingBeamIndex(null); setDraggingStair(false); }}>
             {Array.from({ length: 13 }, (_, index) => { const offset = PADDING + index * ((VIEW_SIZE - PADDING * 2) / 12); return <g key={index}><line x1={PADDING} y1={offset} x2={VIEW_SIZE - PADDING} y2={offset} className="grid-line" /><line x1={offset} y1={PADDING} x2={offset} y2={VIEW_SIZE - PADDING} className="grid-line" /></g>; })}
             <polygon points={points.map((point) => { const svgPoint = toSvgPoint(point); return `${svgPoint.x},${svgPoint.y}`; }).join(' ')} className="deck-polygon" />
