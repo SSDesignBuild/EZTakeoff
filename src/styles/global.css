@@ -346,3 +346,48 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .roof-bay-panel { fill: rgba(34,197,94,0.08); stroke: rgba(34,197,94,0.4); stroke-width: 1.5; }
 .fan-panel-box { fill: rgba(245,158,11,0.18); stroke: #f59e0b; stroke-width: 2; }
 .locked-post { fill: #111827; }
+
+.dimension-line { stroke: color-mix(in srgb, var(--muted) 58%, transparent); stroke-width: 2; marker-start: none; marker-end: none; }
+.deck-board-line { stroke: rgba(196, 153, 110, 0.55); stroke-width: 3; }
+.band-line { stroke: #856245; stroke-width: 3.5; }
+.band-line.secondary { stroke: #6f5037; stroke-width: 3; opacity: 0.9; }
+.receiver-line { stroke: #d9472a; stroke-width: 3; }
+.one-by-two-line { stroke: #ff8c42; stroke-width: 2.5; }
+.two-by-two-line { stroke: #3273dc; stroke-width: 3; }
+.two-by-two-no-groove-line { stroke: #3273dc; stroke-width: 3; }
+.channel-2x2-line { stroke: #f0c419; stroke-width: 3; }
+.picket-line { stroke: #7a43b6; stroke-width: 2.2; }
+.vgroove-top-line { stroke: #ff5cad; stroke-width: 3; }
+.kick-panel-box { fill: rgba(255, 92, 173, 0.08); stroke: rgba(255, 92, 173, 0.5); stroke-width: 1.5; }
+.insulated-panel-box { fill: rgba(70, 140, 220, 0.12); stroke: rgba(70, 140, 220, 0.45); stroke-width: 1.5; }
+.door-box { fill: rgba(255,255,255,0.05); stroke: var(--green-strong); stroke-width: 2.5; }
+.railing-post-node { fill: #7e5b3f; stroke: var(--panel); stroke-width: 2; }
+.stair-edge-highlight { stroke: #c95d2e; stroke-width: 5; }
+.stair-tread-line { stroke: #f0b67c; stroke-width: 2.5; }
+.stringer-line { stroke: #74451d; stroke-width: 2.5; }
+.locked-post { fill: #d93f6a; }
+.roof-bay-panel { fill: rgba(255,255,255,0.06); stroke: rgba(33,56,45,0.45); stroke-width: 2; }
+.fan-panel-box { fill: rgba(210,160,113,0.18); stroke: var(--accent); stroke-width: 3; }
+.cut-panel-box { fill: rgba(90,67,52,0.1); stroke: rgba(90,67,52,0.65); stroke-width: 2.5; stroke-dasharray: 7 5; }
+.beam-line.support { opacity: 0.75; stroke-dasharray: 8 5; }
+.deck-board-line-swatch { background: rgba(196, 153, 110, 0.8); }
+.band-line-swatch { background: #7a5940; }
+.railing-post-line-swatch { width: 10px; height: 10px; border-radius: 50%; background: #7e5b3f; }
+.receiver-line-swatch { background: #d9472a; }
+.one-by-two-line-swatch { background: #ff8c42; }
+.two-by-two-line-swatch { background: #3273dc; }
+.two-by-two-no-groove-line-swatch { background: #3273dc; }
+.picket-line-swatch { background: #7a43b6; }
+.vgroove-line-swatch { background: #ff5cad; }
+.section-card { padding: 1rem; border: 1px solid var(--border); border-radius: 18px; background: color-mix(in srgb, var(--panel) 94%, transparent); display: grid; gap: 1rem; }
+.toggle-cluster { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.8rem; }
+.small-btn { padding: 0.55rem 0.85rem; }
+.visual-card { overflow: hidden; }
+.layout-svg { background: color-mix(in srgb, var(--panel-strong) 78%, transparent); border-radius: 18px; padding: 0.25rem; }
+.tag { font-size: 0.9rem; }
+.form-field input, .form-field select { min-height: 44px; }
+@media (max-width: 900px) {
+  .hero-card, .workspace-grid, .grid-section.two-col, .deck-designer-grid { grid-template-columns: 1fr; }
+  .shell { grid-template-columns: 1fr; }
+  .sidebar { position: static; height: auto; }
+}

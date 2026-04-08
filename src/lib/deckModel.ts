@@ -268,9 +268,9 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
 
   const boardLengths: number[] = [];
   if (boardRun === 'width') {
-    for (let x = minX + EFFECTIVE_COVERAGE / 2; x < maxX; x += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'vertical', x).forEach((pair) => boardLengths.push(pair.length));
-  } else {
     for (let y = minY + EFFECTIVE_COVERAGE / 2; y < maxY; y += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'horizontal', y).forEach((pair) => boardLengths.push(pair.length));
+  } else {
+    for (let x = minX + EFFECTIVE_COVERAGE / 2; x < maxX; x += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'vertical', x).forEach((pair) => boardLengths.push(pair.length));
   }
   const boardGroups = accumulateGroups(boardLengths);
   const borderGroups = inputs.borderSameBoard ? accumulateGroups(exposedSegments.map((segment) => segment.length)) : [];
@@ -370,19 +370,22 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const railingRun = round2(Number(inputs.perimeterRailingFt ?? 0) || exposedPerimeter);
   let railingSections6 = 0;
   let railingSections8 = 0;
-  let bestWaste = Number.POSITIVE_INFINITY;
-  let bestPieces = Number.POSITIVE_INFINITY;
-  for (let six = 0; six < 10; six += 1) {
-    for (let eight = 0; eight < 10; eight += 1) {
-      const covered = (six * 6) + (eight * 8);
-      if (covered + 1e-6 < railingRun) continue;
-      const waste = covered - railingRun;
-      const pieces = six + eight;
-      if (waste < bestWaste - 1e-6 || (Math.abs(waste - bestWaste) < 1e-6 && pieces < bestPieces) || (Math.abs(waste - bestWaste) < 1e-6 && pieces === bestPieces && six > railingSections6)) {
-        railingSections6 = six; railingSections8 = eight; bestWaste = waste; bestPieces = pieces;
+  exposedSegments.forEach((segment) => {
+    let segmentBest = { six: 0, eight: 0, waste: Number.POSITIVE_INFINITY, pieces: Number.POSITIVE_INFINITY };
+    for (let six = 0; six < 10; six += 1) {
+      for (let eight = 0; eight < 10; eight += 1) {
+        const covered = (six * 6) + (eight * 8);
+        if (covered + 1e-6 < segment.length) continue;
+        const waste = covered - segment.length;
+        const pieces = six + eight;
+        if (waste < segmentBest.waste - 1e-6 || (Math.abs(waste - segmentBest.waste) < 1e-6 && pieces < segmentBest.pieces) || (Math.abs(waste - segmentBest.waste) < 1e-6 && pieces == segmentBest.pieces && six > segmentBest.six)) {
+          segmentBest = { six, eight, waste, pieces };
+        }
       }
     }
-  }
+    railingSections6 += segmentBest.six;
+    railingSections8 += segmentBest.eight;
+  });
   const railingType = String(inputs.railingType ?? 'aluminum');
   const railingPosts = railingType === 'aluminum' ? 0 : Math.max(2, Math.ceil(railingRun / 6) + 1);
   const carriageBolts = postCount * 2 + (railingPosts > 0 ? railingPosts * 2 : 0);

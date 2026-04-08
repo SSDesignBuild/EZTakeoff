@@ -1,6 +1,7 @@
 import { parseSections } from './sectioning';
 import { buildDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem } from './types';
+import { buildPatioPanelLayout } from './patioLayout';
 
 export type EstimateInputs = Record<string, string | number | boolean>;
 
@@ -95,7 +96,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   return {
     summary: [
       { label: 'Deck area', value: `${deck.area.toFixed(1)} sq ft` },
-      { label: 'Board direction', value: deck.boardRun === 'width' ? 'Parallel with house / stock tracks projection' : 'Perpendicular to house / stock tracks width' },
+      { label: 'Board direction', value: deck.boardRun === 'width' ? 'Parallel with house / stock tracks width' : 'Perpendicular to house / stock tracks projection' },
       { label: 'Stairs', value: deck.stairCount ? `${deck.stairRisers} risers · ${deck.stairTreadsPerRun} treads · ${deck.stairStringers} stringers` : 'No stairs' },
       { label: 'Railing mix', value: `${deck.railingSections6}x6' + ${deck.railingSections8}x8'` },
     ],
@@ -172,9 +173,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       const picketSpanIn = wallWidthExcludingDoor * 12;
       const sectionPickets = Math.max(0, Math.ceil(picketSpanIn / 4));
       picketCount += sectionPickets;
-      if (renaissance) {
-        if (section.chairRail) twoByTwoCustomGroove.push(wallWidthExcludingDoor);
-      } else {
+      if (!renaissance) {
         uChannelLf += wallWidthExcludingDoor * 2;
         picketStockLf += sectionPickets * 3;
       }
@@ -312,16 +311,13 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const standard3In = panelThickness === 3 && !(metalGauge === '.32' && foamDensity === 2);
   const supportBeamCount = standard3In && projection > 13 ? Math.ceil(projection / 13) - 1 : 0;
 
-  let panelMix4 = panelWidth === 4 ? Math.floor(width / 4) : 0;
-  let panelMix2 = panelWidth === 2 ? Math.ceil(width / 2) : Math.ceil((width - panelMix4 * 4) / 2);
-  let notes = 'Standard panel layout';
-  if (fanBeam === 'centered' && Math.round(width) % 4 === 0) {
-    panelMix4 = Math.max(1, Math.floor((width - 4) / 4));
-    const remaining = Math.max(0, width - (panelMix4 * 4) - 4);
-    panelMix2 = Math.ceil(remaining / 2);
-    notes = 'Centered fan beam layout can mix 4 ft and 2 ft panels to keep symmetry.';
-  }
-  const panelCount = panelMix4 + panelMix2;
+  const panelLayout = buildPatioPanelLayout(width, fanBeam, panelWidth);
+  const panelMix4 = panelLayout.regular4;
+  const panelMix2 = panelLayout.regular2;
+  const cutPanelCount = panelLayout.cut2Equivalent;
+  const fanBeamPanels = panelLayout.fanBeamPanels;
+  const notes = panelLayout.notes.join(' ');
+  const panelCount = panelLayout.pieces.length;
   const panelLength = Math.ceil(projection);
   const frontPostCount = Math.max(2, Math.ceil(width / 6) + 1);
   const hiddenBracketPerPost = beamStyle === '3x3' ? 2 : 1;
@@ -342,7 +338,7 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
 
   const materials: MaterialItem[] = [
     toMaterial('4 ft insulated roof panels', 'Roof system', panelMix4, 'panels', `${panelLength} ft custom length`, `${panelThickness} in panel · ${metalGauge} skin · ${foamDensity} lb foam`),
-    toMaterial('2 ft insulated roof panels', 'Roof system', panelMix2, 'panels', `${panelLength} ft custom length`, notes),
+    toMaterial('2 ft insulated roof panels', 'Roof system', panelMix2 + cutPanelCount, 'panels', `${panelLength} ft custom length`, notes || '2 ft stock and cut pieces as needed for symmetry'),
     toMaterial('Front gutter', 'Trim', gutterPieces, 'sticks', '24 ft sections', 'Front lower side only'),
     toMaterial('Drip-edge fascia', 'Trim', fasciaPieces, 'sticks', '24 ft sections', `${fasciaLf.toFixed(1)} lf including 5 in gutter cap return on both sides`),
     toMaterial('C-channel', 'Trim', cChannelPieces, 'sticks', '24 ft sections', 'Attached conditions only'),
@@ -354,13 +350,13 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
     toMaterial('Tek screws', 'Hardware', tekScrews, 'ea', 'Approx. every 6 in', 'For C-channel, gutter, and fascia'),
     toMaterial('Sealant / NovaFlex', 'Hardware', sealantTubes, 'tubes', 'Approx. 24 lf per tube', `Snap-lock seams + full perimeter + behind C-channel = ${sealantLf.toFixed(1)} lf`),
   ].filter((item) => item.quantity > 0);
-  if (fanBeam !== 'none') materials.push(toMaterial('Fan beam panel', 'Roof system', 1, 'ea', fanBeam === 'centered' ? 'Centered' : fanBeam === 'female-offset' ? '1 ft from female side' : '1 ft from male side', 'Panel mix adjusts to accommodate fan beam landing rules'));
+  if (fanBeamPanels > 0) materials.push(toMaterial('Fan beam panel', 'Roof system', fanBeamPanels, 'ea', fanBeam === 'centered' ? 'Centered' : fanBeam === 'female-offset' ? '1 ft from female side' : '1 ft from male side', 'Panel mix adjusts to accommodate fan beam landing rules'));
   if (supportBeamCount > 0) materials.push(toMaterial(beamStyle === '3x3' ? 'Intermediate 3x3 support beam' : 'Intermediate support beam', 'Structure', supportBeamCount, 'lines', `${width.toFixed(1)} ft each`, 'Added because projection exceeds 13 ft without the full upgrade package'));
 
   return {
     summary: [
       { label: 'Roof area', value: `${(width * projection).toFixed(1)} sq ft` },
-      { label: 'Panel mix', value: `${panelMix4}x4' + ${panelMix2}x2'` },
+      { label: 'Panel mix', value: `${panelMix4}x4' + ${panelMix2 + cutPanelCount}x2'${fanBeamPanels ? ' + fan beam' : ''}` },
       { label: 'Slope drop', value: feetAndInches(Math.max(slopeDrop, projection * (0.5 / 12))) },
       { label: 'Projection check', value: overLimit ? `Over ${maxProjection} ft rule` : `Within ${maxProjection} ft rule` },
     ],
