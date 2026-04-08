@@ -17,7 +17,10 @@ export interface DeckInputs {
   stairOffset?: string | number | boolean;
   manualRailingEdges?: string | number | boolean;
   lockedPosts?: string | number | boolean;
+  beamEdits?: string | number | boolean;
 }
+
+export interface BeamEdit { beamIndex: number; startTrim: number; endTrim: number; }
 
 export interface BeamLine {
   y: number;
@@ -25,6 +28,8 @@ export interface BeamLine {
   segments: { startX: number; endX: number; length: number }[];
   postXs: number[];
   lockedPostXs: number[];
+  startTrim: number;
+  endTrim: number;
 }
 
 export interface BoardGroup { length: number; count: number; }
@@ -69,6 +74,7 @@ export interface DeckModel {
   beamSegmentsCount: number;
   postCount: number;
   lockedPosts: LockedPostPoint[];
+  beamEdits: BeamEdit[];
   postLength: number;
   doubleBandLf: number;
   doubleBandGroups: BoardGroup[];
@@ -145,6 +151,15 @@ function parseLockedPosts(raw: string | number | boolean | undefined) {
     if (!Array.isArray(parsed)) return [];
     return parsed.map((item) => ({ beamIndex: Math.max(0, Math.round(Number(item.beamIndex ?? 0))), x: round2(Number(item.x ?? 0)) }))
       .filter((item) => Number.isFinite(item.x));
+  } catch { return []; }
+}
+
+function parseBeamEdits(raw: string | number | boolean | undefined) {
+  if (typeof raw !== 'string' || !raw.trim()) return [] as BeamEdit[];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item) => ({ beamIndex: Math.max(0, Math.round(Number(item.beamIndex ?? 0))), startTrim: Math.max(0, round2(Number(item.startTrim ?? 0))), endTrim: Math.max(0, round2(Number(item.endTrim ?? 0))) }));
   } catch { return []; }
 }
 
@@ -276,7 +291,8 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const borderGroups = inputs.borderSameBoard ? accumulateGroups(exposedSegments.map((segment) => segment.length)) : [];
 
   const rawCustomBeams = parseNumberArray(inputs.customBeamYs).map((value) => clamp(value, 0, depth)).filter((value) => isFreestanding ? value >= 0 && value <= depth : value > 0.2 && value < depth - 0.2);
-  const beamOffsets = rawCustomBeams.length > 0 ? uniqueSorted(rawCustomBeams) : (() => {
+  const notchBeamOffsets = attachment === 'brick' ? uniqueSorted(segments.filter((segment) => segment.orientation === 'horizontal' && segment.start.y > minY + 0.2 && segment.start.y < maxY - 0.2 && Math.min(segment.start.x, segment.end.x) > minX + 0.2 && Math.max(segment.start.x, segment.end.x) < maxX - 0.2).map((segment) => round2(segment.start.y - minY))) : [];
+  const beamOffsets = uniqueSorted((rawCustomBeams.length > 0 ? uniqueSorted(rawCustomBeams) : (() => {
     if (depth <= FRONT_CANTILEVER) return isFreestanding ? [0] : [depth];
     const positions: number[] = [];
     const frontBeam = Math.max(0, round2(depth - FRONT_CANTILEVER));
@@ -284,7 +300,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     while (positions[positions.length - 1] > BEAM_TARGET_SPACING + (isFreestanding ? 0 : 0.01)) positions.push(round2(positions[positions.length - 1] - BEAM_TARGET_SPACING));
     if (isFreestanding) positions.push(0);
     return uniqueSorted(positions);
-  })();
+  })()).concat(notchBeamOffsets));
 
   const supportAnchors = uniqueSorted([minY, ...beamOffsets.map((value) => value + minY), maxY]);
   const supportSpans = supportAnchors.slice(1).map((value, index) => round2(value - supportAnchors[index]));
@@ -301,10 +317,16 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const joistLengthGroups = accumulateGroups(joistLengthsRaw);
   const joistStockLength = chooseStockLength(Math.min(Math.max(...joistLengthsRaw, maxSpan), JOIST_SPAN_LIMITS[joistSize]));
   const lockedPosts = parseLockedPosts(inputs.lockedPosts);
+  const beamEdits = parseBeamEdits(inputs.beamEdits);
 
   const beamLines: BeamLine[] = beamOffsets.map((offsetY, beamIndex) => {
     const y = round2(offsetY + minY);
-    const segmentsAtBeam = scanlineIntersections(points, 'horizontal', y + 0.0001).map((pair) => ({ startX: pair.start, endX: pair.end, length: pair.length }));
+    const beamEdit = beamEdits.find((item) => item.beamIndex === beamIndex) ?? { beamIndex, startTrim: 0, endTrim: 0 };
+    const segmentsAtBeam = scanlineIntersections(points, 'horizontal', y + 0.0001).map((pair, index, list) => {
+      const startX = round2(pair.start + (index === 0 ? beamEdit.startTrim : 0));
+      const endX = round2(pair.end - (index === list.length - 1 ? beamEdit.endTrim : 0));
+      return { startX, endX, length: round2(endX - startX) };
+    }).filter((segment) => segment.length > 0.25);
     const postXs: number[] = [];
     segmentsAtBeam.forEach((segment) => {
       const count = Math.max(2, Math.ceil(segment.length / POST_TARGET_SPACING) + 1);
@@ -317,7 +339,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     });
     const lockedForBeam = lockedPosts.filter((item) => item.beamIndex === beamIndex && segmentsAtBeam.some((segment) => item.x >= segment.startX - 0.01 && item.x <= segment.endX + 0.01)).map((item) => item.x);
     lockedForBeam.forEach((x) => { if (!postXs.some((value) => Math.abs(value - x) < 0.1)) postXs.push(x); });
-    return { y, offsetFromHouse: round2(offsetY), segments: segmentsAtBeam, postXs: postXs.sort((a, b) => a - b), lockedPostXs: lockedForBeam.sort((a, b) => a - b) };
+    return { y, offsetFromHouse: round2(offsetY), segments: segmentsAtBeam, postXs: postXs.sort((a, b) => a - b), lockedPostXs: lockedForBeam.sort((a, b) => a - b), startTrim: beamEdit.startTrim, endTrim: beamEdit.endTrim };
   });
 
   const postCount = beamLines.reduce((sum, line) => sum + line.postXs.length, 0);
@@ -395,5 +417,5 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const deckFastenerBoxes = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? Math.ceil(deckFastenerCount / 365) : Math.ceil(deckFastenerCount / 1750);
   const fastenerType = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'top screws' : 'hidden camo screws';
 
-  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingBoardCount, joistTapeLf, joistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerLength, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, manualRailingEdges, stairPlacement };
+  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingBoardCount, joistTapeLf, joistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerLength, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, manualRailingEdges, stairPlacement };
 }

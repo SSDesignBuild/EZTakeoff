@@ -484,3 +484,8 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .roof-panel-swatch { background: #4d83d1; }
 .fan-panel-swatch { background: #7c5fb3; }
 .cut-panel-swatch { background: #c97d43; }
+
+.preview-inspect { margin-top: 1rem; }
+.beam-edit-grid { display:grid; grid-template-columns:auto auto 1fr 1fr auto; gap:0.5rem; align-items:end; }
+.inline-mini-field { display:flex; flex-direction:column; gap:0.25rem; font-size:0.8rem; }
+.inline-mini-field input { min-width: 5rem; }

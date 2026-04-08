@@ -347,6 +347,7 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const foamDensity = Number(inputs.foamDensity ?? 1);
   const fanBeam = String(inputs.fanBeam ?? 'none');
   const fanBeamCount = Math.max(1, Number(inputs.fanBeamCount ?? 1));
+  const fanBeamPlacementMode = String(inputs.fanBeamPlacementMode ?? 'spread');
   const screenUnderneath = Boolean(inputs.screenUnderneath ?? false);
   const beamStyle = screenUnderneath ? '3x3' : 'atlas';
   const slopeDrop = Math.max(attachmentHeight - lowSideHeight, projection * (0.5 / 12));
@@ -358,7 +359,7 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const standard3In = panelThickness === 3 && !(metalGauge === '.32' && foamDensity === 2);
   const supportBeamCount = standard3In && projection > 13 ? Math.ceil(projection / 13) - 1 : 0;
 
-  const panelLayout = buildPatioPanelLayout(width, fanBeam, panelWidth, fanBeamCount);
+  const panelLayout = buildPatioPanelLayout(width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode);
   const panelCount = panelLayout.pieces.length;
   const panelLength = Math.ceil(projection);
   const regular4Count = panelLayout.pieces.filter((piece) => piece.kind === 'regular' && piece.panelWidth === 4).length;
@@ -395,9 +396,9 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const postStockPieces = Math.ceil((frontPostCount * postCutLength) / 24);
 
   const materials: MaterialItem[] = [
-    toMaterial('4 ft regular roof panels', 'Roof system', regular4Count, 'panels', `${panelLength} ft custom length`, `${panelThickness} in panel · ${metalGauge} skin · ${foamDensity} lb foam`),
-    toMaterial('2 ft regular roof panels', 'Roof system', regular2Count, 'panels', `${panelLength} ft custom length`, 'Standard full-width 2 ft panels'),
-    toMaterial('2 ft cut closure panels', 'Roof system', cutPanels.length, 'panels', `${panelLength} ft custom length`, cutPanels.map((piece) => `${piece.widthFt} ft closure`).join(' · ') || 'Rip-cut from 2 ft stock'),
+    toMaterial('4 ft regular roof panels', 'Roof system', regular4Count, 'panels', `${panelLength} ft factory-cut panel`, `${panelThickness} in panel · ${metalGauge} skin · ${foamDensity} lb foam`),
+    toMaterial('2 ft regular roof panels', 'Roof system', regular2Count, 'panels', `${panelLength} ft factory-cut panel`, 'Standard full-width 2 ft panels'),
+    toMaterial('Closure roof panels', 'Roof system', cutPanels.length, 'panels', `${panelLength} ft factory-cut panel`, cutPanels.map((piece, index) => `${index === 0 ? 'L' : index === cutPanels.length - 1 ? 'R' : 'Closure'} ${piece.widthFt} ft`).join(' · ') || 'Rip-cut from 2 ft stock'),
     toMaterial('Front gutter', 'Trim', gutterPieces, 'sticks', '24 ft sections', 'Front lower side only'),
     toMaterial('Drip-edge fascia', 'Trim', fasciaPieces, 'sticks', '24 ft sections', `${fasciaLf.toFixed(1)} lf including 5 in gutter cap return on both sides`),
     toMaterial('C-channel', 'Trim', cChannelPieces, 'sticks', '24 ft sections', 'Attached conditions only'),

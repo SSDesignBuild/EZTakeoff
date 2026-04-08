@@ -10,6 +10,7 @@ interface LayoutPreviewProps {
 }
 
 type DeckLayer = 'overview' | 'boards' | 'framing' | 'railing' | 'stairs';
+type InspectMember = { title: string; detail: string };
 
 const feetAndInches = (feet: number) => {
   const totalInches = Math.round(feet * 12);
@@ -89,12 +90,14 @@ function offsetSegment(segment: DeckEdgeSegment, distance: number, points?: Deck
   };
 }
 
+function round2(value: number) { return Math.round(value * 100) / 100; }
+
 function stockPlan(length: number, stock = 20) {
-  if (length <= stock) return [length];
-  const fullCount = Math.max(2, Math.ceil((length - stock) / 10) + 1);
-  const parts = Array(fullCount).fill(stock);
-  const built = stock + (fullCount - 1) * 10;
-  const tail = Math.max(0, Math.round((length - built) * 100) / 100);
+  if (length <= stock + 0.01) return [round2(length)];
+  const parts = [stock, stock];
+  let coverage = stock + 10;
+  while (coverage + 10 < length - 0.01) { parts.push(stock); coverage += 10; }
+  const tail = round2(length - coverage);
   if (tail > 0.1) parts.push(tail);
   return parts;
 }
@@ -153,6 +156,7 @@ function railSegmentsForDeck(deck: ReturnType<typeof buildDeckModel>) {
 function DeckPreview({ values }: { values: Record<string, string | number | boolean> }) {
   const deck = buildDeckModel(values);
   const [layer, setLayer] = useState<DeckLayer>('overview');
+  const [inspect, setInspect] = useState<InspectMember | null>(null);
   const scale = Math.min(560 / Math.max(deck.width, 1), 380 / Math.max(deck.depth, 1));
   const pad = 70;
   const toSvg = (x: number, y: number) => ({ x: pad + (x - deck.minX) * scale, y: pad + (y - deck.minY) * scale });
@@ -218,12 +222,12 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
             ? scanlineIntersections(deck.points, 'vertical', value).map((pair, index) => {
               const a = toSvg(value, pair.start);
               const b = toSvg(value, pair.end);
-              return <line key={`joist-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="joist-line" />;
+              return <line key={`joist-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="joist-line" onClick={() => setInspect({ title: `Joist ${index + 1}`, detail: `Approx. ${feetAndInches(pair.end - pair.start)} ${deck.joistSize} joist at 12 in O.C.` })} />;
             })
             : scanlineIntersections(deck.points, 'horizontal', value).map((pair, index) => {
               const a = toSvg(pair.start, value);
               const b = toSvg(pair.end, value);
-              return <line key={`joist-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="joist-line" />;
+              return <line key={`joist-${value}-${index}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="joist-line" onClick={() => setInspect({ title: `Joist ${index + 1}`, detail: `Approx. ${feetAndInches(pair.end - pair.start)} ${deck.joistSize} joist at 12 in O.C.` })} />;
             })
         ))}
 
@@ -243,7 +247,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
           const b2 = toSvg(inner.end.x, inner.end.y);
           const plan = stockPlan(segment.length);
           return (
-            <g key={`band-${segment.index}`}>
+            <g key={`band-${segment.index}`} onClick={() => setInspect({ title: `Band board ${segment.index + 1}`, detail: `Double band on ${feetAndInches(segment.length)} run. Splice plan: ${plan.map((v) => `${v}'`).join(' + ')}` })}>
               <line x1={a1.x} y1={a1.y} x2={b1.x} y2={b1.y} className="band-line" />
               <line x1={a2.x} y1={a2.y} x2={b2.x} y2={b2.y} className="band-line secondary" />
               {plan.length > 1 && <text x={(a1.x + b1.x) / 2 - 16} y={(a1.y + b1.y) / 2 - 8} className="svg-note">{plan.map((v) => `${v}'`).join(' + ')}</text>}
@@ -259,7 +263,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
               const x2 = toSvg(segment.endX, beam.y).x;
               const plan = stockPlan(segment.length);
               return (
-                <g key={`beamseg-${index}-${segIndex}`}>
+                <g key={`beamseg-${index}-${segIndex}`} onClick={() => setInspect({ title: `Beam ${index + 1} segment ${segIndex + 1}`, detail: `${feetAndInches(segment.length)} long at ${feetAndInches(beam.offsetFromHouse)} off house. Splice plan: ${plan.map((v) => `${v}'`).join(' + ')}` })}>
                   <line x1={x1} y1={y - 5} x2={x2} y2={y - 5} className="beam-line" />
                   <line x1={x1} y1={y + 5} x2={x2} y2={y + 5} className="beam-line" />
                   {plan.length > 1 && <text x={(x1 + x2) / 2 - 18} y={y - 10} className="svg-note">{plan.map((v) => `${v}'`).join(' + ')}</text>}
@@ -268,7 +272,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
             })}
             {beam.postXs.map((postX) => {
               const p = toSvg(postX, beam.y);
-              return <rect key={`post-${beam.y}-${postX}`} x={p.x - 5} y={p.y - 5} width="10" height="10" className={beam.lockedPostXs.includes(postX) ? 'post-node locked-post' : 'post-node'} rx="2" />;
+              return <rect key={`post-${beam.y}-${postX}`} x={p.x - 5} y={p.y - 5} width="10" height="10" className={beam.lockedPostXs.includes(postX) ? 'post-node locked-post' : 'post-node'} rx="2" onClick={() => setInspect({ title: `Post on beam ${index + 1}`, detail: `Post located ${feetAndInches(postX - deck.minX)} from left reference.` })} />;
             })}
           </g>
         ))}
@@ -315,6 +319,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
         <line x1={pad - 24} y1={pad} x2={pad - 24} y2={pad + deck.depth * scale} className="dimension-line" />
         <text x={pad - 58} y={pad + (deck.depth * scale) / 2} className="svg-note">{feetAndInches(deck.depth)}</text>
       </svg>
+      {inspect && <div className="callout-box preview-inspect"><h4>{inspect.title}</h4><p className="muted">{inspect.detail}</p></div>}
       <div className="legend-row">
         <span><i className="legend-swatch deck-board-swatch" /> deck boards</span>
         <span><i className="legend-swatch joist-line-swatch" /> joists</span>
@@ -505,7 +510,8 @@ function PatioPreview({ values }: { values: Record<string, string | number | boo
   const fanBeam = String(values.fanBeam ?? 'none');
   const fanBeamCount = Math.max(1, Number(values.fanBeamCount ?? 1));
   const screenUnderneath = Boolean(values.screenUnderneath ?? false);
-  const layout = useMemo(() => buildPatioPanelLayout(width, fanBeam, panelWidth, fanBeamCount), [width, fanBeam, panelWidth, fanBeamCount]);
+  const fanBeamPlacementMode = String(values.fanBeamPlacementMode ?? 'spread');
+  const layout = useMemo(() => buildPatioPanelLayout(width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode), [width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode]);
   const panelThickness = Number(values.panelThickness ?? 3);
   const upgraded3 = String(values.metalGauge ?? '.26') === '.32' && Number(values.foamDensity ?? 1) === 2;
   const supportBeamCount = (panelThickness === 3 && !upgraded3 && projection > 13) ? Math.ceil(projection / 13) - 1 : 0;

@@ -15,11 +15,13 @@ const defaultShape: DeckPoint[] = [
 ];
 
 type EditMode = 'points' | 'railing' | 'stairs' | 'beams' | 'posts';
-type Snapshot = Pick<Record<string, string | number | boolean>, 'deckShape' | 'manualRailingEdges' | 'customBeamYs' | 'stairEdgeIndex' | 'stairOffset' | 'lockedPosts'>;
+type BeamEdit = { beamIndex: number; startTrim: number; endTrim: number };
+type Snapshot = Pick<Record<string, string | number | boolean>, 'deckShape' | 'manualRailingEdges' | 'customBeamYs' | 'stairEdgeIndex' | 'stairOffset' | 'lockedPosts' | 'beamEdits'>;
 
 const snap = (value: number) => Math.round(value / GRID_SIZE) * GRID_SIZE;
 const parseNumberArray = (raw: string | number | boolean | undefined) => typeof raw === 'string' && raw.trim() ? JSON.parse(raw) as number[] : [];
 const parseLockedPosts = (raw: string | number | boolean | undefined): LockedPostPoint[] => typeof raw === 'string' && raw.trim() ? JSON.parse(raw) as LockedPostPoint[] : [];
+const parseBeamEdits = (raw: string | number | boolean | undefined): BeamEdit[] => typeof raw === 'string' && raw.trim() ? JSON.parse(raw) as BeamEdit[] : [];
 
 const polygonArea = (points: DeckPoint[]) => points.length < 3 ? 0 : Math.abs(points.reduce((sum, current, index) => {
   const next = points[(index + 1) % points.length];
@@ -62,6 +64,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     return parsed.length > 0 ? parsed : model.beamLines.map((line) => line.offsetFromHouse);
   }, [model.beamLines, values.customBeamYs]);
   const lockedPosts = useMemo(() => parseLockedPosts(values.lockedPosts), [values.lockedPosts]);
+  const beamEdits = useMemo(() => parseBeamEdits(values.beamEdits), [values.beamEdits]);
   const [history, setHistory] = useState<Snapshot[]>([]);
   const [future, setFuture] = useState<Snapshot[]>([]);
 
@@ -72,6 +75,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     stairEdgeIndex: values.stairEdgeIndex,
     stairOffset: values.stairOffset,
     lockedPosts: values.lockedPosts,
+    beamEdits: values.beamEdits,
   });
 
   const applySnapshot = (shot: Snapshot) => onValuesChange((current) => ({ ...current, ...shot }));
@@ -127,7 +131,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
 
   const resetShape = () => {
     setSelectedIndex(null);
-    commitChange((current) => ({ ...current, deckShape: JSON.stringify(defaultShape), manualRailingEdges: JSON.stringify([]), customBeamYs: JSON.stringify([]), lockedPosts: JSON.stringify([]), stairEdgeIndex: -1, stairOffset: 0 }));
+    commitChange((current) => ({ ...current, deckShape: JSON.stringify(defaultShape), manualRailingEdges: JSON.stringify([]), customBeamYs: JSON.stringify([]), lockedPosts: JSON.stringify([]), beamEdits: JSON.stringify([]), stairEdgeIndex: -1, stairOffset: 0 }));
   };
 
   const toggleRailingEdge = (edgeIndex: number) => {
@@ -138,7 +142,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
 
   const selectStairEdge = (edgeIndex: number) => commitChange((current) => ({ ...current, stairEdgeIndex: edgeIndex, stairOffset: 0 }));
   const addBeamLine = () => updateNumberArray('customBeamYs', [...beamOffsets, Math.max(0.5, snap(model.depth / 2))].sort((a, b) => a - b));
-  const removeBeamLine = (index: number) => updateNumberArray('customBeamYs', beamOffsets.filter((_, currentIndex) => currentIndex !== index));
+  const removeBeamLine = (index: number) => commitChange((current) => ({ ...current, customBeamYs: JSON.stringify(beamOffsets.filter((_, currentIndex) => currentIndex !== index)), beamEdits: JSON.stringify(beamEdits.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))) }));
+  const updateBeamEdit = (index: number, key: 'startTrim' | 'endTrim', value: number) => commitChange((current) => { const next = [...beamEdits]; const match = next.findIndex((item) => item.beamIndex === index); const safe = Math.max(0, snap(value)); if (match >= 0) next[match] = { ...next[match], [key]: safe }; else next.push({ beamIndex: index, startTrim: key === 'startTrim' ? safe : 0, endTrim: key === 'endTrim' ? safe : 0 }); return { ...current, beamEdits: JSON.stringify(next.sort((a,b)=>a.beamIndex-b.beamIndex)) }; });
   const toggleLockedPost = (beamIndex: number, x: number) => {
     const matchIndex = lockedPosts.findIndex((item) => item.beamIndex === beamIndex && Math.abs(item.x - x) < 0.1);
     const next = [...lockedPosts];
@@ -230,7 +235,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           <div className="callout-box"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Width</span><strong>{spanX.toFixed(1)} ft</strong></div><div><span>Projection</span><strong>{spanY.toFixed(1)} ft</strong></div></div></div>
           <div className="callout-box"><h4>Quick tips</h4><ul className="plain-list compact"><li>Drag any point directly in the drawing.</li><li>Click an edge in point mode to insert a new corner.</li><li>Drag the stair bar to slide stairs along the selected edge.</li><li>Switch to post mode and click a post to lock or unlock it.</li><li>Undo and redo keep complex shape editing safer.</li></ul></div>
           <div className="callout-box"><h4>Selected point</h4>{selectedIndex === null ? <p className="muted">Click a point in the drawing to fine-tune it.</p> : <div className="form-grid compact-grid"><label className="form-field"><span>X (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].x} onChange={(event) => updatePoint(selectedIndex, 'x', Number(event.target.value))} /></label><label className="form-field"><span>Y (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].y} onChange={(event) => updatePoint(selectedIndex, 'y', Number(event.target.value))} /></label><button type="button" className="secondary-btn block-btn" onClick={removeSelected}>Remove point</button></div>}</div>
-          <div className="callout-box"><h4>Manual framing controls</h4><div className="form-grid compact-grid"><label className="form-field"><span>Stair offset along selected edge (ft)</span><input type="number" step={GRID_SIZE} value={Number(values.stairOffset ?? 0)} onChange={(event) => commitChange((current) => ({ ...current, stairOffset: snap(Number(event.target.value)) }))} /></label><label className="form-field"><span>Locked posts</span><input type="text" value={lockedPosts.length ? lockedPosts.map((item) => `B${item.beamIndex + 1}@${item.x}`).join(', ') : 'none'} readOnly /></label><button type="button" className="ghost-btn block-btn" onClick={addBeamLine}>Add beam line</button><button type="button" className="ghost-btn block-btn" onClick={() => updateNumberArray('customBeamYs', [])}>Reset auto beam lines</button></div><div className="stack-list beam-editor-list">{beamOffsets.map((beamOffset, index) => <div key={`beam-edit-${index}`} className="beam-editor-row"><span>Beam {index + 1}</span><strong>{beamOffset.toFixed(1)} ft</strong><button type="button" className="ghost-btn small-btn" onClick={() => removeBeamLine(index)}>Remove</button></div>)}</div></div>
+          <div className="callout-box"><h4>Manual framing controls</h4><div className="form-grid compact-grid"><label className="form-field"><span>Stair offset along selected edge (ft)</span><input type="number" step={GRID_SIZE} value={Number(values.stairOffset ?? 0)} onChange={(event) => commitChange((current) => ({ ...current, stairOffset: snap(Number(event.target.value)) }))} /></label><label className="form-field"><span>Locked posts</span><input type="text" value={lockedPosts.length ? lockedPosts.map((item) => `B${item.beamIndex + 1}@${item.x}`).join(', ') : 'none'} readOnly /></label><button type="button" className="ghost-btn block-btn" onClick={addBeamLine}>Add beam line</button><button type="button" className="ghost-btn block-btn" onClick={() => updateNumberArray('customBeamYs', [])}>Reset auto beam lines</button></div><div className="stack-list beam-editor-list">{model.beamLines.map((beam, index) => <div key={`beam-edit-${index}`} className="beam-editor-row beam-edit-grid"><span>Beam {index + 1}</span><strong>{beam.offsetFromHouse.toFixed(1)} ft</strong><label className="inline-mini-field"><span>Start trim</span><input type="number" step={GRID_SIZE} value={beam.startTrim} onChange={(event) => updateBeamEdit(index, 'startTrim', Number(event.target.value))} /></label><label className="inline-mini-field"><span>End trim</span><input type="number" step={GRID_SIZE} value={beam.endTrim} onChange={(event) => updateBeamEdit(index, 'endTrim', Number(event.target.value))} /></label><button type="button" className="ghost-btn small-btn" onClick={() => removeBeamLine(index)}>Remove</button></div>)}</div></div>
           <div className="callout-box"><h4>Reset</h4><button type="button" className="ghost-btn block-btn" onClick={resetShape}>Reset shape and manual overrides</button></div>
         </div>
       </div>

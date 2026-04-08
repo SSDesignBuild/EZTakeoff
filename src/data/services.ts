@@ -53,6 +53,7 @@ export const SERVICES: ServiceDefinition[] = [
       customBeamYs: JSON.stringify([]),
       manualRailingEdges: JSON.stringify([]),
       lockedPosts: JSON.stringify([]),
+      beamEdits: JSON.stringify([]),
       deckShape: JSON.stringify([
         { x: 0, y: 0 },
         { x: 16, y: 0 },
@@ -255,6 +256,12 @@ export const SERVICES: ServiceDefinition[] = [
         ],
       },
       { key: 'fanBeamCount', label: 'Fan beam count', type: 'number', min: 1, step: 1 },
+      { key: 'fanBeamPlacementMode', label: 'Fan beam placement', type: 'select', options: [
+        { label: 'Spread symmetrically', value: 'spread' },
+        { label: 'Cluster near center', value: 'cluster-center' },
+        { label: 'Bias toward female side', value: 'female-bias' },
+        { label: 'Bias toward male side', value: 'male-bias' },
+      ] },
       { key: 'postCount', label: 'Front post count (0 = auto)', type: 'number', min: 0, step: 1 },
       { key: 'screenUnderneath', label: 'Screen room below cover', type: 'boolean', helper: 'Uses 3x3 beam/post system with hidden brackets when checked.' },
     ],
