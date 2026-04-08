@@ -47,6 +47,60 @@ function sectionDoorWidth(section: SectionConfig) {
   return section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
 }
 
+
+
+function polygonOrientation(points: { x: number; y: number }[]) {
+  let sum = 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const current = points[index];
+    const next = points[(index + 1) % points.length];
+    sum += (next.x - current.x) * (next.y + current.y);
+  }
+  return sum > 0 ? 'clockwise' : 'counterclockwise';
+}
+
+function cornerRole(points: { x: number; y: number }[], index: number) {
+  const prev = points[(index - 1 + points.length) % points.length];
+  const curr = points[index];
+  const next = points[(index + 1) % points.length];
+  const cross = (curr.x - prev.x) * (next.y - curr.y) - (curr.y - prev.y) * (next.x - curr.x);
+  const orientation = polygonOrientation(points);
+  const reflex = orientation === 'counterclockwise' ? cross < 0 : cross > 0;
+  return reflex ? 'inside-corner' : 'corner';
+}
+
+function classifyRailing(deck: ReturnType<typeof buildDeckModel>) {
+  const approxEq = (a: number, b: number) => Math.abs(a - b) < 0.12;
+  const stairSegmentIndex = deck.stairPlacement.edgeIndex;
+  const topRuns = deck.exposedSegments.flatMap((segment) => {
+    if (segment.index !== stairSegmentIndex || !deck.stairPlacement.width) return [{ length: segment.length, kind: 'level' as const }];
+    const left = deck.stairPlacement.offset;
+    const right = segment.length - deck.stairPlacement.offset - deck.stairPlacement.width;
+    return [left, right].filter((value) => value > 0.05).map((length) => ({ length, kind: 'level' as const }));
+  });
+  const stairRuns = deck.stairRisers > 3 && deck.stairCount > 0
+    ? Array.from({ length: deck.stairCount * 2 }, () => ({ length: deck.stairRunFt, kind: 'stair' as const }))
+    : [];
+  const levelMix = topRuns.reduce((sum, run) => { const opt = optimizeRail(run.length); return { six: sum.six + opt.six, eight: sum.eight + opt.eight }; }, { six: 0, eight: 0 });
+  const stairMix = stairRuns.reduce((sum, run) => { const opt = optimizeRail(run.length); return { six: sum.six + opt.six, eight: sum.eight + opt.eight }; }, { six: 0, eight: 0 });
+  const vertexRoles = new Map<string, string>();
+  deck.exposedSegments.forEach((segment) => {
+    const startIndex = deck.points.findIndex((point) => approxEq(point.x, segment.start.x) && approxEq(point.y, segment.start.y));
+    const endIndex = deck.points.findIndex((point) => approxEq(point.x, segment.end.x) && approxEq(point.y, segment.end.y));
+    if (startIndex >= 0) vertexRoles.set(`${Math.round(segment.start.x*12)}-${Math.round(segment.start.y*12)}`, cornerRole(deck.points, startIndex));
+    if (endIndex >= 0) vertexRoles.set(`${Math.round(segment.end.x*12)}-${Math.round(segment.end.y*12)}`, cornerRole(deck.points, endIndex));
+  });
+  let inlinePosts = 0;
+  topRuns.forEach((run) => { inlinePosts += Math.max(0, Math.max(2, Math.ceil(run.length / 6) + 1) - 2); });
+  return {
+    levelMix, stairMix,
+    cornerPosts: [...vertexRoles.values()].filter((role) => role === 'corner').length,
+    insideCornerPosts: [...vertexRoles.values()].filter((role) => role === 'inside-corner').length,
+    inlinePosts,
+    stairPosts: stairRuns.length > 0 ? 4 * deck.stairCount : 0,
+  };
+}
+
 function optimizeRail(length: number) {
   let best = { six: 0, eight: 0, waste: Number.POSITIVE_INFINITY, pieces: Number.POSITIVE_INFINITY };
   for (let six = 0; six < 12; six += 1) {
@@ -105,12 +159,11 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   if (deck.stairRisers > 3 && deck.stairCount > 0) {
     for (let run = 0; run < deck.stairCount * 2; run += 1) adjustedRailSegments.push(deck.stairRunFt);
   }
-  const railMix = adjustedRailSegments.reduce((sum, length) => {
-    const opt = optimizeRail(length);
-    return { six: sum.six + opt.six, eight: sum.eight + opt.eight };
-  }, { six: 0, eight: 0 });
+  const railingBreakdown = classifyRailing(deck);
 
-  const railingPosts = railingType === 'aluminum' ? 0 : adjustedRailSegments.reduce((sum, length) => sum + Math.max(2, Math.ceil(length / 6) + 1), 0);
+  const railingPosts = railingType === 'aluminum'
+    ? railingBreakdown.cornerPosts + railingBreakdown.insideCornerPosts + railingBreakdown.inlinePosts + railingBreakdown.stairPosts
+    : adjustedRailSegments.reduce((sum, length) => sum + Math.max(2, Math.ceil(length / 6) + 1), 0);
 
   materials.push(
     toMaterial('Blocking', 'Framing', deck.blockingBoardCount, 'boards', '8 ft stock', `${deck.blockingCount} blocks across ${deck.blockingRows} rows`),
@@ -134,12 +187,24 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   }
 
   if (railingType === 'aluminum') {
-    if (railMix.eight) materials.push(toMaterial('8 ft aluminum railing sections', 'Railing', railMix.eight, 'sections', '8 ft sections', undefined));
-    if (railMix.six) materials.push(toMaterial('6 ft aluminum railing sections', 'Railing', railMix.six, 'sections', '6 ft sections', undefined));
+    if (railingBreakdown.levelMix.eight) materials.push(toMaterial('8 ft level railing sections', 'Railing', railingBreakdown.levelMix.eight, 'sections', '8 ft sections', 'Top-level straight runs'));
+    if (railingBreakdown.levelMix.six) materials.push(toMaterial('6 ft level railing sections', 'Railing', railingBreakdown.levelMix.six, 'sections', '6 ft sections', 'Top-level straight runs'));
+    if (railingBreakdown.stairMix.eight) materials.push(toMaterial('8 ft angled railing sections', 'Railing', railingBreakdown.stairMix.eight, 'sections', '8 ft sections', 'Stair-side or angled runs'));
+    if (railingBreakdown.stairMix.six) materials.push(toMaterial('6 ft angled railing sections', 'Railing', railingBreakdown.stairMix.six, 'sections', '6 ft sections', 'Stair-side or angled runs'));
+    if (railingBreakdown.cornerPosts) materials.push(toMaterial('Corner posts', 'Railing', railingBreakdown.cornerPosts, 'ea', 'Match railing system', 'Top-level outside corners'));
+    if (railingBreakdown.insideCornerPosts) materials.push(toMaterial('Inside corner posts', 'Railing', railingBreakdown.insideCornerPosts, 'ea', 'Match railing system', 'Top-level inside corners'));
+    if (railingBreakdown.inlinePosts) materials.push(toMaterial('Inline posts', 'Railing', railingBreakdown.inlinePosts, 'ea', 'Match railing system', 'Top-level inline posts between corners'));
+    if (railingBreakdown.stairPosts) materials.push(toMaterial('Stair posts', 'Railing', railingBreakdown.stairPosts, 'ea', 'Match railing system', 'Posts serving stair-side railing'));
   } else {
-    materials.push(toMaterial('4x4 railing posts', 'Railing', railingPosts, 'ea', 'Match railing height stock', 'For wood, vinyl, or composite railing systems'));
-    if (railMix.eight) materials.push(toMaterial('8 ft railing infill sections', 'Railing', railMix.eight, 'sections', '8 ft sections', undefined));
-    if (railMix.six) materials.push(toMaterial('6 ft railing infill sections', 'Railing', railMix.six, 'sections', '6 ft sections', undefined));
+    materials.push(toMaterial('Level posts', 'Railing', Math.max(0, railingBreakdown.cornerPosts + railingBreakdown.insideCornerPosts + railingBreakdown.inlinePosts), 'ea', '4x4 stock', 'Top-level wood/vinyl/composite posts'));
+    if (railingBreakdown.stairPosts) materials.push(toMaterial('Stair posts', 'Railing', railingBreakdown.stairPosts, 'ea', '4x4 stock', 'Posts serving stair-side railing'));
+    if (railingBreakdown.cornerPosts) materials.push(toMaterial('Corner posts', 'Railing', railingBreakdown.cornerPosts, 'ea', '4x4 stock', 'Top-level outside corners'));
+    if (railingBreakdown.insideCornerPosts) materials.push(toMaterial('Inside corner posts', 'Railing', railingBreakdown.insideCornerPosts, 'ea', '4x4 stock', 'Top-level inside corners'));
+    if (railingBreakdown.inlinePosts) materials.push(toMaterial('Inline posts', 'Railing', railingBreakdown.inlinePosts, 'ea', '4x4 stock', 'Top-level inline posts between corners'));
+    if (railingBreakdown.levelMix.eight) materials.push(toMaterial('8 ft level railing infill sections', 'Railing', railingBreakdown.levelMix.eight, 'sections', '8 ft sections', 'Top-level straight runs'));
+    if (railingBreakdown.levelMix.six) materials.push(toMaterial('6 ft level railing infill sections', 'Railing', railingBreakdown.levelMix.six, 'sections', '6 ft sections', 'Top-level straight runs'));
+    if (railingBreakdown.stairMix.eight) materials.push(toMaterial('8 ft angled railing infill sections', 'Railing', railingBreakdown.stairMix.eight, 'sections', '8 ft sections', 'Stair-side or angled runs'));
+    if (railingBreakdown.stairMix.six) materials.push(toMaterial('6 ft angled railing infill sections', 'Railing', railingBreakdown.stairMix.six, 'sections', '6 ft sections', 'Stair-side or angled runs'));
   }
 
   return {
@@ -147,7 +212,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       { label: 'Deck area', value: `${deck.area.toFixed(1)} sq ft` },
       { label: 'Board direction', value: deck.boardRun === 'width' ? 'Parallel to house / stock tracks width' : 'Perpendicular to house / stock tracks projection' },
       { label: 'Stairs', value: deck.stairCount ? `${deck.stairRisers} risers · ${deck.stairTreadsPerRun} treads · ${deck.stairStringers} stringers` : 'No stairs' },
-      { label: 'Railing mix', value: `${railMix.six}x6' + ${railMix.eight}x8'` },
+      { label: 'Railing mix', value: `Level ${railingBreakdown.levelMix.six}x6' + ${railingBreakdown.levelMix.eight}x8' · Angled ${railingBreakdown.stairMix.six}x6' + ${railingBreakdown.stairMix.eight}x8'` },
     ],
     materials: materials.filter((item) => item.quantity > 0),
     orderNotes: [
