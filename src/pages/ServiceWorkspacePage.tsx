@@ -33,7 +33,7 @@ export function ServiceWorkspacePage() {
         <SectionEditor renaissance={service.slug === 'renaissance-screen-rooms'} values={values} onValuesChange={setValues} />
       )}
 
-      <section className="workspace-grid">
+      <section className="workspace-grid compact-workspace-grid">
         <article className="content-card project-config-card">
           <div className="section-heading">
             <p className="eyebrow">Inputs</p>

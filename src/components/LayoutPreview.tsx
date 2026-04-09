@@ -187,6 +187,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
   const [layer, setLayer] = useState<DeckLayer>('overview');
   const [inspect, setInspect] = useState<InspectMember | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
   const drawingScale = Math.min(920 / Math.max(deck.width, 1), 620 / Math.max(deck.depth, 1));
   const planW = deck.width * drawingScale;
@@ -194,14 +195,14 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
   const sheetW = Math.max(1380, planW + 300);
   const sheetH = Math.max(960, planH + 260);
   const padLeft = Math.max(150, (sheetW - planW) / 2);
-  const padTop = Math.max(140, (sheetH - planH) / 2 + 20);
+  const padTop = Math.max(180, (sheetH - planH) / 2 + 60);
   const toSvg = (x: number, y: number) => ({ x: padLeft + (x - deck.minX) * drawingScale, y: padTop + (y - deck.minY) * drawingScale });
   const printPlan = () => {
     if (!svgRef.current) return;
-    const win = window.open('', '_blank', 'width=1400,height=1000');
+    const win = window.open('', '_blank', 'width=1600,height=1100');
     if (!win) return;
-    const svgMarkup = svgRef.current.outerHTML.replace('<svg', '<svg style="background:#ffffff"');
-    win.document.write(`<!doctype html><html><head><title>Deck plan</title><style>@page{size:landscape;margin:0.35in} html,body{margin:0;background:#fff} body{padding:18px;font-family:Inter,Arial,sans-serif;color:#111} .sheet{display:flex;justify-content:center;align-items:flex-start} svg{width:100%;height:auto;max-width:1500px;background:#fff}</style></head><body><div class="sheet">${svgMarkup}</div><script>window.onload=()=>setTimeout(()=>window.print(),150);</script></body></html>`);
+    const svgMarkup = svgRef.current.outerHTML.replace('<svg', '<svg style="background:#ffffff;display:block;width:100%;height:auto"');
+    win.document.write(`<!doctype html><html><head><title>Deck plan</title><style>@page{size:landscape;margin:0.25in} html,body{margin:0;padding:0;background:#fff;color:#111;font-family:Inter,Arial,sans-serif} body{padding:12px} .sheet{width:100%;background:#fff} svg *{vector-effect:non-scaling-stroke}</style></head><body><div class="sheet">${svgMarkup}</div><script>window.onload=()=>setTimeout(()=>window.print(),200);</script></body></html>`);
     win.document.close();
   };
   const pointString = deck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ');
@@ -270,9 +271,9 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
           <h3>Deck plan layout</h3>
           <span>Scaled plan intended to read like a schematic sheet: board seams, doubled bands, beam ply overlaps, post layout, stair geometry, and named railing components.</span>
         </div>
-        <div className="preview-toolbar">{(['overview', 'boards', 'framing', 'railing', 'stairs'] as DeckLayer[]).map((item) => <button key={item} type="button" className={layer === item ? 'ghost-btn small-btn active-chip' : 'ghost-btn small-btn'} onClick={() => setLayer(item)}>{item}</button>)}<button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.max(0.8, Number((current - 0.15).toFixed(2))))}>−</button><button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.min(2.5, Number((current + 0.15).toFixed(2))))}>+</button><button type="button" className="ghost-btn small-btn" onClick={printPlan}>Print plan</button></div>
+        <div className="preview-toolbar">{(['overview', 'boards', 'framing', 'railing', 'stairs'] as DeckLayer[]).map((item) => <button key={item} type="button" className={layer === item ? 'ghost-btn small-btn active-chip' : 'ghost-btn small-btn'} onClick={() => setLayer(item)}>{item}</button>)}<button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.max(0.8, Number((current - 0.15).toFixed(2))))}>−</button><span className="tag">{Math.round(zoom * 100)}%</span><button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.min(3, Number((current + 0.15).toFixed(2))))}>+</button><button type="button" className="ghost-btn small-btn" onClick={() => setPan({ x: 0, y: 0 })}>Center</button><button type="button" className="ghost-btn small-btn" onClick={printPlan}>Print plan</button></div>
       </div>
-      <div className="zoom-shell"><svg ref={svgRef} viewBox={`0 0 ${sheetW} ${sheetH}`} className="layout-svg cad-svg" style={{ transform: `scale(${zoom})`, transformOrigin: "center top" }}>
+      <div className="zoom-shell deck-pan-shell"><div className="deck-pan-stage"><svg ref={svgRef} viewBox={`0 0 ${sheetW} ${sheetH}`} className="layout-svg cad-svg" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'center top' }}>
         <rect x="12" y="12" width={sheetW - 24} height={sheetH - 24} className="sheet-border" rx="10" />
         <rect x="26" y="26" width={sheetW - 52} height={sheetH - 52} className="sheet-border inner" rx="8" />
         <text x={padLeft} y="48" className="sheet-title">Plan view framing schematic</text>
@@ -325,7 +326,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
         <text x={padLeft + (deck.width * drawingScale)/2 - 18} y={padTop + deck.depth * drawingScale + 32} className="svg-note">{feetAndInches(deck.width)}</text>
         <line x1={padLeft - 40} y1={padTop} x2={padLeft - 40} y2={padTop + deck.depth * drawingScale} className="dimension-line" />
         <text x={padLeft - 78} y={padTop + (deck.depth * drawingScale)/2} className="svg-note">{feetAndInches(deck.depth)}</text>
-      </svg></div>
+      </svg></div></div>
       {inspect && <div className="callout-box preview-inspect"><h4>{inspect.title}</h4><p className="muted">{inspect.detail}</p></div>}
       <div className="callout-box preview-inspect"><h4>Railing naming</h4><p className="muted">Level railing, angled railing, corner post, inside corner post, inline post, level post, and stair post are now separated in the plan logic so the printed schematic and material list can speak the same language.</p></div>
 

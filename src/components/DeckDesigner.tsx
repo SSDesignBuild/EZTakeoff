@@ -3,8 +3,8 @@ import { buildDeckModel, parseDeckShape } from '../lib/deckModel';
 import { DeckPoint, LockedPostPoint } from '../lib/types';
 
 const GRID_SIZE = 1 / 12;
-const VIEW_SIZE = 860;
-const PADDING = 42;
+const VIEW_SIZE = 1400;
+const PADDING = 84;
 const SNAP_TOLERANCE = 0.4;
 const defaultShape: DeckPoint[] = [];
 
@@ -66,6 +66,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const [draggingStair, setDraggingStair] = useState(false);
   const [drawingSequence, setDrawingSequence] = useState(points.length === 0);
   const [previewPoint, setPreviewPoint] = useState<DeckPoint | null>(null);
+  const [zoom, setZoom] = useState(1);
   const [history, setHistory] = useState<DesignerHistory[]>([]);
   const [future, setFuture] = useState<DesignerHistory[]>([]);
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -74,6 +75,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const spanX = Math.max(limits.maxX - limits.minX, 1);
   const spanY = Math.max(limits.maxY - limits.minY, 1);
   const scale = Math.min((VIEW_SIZE - PADDING * 2) / spanX, (VIEW_SIZE - PADDING * 2) / spanY);
+  const drawingScale = scale * zoom;
   const railingEdges = useMemo(() => new Set(parseNumberArray(values.manualRailingEdges).map((value) => Math.round(value))), [values.manualRailingEdges]);
   const beamOffsets = useMemo(() => {
     const parsed = parseNumberArray(values.customBeamYs);
@@ -118,14 +120,14 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const updateNumberArray = (key: string, next: number[]) => commitChange((current) => ({ ...current, [key]: JSON.stringify(next.map((value) => snap(value))) }));
   const updateLockedPosts = (next: LockedPostPoint[]) => commitChange((current) => ({ ...current, lockedPosts: JSON.stringify(next) }));
 
-  const toSvgPoint = (point: DeckPoint) => ({ x: PADDING + (point.x - limits.minX) * scale, y: PADDING + (point.y - limits.minY) * scale });
+  const toSvgPoint = (point: DeckPoint) => ({ x: PADDING + (point.x - limits.minX) * drawingScale, y: PADDING + (point.y - limits.minY) * drawingScale });
   const fromClientToModelPoint = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
     if (!svg) return null;
     const rect = svg.getBoundingClientRect();
     const x = ((clientX - rect.left) / rect.width) * VIEW_SIZE;
     const y = ((clientY - rect.top) / rect.height) * VIEW_SIZE;
-    return { x: snap(limits.minX + (x - PADDING) / scale), y: snap(limits.minY + (y - PADDING) / scale) };
+    return { x: snap(limits.minX + (x - PADDING) / drawingScale), y: snap(limits.minY + (y - PADDING) / drawingScale) };
   };
 
   useEffect(() => {
@@ -309,6 +311,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
 
   const lastPoint = points[points.length - 1] ?? null;
   const previewDelta = lastPoint && previewPoint ? { dx: previewPoint.x - lastPoint.x, dy: previewPoint.y - lastPoint.y, distance: Math.hypot(previewPoint.x - lastPoint.x, previewPoint.y - lastPoint.y) } : null;
+  const previewMid = lastPoint && previewPoint ? { x: (lastPoint.x + previewPoint.x) / 2, y: (lastPoint.y + previewPoint.y) / 2 } : null;
 
   return (
     <div className="content-card deck-designer-card">
@@ -321,6 +324,9 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           <span className="tag">Snap: 1 in</span>
           <span className="tag">Points: {points.length}</span>
           <span className="tag">Mode: {drawingSequence ? 'drawing' : mode}</span>
+          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.max(0.5, Number((current - 0.1).toFixed(2))))}>−</button>
+          <span className="tag">Zoom {Math.round(zoom * 100)}%</span>
+          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.min(2.5, Number((current + 0.1).toFixed(2))))}>+</button>
         </div>
       </div>
       <div className="designer-mode-row tidy-mode-row">
@@ -334,6 +340,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       </div>
       <div className="deck-designer-grid enhanced-deck-grid">
         <div className="deck-canvas-wrap centered-canvas-wrap">
+          <div className="drawing-ruler-hint">1 major square = 1'-0" · 12 minor squares = inches</div>
+          <div className="designer-scroll-shell">
           {points.length === 0 && <div className="empty-designer-state"><p>Click anywhere on the canvas to place point P1. Each next click places the next corner. Click back on P1 to close the shape.</p></div>}
           {drawingSequence && points.length > 0 && <div className="empty-designer-state drawing-hint drawing-hint-bottom"><p>Place point P{points.length + 1}. When ready, click P1 to close the deck. Live segment: {previewDelta ? `${feetAndInches(previewDelta.distance)} · ΔX ${feetAndInches(Math.abs(previewDelta.dx))} · ΔY ${feetAndInches(Math.abs(previewDelta.dy))}` : 'move the cursor to preview the next segment'}</p></div>}
           <svg ref={svgRef} viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} className="deck-canvas" onClick={handleCanvasClick} onPointerMove={handlePointerMove} onPointerLeave={() => setPreviewPoint(null)}>
@@ -360,6 +368,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
             {drawingSequence && points.length > 0 && previewPoint && lastPoint && <>
               <line x1={toSvgPoint(lastPoint).x} y1={toSvgPoint(lastPoint).y} x2={toSvgPoint(previewPoint).x} y2={toSvgPoint(previewPoint).y} className="preview-segment" />
               <circle cx={toSvgPoint(previewPoint).x} cy={toSvgPoint(previewPoint).y} r={5} className="preview-point" />
+              {previewMid && previewDelta && <text x={toSvgPoint(previewMid).x} y={toSvgPoint(previewMid).y - 12} textAnchor="middle" className="preview-distance-label">{`${feetAndInches(previewDelta.distance)} · ΔX ${feetAndInches(Math.abs(previewDelta.dx))} · ΔY ${feetAndInches(Math.abs(previewDelta.dy))}`}</text>}
             </>}
             {!drawingSequence && model.edgeSegments.map((segment) => {
               const start = toSvgPoint(segment.start); const end = toSvgPoint(segment.end); const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
@@ -371,9 +380,10 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
               const y = PADDING + (beam.y - limits.minY) * scale;
               return <g key={`beam-${index}`}>{beam.segments.map((segment) => <g key={`${segment.startX}-${segment.endX}`}><line x1={PADDING + (segment.startX - limits.minX) * scale} y1={y - 3} x2={PADDING + (segment.endX - limits.minX) * scale} y2={y - 3} className="beam-line beam-line-editable" onPointerDown={(event) => onBeamPointerDown(event, index)} /><line x1={PADDING + (segment.startX - limits.minX) * scale} y1={y + 3} x2={PADDING + (segment.endX - limits.minX) * scale} y2={y + 3} className="beam-line beam-line-secondary" onPointerDown={(event) => onBeamPointerDown(event, index)} /></g>)}{beam.segments[0] && <circle cx={PADDING + (beam.segments[0].startX - limits.minX) * scale + 12} cy={y} r={8} className="beam-handle" />}{beam.postXs.map((postX) => <rect key={`${index}-${postX}`} x={PADDING + (postX - limits.minX) * scale - 4} y={y - 4} width={8} height={8} className={beam.lockedPostXs.includes(postX) ? 'post-lock locked' : 'post-lock'} onClick={() => mode === 'posts' && toggleLockedPost(index, postX)} />)}</g>;
             })}
-            {points.map((point, index) => { const svgPoint = toSvgPoint(point); const isClosePoint = drawingSequence && index === 0 && points.length >= 3; return <g key={`${point.x}-${point.y}-${index}`}><circle cx={svgPoint.x} cy={svgPoint.y} r={selectedIndex === index ? 9 : 7} className={selectedIndex === index ? 'deck-point active' : isClosePoint ? 'deck-point close-target' : 'deck-point'} onPointerDown={(event) => onPointPointerDown(event, index)} onClick={(event) => { event.stopPropagation(); if (isClosePoint) { finishDrawing(); return; } setSelectedIndex(index); }} /><text x={svgPoint.x + 10} y={svgPoint.y - 10} className="deck-point-label">P{index + 1}{isClosePoint ? ' · close' : ''}</text></g>; })}
+            {points.map((point, index) => { const svgPoint = toSvgPoint(point); const isClosePoint = drawingSequence && index === 0 && points.length >= 3; return <g key={`${point.x}-${point.y}-${index}`}><circle cx={svgPoint.x} cy={svgPoint.y} r={selectedIndex === index ? 9 : 7} className={selectedIndex === index ? 'deck-point active' : isClosePoint ? 'deck-point close-target' : 'deck-point'} onPointerDown={(event) => onPointPointerDown(event, index)} onClick={(event) => { event.stopPropagation(); if (drawingSequence && !isClosePoint) return; if (isClosePoint) { finishDrawing(); return; } setSelectedIndex(index); }} /><text x={svgPoint.x + 10} y={svgPoint.y - 10} className="deck-point-label">P{index + 1}{isClosePoint ? ' · close' : ''}</text></g>; })}
             {model.stairPlacement.start && model.stairPlacement.end && <><line x1={toSvgPoint(model.stairPlacement.start).x} y1={toSvgPoint(model.stairPlacement.start).y} x2={toSvgPoint(model.stairPlacement.end).x} y2={toSvgPoint(model.stairPlacement.end).y} className="stair-edge-highlight" onPointerDown={onStairPointerDown} /><circle cx={(toSvgPoint(model.stairPlacement.start).x + toSvgPoint(model.stairPlacement.end).x) / 2} cy={(toSvgPoint(model.stairPlacement.start).y + toSvgPoint(model.stairPlacement.end).y) / 2} r={8} className="stair-handle" /></>}
           </svg>
+          </div>
         </div>
         <div className="deck-designer-controls organized-controls">
           <div className="callout-box compact-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Width</span><strong>{feetAndInches(spanX)}</strong></div><div><span>Projection</span><strong>{feetAndInches(spanY)}</strong></div></div></div>
