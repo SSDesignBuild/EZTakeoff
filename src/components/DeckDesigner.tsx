@@ -3,8 +3,8 @@ import { buildDeckModel, parseDeckShape } from '../lib/deckModel';
 import { DeckPoint, LockedPostPoint } from '../lib/types';
 
 const GRID_SIZE = 1 / 12;
-const VIEW_SIZE = 520;
-const PADDING = 28;
+const VIEW_SIZE = 860;
+const PADDING = 42;
 const SNAP_TOLERANCE = 0.4;
 const defaultShape: DeckPoint[] = [];
 
@@ -70,7 +70,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const [future, setFuture] = useState<DesignerHistory[]>([]);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const limits = points.length ? bounds(points) : { minX: 0, maxX: 24, minY: 0, maxY: 18 };
+  const limits = points.length ? { minX: Math.floor(bounds(points).minX) - 2, maxX: Math.ceil(bounds(points).maxX) + 2, minY: Math.floor(bounds(points).minY) - 2, maxY: Math.ceil(bounds(points).maxY) + 2 } : { minX: 0, maxX: 32, minY: 0, maxY: 24 };
   const spanX = Math.max(limits.maxX - limits.minX, 1);
   const spanY = Math.max(limits.maxY - limits.minY, 1);
   const scale = Math.min((VIEW_SIZE - PADDING * 2) / spanX, (VIEW_SIZE - PADDING * 2) / spanY);
@@ -338,11 +338,24 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           {drawingSequence && points.length > 0 && <div className="empty-designer-state drawing-hint drawing-hint-bottom"><p>Place point P{points.length + 1}. When ready, click P1 to close the deck. Live segment: {previewDelta ? `${feetAndInches(previewDelta.distance)} · ΔX ${feetAndInches(Math.abs(previewDelta.dx))} · ΔY ${feetAndInches(Math.abs(previewDelta.dy))}` : 'move the cursor to preview the next segment'}</p></div>}
           <svg ref={svgRef} viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} className="deck-canvas" onClick={handleCanvasClick} onPointerMove={handlePointerMove} onPointerLeave={() => setPreviewPoint(null)}>
             <rect x={PADDING} y={PADDING} width={VIEW_SIZE - PADDING * 2} height={VIEW_SIZE - PADDING * 2} className="canvas-background" rx="16" />
-            {Array.from({ length: 25 }, (_, index) => {
-              const x = PADDING + index * ((VIEW_SIZE - PADDING * 2) / 24);
-              const y = PADDING + index * ((VIEW_SIZE - PADDING * 2) / 24);
-              return <g key={index}><line x1={PADDING} y1={y} x2={VIEW_SIZE - PADDING} y2={y} className="grid-line minor-grid" /><line x1={x} y1={PADDING} x2={x} y2={VIEW_SIZE - PADDING} className="grid-line minor-grid" /></g>;
-            })}
+            {(() => {
+              const minorXs: number[] = [];
+              const minorYs: number[] = [];
+              for (let x = Math.ceil(limits.minX * 12) / 12; x <= limits.maxX + 1e-6; x += 1 / 12) minorXs.push(x);
+              for (let y = Math.ceil(limits.minY * 12) / 12; y <= limits.maxY + 1e-6; y += 1 / 12) minorYs.push(y);
+              return <g>
+                {minorXs.map((x, index) => {
+                  const sx = toSvgPoint({ x, y: limits.minY }).x;
+                  const major = Math.abs((x * 12) % 12) < 1e-6;
+                  return <line key={`gx-${index}`} x1={sx} y1={PADDING} x2={sx} y2={VIEW_SIZE - PADDING} className={major ? 'grid-line major-grid' : 'grid-line minor-grid'} />;
+                })}
+                {minorYs.map((y, index) => {
+                  const sy = toSvgPoint({ x: limits.minX, y }).y;
+                  const major = Math.abs((y * 12) % 12) < 1e-6;
+                  return <line key={`gy-${index}`} x1={PADDING} y1={sy} x2={VIEW_SIZE - PADDING} y2={sy} className={major ? 'grid-line major-grid' : 'grid-line minor-grid'} />;
+                })}
+              </g>;
+            })()}
             {(!drawingSequence && points.length >= 3) ? <polygon points={points.map((point) => { const svgPoint = toSvgPoint(point); return `${svgPoint.x},${svgPoint.y}`; }).join(' ')} className="deck-polygon" /> : points.length > 1 ? <polyline points={points.map((point) => { const svgPoint = toSvgPoint(point); return `${svgPoint.x},${svgPoint.y}`; }).join(' ')} className="deck-polyline" fill="none" /> : null}
             {drawingSequence && points.length > 0 && previewPoint && lastPoint && <>
               <line x1={toSvgPoint(lastPoint).x} y1={toSvgPoint(lastPoint).y} x2={toSvgPoint(previewPoint).x} y2={toSvgPoint(previewPoint).y} className="preview-segment" />
