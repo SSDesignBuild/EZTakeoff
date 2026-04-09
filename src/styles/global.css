@@ -969,3 +969,229 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .stair-rail-line{stroke:#ec4899;stroke-width:3;stroke-dasharray:none;}
 .legend-swatch.stair-post-swatch{background:#7c3aed;}
 .deck-sheet-svg text{font-family:Inter,Arial,sans-serif;}
+
+/* v25 deck drawing + cad sheet refinement */
+.fixed-canvas-shell,
+.designer-scroll-shell {
+  overflow: hidden !important;
+  width: 100%;
+  height: 100%;
+}
+.deck-canvas-wrap {
+  min-height: 980px;
+}
+.fixed-canvas-shell .deck-canvas {
+  width: 100%;
+  height: 100%;
+  max-height: 980px;
+}
+.deck-canvas {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  aspect-ratio: 1 / 1;
+}
+.organized-config-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.55rem 0.7rem;
+}
+.organized-config-grid > * {
+  grid-column: span 3;
+  padding: 0.6rem 0.7rem;
+  border-radius: 12px;
+}
+.organized-config-grid .toggle-field {
+  grid-column: span 4;
+}
+.project-config-card .section-heading h2,
+.project-config-card .section-heading h3 {
+  font-size: 1.15rem;
+}
+.project-config-card .eyebrow {
+  letter-spacing: 0.14em;
+}
+.deck-sheet-shell {
+  overflow: auto;
+  max-height: 80vh;
+  background: #ebe8e1;
+  border: 1px solid var(--border);
+  cursor: grab;
+}
+.deck-sheet-shell:active { cursor: grabbing; }
+.deck-sheet-stage {
+  min-width: max-content;
+  padding: 1rem;
+}
+.deck-sheet-svg {
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.08);
+}
+.sheet-title { font-size: 24px; letter-spacing: 0.08em; }
+.sheet-subtitle { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+.title-block { fill: #fff; stroke: #111; stroke-width: 1.6; }
+.title-block-line { stroke: #111; stroke-width: 1.2; }
+.title-block-title { font-size: 15px; letter-spacing: 0.04em; }
+.title-block-label { font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+.title-block-value { font-size: 12px; }
+.deck-outline { stroke-width: 2.2; }
+.double-band-rect { fill: #f4f4f2; stroke: #111; stroke-width: 1.4; }
+.double-band-rect.secondary { fill: #fff; }
+.beam-rect.primary { fill: #d9d4b6; stroke: #3a3122; stroke-width: 1.4; }
+.beam-rect.secondary { fill: #eee6c9; stroke: #3a3122; stroke-width: 1.4; }
+.post-node { fill: #fff; stroke: #0d6efd; stroke-width: 1.4; }
+.post-notch-seat { fill: #cfe0ff; stroke: #0d6efd; stroke-width: 1.2; }
+.joist-rect { fill: #e6ddff; stroke: #6d28d9; stroke-width: 1.1; }
+.deck-board-strip { fill: #eadcc8; stroke: #81633d; stroke-width: 0.8; }
+.railing-line { stroke: #ff7a00; stroke-width: 2.6; }
+.stair-rail-line { stroke: #009f7f; stroke-width: 2.6; }
+.dimension-text { font-size: 11px; font-weight: 800; }
+.splice-line { stroke: #111; stroke-width: 1.1; stroke-dasharray: 3 2; }
+.splice-label { fill: #111; font-size: 10px; font-weight: 700; }
+@media (max-width: 1100px) {
+  .organized-config-grid > *, .organized-config-grid .toggle-field { grid-column: span 6; }
+}
+@media (max-width: 720px) {
+  .organized-config-grid > *, .organized-config-grid .toggle-field { grid-column: span 12; }
+  .deck-canvas-wrap { min-height: 720px; }
+}
+
+/* v26 focused deck drafting + sheet pass */
+.empty-designer-state,
+.drawing-hint { pointer-events: none; }
+.full-grid-canvas-wrap {
+  min-height: 860px;
+  padding: 0.75rem;
+  background: linear-gradient(180deg, rgba(255,255,255,0.82), rgba(244,241,234,0.9));
+}
+.no-scroll-shell {
+  overflow: hidden;
+  border-radius: 18px;
+}
+.fixed-canvas-shell.no-scroll-shell .deck-canvas {
+  width: 100%;
+  height: auto;
+}
+.cad-designer-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  gap: 0.9rem;
+}
+.centered-canvas-wrap {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+}
+.deck-canvas {
+  background: #faf7f0;
+}
+.canvas-background {
+  fill: #fffdfa;
+  stroke: #d6d0c2;
+  stroke-width: 1.2;
+}
+.grid-line.ten-grid { stroke: #b8ae98; stroke-width: 1.5; }
+.grid-line.foot-grid { stroke: #d8d1c4; stroke-width: 1; }
+.grid-line.inch-grid { stroke: #efebe2; stroke-width: 0.7; }
+.grid-label { fill: #7c725f; font-size: 14px; font-weight: 600; }
+.deck-polyline, .deck-outline { stroke: #111827; stroke-width: 2.1; fill: none; }
+.deck-polygon { fill: rgba(255,255,255,0.82); stroke: #111827; stroke-width: 2; }
+.preview-segment { stroke: #ef4444; stroke-width: 2.25; stroke-dasharray: 12 6; }
+.preview-distance-label { fill: #b42318; font-size: 16px; font-weight: 700; paint-order: stroke; stroke: rgba(255,255,255,0.94); stroke-width: 4px; }
+.deck-point { fill: #1d4ed8; stroke: #ffffff; stroke-width: 2.25; }
+.deck-point.close-target { fill: #dc2626; }
+.deck-point.active { fill: #0f766e; }
+.interactive-edge { stroke-width: 16; opacity: 0.12; }
+.beam-line { stroke-width: 2.75; }
+.beam-line-secondary { stroke-width: 2.75; }
+.post-lock { stroke-width: 1.5; }
+.organized-controls {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 0.7rem;
+  align-content: start;
+}
+.compact-card {
+  padding: 0.85rem 0.9rem;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel) 96%, white 4%);
+}
+.workflow-card { opacity: 0.92; }
+.project-config-card {
+  padding: 1rem 1rem 0.9rem;
+}
+.organized-config-grid {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+.organized-config-grid > * { grid-column: span 3; }
+.organized-config-grid .toggle-field { grid-column: span 3; }
+.organized-config-grid .form-field,
+.organized-config-grid .toggle-field {
+  min-height: 74px;
+  padding: 0.55rem 0.65rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 95%, #ffffff 5%);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, #bcb4a7 18%);
+  box-shadow: none;
+}
+.organized-config-grid .form-field span,
+.organized-config-grid .toggle-field span { font-size: 0.78rem; letter-spacing: 0.01em; }
+.organized-config-grid .form-field input,
+.organized-config-grid .form-field select {
+  margin-top: 0.35rem;
+  height: 42px;
+  padding: 0.45rem 0.7rem;
+  border-radius: 10px;
+}
+.deck-sheet-shell {
+  overflow: auto;
+  max-height: 84vh;
+  background: #e9e4d7;
+  border: 1px solid #cbc2b0;
+  cursor: grab;
+}
+.deck-sheet-stage {
+  min-width: 100%;
+  justify-content: center;
+  padding: 1rem;
+}
+.deck-sheet-svg {
+  background: #fff;
+  box-shadow: 0 20px 40px rgba(41,31,20,0.08);
+}
+.sheet-border { fill: none; stroke: #1f2937; stroke-width: 1.5; }
+.sheet-border.inner { stroke-width: 0.8; }
+.sheet-title { font-size: 22px; font-weight: 800; letter-spacing: 0.12em; fill: #111827; }
+.sheet-subtitle { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; fill: #6b7280; }
+.deck-board-strip { fill: #f3efe4; stroke: #8b5e3c; stroke-width: 0.9; }
+.joist-rect { fill: #f4d0ff; stroke: #9333ea; stroke-width: 1.05; }
+.double-band-rect { fill: #f8f8f8; stroke: #111827; stroke-width: 1.4; }
+.double-band-rect.secondary { fill: #ffffff; stroke: #111827; stroke-width: 1.4; }
+.beam-rect.primary { fill: #ffd7d5; stroke: #c81e1e; stroke-width: 1.5; }
+.beam-rect.secondary { fill: #fff1f1; stroke: #c81e1e; stroke-width: 1.5; }
+.post-node { fill: #ffffff; stroke: #2563eb; stroke-width: 1.5; }
+.post-notch-seat { fill: #2563eb; stroke: #2563eb; }
+.post-centerline { stroke: #60a5fa; stroke-width: 1; stroke-dasharray: 5 4; }
+.seam-tick, .splice-line { stroke: #111827; stroke-width: 1.2; }
+.splice-label, .dimension-text, .title-block-label, .title-block-value, .title-block-title, .title-block-note, .svg-note {
+  fill: #111827;
+}
+.dimension-line { stroke: #4b5563; stroke-width: 1; }
+.dimension-text { font-size: 11px; font-weight: 700; paint-order: stroke; stroke: white; stroke-width: 3px; }
+.title-block { fill: #fff; stroke: #111827; stroke-width: 1.4; }
+.title-block-line { stroke: #111827; stroke-width: 0.9; }
+.title-block-title { font-size: 13px; font-weight: 800; letter-spacing: 0.05em; }
+.title-block-label { font-size: 10px; font-weight: 700; }
+.title-block-value { font-size: 10px; font-weight: 600; }
+.title-block-note { font-size: 9px; }
+.railing-line.level-rail { stroke: #0f766e; stroke-width: 2.8; }
+.railing-line.angled-rail { stroke: #0369a1; stroke-width: 2.8; stroke-dasharray: 8 4; }
+.railing-post-node { fill: #0f766e; stroke: #ffffff; stroke-width: 1.8; }
+.stair-post-node { fill: #7c3aed; stroke: #ffffff; stroke-width: 1.8; }
+.inspect-card { border-left: 4px solid #111827; }
+@media (max-width: 1200px) {
+  .cad-designer-grid { grid-template-columns: 1fr; }
+  .organized-config-grid > *, .organized-config-grid .toggle-field { grid-column: span 4; }
+}
+@media (max-width: 760px) {
+  .organized-config-grid > *, .organized-config-grid .toggle-field { grid-column: span 12; }
+}

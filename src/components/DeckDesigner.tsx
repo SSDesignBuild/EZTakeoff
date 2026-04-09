@@ -6,6 +6,7 @@ const GRID_SIZE = 1 / 12;
 const VIEW_SIZE = 1800;
 const PADDING = 72;
 const BASE_VIEW_FEET = 25;
+const MAX_DRAW_VIEW_FEET = 60;
 const TEN_FOOT_GRID = 10;
 const ONE_FOOT_GRID = 1;
 const INCH_GRID = 1 / 12;
@@ -18,6 +19,7 @@ type Snapshot = Pick<Record<string, string | number | boolean>, 'deckShape' | 'm
 type DesignerHistory = { shot: Snapshot; drawingSequence: boolean; selectedIndex: number | null };
 
 const snap = (value: number) => Math.round(value / GRID_SIZE) * GRID_SIZE;
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const parseNumberArray = (raw: string | number | boolean | undefined) => typeof raw === 'string' && raw.trim() ? JSON.parse(raw) as number[] : [];
 const parseLockedPosts = (raw: string | number | boolean | undefined): LockedPostPoint[] => typeof raw === 'string' && raw.trim() ? JSON.parse(raw) as LockedPostPoint[] : [];
 const parseBeamEdits = (raw: string | number | boolean | undefined): BeamEdit[] => typeof raw === 'string' && raw.trim() ? JSON.parse(raw) as BeamEdit[] : [];
@@ -78,17 +80,16 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const [drawingSequence, setDrawingSequence] = useState(points.length === 0);
   const [previewPoint, setPreviewPoint] = useState<DeckPoint | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [viewCenter] = useState({ x: BASE_VIEW_FEET / 2, y: BASE_VIEW_FEET / 2 });
   const [history, setHistory] = useState<DesignerHistory[]>([]);
   const [future, setFuture] = useState<DesignerHistory[]>([]);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const viewFeet = Math.max(8, BASE_VIEW_FEET / zoom);
+  const viewFeet = Math.min(MAX_DRAW_VIEW_FEET, Math.max(8, Number((BASE_VIEW_FEET / zoom).toFixed(3))));
   const limits = {
-    minX: viewCenter.x - viewFeet / 2,
-    maxX: viewCenter.x + viewFeet / 2,
-    minY: viewCenter.y - viewFeet / 2,
-    maxY: viewCenter.y + viewFeet / 2,
+    minX: 0,
+    maxX: viewFeet,
+    minY: 0,
+    maxY: viewFeet,
   };
   const spanX = Math.max(limits.maxX - limits.minX, 1);
   const spanY = Math.max(limits.maxY - limits.minY, 1);
@@ -145,7 +146,9 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     const rect = svg.getBoundingClientRect();
     const x = ((clientX - rect.left) / rect.width) * VIEW_SIZE;
     const y = ((clientY - rect.top) / rect.height) * VIEW_SIZE;
-    return { x: snap(limits.minX + (x - PADDING) / drawingScale), y: snap(limits.minY + (y - PADDING) / drawingScale) };
+    const modelX = limits.minX + (x - PADDING) / drawingScale;
+    const modelY = limits.minY + (y - PADDING) / drawingScale;
+    return { x: snap(clamp(modelX, limits.minX, limits.maxX)), y: snap(clamp(modelY, limits.minY, limits.maxY)) };
   };
 
   useEffect(() => {
@@ -190,7 +193,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     const point = fromClientToModelPoint(event.clientX, event.clientY);
     if (!point) return;
     if (drawingSequence) {
-      appendPoint(point);
+      appendPoint({ x: clamp(point.x, limits.minX, limits.maxX), y: clamp(point.y, limits.minY, limits.maxY) });
       return;
     }
   };
@@ -303,7 +306,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     const point = fromClientToModelPoint(event.clientX, event.clientY);
     if (!point) return;
     if (drawingSequence && mode === 'points') {
-      setPreviewPoint(points.length ? snapPointFromAnchor(points[points.length - 1], point) : point);
+      const preview = points.length ? snapPointFromAnchor(points[points.length - 1], point) : point;
+      setPreviewPoint({ x: clamp(preview.x, limits.minX, limits.maxX), y: clamp(preview.y, limits.minY, limits.maxY) });
       return;
     }
     if (draggingIndex !== null) {
@@ -351,10 +355,10 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           <span className="tag">Snap: 1 in</span>
           <span className="tag">Points: {points.length}</span>
           <span className="tag">Mode: {drawingSequence ? 'drawing' : mode}</span>
-          <span className="tag">View: {feetAndInches(viewFeet)} × {feetAndInches(viewFeet)}</span>
-          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.max(0.5, Number((current - 0.1).toFixed(2))))}>−</button>
+          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.max(0.45, Number((current - 0.1).toFixed(2))))}>−</button>
           <span className="tag">Zoom {Math.round(zoom * 100)}%</span>
-          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.min(2.5, Number((current + 0.1).toFixed(2))))}>+</button>
+          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.min(3, Number((current + 0.1).toFixed(2))))}>+</button>
+          <span className="tag">Field {feetAndInches(viewFeet)} × {feetAndInches(viewFeet)}</span>
         </div>
       </div>
       <div className="designer-mode-row tidy-mode-row">
@@ -366,9 +370,9 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
         <button type="button" className="ghost-btn mode-btn" onClick={undo} disabled={!history.length}>Undo</button>
         <button type="button" className="ghost-btn mode-btn" onClick={redo} disabled={!future.length}>Redo</button>
       </div>
-      <div className="deck-designer-grid enhanced-deck-grid">
-        <div className="deck-canvas-wrap centered-canvas-wrap">
-          <div className="designer-scroll-shell fixed-canvas-shell">
+      <div className="deck-designer-grid enhanced-deck-grid cad-designer-grid">
+        <div className="deck-canvas-wrap centered-canvas-wrap full-grid-canvas-wrap">
+          <div className="designer-scroll-shell fixed-canvas-shell no-scroll-shell">
           {points.length === 0 && <div className="empty-designer-state"><p>Click anywhere on the canvas to place point P1. Each next click places the next corner. Click back on P1 to close the shape.</p></div>}
           {drawingSequence && points.length > 0 && <div className="empty-designer-state drawing-hint drawing-hint-bottom"><p>Place point P{points.length + 1}. When ready, click P1 to close the deck. Live segment: {previewDelta ? `${feetAndInches(previewDelta.distance)} · ΔX ${feetAndInches(Math.abs(previewDelta.dx))} · ΔY ${feetAndInches(Math.abs(previewDelta.dy))}` : 'move the cursor to preview the next segment'}</p></div>}
           <svg ref={svgRef} viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} className="deck-canvas" onClick={handleCanvasClick} onPointerMove={handlePointerMove} onPointerLeave={() => setPreviewPoint(null)}>
@@ -438,8 +442,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           <div className="callout-box compact-card"><h4>Selected point</h4>{selectedIndex === null ? <p className="muted">{drawingSequence ? 'Keep drawing the footprint, then click P1 to close it.' : 'Click a point in the drawing to fine-tune it.'}</p> : <div className="stack-list"><div className="form-grid compact-grid"><label className="form-field"><span>X (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].x} onChange={(event) => updatePoint(selectedIndex, 'x', Number(event.target.value))} /><small>{feetAndInches(points[selectedIndex].x)}</small></label><label className="form-field"><span>Y (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].y} onChange={(event) => updatePoint(selectedIndex, 'y', Number(event.target.value))} /><small>{feetAndInches(points[selectedIndex].y)}</small></label></div><div className="point-nudge-grid"><span className="muted">Move by inches</span><div className="point-nudge-row"><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('x', -1)}>X −1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('x', 1)}>X +1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('y', -1)}>Y −1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('y', 1)}>Y +1"</button></div></div><button type="button" className="secondary-btn block-btn" onClick={removeSelected}>Remove point</button></div>}</div>
           <div className="callout-box compact-card"><h4>Manual framing controls</h4><div className="form-grid compact-grid"><label className="form-field"><span>Stair offset along selected edge</span><input type="number" step={GRID_SIZE} value={Number(values.stairOffset ?? 0)} onChange={(event) => commitChange((current) => ({ ...current, stairOffset: snap(Number(event.target.value)) }))} /></label><label className="form-field"><span>Locked posts</span><input type="text" value={lockedPosts.length ? lockedPosts.map((item) => `B${item.beamIndex + 1}@${feetAndInches(item.x)}`).join(', ') : 'none'} readOnly /></label><button type="button" className="ghost-btn block-btn" onClick={addBeamLine}>Add beam line</button><button type="button" className="ghost-btn block-btn" onClick={() => updateNumberArray('customBeamYs', [])}>Reset auto beam lines</button></div><div className="stack-list beam-editor-list">{model.beamLines.map((beam, index) => <div key={`beam-edit-${index}`} className="beam-editor-row beam-edit-grid"><span>Beam {index + 1}</span><strong>{feetAndInches(beam.offsetFromHouse)}</strong><label className="inline-mini-field"><span>Start trim</span><input type="number" step={GRID_SIZE} value={beam.startTrim} onChange={(event) => updateBeamEdit(index, 'startTrim', Number(event.target.value))} /></label><label className="inline-mini-field"><span>End trim</span><input type="number" step={GRID_SIZE} value={beam.endTrim} onChange={(event) => updateBeamEdit(index, 'endTrim', Number(event.target.value))} /></label><button type="button" className="ghost-btn small-btn" onClick={() => removeBeamLine(index)}>Remove</button></div>)}</div></div>
           <div className="callout-box compact-card"><h4>Reset</h4><button type="button" className="ghost-btn block-btn" onClick={resetShape}>Reset shape and manual overrides</button></div>
-          <div className="callout-box compact-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Viewport</span><strong>{feetAndInches(viewFeet)} × {feetAndInches(viewFeet)}</strong></div><div><span>Origin</span><strong>{feetAndInches(limits.minX)} , {feetAndInches(limits.minY)}</strong></div></div></div>
-          <div className="callout-box compact-card"><h4>Drawing workflow</h4><ul className="plain-list compact"><li>Click to place P1, then keep clicking each next corner.</li><li>The live line follows your cursor and snaps to 45° / 90° when nearby.</li><li>Click back on P1 to close the shape.</li><li>After closing, drag any point or insert a new one on any edge.</li></ul></div>
+          <div className="callout-box compact-card workflow-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Viewport</span><strong>{feetAndInches(viewFeet)} × {feetAndInches(viewFeet)}</strong></div><div><span>Origin</span><strong>{feetAndInches(limits.minX)} , {feetAndInches(limits.minY)}</strong></div></div></div>
+          <div className="callout-box compact-card workflow-card"><h4>Drawing workflow</h4><ul className="plain-list compact"><li>Click to place P1, then keep clicking each next corner.</li><li>The live line follows your cursor and snaps to 45° / 90° when nearby.</li><li>Click back on P1 to close the shape.</li><li>After closing, drag any point or insert a new one on any edge.</li></ul></div>
         </div>
       </div>
     </div>

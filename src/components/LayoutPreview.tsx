@@ -227,22 +227,24 @@ function buildRailingNodes(deck: ReturnType<typeof buildDeckModel>) {
 
 function DeckPreview({ values }: { values: Record<string, string | number | boolean> }) {
   const deck = buildDeckModel(values);
-  const [layer, setLayer] = useState<DeckLayer>('overview');
+  const [layer, setLayer] = useState<DeckLayer>('framing');
   const [inspect, setInspect] = useState<InspectMember | null>(null);
   const [zoom, setZoom] = useState(1);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const panRef = useRef<HTMLDivElement | null>(null);
+  const dragPanRef = useRef<{ active: boolean; x: number; y: number; left: number; top: number }>({ active: false, x: 0, y: 0, left: 0, top: 0 });
 
   const widthFt = Math.max(deck.width, 1);
   const depthFt = Math.max(deck.depth, 1);
-  const scale = Math.min(980 / widthFt, 620 / depthFt);
+  const scale = Math.min(1060 / widthFt, 700 / depthFt);
   const planW = widthFt * scale;
   const planH = depthFt * scale;
   const sheetW = Math.max(1500, planW + 320);
   const sheetH = Math.max(1050, planH + 320);
   const planX = (sheetW - planW) / 2;
   const planY = 150;
-  const titleBlockW = 360;
-  const titleBlockH = 140;
+  const titleBlockW = 430;
+  const titleBlockH = 164;
   const toSvg = (x: number, y: number) => ({ x: planX + (x - deck.minX) * scale, y: planY + (y - deck.minY) * scale });
   const pointString = deck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ');
   const showBoards = layer === 'overview' || layer === 'boards';
@@ -285,12 +287,31 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
     </g>;
   };
 
+
+
+  const startPan = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!panRef.current || zoom <= 1) return;
+    dragPanRef.current = { active: true, x: event.clientX, y: event.clientY, left: panRef.current.scrollLeft, top: panRef.current.scrollTop };
+  };
+
+  const movePan = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!panRef.current || !dragPanRef.current.active) return;
+    const dx = event.clientX - dragPanRef.current.x;
+    const dy = event.clientY - dragPanRef.current.y;
+    panRef.current.scrollLeft = dragPanRef.current.left - dx;
+    panRef.current.scrollTop = dragPanRef.current.top - dy;
+  };
+
+  const endPan = () => {
+    dragPanRef.current.active = false;
+  };
+
   return (
     <div className="visual-card cad-card">
-      <div className="visual-header compact-preview-header">
+      <div className="visual-header compact-preview-header cad-preview-header">
         <div>
           <h3>Deck framing sheet</h3>
-          <span>Technical plan-view framing layout with individual board strips, double-band rectangles, doubled beam plies, post seats, stair geometry, and railing post types.</span>
+          <span>Plan-view construction sheet with rectangular board runs, joists, doubled beams, double band boards, post seats, stair geometry, and railing post types.</span>
         </div>
         <div className="preview-toolbar">
           {(['overview', 'boards', 'framing', 'railing', 'stairs'] as DeckLayer[]).map((item) => (
@@ -302,13 +323,13 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
           <button type="button" className="ghost-btn small-btn" onClick={printPlan}>Print plan</button>
         </div>
       </div>
-      <div className="zoom-shell deck-sheet-shell">
+      <div ref={panRef} className="zoom-shell deck-sheet-shell" onMouseDown={startPan} onMouseMove={movePan} onMouseUp={endPan} onMouseLeave={endPan}>
         <div className="deck-sheet-stage">
           <svg ref={svgRef} viewBox={`0 0 ${sheetW} ${sheetH}`} className="layout-svg deck-sheet-svg" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
             <rect x="18" y="18" width={sheetW - 36} height={sheetH - 36} className="sheet-border" />
             <rect x="34" y="34" width={sheetW - 68} height={sheetH - 68} className="sheet-border inner" />
-            <text x={60} y={68} className="sheet-title">PLAN VIEW FRAMING</text>
-            <text x={60} y={90} className="sheet-subtitle">S&S Design Build · Double band framing standard</text>
+            <text x={60} y={68} className="sheet-title">PLAN VIEW CONSTRUCTION</text>
+            <text x={60} y={90} className="sheet-subtitle">S&S DESIGN BUILD · DECK FRAMING SCHEMATIC · DOUBLE BAND STANDARD</text>
 
             <polygon points={pointString} className="deck-polygon muted-fill" />
 
