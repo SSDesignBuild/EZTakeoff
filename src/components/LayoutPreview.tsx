@@ -86,15 +86,6 @@ function offsetSegment(segment: DeckEdgeSegment, distance: number, points: DeckP
   };
 }
 
-function stockPlan(length: number, stock = 20) {
-  if (length <= stock + 0.01) return [Math.round(length * 100) / 100];
-  const parts = [stock, stock];
-  let coverage = stock + 10;
-  while (coverage + 10 < length - 0.01) { parts.push(stock); coverage += 10; }
-  const tail = Math.round((length - coverage) * 100) / 100;
-  if (tail > 0.1) parts.push(tail);
-  return parts;
-}
 
 function staggeredSegments(length: number, stock = 20, startOffset = 0) {
   const parts: { start: number; end: number }[] = [];
@@ -133,23 +124,7 @@ function sectionSpansExcludingDoor(section: SectionConfig) {
 
 
 
-function segmentDirection(segment: { start: DeckPoint; end: DeckPoint }) {
-  const dx = segment.end.x - segment.start.x;
-  const dy = segment.end.y - segment.start.y;
-  if (Math.abs(dx) < 1e-6) return 'vertical';
-  if (Math.abs(dy) < 1e-6) return 'horizontal';
-  return 'angled';
-}
 
-function cornerRole(points: DeckPoint[], index: number) {
-  const prev = points[(index - 1 + points.length) % points.length];
-  const curr = points[index];
-  const next = points[(index + 1) % points.length];
-  const cross = (curr.x - prev.x) * (next.y - curr.y) - (curr.y - prev.y) * (next.x - curr.x);
-  const orientation = polygonOrientation(points);
-  const reflex = orientation === 'counterclockwise' ? cross < 0 : cross > 0;
-  return reflex ? 'inside-corner' : 'corner';
-}
 
 function railSegmentsForDeck(deck: ReturnType<typeof buildDeckModel>) {
   const result: { start: DeckPoint; end: DeckPoint; length: number; kind: 'deck' | 'stair-side' }[] = [];
@@ -187,152 +162,273 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
   const [layer, setLayer] = useState<DeckLayer>('overview');
   const [inspect, setInspect] = useState<InspectMember | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const drawingScale = Math.min(920 / Math.max(deck.width, 1), 620 / Math.max(deck.depth, 1));
-  const planW = deck.width * drawingScale;
-  const planH = deck.depth * drawingScale;
-  const sheetW = Math.max(1380, planW + 300);
-  const sheetH = Math.max(960, planH + 260);
-  const padLeft = Math.max(150, (sheetW - planW) / 2);
-  const padTop = Math.max(180, (sheetH - planH) / 2 + 60);
-  const toSvg = (x: number, y: number) => ({ x: padLeft + (x - deck.minX) * drawingScale, y: padTop + (y - deck.minY) * drawingScale });
-  const printPlan = () => {
-    if (!svgRef.current) return;
-    const win = window.open('', '_blank', 'width=1600,height=1100');
-    if (!win) return;
-    const svgMarkup = svgRef.current.outerHTML.replace('<svg', '<svg style="background:#ffffff;display:block;width:100%;height:auto"');
-    win.document.write(`<!doctype html><html><head><title>Deck plan</title><style>@page{size:landscape;margin:0.25in} html,body{margin:0;padding:0;background:#fff;color:#111;font-family:Inter,Arial,sans-serif} body{padding:12px} .sheet{width:100%;background:#fff} svg *{vector-effect:non-scaling-stroke}</style></head><body><div class="sheet">${svgMarkup}</div><script>window.onload=()=>setTimeout(()=>window.print(),200);</script></body></html>`);
-    win.document.close();
-  };
+
+  const widthFt = Math.max(deck.width, 1);
+  const depthFt = Math.max(deck.depth, 1);
+  const scale = Math.min(980 / widthFt, 620 / depthFt);
+  const planW = widthFt * scale;
+  const planH = depthFt * scale;
+  const sheetW = Math.max(1500, planW + 320);
+  const sheetH = Math.max(1050, planH + 320);
+  const planX = (sheetW - planW) / 2;
+  const planY = 180;
+  const titleBlockW = 280;
+  const titleBlockH = 94;
+  const toSvg = (x: number, y: number) => ({ x: planX + (x - deck.minX) * scale, y: planY + (y - deck.minY) * scale });
   const pointString = deck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ');
   const showBoards = layer === 'overview' || layer === 'boards';
   const showFraming = layer === 'overview' || layer === 'framing';
   const showRailing = layer === 'overview' || layer === 'railing';
   const showStairs = layer === 'overview' || layer === 'stairs';
-  const showExploded = false;
-  const boardScanlines = deck.boardRun === 'width'
+
+  const printPlan = () => {
+    if (!svgRef.current) return;
+    const win = window.open('', '_blank', 'width=1700,height=1100');
+    if (!win) return;
+    const svgMarkup = svgRef.current.outerHTML.replace('<svg', '<svg style="background:#ffffff;display:block;width:100%;height:auto"');
+    win.document.write(`<!doctype html><html><head><title>Deck framing plan</title><style>@page{size:landscape;margin:0.25in}html,body{margin:0;padding:0;background:#fff;color:#111;font-family:Inter,Arial,sans-serif}body{padding:10px}svg *{vector-effect:non-scaling-stroke;}</style></head><body>${svgMarkup}<script>window.onload=()=>setTimeout(()=>window.print(),150);</script></body></html>`);
+    win.document.close();
+  };
+
+  const boardRuns = deck.boardRun === 'width'
     ? Array.from({ length: Math.max(1, Math.floor(deck.depth / 0.47)) }, (_, i) => deck.minY + 0.22 + i * 0.47)
     : Array.from({ length: Math.max(1, Math.floor(deck.width / 0.47)) }, (_, i) => deck.minX + 0.22 + i * 0.47);
-  const joistScanlines = deck.joistDirection === 'vertical'
-    ? Array.from({ length: Math.max(1, Math.floor(deck.width / 1) + 1) }, (_, i) => deck.minX + i)
-    : Array.from({ length: Math.max(1, Math.floor(deck.depth / 1) + 1) }, (_, i) => deck.minY + i);
-  const stairStart = deck.stairPlacement.start ? toSvg(deck.stairPlacement.start.x, deck.stairPlacement.start.y) : null;
-  const stairEnd = deck.stairPlacement.end ? toSvg(deck.stairPlacement.end.x, deck.stairPlacement.end.y) : null;
+  const joistRuns = deck.joistDirection === 'vertical'
+    ? Array.from({ length: Math.floor(deck.width) + 1 }, (_, i) => deck.minX + i)
+    : Array.from({ length: Math.floor(deck.depth) + 1 }, (_, i) => deck.minY + i);
+  const railingSegments = railSegmentsForDeck(deck);
+
   const stairSegment = deck.stairPlacement.edgeIndex !== null ? deck.edgeSegments[deck.stairPlacement.edgeIndex] : null;
   const stairNormal = stairSegment ? outwardNormal(stairSegment, deck.points) : { x: 0, y: 1 };
-  const stairNx = stairNormal.x * drawingScale;
-  const stairNy = stairNormal.y * drawingScale;
-  const stairLen = Math.hypot(stairNx, stairNy) || 1;
-  const railingSegments = railSegmentsForDeck(deck).map((segment, index) => ({
-    ...segment,
-    direction: segmentDirection(segment),
-    index,
-  }));
-  const topLevelSegments = railingSegments.filter((segment) => segment.kind === 'deck');
-  const stairSideSegments = railingSegments.filter((segment) => segment.kind === 'stair-side');
-  const topLevelSectionMix = topLevelSegments.reduce((sum, seg) => {
-    const target = seg.length <= 6.15 ? { six: 1, eight: 0 } : seg.length <= 12.15 ? { six: 2, eight: 0 } : seg.length <= 14.15 ? { six: 1, eight: 1 } : { six: Math.ceil(seg.length / 6), eight: 0 };
-    return { six: sum.six + target.six, eight: sum.eight + target.eight };
-  }, { six: 0, eight: 0 });
-  const stairSectionCount = stairSideSegments.reduce((sum, seg) => sum + Math.max(1, Math.ceil(seg.length / 6)), 0);
-  const topLevelPosts = new Map<string, { x: number; y: number; role: string }>();
-  const approxEq = (a: number, b: number) => Math.abs(a - b) < 0.12;
-  const findVertexIndex = (point: DeckPoint) => deck.points.findIndex((candidate) => approxEq(candidate.x, point.x) && approxEq(candidate.y, point.y));
-  topLevelSegments.forEach((segment) => {
-    const count = Math.max(2, Math.ceil(segment.length / 6) + 1);
-    for (let idx = 0; idx < count; idx += 1) {
-      const ratio = count === 1 ? 0 : idx / (count - 1);
-      const x = segment.start.x + (segment.end.x - segment.start.x) * ratio;
-      const y = segment.start.y + (segment.end.y - segment.start.y) * ratio;
-      const key = `${Math.round(x * 12)}-${Math.round(y * 12)}`;
-      let role = 'inline-post';
-      if (idx === 0 || idx === count - 1) {
-        const vertexIndex = idx === 0 ? findVertexIndex(segment.start) : findVertexIndex(segment.end);
-        if (vertexIndex >= 0) role = cornerRole(deck.points, vertexIndex);
-        else role = 'level-post';
-      }
-      topLevelPosts.set(key, { x, y, role: role === 'corner' ? 'corner-post' : role === 'inside-corner' ? 'inside-corner-post' : role });
-    }
-  });
-  const stairPosts = new Map<string, { x: number; y: number; role: string }>();
-  stairSideSegments.forEach((segment) => {
-    [segment.start, segment.end].forEach((point) => {
-      const key = `${Math.round(point.x * 12)}-${Math.round(point.y * 12)}`;
-      stairPosts.set(key, { x: point.x, y: point.y, role: 'stair-post' });
-    });
-  });
-  let boardIndex = 0;
-  let joistIndex = 0;
+  const stairRunPx = deck.stairRunFt * scale;
+
+  const renderDim = (a:{x:number;y:number}, b:{x:number;y:number}, text:string, offsetX:number, offsetY:number, key:string) => {
+    const x1 = a.x + offsetX;
+    const y1 = a.y + offsetY;
+    const x2 = b.x + offsetX;
+    const y2 = b.y + offsetY;
+    return <g key={key}>
+      <line x1={a.x} y1={a.y} x2={x1} y2={y1} className="dimension-line" />
+      <line x1={b.x} y1={b.y} x2={x2} y2={y2} className="dimension-line" />
+      <line x1={x1} y1={y1} x2={x2} y2={y2} className="dimension-line" />
+      <text x={(x1+x2)/2 + (Math.abs(offsetX) > Math.abs(offsetY) ? 0 : -14)} y={(y1+y2)/2 + (Math.abs(offsetY) > Math.abs(offsetX) ? 0 : -10)} className="dimension-text">{text}</text>
+    </g>;
+  };
+
   return (
     <div className="visual-card cad-card">
-      <div className="visual-header">
+      <div className="visual-header compact-preview-header">
         <div>
-          <h3>Deck plan layout</h3>
-          <span>Scaled plan intended to read like a schematic sheet: board seams, doubled bands, beam ply overlaps, post layout, stair geometry, and named railing components.</span>
+          <h3>Deck framing sheet</h3>
+          <span>Plan-view framing layout with independent board, joist, band, beam, post, stair, and railing geometry.</span>
         </div>
-        <div className="preview-toolbar">{(['overview', 'boards', 'framing', 'railing', 'stairs'] as DeckLayer[]).map((item) => <button key={item} type="button" className={layer === item ? 'ghost-btn small-btn active-chip' : 'ghost-btn small-btn'} onClick={() => setLayer(item)}>{item}</button>)}<button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.max(0.8, Number((current - 0.15).toFixed(2))))}>−</button><span className="tag">{Math.round(zoom * 100)}%</span><button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.min(3, Number((current + 0.15).toFixed(2))))}>+</button><button type="button" className="ghost-btn small-btn" onClick={() => setPan({ x: 0, y: 0 })}>Center</button><button type="button" className="ghost-btn small-btn" onClick={printPlan}>Print plan</button></div>
+        <div className="preview-toolbar">
+          {(['overview', 'boards', 'framing', 'railing', 'stairs'] as DeckLayer[]).map((item) => (
+            <button key={item} type="button" className={layer === item ? 'ghost-btn small-btn active-chip' : 'ghost-btn small-btn'} onClick={() => setLayer(item)}>{item}</button>
+          ))}
+          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.max(0.7, Number((current - 0.15).toFixed(2))))}>−</button>
+          <span className="tag">{Math.round(zoom * 100)}%</span>
+          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.min(3, Number((current + 0.15).toFixed(2))))}>+</button>
+          <button type="button" className="ghost-btn small-btn" onClick={printPlan}>Print plan</button>
+        </div>
       </div>
-      <div className="zoom-shell deck-pan-shell"><div className="deck-pan-stage"><svg ref={svgRef} viewBox={`0 0 ${sheetW} ${sheetH}`} className="layout-svg cad-svg" style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'center top' }}>
-        <rect x="12" y="12" width={sheetW - 24} height={sheetH - 24} className="sheet-border" rx="10" />
-        <rect x="26" y="26" width={sheetW - 52} height={sheetH - 52} className="sheet-border inner" rx="8" />
-        <text x={padLeft} y="48" className="sheet-title">Plan view framing schematic</text>
-        <text x={padLeft} y="68" className="sheet-subtitle">S&S Design Build · double band framing standard · scale approx. 1" = 1'-0"</text>
-        <text x={sheetW - 260} y="48" className="sheet-note">Boards: {deck.boardRun === 'width' ? 'parallel to house' : 'perpendicular to house'}</text>
-        <text x={sheetW - 260} y="68" className="sheet-note">Joists: {deck.joistDirection === 'vertical' ? 'perpendicular to house' : 'parallel to house'} · {deck.joistSize}</text>
+      <div className="zoom-shell deck-sheet-shell">
+        <div className="deck-sheet-stage">
+          <svg ref={svgRef} viewBox={`0 0 ${sheetW} ${sheetH}`} className="layout-svg deck-sheet-svg" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
+            <rect x="18" y="18" width={sheetW - 36} height={sheetH - 36} className="sheet-border" />
+            <rect x="34" y="34" width={sheetW - 68} height={sheetH - 68} className="sheet-border inner" />
+            <text x={60} y={68} className="sheet-title">PLAN VIEW FRAMING</text>
+            <text x={60} y={90} className="sheet-subtitle">S&S Design Build · Double band framing standard</text>
 
-        {Array.from({ length: Math.floor(deck.width) + 1 }, (_, i) => <line key={`gx-${i}`} x1={padLeft + i * drawingScale} y1={padTop - 16} x2={padLeft + i * drawingScale} y2={padTop + deck.depth * drawingScale + 16} className="svg-grid" />)}
-        {Array.from({ length: Math.floor(deck.depth) + 1 }, (_, i) => <line key={`gy-${i}`} x1={padLeft - 16} y1={padTop + i * drawingScale} x2={padLeft + deck.width * drawingScale + 16} y2={padTop + i * drawingScale} className="svg-grid" />)}
+            <polygon points={pointString} className="deck-polygon muted-fill" />
 
-        <polygon points={pointString} className="deck-polygon muted-fill" />
-        <polygon points={pointString} className="deck-outline" />
+            {showBoards && boardRuns.map((value, idx) => deck.boardRun === 'width'
+              ? scanlineIntersections(deck.points, 'horizontal', value).map((pair, pairIdx) => {
+                  const y = toSvg(pair.start, value).y;
+                  return staggeredSegments(pair.end - pair.start, 20, (idx % 4) * 4).map((seg, segIdx) => {
+                    const x1 = toSvg(pair.start + seg.start, value).x;
+                    const x2 = toSvg(pair.start + seg.end, value).x;
+                    return <g key={`board-h-${idx}-${pairIdx}-${segIdx}`} onClick={() => setInspect({ title: `Deck board`, detail: `${feetAndInches(seg.end - seg.start)} piece in a ${feetAndInches(pair.end - pair.start)} run.` })}>
+                      <rect x={Math.min(x1, x2)} y={y - Math.max(4, scale * 0.22)} width={Math.abs(x2 - x1)} height={Math.max(8, scale * 0.44)} className="deck-board-strip" />
+                      {seg.end < (pair.end - pair.start) - 0.05 && <line x1={x2} y1={y - 8} x2={x2} y2={y + 8} className="seam-tick" />}
+                    </g>;
+                  });
+                })
+              : scanlineIntersections(deck.points, 'vertical', value).map((pair, pairIdx) => {
+                  const x = toSvg(value, pair.start).x;
+                  return staggeredSegments(pair.end - pair.start, 20, (idx % 4) * 4).map((seg, segIdx) => {
+                    const y1 = toSvg(value, pair.start + seg.start).y;
+                    const y2 = toSvg(value, pair.start + seg.end).y;
+                    return <g key={`board-v-${idx}-${pairIdx}-${segIdx}`} onClick={() => setInspect({ title: `Deck board`, detail: `${feetAndInches(seg.end - seg.start)} piece in a ${feetAndInches(pair.end - pair.start)} run.` })}>
+                      <rect x={x - Math.max(4, scale * 0.22)} y={Math.min(y1, y2)} width={Math.max(8, scale * 0.44)} height={Math.abs(y2 - y1)} className="deck-board-strip" />
+                      {seg.end < (pair.end - pair.start) - 0.05 && <line x1={x - 8} y1={y2} x2={x + 8} y2={y2} className="seam-tick" />}
+                    </g>;
+                  });
+                }))}
 
-        {showBoards && boardScanlines.map((value) => deck.boardRun === 'width'
-          ? scanlineIntersections(deck.points, 'horizontal', value).map((pair, idx) => {
-              boardIndex += 1;
-              const n = boardIndex;
-              return <g key={`b-${idx}-${value}`} onClick={() => setInspect({ title: `Deck board ${n}`, detail: `${feetAndInches(pair.end - pair.start)} board run. Seams are staggered in the print layout so crews can follow stock breaks.` })}>{staggeredSegments(pair.end - pair.start, 20, (n % 4) * 4).map((seg, sidx) => { const a = toSvg(pair.start + seg.start, value); const b = toSvg(pair.start + seg.end, value); return <g key={`bs-${sidx}`}><rect x={Math.min(a.x, b.x)} y={a.y - Math.max(4, drawingScale * 0.18)} width={Math.abs(b.x - a.x)} height={Math.max(8, drawingScale * 0.36)} className="deck-board-strip" rx={2} />{seg.end < (pair.end - pair.start) - 0.05 && <line x1={b.x} y1={b.y - 6} x2={b.x} y2={b.y + 6} className="seam-tick" />}</g>; })}{showExploded && n % 8 === 0 && <text x={toSvg((pair.start + pair.end) / 2, value).x - 10} y={toSvg((pair.start + pair.end) / 2, value).y - 5} className="svg-note">B{n}</text>}</g>;
-            })
-          : scanlineIntersections(deck.points, 'vertical', value).map((pair, idx) => {
-              boardIndex += 1;
-              const n = boardIndex;
-              return <g key={`b-${idx}-${value}`} onClick={() => setInspect({ title: `Deck board ${n}`, detail: `${feetAndInches(pair.end - pair.start)} board run. Seams are staggered in the print layout so crews can follow stock breaks.` })}>{staggeredSegments(pair.end - pair.start, 20, (n % 4) * 4).map((seg, sidx) => { const a = toSvg(value, pair.start + seg.start); const b = toSvg(value, pair.start + seg.end); return <g key={`bs-${sidx}`}><rect x={Math.min(a.x, b.x)} y={a.y - Math.max(4, drawingScale * 0.18)} width={Math.abs(b.x - a.x)} height={Math.max(8, drawingScale * 0.36)} className="deck-board-strip" rx={2} />{seg.end < (pair.end - pair.start) - 0.05 && <line x1={b.x - 6} y1={b.y} x2={b.x + 6} y2={b.y} className="seam-tick" />}</g>; })}{showExploded && n % 8 === 0 && <text x={toSvg(value, (pair.start + pair.end) / 2).x + 6} y={toSvg(value, (pair.start + pair.end) / 2).y} className="svg-note">B{n}</text>}</g>;
-            }))}
+            {showFraming && deck.edgeSegments.map((segment) => {
+              const outer = { ...offsetSegment(segment, 0.08, deck.points), length: segment.length } as DeckEdgeSegment;
+              const inner = { ...offsetSegment(segment, -0.24, deck.points), length: segment.length } as DeckEdgeSegment;
+              return <g key={`edge-${segment.index}`} onClick={() => setInspect({ title: `Double band`, detail: `${feetAndInches(segment.length)} double band run.` })}>
+                {staggeredSegments(segment.length, 20, 0).map((seg, idx) => {
+                  const s = pointAlong(outer, seg.start);
+                  const e = pointAlong(outer, seg.end);
+                  const a = toSvg(s.x, s.y);
+                  const b = toSvg(e.x, e.y);
+                  const w = segment.orientation === 'horizontal' ? Math.abs(b.x - a.x) : 9;
+                  const h = segment.orientation === 'vertical' ? Math.abs(b.y - a.y) : 9;
+                  return <g key={`do-${idx}`}><rect x={Math.min(a.x, b.x) - (segment.orientation === 'vertical' ? 4.5 : 0)} y={Math.min(a.y, b.y) - (segment.orientation === 'horizontal' ? 4.5 : 0)} width={Math.max(w, 9)} height={Math.max(h, 9)} className="double-band-rect" />{seg.end < segment.length - 0.05 && <line x1={b.x - 5} y1={b.y - 5} x2={b.x + 5} y2={b.y + 5} className="seam-tick" />}</g>;
+                })}
+                {staggeredSegments(segment.length, 20, 10).map((seg, idx) => {
+                  const s = pointAlong(inner, seg.start);
+                  const e = pointAlong(inner, seg.end);
+                  const a = toSvg(s.x, s.y);
+                  const b = toSvg(e.x, e.y);
+                  const w = segment.orientation === 'horizontal' ? Math.abs(b.x - a.x) : 9;
+                  const h = segment.orientation === 'vertical' ? Math.abs(b.y - a.y) : 9;
+                  return <g key={`di-${idx}`}><rect x={Math.min(a.x, b.x) - (segment.orientation === 'vertical' ? 4.5 : 0)} y={Math.min(a.y, b.y) - (segment.orientation === 'horizontal' ? 4.5 : 0)} width={Math.max(w, 9)} height={Math.max(h, 9)} className="double-band-rect secondary" />{seg.end < segment.length - 0.05 && <line x1={b.x - 5} y1={b.y + 5} x2={b.x + 5} y2={b.y - 5} className="seam-tick" />}</g>;
+                })}
+              </g>;
+            })}
 
-        {showFraming && joistScanlines.map((value) => deck.joistDirection === 'vertical'
-          ? scanlineIntersections(deck.points, 'vertical', value).map((pair, idx) => { joistIndex += 1; const a=toSvg(value,pair.start); const b=toSvg(value,pair.end); const n=joistIndex; return <g key={`j-${idx}-${value}`} onClick={() => setInspect({ title:`Joist ${n}`, detail:`${feetAndInches(pair.end-pair.start)} ${deck.joistSize} joist at 12 in. O.C.` })}><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="joist-line" />{showExploded && n % 3 === 1 && <text x={a.x + 6} y={(a.y + b.y) / 2} className="svg-note">J{n}</text>}</g>; })
-          : scanlineIntersections(deck.points, 'horizontal', value).map((pair, idx) => { joistIndex += 1; const a=toSvg(pair.start,value); const b=toSvg(pair.end,value); const n=joistIndex; return <g key={`j-${idx}-${value}`} onClick={() => setInspect({ title:`Joist ${n}`, detail:`${feetAndInches(pair.end-pair.start)} ${deck.joistSize} joist at 12 in. O.C.` })}><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="joist-line" />{showExploded && n % 3 === 1 && <text x={(a.x+b.x)/2 - 10} y={a.y - 6} className="svg-note">J{n}</text>}</g>; }))}
+            {showFraming && joistRuns.map((value, idx) => deck.joistDirection === 'vertical'
+              ? scanlineIntersections(deck.points, 'vertical', value).map((pair, pairIdx) => {
+                  const x = toSvg(value, pair.start).x;
+                  const y1 = toSvg(value, pair.start).y;
+                  const y2 = toSvg(value, pair.end).y;
+                  return <rect key={`joist-v-${idx}-${pairIdx}`} x={x - 3} y={Math.min(y1, y2)} width={6} height={Math.abs(y2 - y1)} className="joist-rect" onClick={() => setInspect({ title: `Joist ${idx + 1}`, detail: `${deck.joistSize} joist at 12 in O.C.` })} />;
+                })
+              : scanlineIntersections(deck.points, 'horizontal', value).map((pair, pairIdx) => {
+                  const y = toSvg(pair.start, value).y;
+                  const x1 = toSvg(pair.start, value).x;
+                  const x2 = toSvg(pair.end, value).x;
+                  return <rect key={`joist-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - 3} width={Math.abs(x2 - x1)} height={6} className="joist-rect" onClick={() => setInspect({ title: `Joist ${idx + 1}`, detail: `${deck.joistSize} joist at 12 in O.C.` })} />;
+                }))}
 
-        {!deck.isFreestanding && <><line x1={padLeft} y1={padTop - 28} x2={padLeft + deck.width * drawingScale} y2={padTop - 28} className="house-line" /><text x={padLeft} y={padTop - 36} className="svg-note">House / ledger side</text></>}
+            {showFraming && deck.beamLines.map((beam, beamIdx) => (
+              <g key={`beam-${beamIdx}`}>
+                {beam.segments.map((segment, segIdx) => {
+                  const y = toSvg(segment.startX, beam.y).y;
+                  return <g key={`beam-seg-${segIdx}`} onClick={() => setInspect({ title: `Beam ${beamIdx + 1}`, detail: `${feetAndInches(segment.length)} run at ${feetAndInches(beam.offsetFromHouse)} off house.` })}>
+                    {staggeredSegments(segment.length, 20, 0).map((splice, idx) => {
+                      const x1 = toSvg(segment.startX + splice.start, beam.y).x;
+                      const x2 = toSvg(segment.startX + splice.end, beam.y).x;
+                      return <g key={`bp1-${idx}`}><rect x={Math.min(x1, x2)} y={y - 8} width={Math.abs(x2 - x1)} height={6} className="beam-rect primary" />{splice.end < segment.length - 0.05 && <line x1={x2} y1={y - 10} x2={x2} y2={y - 2} className="seam-tick" />}</g>;
+                    })}
+                    {staggeredSegments(segment.length, 20, 10).map((splice, idx) => {
+                      const x1 = toSvg(segment.startX + splice.start, beam.y).x;
+                      const x2 = toSvg(segment.startX + splice.end, beam.y).x;
+                      return <g key={`bp2-${idx}`}><rect x={Math.min(x1, x2)} y={y - 2} width={Math.abs(x2 - x1)} height={6} className="beam-rect secondary" />{splice.end < segment.length - 0.05 && <line x1={x2} y1={y} x2={x2} y2={y + 8} className="seam-tick" />}</g>;
+                    })}
+                  </g>;
+                })}
+                {beam.postXs.map((postX, postIdx) => {
+                  const cx = toSvg(postX, beam.y).x;
+                  const cy = toSvg(postX, beam.y).y;
+                  return <g key={`post-${beamIdx}-${postIdx}`} onClick={() => setInspect({ title: `Post ${postIdx + 1}`, detail: `Notched ${feetAndInches(deck.postLength)} post supporting doubled beam.` })}>
+                    <rect x={cx - 7} y={cy - 1} width={14} height={18} className="post-node" />
+                    <rect x={cx - 7} y={cy - 7} width={7} height={6} className="post-notch-seat" />
+                  </g>;
+                })}
+              </g>
+            ))}
 
-        {showFraming && deck.edgeSegments.map((segment) => {
-          const outer={...offsetSegment(segment,0.05,deck.points),length:segment.length} as DeckEdgeSegment;
-          const inner={...offsetSegment(segment,-0.22,deck.points),length:segment.length} as DeckEdgeSegment;
-          return <g key={`bb-${segment.index}`} onClick={() => setInspect({ title:`Double band run ${segment.index+1}`, detail:`${feetAndInches(segment.length)} run with staggered double-band plies.` })}>{staggeredSegments(segment.length,20,0).map((seg,sidx)=>{const s=pointAlong(outer,seg.start); const e=pointAlong(outer,seg.end); const a=toSvg(s.x,s.y); const b=toSvg(e.x,e.y); return <g key={`a-${sidx}`}><rect x={Math.min(a.x,b.x)-1.5} y={Math.min(a.y,b.y)-3} width={Math.max(Math.abs(b.x-a.x),3)} height={segment.orientation === 'horizontal' ? 6 : Math.max(Math.abs(b.y-a.y),3)} className="double-band-rect" rx={1.5} />{seg.end < segment.length - 0.05 && <line x1={b.x - 5} y1={b.y - 5} x2={b.x + 5} y2={b.y + 5} className="seam-tick" />}</g>;})}{staggeredSegments(segment.length,20,10).map((seg,sidx)=>{const s=pointAlong(inner,seg.start); const e=pointAlong(inner,seg.end); const a=toSvg(s.x,s.y); const b=toSvg(e.x,e.y); return <g key={`b-${sidx}`}><rect x={Math.min(a.x,b.x)-1.5} y={Math.min(a.y,b.y)-3} width={Math.max(Math.abs(b.x-a.x),3)} height={segment.orientation === 'horizontal' ? 6 : Math.max(Math.abs(b.y-a.y),3)} className="double-band-rect secondary" rx={1.5} />{seg.end < segment.length - 0.05 && <line x1={b.x - 5} y1={b.y + 5} x2={b.x + 5} y2={b.y - 5} className="seam-tick" />}</g>;})}{showExploded && <text x={(toSvg(segment.start.x,segment.start.y).x + toSvg(segment.end.x,segment.end.y).x)/2 - 18} y={(toSvg(segment.start.x,segment.start.y).y + toSvg(segment.end.x,segment.end.y).y)/2 - 12} className="svg-note">BB{segment.index+1}</text>}</g>;
-        })}
+            {showRailing && railingSegments.map((segment, idx) => {
+              const a = toSvg(segment.start.x, segment.start.y);
+              const b = toSvg(segment.end.x, segment.end.y);
+              return <g key={`rail-${idx}`} onClick={() => setInspect({ title: segment.kind === 'stair-side' ? 'Angled railing' : 'Level railing', detail: `${feetAndInches(segment.length)} railing run.` })}>
+                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={segment.kind === 'stair-side' ? 'stair-rail-line' : 'railing-line'} />
+              </g>;
+            })}
 
-        {showFraming && deck.beamLines.map((beam,index)=><g key={`bm-${index}`}>{beam.segments.map((segment,segIndex)=>{const y=toSvg(segment.startX,beam.y).y; const plan=stockPlan(segment.length); const mid=(toSvg(segment.startX,beam.y).x + toSvg(segment.endX,beam.y).x)/2; return <g key={`seg-${segIndex}`} onClick={() => setInspect({ title:`Beam ${index+1} segment ${segIndex+1}`, detail:`${feetAndInches(segment.length)} beam at ${feetAndInches(beam.offsetFromHouse)} off the house. Stock overlap plan: ${plan.map(v=>`${v}'`).join(' + ')}` })}>{staggeredSegments(segment.length,20,0).map((splice,sidx)=>{const x1=toSvg(segment.startX+splice.start,beam.y).x; const x2=toSvg(segment.startX+splice.end,beam.y).x; return <g key={`sa-${sidx}`}><rect x={Math.min(x1,x2)} y={y-7} width={Math.abs(x2-x1)} height={6} className="beam-rect primary" rx={1.5} />{splice.end < segment.length - 0.05 && <line x1={x2} y1={y-8} x2={x2} y2={y} className="seam-tick" />}</g>;})}{staggeredSegments(segment.length,20,10).map((splice,sidx)=>{const x1=toSvg(segment.startX+splice.start,beam.y).x; const x2=toSvg(segment.startX+splice.end,beam.y).x; return <g key={`sb-${sidx}`}><rect x={Math.min(x1,x2)} y={y-1} width={Math.abs(x2-x1)} height={6} className="beam-rect secondary" rx={1.5} />{splice.end < segment.length - 0.05 && <line x1={x2} y1={y} x2={x2} y2={y+8} className="seam-tick" />}</g>;})}{showExploded && <text x={mid-18} y={y-16} className="svg-note">BM{index+1}.{segIndex+1}</text>}</g>;})}{beam.postXs.map((postX,postIndex)=>{const p=toSvg(postX,beam.y); return <g key={`p-${postX}`} onClick={() => setInspect({ title:`Beam post ${index+1}.${postIndex+1}`, detail:`Post sits under a notched beam seat at ${feetAndInches(postX-deck.minX)} from the left reference and ${feetAndInches(beam.offsetFromHouse)} off the house.` })}><g><rect x={p.x-7} y={p.y+1} width="14" height="18" className={beam.lockedPostXs.includes(postX)?'post-node locked-post':'post-node'} rx="1.5" /><rect x={p.x-7} y={p.y-6} width="7" height="7" className="post-notch-seat" /></g>{showExploded && <text x={p.x+8} y={p.y-10} className="svg-note">P{index+1}.{postIndex+1}</text>}</g>;})}</g>)}
+            {showStairs && stairSegment && deck.stairPlacement.start && deck.stairPlacement.end && (() => {
+              const a = toSvg(deck.stairPlacement.start.x, deck.stairPlacement.start.y);
+              const b = toSvg(deck.stairPlacement.end.x, deck.stairPlacement.end.y);
+              const nx = stairNormal.x * stairRunPx;
+              const ny = stairNormal.y * stairRunPx;
+              const count = Math.max(2, deck.stairStringers);
+              const treadCount = Math.max(1, deck.stairTreadsPerRun);
+              return <g>
+                {Array.from({ length: count }, (_, idx) => {
+                  const ratio = count === 1 ? 0 : idx / (count - 1);
+                  const sx = a.x + (b.x - a.x) * ratio;
+                  const sy = a.y + (b.y - a.y) * ratio;
+                  return <line key={`stringer-${idx}`} x1={sx} y1={sy} x2={sx + nx} y2={sy + ny} className="stringer-line" />;
+                })}
+                {Array.from({ length: treadCount }, (_, idx) => {
+                  const ratio = (idx + 1) / (treadCount + 1);
+                  const tx1 = a.x + nx * ratio;
+                  const ty1 = a.y + ny * ratio;
+                  const tx2 = b.x + nx * ratio;
+                  const ty2 = b.y + ny * ratio;
+                  return <line key={`tread-${idx}`} x1={tx1} y1={ty1} x2={tx2} y2={ty2} className="tread-line" />;
+                })}
+              </g>;
+            })()}
 
-        {showRailing && railingSegments.map((segment)=>{const fakeEdge:DeckEdgeSegment={start:segment.start,end:segment.end,length:segment.length,orientation:'horizontal',index:segment.index}; const rail=offsetSegment(fakeEdge,segment.kind==='stair-side'?0.28:0.34,deck.points); const a=toSvg(rail.start.x,rail.start.y); const b=toSvg(rail.end.x,rail.end.y); return <g key={`r-${segment.index}`} onClick={() => setInspect({ title: segment.kind === 'stair-side' ? 'Angled railing section' : segment.direction === 'angled' ? 'Angled railing section' : 'Level railing section', detail: `${feetAndInches(segment.length)} ${segment.kind === 'stair-side' ? 'stair-side' : 'top-level'} railing run.` })}><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={segment.kind==='stair-side'?'stair-rail-line':'railing-line'} /></g>;})}
+            <polygon points={pointString} className="deck-outline" />
 
-        {showRailing && [...topLevelPosts.values()].map((post, idx) => { const p = toSvg(post.x, post.y); const label = post.role === 'corner-post' ? 'CP' : post.role === 'inside-corner-post' ? 'ICP' : post.role === 'inline-post' ? 'IP' : 'LP'; return <g key={`trl-${idx}`} onClick={() => setInspect({ title: post.role.replace(/-/g,' '), detail: `${post.role === 'corner-post' ? 'Outside corner' : post.role === 'inside-corner-post' ? 'Inside corner' : post.role === 'inline-post' ? 'Inline' : 'Level'} top-level railing post.` })}><rect x={p.x-4.5} y={p.y-4.5} width="9" height="9" className="railing-post-node" rx="1.5" />{showExploded && <text x={p.x + 6} y={p.y - 6} className="svg-note">{label}</text>}</g>; })}
-        {showRailing && [...stairPosts.values()].map((post, idx) => { const p = toSvg(post.x, post.y); return <g key={`stp-${idx}`} onClick={() => setInspect({ title: 'Stair post', detail: 'Stair-side railing post.' })}><rect x={p.x-5} y={p.y-5} width="10" height="10" className="stair-post-node" rx="1.5" />{showExploded && <text x={p.x + 6} y={p.y - 6} className="svg-note">SP</text>}</g>; })}
+            {renderDim({ x: planX, y: planY - 34 }, { x: planX + planW, y: planY - 34 }, feetAndInches(deck.width), 0, 0, 'overall-top')}
+            {renderDim({ x: planX - 34, y: planY }, { x: planX - 34, y: planY + planH }, feetAndInches(deck.depth), 0, 0, 'overall-left')}
 
-        {showStairs && stairStart && stairEnd && <><line x1={stairStart.x} y1={stairStart.y} x2={stairEnd.x} y2={stairEnd.y} className="stair-edge-highlight" />{Array.from({length:Math.max(deck.stairStringers,0)},(_,index)=>{const ratio=deck.stairStringers<=1?0.5:index/(deck.stairStringers-1); const sx=stairStart.x + (stairEnd.x-stairStart.x)*ratio; const sy=stairStart.y + (stairEnd.y-stairStart.y)*ratio; const ex=sx + stairNx*deck.stairRunFt; const ey=sy + stairNy*deck.stairRunFt; return <g key={`s-${index}`} onClick={() => setInspect({ title:`Stringer ${index+1}`, detail:`${feetAndInches(deck.stairStringerLength)} 2x12 stringer serving ${deck.stairRisers} risers and ${deck.stairTreadsPerRun} treads.` })}><line x1={sx} y1={sy} x2={ex} y2={ey} className="stringer-line" />{showExploded && <text x={sx+5} y={sy+13} className="svg-note">S{index+1}</text>}</g>;})}{Array.from({length:Math.max(deck.stairTreadsPerRun,0)},(_,index)=>{const offset=((index+1)*stairLen*deck.stairRunFt)/Math.max(deck.stairTreadsPerRun+1,1); return <line key={`t-${index}`} x1={stairStart.x + (stairNx/stairLen)*offset} y1={stairStart.y + (stairNy/stairLen)*offset} x2={stairEnd.x + (stairNx/stairLen)*offset} y2={stairEnd.y + (stairNy/stairLen)*offset} className="tread-line" />;})}<text x={Math.min(stairStart.x,stairEnd.x)+10} y={Math.min(stairStart.y,stairEnd.y)-14} className="svg-note strong-note">{`${deck.stairRisers} risers · ${deck.stairTreadsPerRun} treads · ${deck.stairStringers} stringers`}</text></>}
+            {deck.edgeSegments.filter((segment) => segment.orientation === 'horizontal').map((segment) => {
+              const a = toSvg(segment.start.x, segment.start.y);
+              const b = toSvg(segment.end.x, segment.end.y);
+              const outward = outwardNormal(segment, deck.points);
+              const offset = 26;
+              return renderDim(a, b, feetAndInches(segment.length), outward.x * offset, outward.y * offset, `seg-h-${segment.index}`);
+            })}
+            {deck.edgeSegments.filter((segment) => segment.orientation === 'vertical').map((segment) => {
+              const a = toSvg(segment.start.x, segment.start.y);
+              const b = toSvg(segment.end.x, segment.end.y);
+              const outward = outwardNormal(segment, deck.points);
+              const offset = 28;
+              return renderDim(a, b, feetAndInches(segment.length), outward.x * offset, outward.y * offset, `seg-v-${segment.index}`);
+            })}
 
-        {deck.edgeSegments.map((segment) => { const a = toSvg(segment.start.x, segment.start.y); const b = toSvg(segment.end.x, segment.end.y); const dimOffset = segment.orientation === 'horizontal' ? (segment.start.y === deck.minY ? -44 : 44) : (segment.start.x === deck.minX ? -44 : 44); const tx = (a.x + b.x) / 2 + (segment.orientation === 'vertical' ? dimOffset : 0); const ty = (a.y + b.y) / 2 + (segment.orientation === 'horizontal' ? dimOffset : 0); return <g key={`dim-seg-${segment.index}`}><line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="segment-dimension" /><text x={tx - 12} y={ty} className="svg-note">{feetAndInches(segment.length)}</text></g>; })}
+            {stairSegment && deck.stairPlacement.start && deck.stairPlacement.end && (() => {
+              const a = toSvg(stairSegment.start.x, stairSegment.start.y);
+              const s = toSvg(deck.stairPlacement.start.x, deck.stairPlacement.start.y);
+              const e = toSvg(deck.stairPlacement.end.x, deck.stairPlacement.end.y);
+              const b = toSvg(stairSegment.end.x, stairSegment.end.y);
+              const outward = outwardNormal(stairSegment, deck.points);
+              const offX = outward.x * 48;
+              const offY = outward.y * 48;
+              const chunks = [] as React.ReactNode[];
+              const leftLen = Math.hypot(deck.stairPlacement.start.x - stairSegment.start.x, deck.stairPlacement.start.y - stairSegment.start.y);
+              const rightLen = Math.hypot(stairSegment.end.x - deck.stairPlacement.end.x, stairSegment.end.y - deck.stairPlacement.end.y);
+              if (leftLen > 0.05) chunks.push(renderDim(a, s, feetAndInches(leftLen), offX, offY, 'stair-left'));
+              chunks.push(renderDim(s, e, feetAndInches(deck.stairPlacement.width), offX, offY, 'stair-opening'));
+              if (rightLen > 0.05) chunks.push(renderDim(e, b, feetAndInches(rightLen), offX, offY, 'stair-right'));
+              return chunks;
+            })()}
 
-        <line x1={padLeft} y1={padTop + deck.depth * drawingScale + 40} x2={padLeft + deck.width * drawingScale} y2={padTop + deck.depth * drawingScale + 40} className="dimension-line" />
-        <text x={padLeft + (deck.width * drawingScale)/2 - 18} y={padTop + deck.depth * drawingScale + 32} className="svg-note">{feetAndInches(deck.width)}</text>
-        <line x1={padLeft - 40} y1={padTop} x2={padLeft - 40} y2={padTop + deck.depth * drawingScale} className="dimension-line" />
-        <text x={padLeft - 78} y={padTop + (deck.depth * drawingScale)/2} className="svg-note">{feetAndInches(deck.depth)}</text>
-      </svg></div></div>
-      {inspect && <div className="callout-box preview-inspect"><h4>{inspect.title}</h4><p className="muted">{inspect.detail}</p></div>}
-      <div className="callout-box preview-inspect"><h4>Railing naming</h4><p className="muted">Level railing, angled railing, corner post, inside corner post, inline post, level post, and stair post are now separated in the plan logic so the printed schematic and material list can speak the same language.</p></div>
-
-      <div className="legend-row wrap-legend"><span><i className="legend-swatch deck-board-swatch" /> deck boards</span><span><i className="legend-swatch joist-line-swatch" /> joists</span><span><i className="legend-swatch beam-line-swatch" /> doubled beam</span><span><i className="legend-swatch band-line-swatch" /> double band</span><span><i className="legend-swatch railing-line-swatch" /> level railing</span><span><i className="legend-swatch stair-line-swatch" /> stair / angled railing</span></div>
-      <div className="legend-row wrap-legend"><span><i className="legend-swatch post-swatch" /> beam post</span><span><i className="legend-swatch railing-post-swatch" /> level / corner / inline post</span><span><i className="legend-swatch stair-post-swatch" /> stair post</span><span><i className="legend-swatch seam-swatch" /> staggered seam</span></div>
-      <div className="legend-row wrap-legend"><span><strong>Top-level railing:</strong> {topLevelSectionMix.six} × 6' + {topLevelSectionMix.eight} × 8'</span><span><strong>Angled / stair railing:</strong> {stairSectionCount} section(s)</span><span><strong>Top-level posts:</strong> {[...topLevelPosts.values()].length}</span><span><strong>Stair posts:</strong> {[...stairPosts.values()].length}</span></div>
+            <g transform={`translate(${sheetW - titleBlockW - 46}, ${sheetH - titleBlockH - 42})`}>
+              <rect x="0" y="0" width={titleBlockW} height={titleBlockH} className="title-block" />
+              <line x1="0" y1="28" x2={titleBlockW} y2="28" className="title-block-line" />
+              <line x1="0" y1="62" x2={titleBlockW} y2="62" className="title-block-line" />
+              <line x1="170" y1="28" x2="170" y2={titleBlockH} className="title-block-line" />
+              <text x="12" y="18" className="title-block-title">DECK FRAMING PLAN</text>
+              <text x="12" y="46" className="title-block-label">Width</text>
+              <text x="84" y="46" className="title-block-value">{feetAndInches(deck.width)}</text>
+              <text x="12" y="80" className="title-block-label">Projection</text>
+              <text x="84" y="80" className="title-block-value">{feetAndInches(deck.depth)}</text>
+              <text x="182" y="46" className="title-block-label">Joists</text>
+              <text x="182" y="80" className="title-block-value">{deck.joistSize} @ 12&quot; O.C.</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div className="legend-row wrap-legend deck-legend-strong">
+        <span><i className="legend-swatch board-swatch" /> boards</span>
+        <span><i className="legend-swatch joist-line-swatch" /> joists</span>
+        <span><i className="legend-swatch beam-line-swatch" /> doubled beams</span>
+        <span><i className="legend-swatch fascia-swatch" /> double band</span>
+        <span><i className="legend-swatch post-swatch" /> posts</span>
+        <span><i className="legend-swatch railing-swatch" /> railing</span>
+      </div>
+      {inspect && <div className="callout-box inspect-card"><h4>{inspect.title}</h4><p>{inspect.detail}</p></div>}
     </div>
   );
 }

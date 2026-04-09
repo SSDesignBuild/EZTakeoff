@@ -833,3 +833,48 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .deck-canvas{width:100%;min-width:1600px;min-height:1600px;display:block;}
 .enhanced-deck-grid{align-items:stretch;}
 .grid-label{font-size:12px;fill:#1f2937;font-weight:700;}
+
+/* v22 deck drafting and cad sheet refinement */
+.fixed-canvas-shell{overflow:hidden;display:flex;align-items:stretch;justify-content:center;background:#fbfaf6;}
+.fixed-canvas-shell .deck-canvas{min-width:0;min-height:0;width:100%;height:auto;display:block;}
+.deck-canvas-wrap{min-height:900px;}
+.deck-canvas{aspect-ratio:1/1;}
+.canvas-background{fill:#fff;stroke:#cfc8bd;stroke-width:1.5;}
+.inch-grid{stroke:rgba(0,0,0,.04);stroke-width:.8;}
+.foot-grid{stroke:rgba(0,0,0,.12);stroke-width:1;}
+.ten-grid{stroke:rgba(0,0,0,.28);stroke-width:1.6;}
+.grid-label{font-size:13px;fill:#111827;font-weight:700;}
+.preview-distance-label{font-size:15px;fill:#c2410c;font-weight:800;paint-order:stroke;stroke:#fff;stroke-width:5px;}
+.deck-sheet-shell{overflow:auto;max-height:78vh;border:1px solid var(--border);background:#f5f3ee;}
+.deck-sheet-stage{min-width:100%;display:flex;justify-content:center;align-items:flex-start;padding:.5rem;}
+.deck-sheet-svg{background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.05);}
+.compact-preview-header{align-items:flex-start;gap:1rem;}
+.title-block{fill:#fff;stroke:#111;stroke-width:1.2;}
+.title-block-line{stroke:#111;stroke-width:1;}
+.title-block-title{font-size:14px;font-weight:800;fill:#111;}
+.title-block-label{font-size:11px;fill:#555;}
+.title-block-value{font-size:12px;font-weight:700;fill:#111;}
+.dimension-text{font-size:11px;fill:#111;font-weight:700;paint-order:stroke;stroke:#fff;stroke-width:4px;}
+.joist-rect{fill:#d8c1ff;stroke:#7b2cbf;stroke-width:1;}
+.deck-board-strip{fill:#f4e7d5;stroke:#99714e;stroke-width:.9;}
+.double-band-rect{fill:#f8f8f8;stroke:#111;stroke-width:1.1;}
+.double-band-rect.secondary{fill:#fff;}
+.beam-rect.primary{fill:#ffd166;stroke:#9f3a00;stroke-width:1.2;}
+.beam-rect.secondary{fill:#ffe7a3;stroke:#9f3a00;stroke-width:1.2;}
+.post-node{fill:#d1fae5;stroke:#0f766e;stroke-width:1.2;}
+.post-notch-seat{fill:#ffffff;stroke:#0f766e;stroke-width:1.2;}
+.railing-line{stroke:#0d6efd;stroke-width:2.4;}
+.stair-rail-line{stroke:#14b8a6;stroke-width:2.4;}
+.stringer-line{stroke:#e11d48;stroke-width:2.2;}
+.tread-line{stroke:#e11d48;stroke-width:1.2;}
+.deck-outline{fill:none;stroke:#111;stroke-width:1.8;}
+.deck-polygon.muted-fill{fill:#fdfdfc;}
+.deck-legend-strong .legend-swatch{border:1px solid rgba(0,0,0,.15);}
+.board-swatch{background:#f4e7d5;}
+.post-swatch{background:#d1fae5;}
+.railing-swatch{background:#0d6efd;}
+.organized-config-grid{grid-template-columns:repeat(12,minmax(0,1fr));gap:.6rem;}
+.organized-config-grid > *{grid-column:span 3;padding:.65rem .75rem;border-radius:12px;}
+.project-config-card .section-heading{margin-bottom:.2rem;}
+.project-config-card .content-card,.project-config-card{padding-bottom:.75rem;}
+@media (max-width:1100px){.deck-canvas-wrap{min-height:720px;}}
