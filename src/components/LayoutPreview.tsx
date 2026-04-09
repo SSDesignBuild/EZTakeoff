@@ -236,15 +236,20 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
 
   const widthFt = Math.max(deck.width, 1);
   const depthFt = Math.max(deck.depth, 1);
-  const scale = Math.min(1060 / widthFt, 700 / depthFt);
-  const planW = widthFt * scale;
-  const planH = depthFt * scale;
-  const sheetW = Math.max(1500, planW + 320);
-  const sheetH = Math.max(1050, planH + 320);
-  const planX = (sheetW - planW) / 2;
-  const planY = 150;
   const titleBlockW = 430;
   const titleBlockH = 164;
+  const sheetMarginX = 54;
+  const sheetMarginTop = 110;
+  const sheetMarginBottom = 54;
+  const planScaleW = 1180;
+  const planScaleH = 720;
+  const scale = Math.min(planScaleW / widthFt, planScaleH / depthFt);
+  const planW = widthFt * scale;
+  const planH = depthFt * scale;
+  const sheetW = Math.max(1580, planW + sheetMarginX * 2);
+  const sheetH = Math.max(1260, planH + titleBlockH + sheetMarginTop + sheetMarginBottom + 90);
+  const planX = (sheetW - planW) / 2;
+  const planY = sheetMarginTop;
   const toSvg = (x: number, y: number) => ({ x: planX + (x - deck.minX) * scale, y: planY + (y - deck.minY) * scale });
   const pointString = deck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ');
   const showBoards = layer === 'overview' || layer === 'boards';
@@ -265,8 +270,8 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
     ? Array.from({ length: Math.max(1, Math.floor(deck.depth / 0.47)) }, (_, i) => deck.minY + 0.22 + i * 0.47)
     : Array.from({ length: Math.max(1, Math.floor(deck.width / 0.47)) }, (_, i) => deck.minX + 0.22 + i * 0.47);
   const joistRuns = deck.joistDirection === 'vertical'
-    ? Array.from({ length: Math.floor(deck.width) + 1 }, (_, i) => deck.minX + i)
-    : Array.from({ length: Math.floor(deck.depth) + 1 }, (_, i) => deck.minY + i);
+    ? Array.from({ length: Math.max(0, Math.floor(deck.width) - 1) }, (_, i) => deck.minX + 1 + i)
+    : Array.from({ length: Math.max(0, Math.floor(deck.depth) - 1) }, (_, i) => deck.minY + 1 + i);
   const railingSegments = railSegmentsForDeck(deck);
   const railingNodes = buildRailingNodes(deck);
 
@@ -468,7 +473,6 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
               </g>;
             })()}
 
-            <polygon points={pointString} className="deck-outline" />
 
             {renderDim({ x: planX, y: planY - 34 }, { x: planX + planW, y: planY - 34 }, feetAndInches(deck.width), 0, 0, 'overall-top')}
             {renderDim({ x: planX - 34, y: planY }, { x: planX - 34, y: planY + planH }, feetAndInches(deck.depth), 0, 0, 'overall-left')}
@@ -505,7 +509,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
               return chunks;
             })()}
 
-            <g transform={`translate(${sheetW - titleBlockW - 52}, ${sheetH - titleBlockH - 46})`}>
+            <g transform={`translate(${sheetW - titleBlockW - 52}, ${planY + planH + 34})`}>
               <rect x="0" y="0" width={titleBlockW} height={titleBlockH} className="title-block" />
               <line x1="0" y1="28" x2={titleBlockW} y2="28" className="title-block-line" />
               <line x1="0" y1="58" x2={titleBlockW} y2="58" className="title-block-line" />
