@@ -333,9 +333,9 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           <span className="tag">Snap: 1 in</span>
           <span className="tag">Points: {points.length}</span>
           <span className="tag">Mode: {drawingSequence ? 'drawing' : mode}</span>
-          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.max(0.5, Number((current - 0.1).toFixed(2))))}>−</button>
+          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.max(0.4, Number((current - 0.1).toFixed(2))))}>−</button>
           <span className="tag">Zoom {Math.round(zoom * 100)}%</span>
-          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.min(2.5, Number((current + 0.1).toFixed(2))))}>+</button>
+          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((current) => Math.min(3.5, Number((current + 0.1).toFixed(2))))}>+</button>
         </div>
       </div>
       <div className="designer-mode-row tidy-mode-row">
@@ -349,7 +349,6 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       </div>
       <div className="deck-designer-grid enhanced-deck-grid">
         <div className="deck-canvas-wrap centered-canvas-wrap">
-          <div className="drawing-ruler-hint">10' master grid · 1' drawing squares · inch movement from point controls · inch sub-grid only appears when zoomed in</div>
           <div className="designer-scroll-shell">
           {points.length === 0 && <div className="empty-designer-state"><p>Click anywhere on the canvas to place point P1. Each next click places the next corner. Click back on P1 to close the shape.</p></div>}
           {drawingSequence && points.length > 0 && <div className="empty-designer-state drawing-hint drawing-hint-bottom"><p>Place point P{points.length + 1}. When ready, click P1 to close the deck. Live segment: {previewDelta ? `${feetAndInches(previewDelta.distance)} · ΔX ${feetAndInches(Math.abs(previewDelta.dx))} · ΔY ${feetAndInches(Math.abs(previewDelta.dy))}` : 'move the cursor to preview the next segment'}</p></div>}

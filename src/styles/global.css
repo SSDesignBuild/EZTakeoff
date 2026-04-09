@@ -824,3 +824,12 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .point-nudge-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
 @media (max-width: 1100px) { .organized-config-grid > * { grid-column: span 6; } .organized-config-grid .toggle-field { grid-column: span 6; } }
 @media (max-width: 720px) { .organized-config-grid > *, .organized-config-grid .toggle-field { grid-column: span 12; } }
+
+
+/* v21 deck canvas fill cleanup */
+.centered-canvas-wrap{min-height:0;display:flex;flex-direction:column;align-items:stretch;justify-content:stretch;height:100%;}
+.deck-canvas-wrap{min-height:820px;}
+.designer-scroll-shell{flex:1 1 auto;overflow:auto;max-height:none;height:100%;width:100%;border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.65),rgba(255,255,255,.35));}
+.deck-canvas{width:100%;min-width:1600px;min-height:1600px;display:block;}
+.enhanced-deck-grid{align-items:stretch;}
+.grid-label{font-size:12px;fill:#1f2937;font-weight:700;}
