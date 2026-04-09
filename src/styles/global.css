@@ -6,7 +6,7 @@
   --border: rgba(76, 56, 39, 0.16);
   --ink: #1f1b17;
   --muted: #6d6156;
-  --accent: #a96d43;
+  --accent: #ff8a3d;
   --accent-strong: #82512f;
   --accent-soft: rgba(169, 109, 67, 0.12);
   --green-soft: rgba(47, 72, 60, 0.1);
@@ -536,3 +536,136 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .patio-sheet-svg .gutter-line { stroke: #3e7db5; stroke-width: 3; }
 .patio-sheet-svg .fascia-line { stroke: #bb6b1d; stroke-width: 3; }
 .patio-sheet-svg .fan-axis-line { stroke: #8f2bd6; stroke-width: 2.5; stroke-dasharray: 6 4; }
+
+
+.project-config-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.organized-config-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  align-items: start;
+}
+
+.canvas-background {
+  fill: color-mix(in srgb, var(--panel) 96%, white 4%);
+  stroke: color-mix(in srgb, var(--accent) 40%, var(--border));
+  stroke-width: 1.5;
+}
+
+.minor-grid {
+  stroke: rgba(255, 138, 61, 0.08);
+}
+
+.preview-segment {
+  stroke: #4da3ff;
+  stroke-width: 3;
+  stroke-dasharray: 12 8;
+}
+
+.preview-point {
+  fill: #4da3ff;
+  stroke: white;
+  stroke-width: 2;
+}
+
+.drawing-hint-bottom {
+  top: auto;
+  bottom: 1rem;
+  left: 1rem;
+  right: 1rem;
+}
+
+.centered-canvas-wrap {
+  min-height: 640px;
+  display: grid;
+  place-items: center;
+}
+
+.tidy-mode-row {
+  margin-bottom: 1.25rem;
+}
+
+.organized-controls {
+  align-content: start;
+}
+
+.compact-card {
+  border-radius: 20px;
+}
+
+.beam-line-secondary {
+  stroke: #38c9ff;
+}
+
+.post-lock {
+  fill: #ffd25f;
+  stroke: #0f172a;
+  stroke-width: 1.5;
+  cursor: pointer;
+}
+
+.post-lock.locked {
+  fill: #ff8a3d;
+}
+
+.zoom-shell {
+  overflow: auto;
+  padding: 0.5rem 0 1rem;
+}
+
+.cad-svg {
+  display: block;
+  margin: 0 auto;
+}
+
+.deck-board-strip {
+  fill: rgba(77, 163, 255, 0.32);
+  stroke: #4da3ff;
+  stroke-width: 1.1;
+}
+
+.deck-outline {
+  fill: transparent;
+  stroke: #111827;
+  stroke-width: 2.2;
+}
+
+.deck-board-line,
+.joist-line,
+.band-line,
+.beam-line,
+.railing-line,
+.stair-rail-line,
+.stringer-line,
+.tread-line,
+.stair-edge-highlight,
+.dimension-line,
+.segment-dimension,
+.house-line,
+.seam-tick {
+  vector-effect: non-scaling-stroke;
+}
+
+.joist-line { stroke: #8a5cf6; stroke-width: 1.8; }
+.band-line { stroke: #0f172a; stroke-width: 2.6; }
+.band-line.secondary { stroke: #4b5563; stroke-width: 2.2; }
+.beam-line { stroke: #00bcd4; stroke-width: 3.2; }
+.railing-line { stroke: #ff8a3d; stroke-width: 2.6; stroke-dasharray: 8 5; }
+.stair-rail-line { stroke: #ef4444; stroke-width: 2.6; stroke-dasharray: 8 5; }
+.stringer-line { stroke: #16a34a; stroke-width: 2.2; }
+.tread-line { stroke: #eab308; stroke-width: 1.8; }
+.stair-edge-highlight { stroke: #ef4444; stroke-width: 4; }
+.seam-tick { stroke: #111827; stroke-width: 1.5; }
+
+.preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.mode-btn,
+.preview-toolbar .small-btn {
+  min-height: 40px;
+}

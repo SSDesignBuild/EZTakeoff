@@ -2,17 +2,16 @@ import { MouseEvent, PointerEvent, useEffect, useMemo, useRef, useState } from '
 import { buildDeckModel, parseDeckShape } from '../lib/deckModel';
 import { DeckPoint, LockedPostPoint } from '../lib/types';
 
-const GRID_SIZE = 0.5;
+const GRID_SIZE = 1 / 12;
 const VIEW_SIZE = 520;
 const PADDING = 28;
-const SNAP_TOLERANCE = 0.75;
-
+const SNAP_TOLERANCE = 0.4;
 const defaultShape: DeckPoint[] = [];
-const starterPoints: DeckPoint[] = [{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 10 }];
 
 type EditMode = 'points' | 'railing' | 'stairs' | 'beams' | 'posts';
 type BeamEdit = { beamIndex: number; startTrim: number; endTrim: number };
 type Snapshot = Pick<Record<string, string | number | boolean>, 'deckShape' | 'manualRailingEdges' | 'customBeamYs' | 'stairEdgeIndex' | 'stairOffset' | 'lockedPosts' | 'beamEdits'>;
+type DesignerHistory = { shot: Snapshot; drawingSequence: boolean; selectedIndex: number | null };
 
 const snap = (value: number) => Math.round(value / GRID_SIZE) * GRID_SIZE;
 const parseNumberArray = (raw: string | number | boolean | undefined) => typeof raw === 'string' && raw.trim() ? JSON.parse(raw) as number[] : [];
@@ -36,6 +35,13 @@ const bounds = (points: DeckPoint[]) => ({
   maxY: Math.max(...points.map((point) => point.y)),
 });
 
+const feetAndInches = (value: number) => {
+  const totalInches = Math.round(value * 12);
+  const feet = Math.floor(totalInches / 12);
+  const inches = totalInches % 12;
+  return inches ? `${feet}' ${inches}"` : `${feet}'`;
+};
+
 interface DeckDesignerProps {
   values: Record<string, string | number | boolean>;
   onValuesChange: (updater: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => void;
@@ -51,6 +57,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     }
     return parseDeckShape(values.deckShape);
   }, [values.deckShape]);
+
   const model = useMemo(() => buildDeckModel(values), [values]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [mode, setMode] = useState<EditMode>('points');
@@ -58,8 +65,12 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const [draggingBeamIndex, setDraggingBeamIndex] = useState<number | null>(null);
   const [draggingStair, setDraggingStair] = useState(false);
   const [drawingSequence, setDrawingSequence] = useState(points.length === 0);
+  const [previewPoint, setPreviewPoint] = useState<DeckPoint | null>(null);
+  const [history, setHistory] = useState<DesignerHistory[]>([]);
+  const [future, setFuture] = useState<DesignerHistory[]>([]);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const limits = points.length ? bounds(points) : { minX: 0, maxX: 16, minY: 0, maxY: 12 };
+
+  const limits = points.length ? bounds(points) : { minX: 0, maxX: 24, minY: 0, maxY: 18 };
   const spanX = Math.max(limits.maxX - limits.minX, 1);
   const spanY = Math.max(limits.maxY - limits.minY, 1);
   const scale = Math.min((VIEW_SIZE - PADDING * 2) / spanX, (VIEW_SIZE - PADDING * 2) / spanY);
@@ -70,27 +81,40 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   }, [model.beamLines, values.customBeamYs]);
   const lockedPosts = useMemo(() => parseLockedPosts(values.lockedPosts), [values.lockedPosts]);
   const beamEdits = useMemo(() => parseBeamEdits(values.beamEdits), [values.beamEdits]);
-  const [history, setHistory] = useState<Snapshot[]>([]);
-  const [future, setFuture] = useState<Snapshot[]>([]);
 
-  const snapshot = (): Snapshot => ({
-    deckShape: values.deckShape,
-    manualRailingEdges: values.manualRailingEdges,
-    customBeamYs: values.customBeamYs,
-    stairEdgeIndex: values.stairEdgeIndex,
-    stairOffset: values.stairOffset,
-    lockedPosts: values.lockedPosts,
-    beamEdits: values.beamEdits,
+  const snapshot = (): DesignerHistory => ({
+    shot: {
+      deckShape: values.deckShape,
+      manualRailingEdges: values.manualRailingEdges,
+      customBeamYs: values.customBeamYs,
+      stairEdgeIndex: values.stairEdgeIndex,
+      stairOffset: values.stairOffset,
+      lockedPosts: values.lockedPosts,
+      beamEdits: values.beamEdits,
+    },
+    drawingSequence,
+    selectedIndex,
   });
 
-  const applySnapshot = (shot: Snapshot) => onValuesChange((current) => ({ ...current, ...shot }));
+  const applySnapshot = (entry: DesignerHistory) => {
+    onValuesChange((current) => ({ ...current, ...entry.shot }));
+    setDrawingSequence(entry.drawingSequence);
+    setSelectedIndex(entry.selectedIndex);
+    setPreviewPoint(null);
+  };
+
+  const pushHistory = () => setHistory((current) => [...current.slice(-39), snapshot()]);
+
   const commitChange = (producer: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => {
-    setHistory((current) => [...current.slice(-39), snapshot()]);
+    pushHistory();
     setFuture([]);
     onValuesChange(producer);
   };
 
-  const updateShape = (nextPoints: DeckPoint[]) => commitChange((current) => ({ ...current, deckShape: JSON.stringify(nextPoints) }));
+  const updateShape = (nextPoints: DeckPoint[], keepSelected?: number | null) => {
+    commitChange((current) => ({ ...current, deckShape: JSON.stringify(nextPoints) }));
+    if (keepSelected !== undefined) setSelectedIndex(keepSelected);
+  };
   const updateNumberArray = (key: string, next: number[]) => commitChange((current) => ({ ...current, [key]: JSON.stringify(next.map((value) => snap(value))) }));
   const updateLockedPosts = (next: LockedPostPoint[]) => commitChange((current) => ({ ...current, lockedPosts: JSON.stringify(next) }));
 
@@ -108,32 +132,12 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     if (points.length === 0) {
       setDrawingSequence(true);
       setSelectedIndex(null);
-      return;
+      setPreviewPoint(null);
     }
   }, [points.length]);
 
-  const appendPoint = (point: DeckPoint) => {
-    const next = [...points, { x: snap(point.x), y: snap(point.y) }];
-    updateShape(next);
-    setSelectedIndex(next.length - 1);
-  };
-
-  const finishDrawing = () => {
-    if (points.length < 3) return;
-    setDrawingSequence(false);
-    setSelectedIndex(null);
-  };
-
-  const handleCanvasClick = (event: MouseEvent<SVGSVGElement>) => {
-    if (mode !== 'points') return;
-    if (event.target !== event.currentTarget) return;
-    const point = fromClientToModelPoint(event.clientX, event.clientY);
-    if (!point) return;
-    if (!drawingSequence && points.length > 0) return;
-    appendPoint(point);
-  };
-
   const constrainedPoint = (index: number, point: DeckPoint) => {
+    if (points.length < 3) return { x: snap(point.x), y: snap(point.y) };
     const prev = points[(index - 1 + points.length) % points.length];
     const next = points[(index + 1) % points.length];
     let x = point.x;
@@ -143,9 +147,34 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     return { x: snap(x), y: snap(y) };
   };
 
+  const appendPoint = (point: DeckPoint) => {
+    const next = [...points, { x: snap(point.x), y: snap(point.y) }];
+    commitChange((current) => ({ ...current, deckShape: JSON.stringify(next) }));
+    setSelectedIndex(next.length - 1);
+  };
+
+  const finishDrawing = () => {
+    if (points.length < 3) return;
+    pushHistory();
+    setFuture([]);
+    setDrawingSequence(false);
+    setSelectedIndex(null);
+    setPreviewPoint(null);
+  };
+
+  const handleCanvasClick = (event: MouseEvent<SVGSVGElement>) => {
+    if (mode !== 'points') return;
+    const point = fromClientToModelPoint(event.clientX, event.clientY);
+    if (!point) return;
+    if (drawingSequence) {
+      appendPoint(point);
+      return;
+    }
+  };
+
   const updatePoint = (index: number, axis: 'x' | 'y', nextValue: number) => {
     const next = points.map((point, currentIndex) => currentIndex === index ? { ...point, [axis]: snap(nextValue) } : point);
-    updateShape(next);
+    updateShape(next, index);
   };
 
   const insertPointAtEdge = (edgeIndex: number) => {
@@ -153,20 +182,22 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     const end = points[(edgeIndex + 1) % points.length];
     const mid = { x: snap((start.x + end.x) / 2), y: snap((start.y + end.y) / 2) };
     const next = [...points.slice(0, edgeIndex + 1), mid, ...points.slice(edgeIndex + 1)];
-    updateShape(next);
-    setSelectedIndex(edgeIndex + 1);
+    updateShape(next, edgeIndex + 1);
   };
 
   const removeSelected = () => {
     if (selectedIndex === null || points.length <= 3) return;
     setSelectedIndex(null);
-    updateShape(points.filter((_, index) => index !== selectedIndex));
+    updateShape(points.filter((_, index) => index !== selectedIndex), null);
   };
 
   const resetShape = () => {
+    pushHistory();
+    setFuture([]);
     setDrawingSequence(true);
     setSelectedIndex(null);
-    commitChange((current) => ({ ...current, deckShape: JSON.stringify(defaultShape), manualRailingEdges: JSON.stringify([]), customBeamYs: JSON.stringify([]), lockedPosts: JSON.stringify([]), beamEdits: JSON.stringify([]), stairEdgeIndex: -1, stairOffset: 0 }));
+    setPreviewPoint(null);
+    onValuesChange((current) => ({ ...current, deckShape: JSON.stringify(defaultShape), manualRailingEdges: JSON.stringify([]), customBeamYs: JSON.stringify([]), lockedPosts: JSON.stringify([]), beamEdits: JSON.stringify([]), stairEdgeIndex: -1, stairOffset: 0 }));
   };
 
   const toggleRailingEdge = (edgeIndex: number) => {
@@ -177,8 +208,19 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
 
   const selectStairEdge = (edgeIndex: number) => commitChange((current) => ({ ...current, stairEdgeIndex: edgeIndex, stairOffset: 0 }));
   const addBeamLine = () => updateNumberArray('customBeamYs', [...beamOffsets, Math.max(0.5, snap(model.depth / 2))].sort((a, b) => a - b));
-  const removeBeamLine = (index: number) => commitChange((current) => ({ ...current, customBeamYs: JSON.stringify(beamOffsets.filter((_, currentIndex) => currentIndex !== index)), beamEdits: JSON.stringify(beamEdits.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))) }));
-  const updateBeamEdit = (index: number, key: 'startTrim' | 'endTrim', value: number) => commitChange((current) => { const next = [...beamEdits]; const match = next.findIndex((item) => item.beamIndex === index); const safe = Math.max(0, snap(value)); if (match >= 0) next[match] = { ...next[match], [key]: safe }; else next.push({ beamIndex: index, startTrim: key === 'startTrim' ? safe : 0, endTrim: key === 'endTrim' ? safe : 0 }); return { ...current, beamEdits: JSON.stringify(next.sort((a,b)=>a.beamIndex-b.beamIndex)) }; });
+  const removeBeamLine = (index: number) => commitChange((current) => ({
+    ...current,
+    customBeamYs: JSON.stringify(beamOffsets.filter((_, currentIndex) => currentIndex !== index)),
+    beamEdits: JSON.stringify(beamEdits.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))),
+  }));
+  const updateBeamEdit = (index: number, key: 'startTrim' | 'endTrim', value: number) => commitChange((current) => {
+    const next = [...beamEdits];
+    const match = next.findIndex((item) => item.beamIndex === index);
+    const safe = Math.max(0, snap(value));
+    if (match >= 0) next[match] = { ...next[match], [key]: safe };
+    else next.push({ beamIndex: index, startTrim: key === 'startTrim' ? safe : 0, endTrim: key === 'endTrim' ? safe : 0 });
+    return { ...current, beamEdits: JSON.stringify(next.sort((a, b) => a.beamIndex - b.beamIndex)) };
+  });
   const toggleLockedPost = (beamIndex: number, x: number) => {
     const matchIndex = lockedPosts.findIndex((item) => item.beamIndex === beamIndex && Math.abs(item.x - x) < 0.1);
     const next = [...lockedPosts];
@@ -193,6 +235,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     setFuture((current) => [snapshot(), ...current]);
     applySnapshot(previous);
   };
+
   const redo = () => {
     if (!future.length) return;
     const next = future[0];
@@ -201,27 +244,54 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     applySnapshot(next);
   };
 
-  const onPointPointerDown = (event: PointerEvent<SVGCircleElement>, index: number) => { event.preventDefault(); setMode('points'); setSelectedIndex(index); setDraggingIndex(index); };
-  const onBeamPointerDown = (event: PointerEvent<SVGLineElement>, index: number) => { event.preventDefault(); setMode('beams'); setDraggingBeamIndex(index); };
-  const onStairPointerDown = (event: PointerEvent<SVGLineElement>) => { event.preventDefault(); setMode('stairs'); setDraggingStair(true); };
+  const onPointPointerDown = (event: PointerEvent<SVGCircleElement>, index: number) => {
+    if (drawingSequence) return;
+    event.preventDefault();
+    setMode('points');
+    setSelectedIndex(index);
+    pushHistory();
+    setFuture([]);
+    setDraggingIndex(index);
+  };
+
+  const onBeamPointerDown = (event: PointerEvent<SVGLineElement>, index: number) => {
+    event.preventDefault();
+    setMode('beams');
+    pushHistory();
+    setFuture([]);
+    setDraggingBeamIndex(index);
+  };
+
+  const onStairPointerDown = (event: PointerEvent<SVGLineElement>) => {
+    event.preventDefault();
+    setMode('stairs');
+    pushHistory();
+    setFuture([]);
+    setDraggingStair(true);
+  };
 
   const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
+    const point = fromClientToModelPoint(event.clientX, event.clientY);
+    if (!point) return;
+    if (drawingSequence && mode === 'points') {
+      setPreviewPoint(point);
+      return;
+    }
     if (draggingIndex !== null) {
-      const point = fromClientToModelPoint(event.clientX, event.clientY); if (!point) return;
       const next = points.map((current, index) => index === draggingIndex ? constrainedPoint(index, point) : current);
       onValuesChange((current) => ({ ...current, deckShape: JSON.stringify(next) }));
       return;
     }
     if (draggingBeamIndex !== null) {
-      const point = fromClientToModelPoint(event.clientX, event.clientY); if (!point) return;
-      onValuesChange((current) => ({ ...current, customBeamYs: JSON.stringify(beamOffsets.map((value, currentIndex) => currentIndex === draggingBeamIndex ? snap(point.y - model.minY) : value).sort((a,b)=>a-b)) }));
+      onValuesChange((current) => ({ ...current, customBeamYs: JSON.stringify(beamOffsets.map((value, currentIndex) => currentIndex === draggingBeamIndex ? snap(point.y - model.minY) : value).sort((a, b) => a - b)) }));
       return;
     }
     if (draggingStair && model.stairPlacement.edgeIndex !== null) {
-      const point = fromClientToModelPoint(event.clientX, event.clientY); if (!point) return;
       const edge = model.edgeSegments[model.stairPlacement.edgeIndex];
-      const dx = edge.end.x - edge.start.x; const dy = edge.end.y - edge.start.y; const lenSq = (dx * dx) + (dy * dy) || 1;
-      const projection = (((point.x - edge.start.x) * dx) + ((point.y - edge.start.y) * dy)) / lenSq * edge.length;
+      const dx = edge.end.x - edge.start.x;
+      const dy = edge.end.y - edge.start.y;
+      const lenSq = (dx * dx) + (dy * dy) || 1;
+      const projection = ((((point.x - edge.start.x) * dx) + ((point.y - edge.start.y) * dy)) / lenSq) * edge.length;
       const nextOffset = Math.max(0, Math.min(edge.length - model.stairPlacement.width, projection));
       onValuesChange((current) => ({ ...current, stairOffset: snap(nextOffset) }));
     }
@@ -229,31 +299,55 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
 
   useEffect(() => {
     const release = () => {
-      if (draggingIndex !== null || draggingBeamIndex !== null || draggingStair) setHistory((current) => [...current.slice(-39), snapshot()]);
-      setDraggingIndex(null); setDraggingBeamIndex(null); setDraggingStair(false);
+      setDraggingIndex(null);
+      setDraggingBeamIndex(null);
+      setDraggingStair(false);
     };
     window.addEventListener('pointerup', release);
     return () => window.removeEventListener('pointerup', release);
-  });
+  }, []);
+
+  const lastPoint = points[points.length - 1] ?? null;
+  const previewDelta = lastPoint && previewPoint ? { dx: previewPoint.x - lastPoint.x, dy: previewPoint.y - lastPoint.y, distance: Math.hypot(previewPoint.x - lastPoint.x, previewPoint.y - lastPoint.y) } : null;
 
   return (
     <div className="content-card deck-designer-card">
       <div className="section-heading inline-heading">
-        <div><p className="eyebrow">Deck layout</p><h3>Draw, drag, snap, and lock the footprint</h3></div>
-        <div className="tag-row"><span className="tag">Snap: 6 in</span><span className="tag">Points: {points.length}</span><span className="tag">Mode: {drawingSequence ? 'drawing' : mode}</span></div>
+        <div>
+          <p className="eyebrow">Deck layout</p>
+          <h3>Draw, drag, snap, and lock the footprint</h3>
+        </div>
+        <div className="tag-row">
+          <span className="tag">Snap: 1 in</span>
+          <span className="tag">Points: {points.length}</span>
+          <span className="tag">Mode: {drawingSequence ? 'drawing' : mode}</span>
+        </div>
       </div>
-      <div className="designer-mode-row">
-        {(['points', 'railing', 'stairs', 'beams', 'posts'] as EditMode[]).map((item) => <button key={item} type="button" className={mode === item ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => setMode(item)}>{item === 'points' ? 'Drag points' : item === 'railing' ? 'Pick railing edges' : item === 'stairs' ? 'Place stairs' : item === 'beams' ? 'Move beam lines' : 'Lock posts'}</button>)}
+      <div className="designer-mode-row tidy-mode-row">
+        {(['points', 'railing', 'stairs', 'beams', 'posts'] as EditMode[]).map((item) => (
+          <button key={item} type="button" className={mode === item ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => setMode(item)}>
+            {item === 'points' ? (drawingSequence ? 'Draw footprint' : 'Edit points') : item === 'railing' ? 'Pick railing edges' : item === 'stairs' ? 'Place stairs' : item === 'beams' ? 'Move beam lines' : 'Lock posts'}
+          </button>
+        ))}
         <button type="button" className="ghost-btn mode-btn" onClick={undo} disabled={!history.length}>Undo</button>
         <button type="button" className="ghost-btn mode-btn" onClick={redo} disabled={!future.length}>Redo</button>
       </div>
-      <div className="deck-designer-grid">
-        <div className="deck-canvas-wrap">
-          {points.length === 0 && <div className="empty-designer-state"><p>Click anywhere on the canvas to place the first point, then keep clicking to continue the outline.</p><div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => { setDrawingSequence(true); updateShape(starterPoints); }}>Load starter triangle</button></div></div>}
-          {drawingSequence && points.length > 0 && <div className="empty-designer-state drawing-hint"><p>Click to place the next point. Click back on point P1 to close the deck shape.</p></div>}
-          <svg ref={svgRef} viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} className="deck-canvas" onClick={handleCanvasClick} onPointerMove={handlePointerMove} onPointerUp={() => { setDraggingIndex(null); setDraggingBeamIndex(null); setDraggingStair(false); }}>
-            {Array.from({ length: 13 }, (_, index) => { const offset = PADDING + index * ((VIEW_SIZE - PADDING * 2) / 12); return <g key={index}><line x1={PADDING} y1={offset} x2={VIEW_SIZE - PADDING} y2={offset} className="grid-line" /><line x1={offset} y1={PADDING} x2={offset} y2={VIEW_SIZE - PADDING} className="grid-line" /></g>; })}
+      <div className="deck-designer-grid enhanced-deck-grid">
+        <div className="deck-canvas-wrap centered-canvas-wrap">
+          {points.length === 0 && <div className="empty-designer-state"><p>Click anywhere on the canvas to place point P1. Each next click places the next corner. Click back on P1 to close the shape.</p></div>}
+          {drawingSequence && points.length > 0 && <div className="empty-designer-state drawing-hint drawing-hint-bottom"><p>Place point P{points.length + 1}. When ready, click P1 to close the deck. Live segment: {previewDelta ? `${feetAndInches(previewDelta.distance)} · ΔX ${feetAndInches(Math.abs(previewDelta.dx))} · ΔY ${feetAndInches(Math.abs(previewDelta.dy))}` : 'move the cursor to preview the next segment'}</p></div>}
+          <svg ref={svgRef} viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} className="deck-canvas" onClick={handleCanvasClick} onPointerMove={handlePointerMove} onPointerLeave={() => setPreviewPoint(null)}>
+            <rect x={PADDING} y={PADDING} width={VIEW_SIZE - PADDING * 2} height={VIEW_SIZE - PADDING * 2} className="canvas-background" rx="16" />
+            {Array.from({ length: 25 }, (_, index) => {
+              const x = PADDING + index * ((VIEW_SIZE - PADDING * 2) / 24);
+              const y = PADDING + index * ((VIEW_SIZE - PADDING * 2) / 24);
+              return <g key={index}><line x1={PADDING} y1={y} x2={VIEW_SIZE - PADDING} y2={y} className="grid-line minor-grid" /><line x1={x} y1={PADDING} x2={x} y2={VIEW_SIZE - PADDING} className="grid-line minor-grid" /></g>;
+            })}
             {(!drawingSequence && points.length >= 3) ? <polygon points={points.map((point) => { const svgPoint = toSvgPoint(point); return `${svgPoint.x},${svgPoint.y}`; }).join(' ')} className="deck-polygon" /> : points.length > 1 ? <polyline points={points.map((point) => { const svgPoint = toSvgPoint(point); return `${svgPoint.x},${svgPoint.y}`; }).join(' ')} className="deck-polyline" fill="none" /> : null}
+            {drawingSequence && points.length > 0 && previewPoint && lastPoint && <>
+              <line x1={toSvgPoint(lastPoint).x} y1={toSvgPoint(lastPoint).y} x2={toSvgPoint(previewPoint).x} y2={toSvgPoint(previewPoint).y} className="preview-segment" />
+              <circle cx={toSvgPoint(previewPoint).x} cy={toSvgPoint(previewPoint).y} r={5} className="preview-point" />
+            </>}
             {!drawingSequence && model.edgeSegments.map((segment) => {
               const start = toSvgPoint(segment.start); const end = toSvgPoint(segment.end); const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
               const isRailing = railingEdges.has(segment.index) || (!values.manualRailingEdges && model.exposedSegments.some((item) => item.index === segment.index));
@@ -262,18 +356,18 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
             })}
             {!drawingSequence && model.beamLines.map((beam, index) => {
               const y = PADDING + (beam.y - limits.minY) * scale;
-              return <g key={`beam-${index}`}>{beam.segments.map((segment) => <line key={`${segment.startX}-${segment.endX}`} x1={PADDING + (segment.startX - limits.minX) * scale} y1={y} x2={PADDING + (segment.endX - limits.minX) * scale} y2={y} className="beam-line beam-line-editable" onPointerDown={(event) => onBeamPointerDown(event, index)} />)}{beam.segments[0] && <circle cx={PADDING + (beam.segments[0].startX - limits.minX) * scale + 12} cy={y} r={8} className="beam-handle" />}{beam.postXs.map((postX) => <circle key={`${index}-${postX}`} cx={PADDING + (postX - limits.minX) * scale} cy={y} r={mode === 'posts' ? 8 : 6} className={beam.lockedPostXs.includes(postX) ? 'post-lock locked' : 'post-lock'} onClick={() => mode === 'posts' && toggleLockedPost(index, postX)} />)}</g>;
+              return <g key={`beam-${index}`}>{beam.segments.map((segment) => <g key={`${segment.startX}-${segment.endX}`}><line x1={PADDING + (segment.startX - limits.minX) * scale} y1={y - 3} x2={PADDING + (segment.endX - limits.minX) * scale} y2={y - 3} className="beam-line beam-line-editable" onPointerDown={(event) => onBeamPointerDown(event, index)} /><line x1={PADDING + (segment.startX - limits.minX) * scale} y1={y + 3} x2={PADDING + (segment.endX - limits.minX) * scale} y2={y + 3} className="beam-line beam-line-secondary" onPointerDown={(event) => onBeamPointerDown(event, index)} /></g>)}{beam.segments[0] && <circle cx={PADDING + (beam.segments[0].startX - limits.minX) * scale + 12} cy={y} r={8} className="beam-handle" />}{beam.postXs.map((postX) => <rect key={`${index}-${postX}`} x={PADDING + (postX - limits.minX) * scale - 4} y={y - 4} width={8} height={8} className={beam.lockedPostXs.includes(postX) ? 'post-lock locked' : 'post-lock'} onClick={() => mode === 'posts' && toggleLockedPost(index, postX)} />)}</g>;
             })}
-            {points.map((point, index) => { const svgPoint = toSvgPoint(point); const isClosePoint = drawingSequence && index === 0 && points.length >= 3; return <g key={`${point.x}-${point.y}-${index}`}><circle cx={svgPoint.x} cy={svgPoint.y} r={selectedIndex === index ? 9 : 7} className={selectedIndex === index ? 'deck-point active' : isClosePoint ? 'deck-point close-target' : 'deck-point'} onPointerDown={(event) => !drawingSequence && onPointPointerDown(event, index)} onClick={(event) => { event.stopPropagation(); if (isClosePoint) { finishDrawing(); return; } setSelectedIndex(index); }} /><text x={svgPoint.x + 10} y={svgPoint.y - 10} className="deck-point-label">P{index + 1}{isClosePoint ? ' · close' : ''}</text></g>; })}
+            {points.map((point, index) => { const svgPoint = toSvgPoint(point); const isClosePoint = drawingSequence && index === 0 && points.length >= 3; return <g key={`${point.x}-${point.y}-${index}`}><circle cx={svgPoint.x} cy={svgPoint.y} r={selectedIndex === index ? 9 : 7} className={selectedIndex === index ? 'deck-point active' : isClosePoint ? 'deck-point close-target' : 'deck-point'} onPointerDown={(event) => onPointPointerDown(event, index)} onClick={(event) => { event.stopPropagation(); if (isClosePoint) { finishDrawing(); return; } setSelectedIndex(index); }} /><text x={svgPoint.x + 10} y={svgPoint.y - 10} className="deck-point-label">P{index + 1}{isClosePoint ? ' · close' : ''}</text></g>; })}
             {model.stairPlacement.start && model.stairPlacement.end && <><line x1={toSvgPoint(model.stairPlacement.start).x} y1={toSvgPoint(model.stairPlacement.start).y} x2={toSvgPoint(model.stairPlacement.end).x} y2={toSvgPoint(model.stairPlacement.end).y} className="stair-edge-highlight" onPointerDown={onStairPointerDown} /><circle cx={(toSvgPoint(model.stairPlacement.start).x + toSvgPoint(model.stairPlacement.end).x) / 2} cy={(toSvgPoint(model.stairPlacement.start).y + toSvgPoint(model.stairPlacement.end).y) / 2} r={8} className="stair-handle" /></>}
           </svg>
         </div>
-        <div className="deck-designer-controls">
-          <div className="callout-box"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Width</span><strong>{spanX.toFixed(1)} ft</strong></div><div><span>Projection</span><strong>{spanY.toFixed(1)} ft</strong></div></div></div>
-          <div className="callout-box"><h4>Quick tips</h4><ul className="plain-list compact"><li>From a blank deck, click the canvas to place each corner in order.</li><li>Click back on point P1 to close the outline and finish the shape.</li><li>After closing, drag any point directly in the drawing.</li><li>Click an edge in point mode to insert a new corner.</li><li>Undo and redo keep complex shape editing safer.</li></ul></div>
-          <div className="callout-box"><h4>Selected point</h4>{selectedIndex === null ? <p className="muted">{drawingSequence ? 'Keep placing points, then click P1 to close the deck.' : 'Click a point in the drawing to fine-tune it.'}</p> : <div className="form-grid compact-grid"><label className="form-field"><span>X (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].x} onChange={(event) => updatePoint(selectedIndex, 'x', Number(event.target.value))} /></label><label className="form-field"><span>Y (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].y} onChange={(event) => updatePoint(selectedIndex, 'y', Number(event.target.value))} /></label><button type="button" className="secondary-btn block-btn" onClick={removeSelected}>Remove point</button></div>}</div>
-          <div className="callout-box"><h4>Manual framing controls</h4><div className="form-grid compact-grid"><label className="form-field"><span>Stair offset along selected edge (ft)</span><input type="number" step={GRID_SIZE} value={Number(values.stairOffset ?? 0)} onChange={(event) => commitChange((current) => ({ ...current, stairOffset: snap(Number(event.target.value)) }))} /></label><label className="form-field"><span>Locked posts</span><input type="text" value={lockedPosts.length ? lockedPosts.map((item) => `B${item.beamIndex + 1}@${item.x}`).join(', ') : 'none'} readOnly /></label><button type="button" className="ghost-btn block-btn" onClick={addBeamLine}>Add beam line</button><button type="button" className="ghost-btn block-btn" onClick={() => updateNumberArray('customBeamYs', [])}>Reset auto beam lines</button></div><div className="stack-list beam-editor-list">{model.beamLines.map((beam, index) => <div key={`beam-edit-${index}`} className="beam-editor-row beam-edit-grid"><span>Beam {index + 1}</span><strong>{beam.offsetFromHouse.toFixed(1)} ft</strong><label className="inline-mini-field"><span>Start trim</span><input type="number" step={GRID_SIZE} value={beam.startTrim} onChange={(event) => updateBeamEdit(index, 'startTrim', Number(event.target.value))} /></label><label className="inline-mini-field"><span>End trim</span><input type="number" step={GRID_SIZE} value={beam.endTrim} onChange={(event) => updateBeamEdit(index, 'endTrim', Number(event.target.value))} /></label><button type="button" className="ghost-btn small-btn" onClick={() => removeBeamLine(index)}>Remove</button></div>)}</div></div>
-          <div className="callout-box"><h4>Reset</h4><button type="button" className="ghost-btn block-btn" onClick={resetShape}>Reset shape and manual overrides</button></div>
+        <div className="deck-designer-controls organized-controls">
+          <div className="callout-box compact-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Width</span><strong>{feetAndInches(spanX)}</strong></div><div><span>Projection</span><strong>{feetAndInches(spanY)}</strong></div></div></div>
+          <div className="callout-box compact-card"><h4>Drawing workflow</h4><ul className="plain-list compact"><li>Click to place P1, then keep clicking each next corner.</li><li>The live line follows your cursor and snaps by the inch.</li><li>Click back on P1 to close the shape.</li><li>After closing, drag any point or insert a new one on any edge.</li></ul></div>
+          <div className="callout-box compact-card"><h4>Selected point</h4>{selectedIndex === null ? <p className="muted">{drawingSequence ? 'Keep drawing the footprint, then click P1 to close it.' : 'Click a point in the drawing to fine-tune it.'}</p> : <div className="form-grid compact-grid"><label className="form-field"><span>X</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].x} onChange={(event) => updatePoint(selectedIndex, 'x', Number(event.target.value))} /></label><label className="form-field"><span>Y</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].y} onChange={(event) => updatePoint(selectedIndex, 'y', Number(event.target.value))} /></label><button type="button" className="secondary-btn block-btn" onClick={removeSelected}>Remove point</button></div>}</div>
+          <div className="callout-box compact-card"><h4>Manual framing controls</h4><div className="form-grid compact-grid"><label className="form-field"><span>Stair offset along selected edge</span><input type="number" step={GRID_SIZE} value={Number(values.stairOffset ?? 0)} onChange={(event) => commitChange((current) => ({ ...current, stairOffset: snap(Number(event.target.value)) }))} /></label><label className="form-field"><span>Locked posts</span><input type="text" value={lockedPosts.length ? lockedPosts.map((item) => `B${item.beamIndex + 1}@${feetAndInches(item.x)}`).join(', ') : 'none'} readOnly /></label><button type="button" className="ghost-btn block-btn" onClick={addBeamLine}>Add beam line</button><button type="button" className="ghost-btn block-btn" onClick={() => updateNumberArray('customBeamYs', [])}>Reset auto beam lines</button></div><div className="stack-list beam-editor-list">{model.beamLines.map((beam, index) => <div key={`beam-edit-${index}`} className="beam-editor-row beam-edit-grid"><span>Beam {index + 1}</span><strong>{feetAndInches(beam.offsetFromHouse)}</strong><label className="inline-mini-field"><span>Start trim</span><input type="number" step={GRID_SIZE} value={beam.startTrim} onChange={(event) => updateBeamEdit(index, 'startTrim', Number(event.target.value))} /></label><label className="inline-mini-field"><span>End trim</span><input type="number" step={GRID_SIZE} value={beam.endTrim} onChange={(event) => updateBeamEdit(index, 'endTrim', Number(event.target.value))} /></label><button type="button" className="ghost-btn small-btn" onClick={() => removeBeamLine(index)}>Remove</button></div>)}</div></div>
+          <div className="callout-box compact-card"><h4>Reset</h4><button type="button" className="ghost-btn block-btn" onClick={resetShape}>Reset shape and manual overrides</button></div>
         </div>
       </div>
     </div>

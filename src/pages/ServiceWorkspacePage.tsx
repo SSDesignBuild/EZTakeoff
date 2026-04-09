@@ -34,12 +34,12 @@ export function ServiceWorkspacePage() {
       )}
 
       <section className="workspace-grid">
-        <article className="content-card">
+        <article className="content-card project-config-card">
           <div className="section-heading">
             <p className="eyebrow">Inputs</p>
             <h3>Project configuration</h3>
           </div>
-          <div className="form-grid">
+          <div className="form-grid organized-config-grid">
             {service.fields.map((field) => (
               <FieldRenderer key={field.key} field={field} value={values[field.key]} onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} />
             ))}
