@@ -3,8 +3,11 @@ import { buildDeckModel, parseDeckShape } from '../lib/deckModel';
 import { DeckPoint, LockedPostPoint } from '../lib/types';
 
 const GRID_SIZE = 1 / 12;
-const VIEW_SIZE = 1400;
-const PADDING = 84;
+const VIEW_SIZE = 1800;
+const PADDING = 96;
+const TEN_FOOT_GRID = 10;
+const ONE_FOOT_GRID = 1;
+const INCH_GRID = 1 / 12;
 const SNAP_TOLERANCE = 0.4;
 const defaultShape: DeckPoint[] = [];
 
@@ -71,7 +74,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const [future, setFuture] = useState<DesignerHistory[]>([]);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const limits = points.length ? { minX: Math.floor(bounds(points).minX) - 2, maxX: Math.ceil(bounds(points).maxX) + 2, minY: Math.floor(bounds(points).minY) - 2, maxY: Math.ceil(bounds(points).maxY) + 2 } : { minX: 0, maxX: 32, minY: 0, maxY: 24 };
+  const limits = points.length ? { minX: Math.floor(bounds(points).minX / TEN_FOOT_GRID) * TEN_FOOT_GRID - 10, maxX: Math.ceil(bounds(points).maxX / TEN_FOOT_GRID) * TEN_FOOT_GRID + 10, minY: Math.floor(bounds(points).minY / TEN_FOOT_GRID) * TEN_FOOT_GRID - 10, maxY: Math.ceil(bounds(points).maxY / TEN_FOOT_GRID) * TEN_FOOT_GRID + 10 } : { minX: 0, maxX: 60, minY: 0, maxY: 40 };
   const spanX = Math.max(limits.maxX - limits.minX, 1);
   const spanY = Math.max(limits.maxY - limits.minY, 1);
   const scale = Math.min((VIEW_SIZE - PADDING * 2) / spanX, (VIEW_SIZE - PADDING * 2) / spanY);
@@ -177,6 +180,12 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const updatePoint = (index: number, axis: 'x' | 'y', nextValue: number) => {
     const next = points.map((point, currentIndex) => currentIndex === index ? { ...point, [axis]: snap(nextValue) } : point);
     updateShape(next, index);
+  };
+
+  const nudgeSelectedPoint = (axis: 'x' | 'y', direction: -1 | 1) => {
+    if (selectedIndex === null) return;
+    const currentPoint = points[selectedIndex];
+    updatePoint(selectedIndex, axis, currentPoint[axis] + (direction * INCH_GRID));
   };
 
   const insertPointAtEdge = (edgeIndex: number) => {
@@ -340,27 +349,49 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       </div>
       <div className="deck-designer-grid enhanced-deck-grid">
         <div className="deck-canvas-wrap centered-canvas-wrap">
-          <div className="drawing-ruler-hint">1 major square = 1'-0" · 12 minor squares = inches</div>
+          <div className="drawing-ruler-hint">10' master grid · 1' drawing squares · inch movement from point controls · inch sub-grid only appears when zoomed in</div>
           <div className="designer-scroll-shell">
           {points.length === 0 && <div className="empty-designer-state"><p>Click anywhere on the canvas to place point P1. Each next click places the next corner. Click back on P1 to close the shape.</p></div>}
           {drawingSequence && points.length > 0 && <div className="empty-designer-state drawing-hint drawing-hint-bottom"><p>Place point P{points.length + 1}. When ready, click P1 to close the deck. Live segment: {previewDelta ? `${feetAndInches(previewDelta.distance)} · ΔX ${feetAndInches(Math.abs(previewDelta.dx))} · ΔY ${feetAndInches(Math.abs(previewDelta.dy))}` : 'move the cursor to preview the next segment'}</p></div>}
           <svg ref={svgRef} viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} className="deck-canvas" onClick={handleCanvasClick} onPointerMove={handlePointerMove} onPointerLeave={() => setPreviewPoint(null)}>
             <rect x={PADDING} y={PADDING} width={VIEW_SIZE - PADDING * 2} height={VIEW_SIZE - PADDING * 2} className="canvas-background" rx="16" />
             {(() => {
-              const minorXs: number[] = [];
-              const minorYs: number[] = [];
-              for (let x = Math.ceil(limits.minX * 12) / 12; x <= limits.maxX + 1e-6; x += 1 / 12) minorXs.push(x);
-              for (let y = Math.ceil(limits.minY * 12) / 12; y <= limits.maxY + 1e-6; y += 1 / 12) minorYs.push(y);
+              const inchXs: number[] = [];
+              const inchYs: number[] = [];
+              const footXs: number[] = [];
+              const footYs: number[] = [];
+              const tenXs: number[] = [];
+              const tenYs: number[] = [];
+              for (let x = Math.ceil(limits.minX / INCH_GRID) * INCH_GRID; x <= limits.maxX + 1e-6; x += INCH_GRID) inchXs.push(Number(x.toFixed(6)));
+              for (let y = Math.ceil(limits.minY / INCH_GRID) * INCH_GRID; y <= limits.maxY + 1e-6; y += INCH_GRID) inchYs.push(Number(y.toFixed(6)));
+              for (let x = Math.ceil(limits.minX / ONE_FOOT_GRID) * ONE_FOOT_GRID; x <= limits.maxX + 1e-6; x += ONE_FOOT_GRID) footXs.push(Number(x.toFixed(6)));
+              for (let y = Math.ceil(limits.minY / ONE_FOOT_GRID) * ONE_FOOT_GRID; y <= limits.maxY + 1e-6; y += ONE_FOOT_GRID) footYs.push(Number(y.toFixed(6)));
+              for (let x = Math.ceil(limits.minX / TEN_FOOT_GRID) * TEN_FOOT_GRID; x <= limits.maxX + 1e-6; x += TEN_FOOT_GRID) tenXs.push(Number(x.toFixed(6)));
+              for (let y = Math.ceil(limits.minY / TEN_FOOT_GRID) * TEN_FOOT_GRID; y <= limits.maxY + 1e-6; y += TEN_FOOT_GRID) tenYs.push(Number(y.toFixed(6)));
               return <g>
-                {minorXs.map((x, index) => {
+                {zoom >= 1.8 && inchXs.map((x, index) => {
                   const sx = toSvgPoint({ x, y: limits.minY }).x;
-                  const major = Math.abs((x * 12) % 12) < 1e-6;
-                  return <line key={`gx-${index}`} x1={sx} y1={PADDING} x2={sx} y2={VIEW_SIZE - PADDING} className={major ? 'grid-line major-grid' : 'grid-line minor-grid'} />;
+                  return <line key={`ix-${index}`} x1={sx} y1={PADDING} x2={sx} y2={VIEW_SIZE - PADDING} className="grid-line inch-grid" />;
                 })}
-                {minorYs.map((y, index) => {
+                {zoom >= 1.8 && inchYs.map((y, index) => {
                   const sy = toSvgPoint({ x: limits.minX, y }).y;
-                  const major = Math.abs((y * 12) % 12) < 1e-6;
-                  return <line key={`gy-${index}`} x1={PADDING} y1={sy} x2={VIEW_SIZE - PADDING} y2={sy} className={major ? 'grid-line major-grid' : 'grid-line minor-grid'} />;
+                  return <line key={`iy-${index}`} x1={PADDING} y1={sy} x2={VIEW_SIZE - PADDING} y2={sy} className="grid-line inch-grid" />;
+                })}
+                {footXs.map((x, index) => {
+                  const sx = toSvgPoint({ x, y: limits.minY }).x;
+                  return <line key={`fx-${index}`} x1={sx} y1={PADDING} x2={sx} y2={VIEW_SIZE - PADDING} className="grid-line foot-grid" />;
+                })}
+                {footYs.map((y, index) => {
+                  const sy = toSvgPoint({ x: limits.minX, y }).y;
+                  return <line key={`fy-${index}`} x1={PADDING} y1={sy} x2={VIEW_SIZE - PADDING} y2={sy} className="grid-line foot-grid" />;
+                })}
+                {tenXs.map((x, index) => {
+                  const sx = toSvgPoint({ x, y: limits.minY }).x;
+                  return <g key={`tx-${index}`}><line x1={sx} y1={PADDING} x2={sx} y2={VIEW_SIZE - PADDING} className="grid-line ten-grid" /><text x={sx + 4} y={PADDING - 16} className="grid-label">{`${x}'`}</text></g>;
+                })}
+                {tenYs.map((y, index) => {
+                  const sy = toSvgPoint({ x: limits.minX, y }).y;
+                  return <g key={`ty-${index}`}><line x1={PADDING} y1={sy} x2={VIEW_SIZE - PADDING} y2={sy} className="grid-line ten-grid" /><text x={PADDING - 30} y={sy - 4} className="grid-label">{`${y}'`}</text></g>;
                 })}
               </g>;
             })()}
@@ -388,7 +419,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
         <div className="deck-designer-controls organized-controls">
           <div className="callout-box compact-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Width</span><strong>{feetAndInches(spanX)}</strong></div><div><span>Projection</span><strong>{feetAndInches(spanY)}</strong></div></div></div>
           <div className="callout-box compact-card"><h4>Drawing workflow</h4><ul className="plain-list compact"><li>Click to place P1, then keep clicking each next corner.</li><li>The live line follows your cursor and snaps by the inch.</li><li>Click back on P1 to close the shape.</li><li>After closing, drag any point or insert a new one on any edge.</li></ul></div>
-          <div className="callout-box compact-card"><h4>Selected point</h4>{selectedIndex === null ? <p className="muted">{drawingSequence ? 'Keep drawing the footprint, then click P1 to close it.' : 'Click a point in the drawing to fine-tune it.'}</p> : <div className="form-grid compact-grid"><label className="form-field"><span>X</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].x} onChange={(event) => updatePoint(selectedIndex, 'x', Number(event.target.value))} /></label><label className="form-field"><span>Y</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].y} onChange={(event) => updatePoint(selectedIndex, 'y', Number(event.target.value))} /></label><button type="button" className="secondary-btn block-btn" onClick={removeSelected}>Remove point</button></div>}</div>
+          <div className="callout-box compact-card"><h4>Selected point</h4>{selectedIndex === null ? <p className="muted">{drawingSequence ? 'Keep drawing the footprint, then click P1 to close it.' : 'Click a point in the drawing to fine-tune it.'}</p> : <div className="stack-list"><div className="form-grid compact-grid"><label className="form-field"><span>X (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].x} onChange={(event) => updatePoint(selectedIndex, 'x', Number(event.target.value))} /><small>{feetAndInches(points[selectedIndex].x)}</small></label><label className="form-field"><span>Y (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].y} onChange={(event) => updatePoint(selectedIndex, 'y', Number(event.target.value))} /><small>{feetAndInches(points[selectedIndex].y)}</small></label></div><div className="point-nudge-grid"><span className="muted">Move by inches</span><div className="point-nudge-row"><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('x', -1)}>X −1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('x', 1)}>X +1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('y', -1)}>Y −1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('y', 1)}>Y +1"</button></div></div><button type="button" className="secondary-btn block-btn" onClick={removeSelected}>Remove point</button></div>}</div>
           <div className="callout-box compact-card"><h4>Manual framing controls</h4><div className="form-grid compact-grid"><label className="form-field"><span>Stair offset along selected edge</span><input type="number" step={GRID_SIZE} value={Number(values.stairOffset ?? 0)} onChange={(event) => commitChange((current) => ({ ...current, stairOffset: snap(Number(event.target.value)) }))} /></label><label className="form-field"><span>Locked posts</span><input type="text" value={lockedPosts.length ? lockedPosts.map((item) => `B${item.beamIndex + 1}@${feetAndInches(item.x)}`).join(', ') : 'none'} readOnly /></label><button type="button" className="ghost-btn block-btn" onClick={addBeamLine}>Add beam line</button><button type="button" className="ghost-btn block-btn" onClick={() => updateNumberArray('customBeamYs', [])}>Reset auto beam lines</button></div><div className="stack-list beam-editor-list">{model.beamLines.map((beam, index) => <div key={`beam-edit-${index}`} className="beam-editor-row beam-edit-grid"><span>Beam {index + 1}</span><strong>{feetAndInches(beam.offsetFromHouse)}</strong><label className="inline-mini-field"><span>Start trim</span><input type="number" step={GRID_SIZE} value={beam.startTrim} onChange={(event) => updateBeamEdit(index, 'startTrim', Number(event.target.value))} /></label><label className="inline-mini-field"><span>End trim</span><input type="number" step={GRID_SIZE} value={beam.endTrim} onChange={(event) => updateBeamEdit(index, 'endTrim', Number(event.target.value))} /></label><button type="button" className="ghost-btn small-btn" onClick={() => removeBeamLine(index)}>Remove</button></div>)}</div></div>
           <div className="callout-box compact-card"><h4>Reset</h4><button type="button" className="ghost-btn block-btn" onClick={resetShape}>Reset shape and manual overrides</button></div>
         </div>
