@@ -470,7 +470,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           {!section.pickets && section.chairRail && spans.map((span, idx) => <line key={`chair-${idx}`} x1={left + span.start * scale + frameInset} y1={chairOnlyY} x2={left + span.end * scale - frameInset} y2={chairOnlyY} className={chairRailClass} />)}
           {uprightXs.map((x, idx) => { const xPos = left + x * scale; const bottomY = section.kickPanel !== 'none' ? kickTop : bottom - frameInset; return <line key={`u-${idx}`} x1={xPos} y1={top + frameInset} x2={xPos} y2={bottomY} className={uprightClass} />; })}
           {section.pickets && picketCount > 0 && spans.map((span, spanIndex) => { const spanCount = Math.max(1, Math.floor((((span.end - span.start) * 12) + 4) / 4)); return Array.from({ length: spanCount }, (_, idx) => { const x = left + span.start * scale + frameInset + ((idx + 0.5) * (((span.end - span.start) * scale) - frameInset * 2)) / spanCount; return <line key={`p-${spanIndex}-${idx}`} x1={x} y1={picketTop + 2} x2={x} y2={picketBottom - 2} className="picket-line" />; }); })}
-          {section.doorType !== 'none' && <><rect x={doorLeft} y={doorTop} width={(doorRightFt - doorLeftFt) * scale} height={bottom - doorTop} className="door-panel" rx="6" /><line x1={doorLeft} y1={doorTop} x2={doorLeft} y2={bottom} className={doorFrameClass} /><line x1={doorRight} y1={doorTop} x2={doorRight} y2={bottom} className={doorFrameClass} /><line x1={doorLeft} y1={doorTop} x2={doorRight} y2={doorTop} className={doorFrameClass} />{section.doorType === 'french' && <line x1={(doorLeft + doorRight) / 2} y1={doorTop + 8} x2={(doorLeft + doorRight) / 2} y2={bottom - 8} className="door-split-line" />}<text x={doorLeft + 6} y={doorTop + 16} className="svg-note">{`${feetAndInches(section.doorWidth)}${section.dogDoor !== 'none' ? ` · ${section.dogDoor} dog door` : ''}`}</text></>}
+          {section.doorType !== 'none' && <><rect x={doorLeft} y={doorTop} width={(doorRightFt - doorLeftFt) * scale} height={bottom - doorTop} className="door-panel" rx="6" /><line x1={doorLeft} y1={top + frameInset} x2={doorLeft} y2={bottom} className={doorFrameClass} /><line x1={doorRight} y1={top + frameInset} x2={doorRight} y2={bottom} className={doorFrameClass} /><line x1={doorLeft} y1={doorTop} x2={doorRight} y2={doorTop} className={doorFrameClass} />{section.doorType === 'french' && <line x1={(doorLeft + doorRight) / 2} y1={doorTop + 8} x2={(doorLeft + doorRight) / 2} y2={bottom - 8} className="door-split-line" />}<text x={doorLeft + 6} y={doorTop + 16} className="svg-note">{`${feetAndInches(section.doorWidth)}${section.dogDoor !== 'none' ? ` · ${section.dogDoor} dog door` : ''}`}</text></>}
           <line x1={left} y1={bottom + 26} x2={right} y2={bottom + 26} className="dimension-line" /><text x={left + sectionW / 2 - 16} y={bottom + 20} className="svg-note">{feetAndInches(section.width)}</text>{sectionIndex === 0 && <text x={left - 34} y={top + sectionH / 2} className="svg-note">{feetAndInches(section.height)}</text>}{section.pickets && <text x={left + 8} y={bottom - 8} className="svg-note">{`${picketCount} pickets`}</text>}</g>;
         })}
       </svg>
@@ -488,11 +488,13 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
   const fanBeamPlacementMode = String(values.fanBeamPlacementMode ?? 'spread');
   const fanShift = Number(values.fanBeamShift ?? 0);
   const screenUnderneath = Boolean(values.screenUnderneath ?? false);
+  const projectionOverhang = Math.max(0, Math.min(2, Number(values.projectionOverhang ?? 2)));
   const layout = useMemo(() => buildPatioPanelLayout(width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode, fanShift), [width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode, fanShift]);
   const panelThickness = Number(values.panelThickness ?? 3);
   const upgraded3 = String(values.metalGauge ?? '.26') === '.32' && Number(values.foamDensity ?? 1) === 2;
   const extraBeams = Math.max(0, Number(values.extraBeamCount ?? 0));
-  const supportBeamCount = ((panelThickness === 3 && !upgraded3 && projection > 13) ? Math.ceil(projection / 13) - 1 : 0) + extraBeams;
+  const effectiveProjection = Math.max(0, projection - projectionOverhang);
+  const supportBeamCount = ((panelThickness === 3 && !upgraded3 && effectiveProjection > 13) ? Math.ceil(effectiveProjection / 13) - 1 : 0) + extraBeams;
   const scale = Math.min(560 / Math.max(width, 1), 340 / Math.max(projection, 1));
   const x0 = 48;
   const y0 = 48;
@@ -506,8 +508,10 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
   const autoPostCount = beamStyle === 'Atlas' ? (spanWidth <= 14 ? 2 : spanWidth <= 22 ? 3 : Math.max(4, Math.ceil(spanWidth / 8))) : (spanWidth <= 10 ? 2 : spanWidth <= 16 ? 3 : spanWidth <= 22 ? 4 : Math.max(4, Math.ceil(spanWidth / 6)));
   const frontPostCount = Math.max(2, Number(values.postCount ?? 0) > 0 ? Number(values.postCount) : autoPostCount);
   const postXs = Array.from({ length: frontPostCount }, (_, index) => beamLeft + ((beamRight - beamLeft) * index) / Math.max(frontPostCount - 1, 1));
-  const supportYs = Array.from({ length: supportBeamCount }, (_, index) => y0 + (((index + 1) * roofD) / (supportBeamCount + 1)));
+  const supportYs = Array.from({ length: supportBeamCount }, (_, index) => y0 + roofD - (projectionOverhang * scale) - ((((index + 1) * (roofD - projectionOverhang * scale)) / (supportBeamCount + 1))));
   let cursor = x0;
+
+  const supportPostCount = Math.max(2, Number(values.supportBeamPostCount ?? 0) > 0 ? Number(values.supportBeamPostCount) : frontPostCount);
 
   const shiftFan = (dir: -1 | 1) => {
     if (!onValuesChange) return;
@@ -549,13 +553,16 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
       <line x1={x0 - 10} y1={y0} x2={x0 - 10} y2={y0 + roofD + 10} className="fascia-line" />
       <line x1={x0 + roofW + 10} y1={y0} x2={x0 + roofW + 10} y2={y0 + roofD + 10} className="fascia-line" />
       <line x1={beamLeft} y1={y0 + roofD} x2={beamRight} y2={y0 + roofD} className="beam-line" />
-      {supportYs.map((y, index) => <line key={`support-${index}`} x1={beamLeft} y1={y} x2={beamRight} y2={y} className="beam-line support" />)}
+      {supportYs.map((y, index) => <g key={`support-${index}`}><line x1={beamLeft} y1={y} x2={beamRight} y2={y} className="beam-line support" />{Array.from({ length: supportPostCount }, (_, postIndex) => {
+        const x = beamLeft + ((beamRight - beamLeft) * postIndex) / Math.max(supportPostCount - 1, 1);
+        return <rect key={`support-post-${index}-${postIndex}`} x={x - 5} y={y - 5} width="10" height="10" className="post-node support-post" rx="2" />;
+      })}</g>)}
       {postXs.map((x, index) => <g key={`post-${index}`}><rect x={x - 6} y={y0 + roofD - 6} width="12" height="12" className="post-node" rx="2" /><text x={x - 10} y={y0 + roofD + 22} className="svg-note">P{index + 1}</text></g>)}
       <line x1={x0} y1={y0 + roofD + 40} x2={x0 + roofW} y2={y0 + roofD + 40} className="dimension-line" />
       <text x={x0 + roofW / 2 - 16} y={y0 + roofD + 34} className="svg-note">{feetAndInches(width)}</text>
       <line x1={x0 - 28} y1={y0} x2={x0 - 28} y2={y0 + roofD} className="dimension-line" />
       <text x={x0 - 62} y={y0 + roofD / 2} className="svg-note">{feetAndInches(projection)}</text>
-      <text x={x0} y={y0 + roofD + 62} className="svg-note">{`${beamStyle} beam · ${frontPostCount} posts · ${supportBeamCount} intermediate beam(s) · ${frontOverhang}' overhang each side`}</text>
+      <text x={x0} y={y0 + roofD + 62} className="svg-note">{`${beamStyle} beam · ${frontPostCount} front posts · ${supportBeamCount} intermediate beam(s)${supportBeamCount ? ` · ${supportPostCount} posts each` : ''} · ${frontOverhang}' side overhang · ${projectionOverhang}' projection overhang`}</text>
     </svg>
     <div className="legend-row wrap-legend"><span><i className="legend-swatch roof-panel-swatch" /> regular panel</span><span><i className="legend-swatch fan-panel-swatch" /> fan-beam panel</span><span><i className="legend-swatch cut-panel-swatch" /> cut closure panel</span><span><i className="legend-swatch beam-line-swatch" /> beam</span></div>
   </div>;

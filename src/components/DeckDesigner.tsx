@@ -40,6 +40,19 @@ const feetAndInches = (value: number) => {
   return inches ? `${feet}' ${inches}"` : `${feet}'`;
 };
 
+const snapPointFromAnchor = (anchor: DeckPoint, point: DeckPoint) => {
+  const dx = point.x - anchor.x;
+  const dy = point.y - anchor.y;
+  const distance = Math.hypot(dx, dy);
+  if (distance < 0.0001) return { x: snap(point.x), y: snap(point.y) };
+  const rawAngle = Math.atan2(dy, dx);
+  const snappedAngle = Math.round(rawAngle / (Math.PI / 4)) * (Math.PI / 4);
+  if (Math.abs(rawAngle - snappedAngle) <= Math.PI / 18) {
+    return { x: snap(anchor.x + Math.cos(snappedAngle) * distance), y: snap(anchor.y + Math.sin(snappedAngle) * distance) };
+  }
+  return { x: snap(point.x), y: snap(point.y) };
+};
+
 interface DeckDesignerProps {
   values: Record<string, string | number | boolean>;
   onValuesChange: (updater: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => void;
@@ -144,18 +157,21 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   }, [points.length]);
 
   const constrainedPoint = (index: number, point: DeckPoint) => {
-    if (points.length < 3) return { x: snap(point.x), y: snap(point.y) };
+    const anchor = points[(index - 1 + points.length) % points.length] ?? points[0] ?? point;
+    const angled = snapPointFromAnchor(anchor, point);
+    if (points.length < 3) return angled;
     const prev = points[(index - 1 + points.length) % points.length];
     const next = points[(index + 1) % points.length];
-    let x = point.x;
-    let y = point.y;
+    let x = angled.x;
+    let y = angled.y;
     [prev.x, next.x].forEach((candidate) => { if (Math.abs(candidate - x) <= SNAP_TOLERANCE) x = candidate; });
     [prev.y, next.y].forEach((candidate) => { if (Math.abs(candidate - y) <= SNAP_TOLERANCE) y = candidate; });
     return { x: snap(x), y: snap(y) };
   };
 
   const appendPoint = (point: DeckPoint) => {
-    const next = [...points, { x: snap(point.x), y: snap(point.y) }];
+    const resolved = points.length ? snapPointFromAnchor(points[points.length - 1], point) : { x: snap(point.x), y: snap(point.y) };
+    const next = [...points, resolved];
     commitChange((current) => ({ ...current, deckShape: JSON.stringify(next) }));
     setSelectedIndex(next.length - 1);
   };
@@ -287,7 +303,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     const point = fromClientToModelPoint(event.clientX, event.clientY);
     if (!point) return;
     if (drawingSequence && mode === 'points') {
-      setPreviewPoint(point);
+      setPreviewPoint(points.length ? snapPointFromAnchor(points[points.length - 1], point) : point);
       return;
     }
     if (draggingIndex !== null) {
@@ -419,11 +435,11 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           </div>
         </div>
         <div className="deck-designer-controls organized-controls">
-          <div className="callout-box compact-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Viewport</span><strong>{feetAndInches(viewFeet)} × {feetAndInches(viewFeet)}</strong></div><div><span>Origin</span><strong>{feetAndInches(limits.minX)} , {feetAndInches(limits.minY)}</strong></div></div></div>
-          <div className="callout-box compact-card"><h4>Drawing workflow</h4><ul className="plain-list compact"><li>Click to place P1, then keep clicking each next corner.</li><li>The live line follows your cursor and snaps by the inch.</li><li>Click back on P1 to close the shape.</li><li>After closing, drag any point or insert a new one on any edge.</li></ul></div>
           <div className="callout-box compact-card"><h4>Selected point</h4>{selectedIndex === null ? <p className="muted">{drawingSequence ? 'Keep drawing the footprint, then click P1 to close it.' : 'Click a point in the drawing to fine-tune it.'}</p> : <div className="stack-list"><div className="form-grid compact-grid"><label className="form-field"><span>X (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].x} onChange={(event) => updatePoint(selectedIndex, 'x', Number(event.target.value))} /><small>{feetAndInches(points[selectedIndex].x)}</small></label><label className="form-field"><span>Y (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].y} onChange={(event) => updatePoint(selectedIndex, 'y', Number(event.target.value))} /><small>{feetAndInches(points[selectedIndex].y)}</small></label></div><div className="point-nudge-grid"><span className="muted">Move by inches</span><div className="point-nudge-row"><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('x', -1)}>X −1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('x', 1)}>X +1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('y', -1)}>Y −1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('y', 1)}>Y +1"</button></div></div><button type="button" className="secondary-btn block-btn" onClick={removeSelected}>Remove point</button></div>}</div>
           <div className="callout-box compact-card"><h4>Manual framing controls</h4><div className="form-grid compact-grid"><label className="form-field"><span>Stair offset along selected edge</span><input type="number" step={GRID_SIZE} value={Number(values.stairOffset ?? 0)} onChange={(event) => commitChange((current) => ({ ...current, stairOffset: snap(Number(event.target.value)) }))} /></label><label className="form-field"><span>Locked posts</span><input type="text" value={lockedPosts.length ? lockedPosts.map((item) => `B${item.beamIndex + 1}@${feetAndInches(item.x)}`).join(', ') : 'none'} readOnly /></label><button type="button" className="ghost-btn block-btn" onClick={addBeamLine}>Add beam line</button><button type="button" className="ghost-btn block-btn" onClick={() => updateNumberArray('customBeamYs', [])}>Reset auto beam lines</button></div><div className="stack-list beam-editor-list">{model.beamLines.map((beam, index) => <div key={`beam-edit-${index}`} className="beam-editor-row beam-edit-grid"><span>Beam {index + 1}</span><strong>{feetAndInches(beam.offsetFromHouse)}</strong><label className="inline-mini-field"><span>Start trim</span><input type="number" step={GRID_SIZE} value={beam.startTrim} onChange={(event) => updateBeamEdit(index, 'startTrim', Number(event.target.value))} /></label><label className="inline-mini-field"><span>End trim</span><input type="number" step={GRID_SIZE} value={beam.endTrim} onChange={(event) => updateBeamEdit(index, 'endTrim', Number(event.target.value))} /></label><button type="button" className="ghost-btn small-btn" onClick={() => removeBeamLine(index)}>Remove</button></div>)}</div></div>
           <div className="callout-box compact-card"><h4>Reset</h4><button type="button" className="ghost-btn block-btn" onClick={resetShape}>Reset shape and manual overrides</button></div>
+          <div className="callout-box compact-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Viewport</span><strong>{feetAndInches(viewFeet)} × {feetAndInches(viewFeet)}</strong></div><div><span>Origin</span><strong>{feetAndInches(limits.minX)} , {feetAndInches(limits.minY)}</strong></div></div></div>
+          <div className="callout-box compact-card"><h4>Drawing workflow</h4><ul className="plain-list compact"><li>Click to place P1, then keep clicking each next corner.</li><li>The live line follows your cursor and snaps to 45° / 90° when nearby.</li><li>Click back on P1 to close the shape.</li><li>After closing, drag any point or insert a new one on any edge.</li></ul></div>
         </div>
       </div>
     </div>

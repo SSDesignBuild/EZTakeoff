@@ -54,6 +54,7 @@ export const SERVICES: ServiceDefinition[] = [
       manualRailingEdges: JSON.stringify([]),
       lockedPosts: JSON.stringify([]),
       beamEdits: JSON.stringify([]),
+      beamCantilever: 2,
       deckShape: JSON.stringify([]),
     },
     fields: [
@@ -100,6 +101,11 @@ export const SERVICES: ServiceDefinition[] = [
       { key: 'stairCount', label: 'Stair runs', type: 'number', min: 0, step: 1 },
       { key: 'stairWidth', label: 'Stair width (ft)', type: 'number', min: 0, step: 0.1 },
       { key: 'stairRise', label: 'Total stair rise (ft)', type: 'number', min: 0, step: 0.1, helper: 'Leave 0 to use deck height.' },
+      { key: 'beamCantilever', label: 'Beam cantilever to post (ft)', type: 'select', options: [
+        { label: '0 ft', value: '0' },
+        { label: '1 ft', value: '1' },
+        { label: '2 ft', value: '2' },
+      ] },
     ],
     formulaNotes: [
       'Joists are calculated at 12 in. on center and sized from your span table: 2x8 to 12 ft, 2x10 to 14 ft, 2x12 to 16 ft.',
@@ -187,7 +193,9 @@ export const SERVICES: ServiceDefinition[] = [
       fanBeamCount: 1,
       fanBeamShift: 0,
       frontOverhang: 1,
+      projectionOverhang: 2,
       extraBeamCount: 0,
+      supportBeamPostCount: 0,
       screenUnderneath: false,
       beamStyle: 'atlas',
       postCount: 0,
@@ -255,7 +263,13 @@ export const SERVICES: ServiceDefinition[] = [
       },
       { key: 'fanBeamCount', label: 'Fan beam count', type: 'number', min: 1, step: 1 },
       { key: 'frontOverhang', label: 'Front beam overhang (ft)', type: 'number', min: 0, step: 1, helper: '0, 1, or 2 ft typical' },
+      { key: 'projectionOverhang', label: 'Projection overhang (ft)', type: 'select', options: [
+        { label: '0 ft', value: '0' },
+        { label: '1 ft', value: '1' },
+        { label: '2 ft', value: '2' },
+      ] },
       { key: 'extraBeamCount', label: 'Extra support beams', type: 'number', min: 0, step: 1 },
+      { key: 'supportBeamPostCount', label: 'Extra beam post count (0 = match front beam)', type: 'number', min: 0, step: 1 },
       { key: 'fanBeamPlacementMode', label: 'Fan beam placement', type: 'select', options: [
         { label: 'Spread symmetrically', value: 'spread' },
         { label: 'Cluster near center', value: 'cluster-center' },

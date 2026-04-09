@@ -416,14 +416,17 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const fanBeamPlacementMode = String(inputs.fanBeamPlacementMode ?? 'spread');
   const screenUnderneath = Boolean(inputs.screenUnderneath ?? false);
   const beamStyle = screenUnderneath ? '3x3' : 'atlas';
+  const projectionOverhang = Math.max(0, Math.min(2, Number(inputs.projectionOverhang ?? 2)));
+  const effectiveProjection = Math.max(0, projection - projectionOverhang);
   const slopeDrop = Math.max(attachmentHeight - lowSideHeight, projection * (0.5 / 12));
 
   let maxProjection = 15;
   if (panelThickness === 3 && metalGauge === '.32' && foamDensity === 2) maxProjection = 19;
   if (panelThickness === 6 && metalGauge === '.32' && foamDensity === 2) maxProjection = 26;
-  const overLimit = projection > maxProjection;
+  const overLimit = effectiveProjection > maxProjection;
   const standard3In = panelThickness === 3 && !(metalGauge === '.32' && foamDensity === 2);
-  const supportBeamCount = standard3In && projection > 13 ? Math.ceil(projection / 13) - 1 : 0;
+  const extraBeams = Math.max(0, Number(inputs.extraBeamCount ?? 0));
+  const supportBeamCount = (standard3In && effectiveProjection > 13 ? Math.ceil(effectiveProjection / 13) - 1 : 0) + extraBeams;
 
   const panelLayout = buildPatioPanelLayout(width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode);
   const panelCount = panelLayout.pieces.length;
@@ -444,8 +447,10 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
     return Math.max(4, Math.ceil((width - 2) / 6));
   })();
   const frontPostCount = Math.max(2, Number(inputs.postCount ?? 0) > 0 ? Number(inputs.postCount) : autoPostCount);
+  const supportPostCount = supportBeamCount > 0 ? Math.max(2, Number(inputs.supportBeamPostCount ?? 0) > 0 ? Number(inputs.supportBeamPostCount) : frontPostCount) : 0;
   const hiddenBracketPerPost = beamStyle === '3x3' ? 2 : 1;
-  const hiddenBracketCount = frontPostCount * hiddenBracketPerPost;
+  const totalSupportPosts = supportBeamCount * supportPostCount;
+  const hiddenBracketCount = (frontPostCount + totalSupportPosts) * hiddenBracketPerPost;
   const totalBeamLines = 1 + supportBeamCount;
   const washerScrews = panelCount * totalBeamLines * 5;
   const tekScrewLf = width + (projection * 2) + (structureType === 'attached' ? width : 0);
@@ -459,7 +464,7 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const fasciaPieces = Math.ceil(fasciaLf / 24);
   const beamStockPieces = Math.ceil((width * totalBeamLines) / 24);
   const postCutLength = Math.ceil(lowSideHeight + 1);
-  const postStockPieces = Math.ceil((frontPostCount * postCutLength) / 24);
+  const postStockPieces = Math.ceil(((frontPostCount + totalSupportPosts) * postCutLength) / 24);
 
   const materials: MaterialItem[] = [
     toMaterial('4 ft regular roof panels', 'Roof system', regular4Count, 'panels', `${panelLength} ft factory-cut panel`, `${panelThickness} in panel · ${metalGauge} skin · ${foamDensity} lb foam`),
@@ -470,7 +475,7 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
     toMaterial('C-channel', 'Trim', cChannelPieces, 'sticks', '24 ft sections', 'Attached conditions only'),
     toMaterial('Downspout kits', 'Trim', 2, 'kits', '2 per cover', 'Standard on every patio cover'),
     toMaterial(beamStyle === '3x3' ? '3x3 beam stock' : 'Atlas beam stock', 'Structure', beamStockPieces, 'sticks', '24 ft sections', screenUnderneath ? 'Screened-under cover uses 3x3 beam and post system' : 'Open cover uses Atlas beam sitting on top of posts'),
-    toMaterial('3x3 post stock', 'Structure', postStockPieces, 'sticks', '24 ft stock', `${frontPostCount} posts cut to about ${postCutLength} ft each`),
+    toMaterial('3x3 post stock', 'Structure', postStockPieces, 'sticks', '24 ft stock', `${frontPostCount + totalSupportPosts} total posts cut to about ${postCutLength} ft each`),
     toMaterial('Hidden brackets', 'Hardware', hiddenBracketCount, 'ea', `${hiddenBracketPerPost} per post`, beamStyle === '3x3' ? 'Two hidden brackets per post for screened-under framing' : 'One hidden bracket per post when using Atlas beam'),
     toMaterial('Washer screws', 'Hardware', washerScrews, 'ea', '5 per panel per beam line', `${panelCount} panels across ${totalBeamLines} beam line(s)`),
     toMaterial('Tek screws', 'Hardware', tekScrews, 'ea', 'Approx. every 6 in', 'For C-channel, gutter, and fascia'),
@@ -490,12 +495,13 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
       { label: 'Panel mix', value: `${regular4Count} regular 4' + ${regular2Count} regular 2' + ${cutPanels.length} cut${fanPanels.length ? ` + ${fanPanels.length} fan beam` : ''}` },
       { label: 'Low-side height', value: feetAndInches(lowSideHeight) },
       { label: 'Projection check', value: overLimit ? `Over ${maxProjection} ft rule` : `Within ${maxProjection} ft rule` },
+      { label: 'Projection overhang', value: feetAndInches(projectionOverhang) },
     ],
     materials,
     orderNotes: [
       `Minimum slope check uses 1/2 in per foot. Current drop is ${feetAndInches(slopeDrop)} from attachment to low side.`,
       `This selection checks against your ${maxProjection} ft max projection rule for the chosen panel package.${overLimit ? ' Current inputs exceed that limit and need more upgrade or redesign.' : ''}`,
-      supportBeamCount > 0 ? `Projection is over 13 ft without the full upgrade package, so ${supportBeamCount} intermediate support beam line(s) were added.` : 'No intermediate support beam was required by the current projection/upgrade combination.',
+      supportBeamCount > 0 ? `Projection is over 13 ft without the full upgrade package, so ${supportBeamCount} intermediate support beam line(s) were added with ${supportPostCount} posts per support beam.` : 'No intermediate support beam was required by the current projection/upgrade combination.',
       panelLayout.notes.join(' '),
       Number(inputs.postCount ?? 0) > 0 ? 'Front post count was manually overridden.' : `Front post count auto-sized to ${frontPostCount} based on the selected beam system.`,
     ].filter(Boolean),

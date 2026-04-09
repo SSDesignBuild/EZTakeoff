@@ -18,6 +18,7 @@ export interface DeckInputs {
   manualRailingEdges?: string | number | boolean;
   lockedPosts?: string | number | boolean;
   beamEdits?: string | number | boolean;
+  beamCantilever?: string | number | boolean;
 }
 
 export interface BeamEdit { beamIndex: number; startTrim: number; endTrim: number; }
@@ -126,7 +127,6 @@ const DECK_GAP = 0.125 / 12;
 const EFFECTIVE_COVERAGE = DECK_BOARD_FACE + DECK_GAP;
 const JOIST_SPACING = 1;
 const BEAM_TARGET_SPACING = 10;
-const FRONT_CANTILEVER = 2;
 const POST_TARGET_SPACING = 6;
 const POST_MAX_SPACING = 7.5;
 const JOIST_SPAN_LIMITS = { '2x8': 12, '2x10': 14, '2x12': 16 } as const;
@@ -291,6 +291,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const borderGroups = inputs.borderSameBoard ? accumulateGroups(exposedSegments.map((segment) => segment.length)) : [];
 
   const rawCustomBeams = parseNumberArray(inputs.customBeamYs).map((value) => clamp(value, 0, depth)).filter((value) => isFreestanding ? value >= 0 && value <= depth : value > 0.2 && value < depth - 0.2);
+  const beamCantilever = Math.max(0, Math.min(2, Number(inputs.beamCantilever ?? 2)));
   const notchBeamOffsets = attachment === 'brick'
     ? uniqueSorted([
         ...segments
@@ -302,9 +303,9 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
       ])
     : [];
   const beamOffsets = uniqueSorted((rawCustomBeams.length > 0 ? uniqueSorted(rawCustomBeams) : (() => {
-    if (depth <= FRONT_CANTILEVER) return isFreestanding ? [0] : [depth];
+    if (depth <= beamCantilever) return isFreestanding ? [0] : [depth];
     const positions: number[] = [];
-    const frontBeam = Math.max(0, round2(depth - FRONT_CANTILEVER));
+    const frontBeam = Math.max(0, round2(depth - beamCantilever));
     positions.push(frontBeam);
     while (positions[positions.length - 1] > BEAM_TARGET_SPACING + (isFreestanding ? 0 : 0.01)) positions.push(round2(positions[positions.length - 1] - BEAM_TARGET_SPACING));
     if (isFreestanding) positions.push(0);
@@ -338,11 +339,14 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     }).filter((segment) => segment.length > 0.25);
     const postXs: number[] = [];
     segmentsAtBeam.forEach((segment) => {
-      const preferredCount = Math.max(2, Math.ceil(segment.length / POST_TARGET_SPACING) + 1);
-      const spacing = segment.length / Math.max(1, preferredCount - 1);
+      const usableLength = Math.max(0, segment.length - (beamCantilever * 2));
+      const postStart = segment.startX + beamCantilever;
+      const postEnd = segment.endX - beamCantilever;
+      const preferredCount = Math.max(2, Math.ceil(Math.max(usableLength, 0.01) / POST_TARGET_SPACING) + 1);
+      const spacing = Math.max(usableLength, 0.01) / Math.max(1, preferredCount - 1);
       const adjustedCount = spacing > POST_MAX_SPACING ? preferredCount + 1 : preferredCount;
       for (let index = 0; index < adjustedCount; index += 1) {
-        const x = round2(segment.startX + (segment.length * index) / Math.max(1, adjustedCount - 1));
+        const x = round2(postStart + (Math.max(postEnd - postStart, 0) * index) / Math.max(1, adjustedCount - 1));
         if (!postXs.some((value) => Math.abs(value - x) < 0.1)) postXs.push(x);
       }
       if (attachment === 'brick' && segment.length > 14 && !postXs.some((value) => Math.abs(value - (segment.startX + segment.length / 2)) < 0.1)) {
