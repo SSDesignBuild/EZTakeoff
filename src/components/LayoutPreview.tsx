@@ -157,6 +157,74 @@ function railSegmentsForDeck(deck: ReturnType<typeof buildDeckModel>) {
   return result;
 }
 
+function pointKey(point: DeckPoint) {
+  return `${Math.round(point.x * 12)}-${Math.round(point.y * 12)}`;
+}
+
+function directionBetween(start: DeckPoint, end: DeckPoint) {
+  const length = Math.hypot(end.x - start.x, end.y - start.y) || 1;
+  return { x: (end.x - start.x) / length, y: (end.y - start.y) / length };
+}
+
+type RailingNodeKind = 'corner' | 'inside-corner' | 'inline' | 'level-end' | 'stair-end' | 'stair-inline';
+type RailingNode = { point: DeckPoint; kind: RailingNodeKind; detail: string };
+
+function buildRailingNodes(deck: ReturnType<typeof buildDeckModel>) {
+  const topRuns = railSegmentsForDeck(deck).filter((segment) => segment.kind === 'deck');
+  const stairRuns = railSegmentsForDeck(deck).filter((segment) => segment.kind === 'stair-side');
+  const orientation = polygonOrientation(deck.points);
+  const reflexVertices = new Set<number>();
+  deck.points.forEach((_, index) => {
+    const prev = deck.points[(index - 1 + deck.points.length) % deck.points.length];
+    const curr = deck.points[index];
+    const next = deck.points[(index + 1) % deck.points.length];
+    const cross = (curr.x - prev.x) * (next.y - curr.y) - (curr.y - prev.y) * (next.x - curr.x);
+    if ((orientation === 'counterclockwise' && cross < 0) || (orientation === 'clockwise' && cross > 0)) reflexVertices.add(index);
+  });
+  const vertexIndexByKey = new Map(deck.points.map((point, index) => [pointKey(point), index] as const));
+  const nodeMap = new Map<string, { point: DeckPoint; directions: { x: number; y: number }[] }>();
+  const addNode = (point: DeckPoint, direction: { x: number; y: number }) => {
+    const key = pointKey(point);
+    const existing = nodeMap.get(key);
+    if (existing) existing.directions.push(direction);
+    else nodeMap.set(key, { point, directions: [direction] });
+  };
+  topRuns.forEach((segment) => {
+    addNode(segment.start, directionBetween(segment.start, segment.end));
+    addNode(segment.end, directionBetween(segment.end, segment.start));
+  });
+  const nodes: RailingNode[] = [];
+  nodeMap.forEach((entry, key) => {
+    const vertexIndex = vertexIndexByKey.get(key);
+    let kind: RailingNodeKind = 'inline';
+    if (entry.directions.length <= 1) kind = 'level-end';
+    else {
+      const [a, b] = entry.directions;
+      const cross = Math.abs(a.x * b.y - a.y * b.x);
+      if (vertexIndex !== undefined && reflexVertices.has(vertexIndex)) kind = 'inside-corner';
+      else if (cross > 0.2) kind = 'corner';
+      else kind = 'inline';
+    }
+    const detail = kind === 'inside-corner' ? 'Inside corner post' : kind === 'corner' ? 'Corner post' : kind === 'level-end' ? 'Level end post' : 'Inline post';
+    nodes.push({ point: entry.point, kind, detail });
+  });
+  topRuns.forEach((segment) => {
+    for (let distance = 6; distance < segment.length - 0.1; distance += 6) {
+      const point = pointAlong({ start: segment.start, end: segment.end, length: segment.length, orientation: 'angled', index: -1 }, distance);
+      nodes.push({ point, kind: 'inline', detail: 'Inline post' });
+    }
+  });
+  stairRuns.forEach((segment) => {
+    nodes.push({ point: segment.start, kind: 'stair-end', detail: 'Stair end post' });
+    nodes.push({ point: segment.end, kind: 'stair-end', detail: 'Stair end post' });
+    for (let distance = 6; distance < segment.length - 0.1; distance += 6) {
+      const point = pointAlong({ start: segment.start, end: segment.end, length: segment.length, orientation: 'angled', index: -1 }, distance);
+      nodes.push({ point, kind: 'stair-inline', detail: 'Stair inline post' });
+    }
+  });
+  return nodes;
+}
+
 function DeckPreview({ values }: { values: Record<string, string | number | boolean> }) {
   const deck = buildDeckModel(values);
   const [layer, setLayer] = useState<DeckLayer>('overview');
@@ -172,9 +240,9 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
   const sheetW = Math.max(1500, planW + 320);
   const sheetH = Math.max(1050, planH + 320);
   const planX = (sheetW - planW) / 2;
-  const planY = 180;
-  const titleBlockW = 280;
-  const titleBlockH = 94;
+  const planY = 150;
+  const titleBlockW = 360;
+  const titleBlockH = 140;
   const toSvg = (x: number, y: number) => ({ x: planX + (x - deck.minX) * scale, y: planY + (y - deck.minY) * scale });
   const pointString = deck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ');
   const showBoards = layer === 'overview' || layer === 'boards';
@@ -198,6 +266,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
     ? Array.from({ length: Math.floor(deck.width) + 1 }, (_, i) => deck.minX + i)
     : Array.from({ length: Math.floor(deck.depth) + 1 }, (_, i) => deck.minY + i);
   const railingSegments = railSegmentsForDeck(deck);
+  const railingNodes = buildRailingNodes(deck);
 
   const stairSegment = deck.stairPlacement.edgeIndex !== null ? deck.edgeSegments[deck.stairPlacement.edgeIndex] : null;
   const stairNormal = stairSegment ? outwardNormal(stairSegment, deck.points) : { x: 0, y: 1 };
@@ -221,7 +290,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
       <div className="visual-header compact-preview-header">
         <div>
           <h3>Deck framing sheet</h3>
-          <span>Plan-view framing layout with independent board, joist, band, beam, post, stair, and railing geometry.</span>
+          <span>Technical plan-view framing layout with individual board strips, double-band rectangles, doubled beam plies, post seats, stair geometry, and railing post types.</span>
         </div>
         <div className="preview-toolbar">
           {(['overview', 'boards', 'framing', 'railing', 'stairs'] as DeckLayer[]).map((item) => (
@@ -314,12 +383,12 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
                     {staggeredSegments(segment.length, 20, 0).map((splice, idx) => {
                       const x1 = toSvg(segment.startX + splice.start, beam.y).x;
                       const x2 = toSvg(segment.startX + splice.end, beam.y).x;
-                      return <g key={`bp1-${idx}`}><rect x={Math.min(x1, x2)} y={y - 8} width={Math.abs(x2 - x1)} height={6} className="beam-rect primary" />{splice.end < segment.length - 0.05 && <line x1={x2} y1={y - 10} x2={x2} y2={y - 2} className="seam-tick" />}</g>;
+                      return <g key={`bp1-${idx}`}><rect x={Math.min(x1, x2)} y={y - 10} width={Math.abs(x2 - x1)} height={8} className="beam-rect primary" />{splice.end < segment.length - 0.05 && <g><line x1={x2} y1={y - 16} x2={x2} y2={y + 4} className="splice-line" /><text x={x2 + 4} y={y - 12} className="splice-label">splice</text></g>}</g>;
                     })}
                     {staggeredSegments(segment.length, 20, 10).map((splice, idx) => {
                       const x1 = toSvg(segment.startX + splice.start, beam.y).x;
                       const x2 = toSvg(segment.startX + splice.end, beam.y).x;
-                      return <g key={`bp2-${idx}`}><rect x={Math.min(x1, x2)} y={y - 2} width={Math.abs(x2 - x1)} height={6} className="beam-rect secondary" />{splice.end < segment.length - 0.05 && <line x1={x2} y1={y} x2={x2} y2={y + 8} className="seam-tick" />}</g>;
+                      return <g key={`bp2-${idx}`}><rect x={Math.min(x1, x2)} y={y - 1} width={Math.abs(x2 - x1)} height={8} className="beam-rect secondary" />{splice.end < segment.length - 0.05 && <g><line x1={x2} y1={y - 4} x2={x2} y2={y + 16} className="splice-line" /><text x={x2 + 4} y={y + 13} className="splice-label">splice</text></g>}</g>;
                     })}
                   </g>;
                 })}
@@ -327,8 +396,9 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
                   const cx = toSvg(postX, beam.y).x;
                   const cy = toSvg(postX, beam.y).y;
                   return <g key={`post-${beamIdx}-${postIdx}`} onClick={() => setInspect({ title: `Post ${postIdx + 1}`, detail: `Notched ${feetAndInches(deck.postLength)} post supporting doubled beam.` })}>
-                    <rect x={cx - 7} y={cy - 1} width={14} height={18} className="post-node" />
-                    <rect x={cx - 7} y={cy - 7} width={7} height={6} className="post-notch-seat" />
+                    <rect x={cx - 9} y={cy + 2} width={18} height={20} className="post-node" />
+                    <rect x={cx - 9} y={cy - 2} width={9} height={6} className="post-notch-seat" />
+                    <line x1={cx} y1={cy - 10} x2={cx} y2={cy + 22} className="post-centerline" />
                   </g>;
                 })}
               </g>
@@ -337,8 +407,18 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
             {showRailing && railingSegments.map((segment, idx) => {
               const a = toSvg(segment.start.x, segment.start.y);
               const b = toSvg(segment.end.x, segment.end.y);
-              return <g key={`rail-${idx}`} onClick={() => setInspect({ title: segment.kind === 'stair-side' ? 'Angled railing' : 'Level railing', detail: `${feetAndInches(segment.length)} railing run.` })}>
+              const midX = (a.x + b.x) / 2;
+              const midY = (a.y + b.y) / 2;
+              return <g key={`rail-${idx}`} onClick={() => setInspect({ title: segment.kind === 'stair-side' ? 'Angled railing section' : 'Level railing section', detail: `${feetAndInches(segment.length)} railing run.` })}>
                 <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={segment.kind === 'stair-side' ? 'stair-rail-line' : 'railing-line'} />
+                <text x={midX + 6} y={midY - 6} className="rail-label">{segment.kind === 'stair-side' ? 'ANGLED RAIL' : 'LEVEL RAIL'}</text>
+              </g>;
+            })}
+            {showRailing && railingNodes.map((node, idx) => {
+              const p = toSvg(node.point.x, node.point.y);
+              const cls = node.kind === 'stair-end' || node.kind === 'stair-inline' ? 'stair-post-node' : 'railing-post-node';
+              return <g key={`rail-node-${idx}`} onClick={() => setInspect({ title: node.detail, detail: `${node.detail} at ${feetAndInches(node.point.x - deck.minX)}, ${feetAndInches(node.point.y - deck.minY)}.` })}>
+                <rect x={p.x - 5} y={p.y - 5} width={10} height={10} className={cls} />
               </g>;
             })}
 
@@ -404,18 +484,34 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
               return chunks;
             })()}
 
-            <g transform={`translate(${sheetW - titleBlockW - 46}, ${sheetH - titleBlockH - 42})`}>
+            <g transform={`translate(${sheetW - titleBlockW - 52}, ${sheetH - titleBlockH - 46})`}>
               <rect x="0" y="0" width={titleBlockW} height={titleBlockH} className="title-block" />
               <line x1="0" y1="28" x2={titleBlockW} y2="28" className="title-block-line" />
-              <line x1="0" y1="62" x2={titleBlockW} y2="62" className="title-block-line" />
-              <line x1="170" y1="28" x2="170" y2={titleBlockH} className="title-block-line" />
-              <text x="12" y="18" className="title-block-title">DECK FRAMING PLAN</text>
+              <line x1="0" y1="58" x2={titleBlockW} y2="58" className="title-block-line" />
+              <line x1="0" y1="88" x2={titleBlockW} y2="88" className="title-block-line" />
+              <line x1="0" y1="116" x2={titleBlockW} y2="116" className="title-block-line" />
+              <line x1="132" y1="28" x2="132" y2={titleBlockH} className="title-block-line" />
+              <line x1="244" y1="28" x2="244" y2={titleBlockH} className="title-block-line" />
+              <text x="12" y="18" className="title-block-title">S&S DESIGN BUILD · DECK FRAMING PLAN</text>
               <text x="12" y="46" className="title-block-label">Width</text>
-              <text x="84" y="46" className="title-block-value">{feetAndInches(deck.width)}</text>
-              <text x="12" y="80" className="title-block-label">Projection</text>
-              <text x="84" y="80" className="title-block-value">{feetAndInches(deck.depth)}</text>
-              <text x="182" y="46" className="title-block-label">Joists</text>
-              <text x="182" y="80" className="title-block-value">{deck.joistSize} @ 12&quot; O.C.</text>
+              <text x="76" y="46" className="title-block-value">{feetAndInches(deck.width)}</text>
+              <text x="144" y="46" className="title-block-label">Projection</text>
+              <text x="220" y="46" className="title-block-value">{feetAndInches(deck.depth)}</text>
+              <text x="256" y="46" className="title-block-label">Area</text>
+              <text x="302" y="46" className="title-block-value">{deck.area.toFixed(1)} sf</text>
+              <text x="12" y="76" className="title-block-label">Joists</text>
+              <text x="76" y="76" className="title-block-value">{deck.joistSize} @ 12&quot; O.C.</text>
+              <text x="144" y="76" className="title-block-label">Beam</text>
+              <text x="220" y="76" className="title-block-value">2-{deck.beamMemberSize}</text>
+              <text x="256" y="76" className="title-block-label">Posts</text>
+              <text x="302" y="76" className="title-block-value">{deck.postCount}</text>
+              <text x="12" y="106" className="title-block-label">Attachment</text>
+              <text x="76" y="106" className="title-block-value">{deck.attachment}</text>
+              <text x="144" y="106" className="title-block-label">Cantilever</text>
+              <text x="220" y="106" className="title-block-value">{feetAndInches(Number(values.beamCantilever ?? 2))}</text>
+              <text x="256" y="106" className="title-block-label">Stairs</text>
+              <text x="302" y="106" className="title-block-value">{deck.stairCount ? `${deck.stairRisers}R/${deck.stairTreadsPerRun}T` : 'none'}</text>
+              <text x="12" y="132" className="title-block-note">Double band boards shown on all edges. Doubled beam plies staggered with explicit splice markers.</text>
             </g>
           </svg>
         </div>
@@ -427,6 +523,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
         <span><i className="legend-swatch fascia-swatch" /> double band</span>
         <span><i className="legend-swatch post-swatch" /> posts</span>
         <span><i className="legend-swatch railing-swatch" /> railing</span>
+        <span><i className="legend-swatch stair-post-swatch" /> stair / rail posts</span>
       </div>
       {inspect && <div className="callout-box inspect-card"><h4>{inspect.title}</h4><p>{inspect.detail}</p></div>}
     </div>
