@@ -179,13 +179,13 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
 
   materials.push(
     toMaterial('Blocking', 'Framing', deck.blockingBoardCount, 'boards', '8 ft stock', `${deck.blockingCount} blocks across ${deck.blockingRows} rows`),
-    toMaterial('Posts', 'Structure', deck.postCount, 'ea', `${deck.postLength} ft stock`, deck.lockedPosts.length ? `${deck.lockedPosts.length} post position(s) manually locked` : 'Auto-spaced with optional manual locks'),
+    toMaterial(`6x6 wood posts ${deck.postLength}'`, 'Structure', deck.postCount, 'ea', `${deck.postLength} ft stock`, deck.lockedPosts.length ? `${deck.lockedPosts.length} post position(s) manually locked` : 'Auto-spaced beam support posts'),
     toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', '3 bags per post footing'),
     toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined),
     toMaterial('Concrete anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined),
     toMaterial('Joist hangers', 'Hardware', deck.joistHangers, 'ea', 'Match joist size', undefined),
     toMaterial('Rafter ties', 'Hardware', deck.rafterTies, 'ea', '1 per joist to beam condition', undefined),
-    toMaterial('Carriage bolt sets', 'Hardware', deck.postCount * 2 + (railingPosts > 0 ? railingPosts * 2 : 0), 'sets', 'Bolt + washer + nut', undefined),
+    toMaterial('Carriage bolt sets', 'Hardware', deck.postCount * 2 + ((railingType === 'wood' || railingType === 'vinyl-composite') ? railingPosts * 2 : 0), 'sets', 'Bolt + washer + nut', undefined),
     toMaterial('Ledger lateral load brackets', 'Hardware', deck.lateralLoadBrackets, 'ea', 'Every 2 ft on ledger', undefined),
     toMaterial('SDS structural screws', 'Hardware', deck.sdsCorners, 'ea', '4 per corner', 'All band-board corners'),
     toMaterial('Joist tape', 'Hardware', deck.joistTapeLf, 'lf', 'Match roll coverage', undefined),
@@ -210,9 +210,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     if (railingBreakdown.stairEndPosts) materials.push(toMaterial('Stair end posts', 'Railing', railingBreakdown.stairEndPosts, 'ea', 'Match railing system', 'Ends of stair-side railing runs'));
     if (railingBreakdown.stairInlinePosts) materials.push(toMaterial('Stair inline posts', 'Railing', railingBreakdown.stairInlinePosts, 'ea', 'Match railing system', 'Intermediate stair-side posts on long runs'));
     if (railingBreakdown.stairPosts) materials.push(toMaterial('Stair posts', 'Railing', railingBreakdown.stairPosts, 'ea', 'Match railing system', 'Posts serving stair-side railing'));
+    if (railingPosts) materials.push(toMaterial('Blocking under top-mount aluminum posts', 'Railing', railingPosts, 'locations', '2x framing blocking', 'Blocking required under each aluminum post location'));
   } else {
-    materials.push(toMaterial('Level posts', 'Railing', Math.max(0, railingBreakdown.cornerPosts + railingBreakdown.insideCornerPosts + railingBreakdown.inlinePosts + railingBreakdown.levelEndPosts), 'ea', '4x4 stock', 'Top-level wood/vinyl/composite posts'));
-    if (railingBreakdown.stairPosts) materials.push(toMaterial('Stair posts', 'Railing', railingBreakdown.stairPosts, 'ea', '4x4 stock', 'Posts serving stair-side railing'));
+    materials.push(toMaterial('4x4 wood level posts', 'Railing', Math.max(0, railingBreakdown.cornerPosts + railingBreakdown.insideCornerPosts + railingBreakdown.inlinePosts + railingBreakdown.levelEndPosts), 'ea', '4x4 stock', 'Top-level wood/vinyl/composite posts'));
+    if (railingBreakdown.stairPosts) materials.push(toMaterial('4x4 wood stair posts', 'Railing', railingBreakdown.stairPosts, 'ea', '4x4 stock', 'Posts serving stair-side railing'));
     if (railingBreakdown.cornerPosts) materials.push(toMaterial('Corner posts', 'Railing', railingBreakdown.cornerPosts, 'ea', '4x4 stock', 'Top-level outside corners'));
     if (railingBreakdown.insideCornerPosts) materials.push(toMaterial('Inside corner posts', 'Railing', railingBreakdown.insideCornerPosts, 'ea', '4x4 stock', 'Top-level inside corners'));
     if (railingBreakdown.inlinePosts) materials.push(toMaterial('Inline posts', 'Railing', railingBreakdown.inlinePosts, 'ea', '4x4 stock', 'Top-level inline posts between corners'));

@@ -59,10 +59,6 @@ export default function App() {
           ))}
         </nav>
 
-        <div className="sidebar-footer">
-          <p className="eyebrow">Current focus</p>
-          <p className="muted-light">Deck workflow now includes a footprint editor, dark/light views, and grouped order output built around your framing notes.</p>
-        </div>
       </aside>
 
       <main className="main-panel">

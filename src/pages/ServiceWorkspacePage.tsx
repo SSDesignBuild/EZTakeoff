@@ -18,16 +18,6 @@ export function ServiceWorkspacePage() {
 
   return (
     <div className="page-stack">
-      <section className="content-card workspace-header">
-        <div>
-          <p className="eyebrow">{service.label}</p>
-          <h2>{service.intro}</h2>
-        </div>
-        <div className="tag-row">
-          {service.highlights.map((item) => <span key={item} className="tag">{item}</span>)}
-        </div>
-      </section>
-
       {service.slug === 'decks' && <DeckDesigner values={values} onValuesChange={setValues} />}
       {(service.slug === 'screen-rooms' || service.slug === 'renaissance-screen-rooms') && (
         <SectionEditor renaissance={service.slug === 'renaissance-screen-rooms'} values={values} onValuesChange={setValues} />
@@ -44,12 +34,6 @@ export function ServiceWorkspacePage() {
               <FieldRenderer key={field.key} field={field} value={values[field.key]} onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} />
             ))}
           </div>
-          <div className="callout-box">
-            <h4>Formula notes</h4>
-            <ul className="plain-list compact">
-              {service.formulaNotes.map((note) => <li key={note}>{note}</li>)}
-            </ul>
-          </div>
         </article>
 
         <div className="workspace-right-col">
@@ -60,7 +44,7 @@ export function ServiceWorkspacePage() {
         </div>
       </section>
 
-      <MaterialTable items={estimate.materials} />
+      <MaterialTable items={estimate.materials} values={values} onValuesChange={setValues} />
 
       <section className="content-card">
         <div className="section-heading">

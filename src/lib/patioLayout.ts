@@ -105,30 +105,32 @@ function targetCenters(totalIn: number, count: number, placementMode: string) {
   return Array.from({ length: count }, (_, index) => totalIn * ((index + 1) / (count + 1)));
 }
 
-function chooseFanOptions(pieces: PatioPanelPiece[], fanCount: number, placementMode: string, shift = 0) {
+function chooseFanOptions(pieces: PatioPanelPiece[], fanCount: number, placementMode: string, shift = 0, fanMode: string = 'centered') {
   const slots = fanSlots(pieces);
-  if (fanCount <= 0 || !slots.length) return { picks: [] as PatioPanelLayout['fanOptions'], slots };
+  const eligible = slots.filter((slot) => fanMode === 'centered' ? slot.placement === 'centered' : fanMode === 'female-offset' ? slot.placement === 'female-offset' || (slot.placement === 'centered' && pieces[slot.pieceIndex]?.panelWidth === 2) : fanMode === 'male-offset' ? slot.placement === 'male-offset' || (slot.placement === 'centered' && pieces[slot.pieceIndex]?.panelWidth === 2) : true);
+  if (fanCount <= 0 || !eligible.length) return { picks: [] as PatioPanelLayout['fanOptions'], slots: eligible.length ? eligible : slots };
   const target = targetCenters(pieces.reduce((sum, piece) => sum + piece.widthIn, 0), Math.min(fanCount, slots.length), placementMode);
   const picks: PatioPanelLayout['fanOptions'] = [];
   target.forEach((center) => {
-    const sorted = [...slots].sort((a, b) => Math.abs(a.centerIn - center) - Math.abs(b.centerIn - center) || a.centerIn - b.centerIn);
+    const sorted = [...eligible].sort((a, b) => Math.abs(a.centerIn - center) - Math.abs(b.centerIn - center) || a.centerIn - b.centerIn);
     const found = sorted.find((slot) => !picks.some((pick) => pick.pieceIndex === slot.pieceIndex && pick.placement === slot.placement));
     if (found) picks.push(found);
   });
   if (!picks.length) return { picks, slots };
   const rotated = picks.map((pick) => {
     const currentIndex = slots.findIndex((slot) => slot.pieceIndex === pick.pieceIndex && slot.placement === pick.placement);
-    const nextIndex = (currentIndex + shift + slots.length * 4) % slots.length;
-    return slots[nextIndex];
+    const nextIndex = (currentIndex + shift + eligible.length * 4) % eligible.length;
+    return eligible[nextIndex];
   });
   const deduped: PatioPanelLayout['fanOptions'] = [];
   rotated.forEach((slot) => {
     if (!deduped.some((item) => item.pieceIndex === slot.pieceIndex && item.placement === slot.placement)) deduped.push(slot);
   });
-  return { picks: deduped.slice(0, fanCount), slots };
+  return { picks: deduped.slice(0, fanCount), slots: eligible };
 }
 
-function comboScore(pieces: PatioPanelPiece[], preferredPanelFt: number, fanCount: number, placementMode: string) {
+
+function comboScore(pieces: PatioPanelPiece[], preferredPanelFt: number, fanCount: number, placementMode: string, fanMode: string) {
   const cuts = pieces.filter((piece) => piece.kind === 'cut');
   const edgeLeft = pieces[0]?.widthIn ?? 0;
   const edgeRight = pieces[pieces.length - 1]?.widthIn ?? 0;
@@ -136,15 +138,17 @@ function comboScore(pieces: PatioPanelPiece[], preferredPanelFt: number, fanCoun
   const preferencePenalty = preferredPanelFt === 4 ? pieces.filter((piece) => piece.panelWidth === 2 && piece.kind !== 'cut').length * 10 : pieces.filter((piece) => piece.panelWidth === 4 && piece.kind !== 'cut').length * 4;
   const interiorCutPenalty = pieces.slice(1, -1).filter((piece) => piece.kind === 'cut').length * 250;
   const cutPenalty = cuts.length * 30 + cuts.reduce((sum, piece) => sum + Math.abs(24 - piece.widthIn), 0) * 0.9;
-  const fanEval = chooseFanOptions(pieces, fanCount, placementMode, 0);
+  const fanEval = chooseFanOptions(pieces, fanCount, placementMode, 0, fanMode);
   const totalIn = pieces.reduce((sum, piece) => sum + piece.widthIn, 0);
   const centerPenalty = fanEval.picks.length
     ? fanEval.picks.reduce((sum, pick) => sum + Math.abs(pick.centerIn - totalIn / 2), 0)
     : 1000;
+  const centeredExactBonus = fanMode === 'centered' && fanEval.picks.some((pick) => Math.abs(pick.centerIn - totalIn / 2) < 0.01) ? -120 : 0;
   const fanPenalty = fanEval.picks.length < fanCount ? 2000 : 0;
   const mirrorBonus = cuts.length === 2 && Math.abs(edgeLeft - edgeRight) < 0.01 ? -18 : 0;
-  return preferencePenalty + interiorCutPenalty + cutPenalty + symmetryPenalty * 2.2 + pieces.length + fanPenalty + centerPenalty * 0.12 + mirrorBonus;
+  return preferencePenalty + interiorCutPenalty + cutPenalty + symmetryPenalty * 2.2 + pieces.length + fanPenalty + centerPenalty * (fanMode === 'centered' ? 1.6 : 0.18) + mirrorBonus + centeredExactBonus;
 }
+
 
 export function buildPatioPanelLayout(widthFt: number, fanBeam: string, preferredPanelFt: number, fanBeamCount = 1, placementMode = 'spread', fanShift = 0): PatioPanelLayout {
   const totalIn = inchesFromFeet(widthFt);
@@ -154,14 +158,14 @@ export function buildPatioPanelLayout(widthFt: number, fanBeam: string, preferre
   const targetFanCount = fanBeam === 'none' ? 0 : Math.max(1, fanBeamCount);
   for (const combo of combos) {
     const pieces = expandWidths(combo);
-    const score = comboScore(pieces, preferredPanelFt, targetFanCount, placementMode);
+    const score = comboScore(pieces, preferredPanelFt, targetFanCount, placementMode, fanBeam);
     if (score < bestScore) {
       bestScore = score;
       bestPieces = pieces;
     }
   }
   const pieces = bestPieces.map((piece) => ({ ...piece }));
-  const fanEval = chooseFanOptions(pieces, targetFanCount, placementMode, fanShift);
+  const fanEval = chooseFanOptions(pieces, targetFanCount, placementMode, fanShift, fanBeam);
   fanEval.picks.forEach((pick) => {
     const piece = pieces[pick.pieceIndex];
     pieces[pick.pieceIndex] = {

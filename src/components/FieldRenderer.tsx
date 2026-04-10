@@ -12,6 +12,26 @@ export function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
     onChange(field.key, Number(event.target.value));
   };
 
+  if (field.type === 'text') {
+    return (
+      <label className="form-field">
+        <span>{field.label}</span>
+        <input type="text" value={String(value ?? '')} onChange={(event) => onChange(field.key, event.target.value)} />
+        {field.helper && <small>{field.helper}</small>}
+      </label>
+    );
+  }
+
+  if (field.type === 'date') {
+    return (
+      <label className="form-field">
+        <span>{field.label}</span>
+        <input type="date" value={String(value ?? '')} onChange={(event) => onChange(field.key, event.target.value)} />
+        {field.helper && <small>{field.helper}</small>}
+      </label>
+    );
+  }
+
   if (field.type === 'select') {
     return (
       <label className="form-field">

@@ -37,7 +37,7 @@ export function SectionEditor({ renaissance = false, values, onValuesChange }: S
           <button type="button" className="secondary-btn" onClick={addSection}>Add section</button>
         </div>
       </div>
-      <div className="stack-list">
+      <div className="section-card-grid">
         {sections.map((section) => (
           <div key={section.id} className="section-card">
             <div className="inline-heading">
@@ -45,7 +45,7 @@ export function SectionEditor({ renaissance = false, values, onValuesChange }: S
               <button type="button" className="ghost-btn small-btn" onClick={() => removeSection(section.id)}>Remove</button>
             </div>
 
-            <div className="form-grid">
+            <div className="form-grid section-input-grid">
               <label className="form-field"><span>Width (ft)</span><input type="number" step="0.1" value={section.width} onChange={(event) => updateSection(section.id, { width: Number(event.target.value) })} /></label>
               <label className="form-field"><span>Height (ft)</span><input type="number" step="0.1" value={section.height} onChange={(event) => updateSection(section.id, { height: Number(event.target.value) })} /></label>
               <label className="form-field"><span>Uprights</span><input type="number" step="1" min="0" value={section.uprights} onChange={(event) => updateSection(section.id, { uprights: Number(event.target.value) })} /></label>

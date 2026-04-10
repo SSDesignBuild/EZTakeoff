@@ -8,7 +8,7 @@ export interface ServiceFieldOption {
 export interface ServiceField {
   key: string;
   label: string;
-  type: 'number' | 'select' | 'boolean';
+  type: 'number' | 'select' | 'boolean' | 'text' | 'date';
   min?: number;
   step?: number;
   helper?: string;
@@ -55,6 +55,8 @@ export const SERVICES: ServiceDefinition[] = [
       lockedPosts: JSON.stringify([]),
       beamEdits: JSON.stringify([]),
       beamCantilever: 2,
+      quickWidth: 16,
+      quickProjection: 12,
       deckShape: JSON.stringify([]),
     },
     fields: [
@@ -101,6 +103,8 @@ export const SERVICES: ServiceDefinition[] = [
       { key: 'stairCount', label: 'Stair runs', type: 'number', min: 0, step: 1 },
       { key: 'stairWidth', label: 'Stair width (ft)', type: 'number', min: 0, step: 0.1 },
       { key: 'stairRise', label: 'Total stair rise (ft)', type: 'number', min: 0, step: 0.1, helper: 'Leave 0 to use deck height.' },
+      { key: 'quickWidth', label: 'Quick width (ft)', type: 'number', min: 1, step: 1 },
+      { key: 'quickProjection', label: 'Quick projection (ft)', type: 'number', min: 1, step: 1 },
       { key: 'beamCantilever', label: 'Beam cantilever to post (ft)', type: 'select', options: [
         { label: '0 ft', value: '0' },
         { label: '1 ft', value: '1' },
@@ -204,7 +208,7 @@ export const SERVICES: ServiceDefinition[] = [
       { key: 'width', label: 'Width (ft)', type: 'number', min: 1, step: 0.1 },
       { key: 'projection', label: 'Projection (ft)', type: 'number', min: 1, step: 0.1 },
       { key: 'attachmentHeight', label: 'Attachment height (ft)', type: 'number', min: 1, step: 0.1 },
-      { key: 'lowSideHeight', label: 'Low-side height (ft)', type: 'number', min: 1, step: 1 / 12, helper: 'Use decimal feet in 1 in increments; preview and summaries print as feet and inches.' },
+      { key: 'lowSideHeight', label: 'Low-side height (ft)', type: 'number', min: 1, step: 1 / 12 },
       {
         key: 'structureType',
         label: 'Structure type',
