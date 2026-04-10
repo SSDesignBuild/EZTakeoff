@@ -32,7 +32,6 @@ export default function App() {
           <div>
             <p className="eyebrow">Estimator Studio</p>
             <h1>S&amp;S Design Build</h1>
-            <p className="muted">Fast take-offs, material grouping, and layout visualization for decks, patio covers, and screen systems.</p>
           </div>
           <ThemeToggle theme={theme} onToggle={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} />
         </div>

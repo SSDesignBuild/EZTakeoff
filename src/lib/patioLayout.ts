@@ -135,7 +135,7 @@ function comboScore(pieces: PatioPanelPiece[], preferredPanelFt: number, fanCoun
   const edgeLeft = pieces[0]?.widthIn ?? 0;
   const edgeRight = pieces[pieces.length - 1]?.widthIn ?? 0;
   const symmetryPenalty = Math.abs(edgeLeft - edgeRight);
-  const preferencePenalty = preferredPanelFt === 4 ? pieces.filter((piece) => piece.panelWidth === 2 && piece.kind !== 'cut').length * 10 : pieces.filter((piece) => piece.panelWidth === 4 && piece.kind !== 'cut').length * 4;
+  const preferencePenalty = preferredPanelFt === 4 ? pieces.filter((piece) => piece.panelWidth === 2 && piece.kind !== 'cut').length * 45 : pieces.filter((piece) => piece.panelWidth === 4 && piece.kind !== 'cut').length * 8;
   const interiorCutPenalty = pieces.slice(1, -1).filter((piece) => piece.kind === 'cut').length * 250;
   const cutPenalty = cuts.length * 30 + cuts.reduce((sum, piece) => sum + Math.abs(24 - piece.widthIn), 0) * 0.9;
   const fanEval = chooseFanOptions(pieces, fanCount, placementMode, 0, fanMode);
@@ -143,7 +143,7 @@ function comboScore(pieces: PatioPanelPiece[], preferredPanelFt: number, fanCoun
   const centerPenalty = fanEval.picks.length
     ? fanEval.picks.reduce((sum, pick) => sum + Math.abs(pick.centerIn - totalIn / 2), 0)
     : 1000;
-  const centeredExactBonus = fanMode === 'centered' && fanEval.picks.some((pick) => Math.abs(pick.centerIn - totalIn / 2) < 0.01) ? -120 : 0;
+  const centeredExactBonus = fanMode === 'centered' && fanEval.picks.some((pick) => Math.abs(pick.centerIn - totalIn / 2) < 0.01) ? -260 : 0;
   const fanPenalty = fanEval.picks.length < fanCount ? 2000 : 0;
   const mirrorBonus = cuts.length === 2 && Math.abs(edgeLeft - edgeRight) < 0.01 ? -18 : 0;
   return preferencePenalty + interiorCutPenalty + cutPenalty + symmetryPenalty * 2.2 + pieces.length + fanPenalty + centerPenalty * (fanMode === 'centered' ? 1.6 : 0.18) + mirrorBonus + centeredExactBonus;

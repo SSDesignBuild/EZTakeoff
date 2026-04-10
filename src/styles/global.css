@@ -1237,3 +1237,7 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .organized-config-grid .form-field input,.organized-config-grid .form-field select{min-height:40px;padding:.55rem .7rem;}
 .project-config-card{padding:1rem;}
 .preview-toolbar{flex-wrap:wrap;}
+
+.beam-rect.infill{fill:#fde68a;stroke:#b45309;stroke-width:1.5;}
+.beam-rect.infill.secondary{fill:#fef3c7;stroke:#b45309;stroke-width:1.5;}
+.blocking-node{fill:#94a3b8;stroke:#475569;stroke-width:1.2;}
