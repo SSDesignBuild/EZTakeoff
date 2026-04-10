@@ -33,7 +33,7 @@ export function SectionEditor({ renaissance = false, values, onValuesChange }: S
           <h3>{renaissance ? 'Renaissance wall sections' : 'Screen room wall sections'}</h3>
         </div>
         <div className="tag-row">
-          <span className="tag">New sections inherit Section 1</span>
+          <span className="tag">Sections flow 4 per row and new sections inherit Section 1</span>
           <button type="button" className="secondary-btn" onClick={addSection}>Add section</button>
         </div>
       </div>

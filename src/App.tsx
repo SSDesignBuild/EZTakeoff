@@ -1,15 +1,8 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Route, Routes } from 'react-router-dom';
-import { DashboardPage } from './pages/DashboardPage';
+import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import { ServiceWorkspacePage } from './pages/ServiceWorkspacePage';
-import { ArchitecturePage } from './pages/ArchitecturePage';
 import { SERVICES } from './data/services';
 import { ThemeToggle } from './components/ThemeToggle';
-
-const navItems = [
-  { label: 'Dashboard', to: '/' },
-  { label: 'Architecture', to: '/architecture' },
-];
 
 export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -37,15 +30,6 @@ export default function App() {
         </div>
 
         <nav className="nav-group">
-          <p className="nav-title">Workspace</p>
-          {navItems.map((item) => (
-            <NavLink key={item.to} to={item.to} className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'} end>
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        <nav className="nav-group">
           <p className="nav-title">Services</p>
           {SERVICES.map((service) => (
             <NavLink
@@ -62,8 +46,7 @@ export default function App() {
 
       <main className="main-panel">
         <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/architecture" element={<ArchitecturePage />} />
+          <Route path="/" element={<Navigate to="/service/decks" replace />} />
           <Route path="/service/:serviceSlug" element={<ServiceWorkspacePage />} />
         </Routes>
       </main>

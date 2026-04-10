@@ -292,16 +292,20 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
 
   const rawCustomBeams = parseNumberArray(inputs.customBeamYs).map((value) => clamp(value, 0, depth)).filter((value) => isFreestanding ? value >= 0 && value <= depth : value > 0.2 && value < depth - 0.2);
   const beamCantilever = Math.max(0, Math.min(2, Number(inputs.beamCantilever ?? 2)));
-  const notchBeamOffsets = attachment === 'brick'
-    ? uniqueSorted([
-        ...segments
-          .filter((segment) => segment.orientation === 'horizontal' && segment.start.y > minY + 0.2 && segment.start.y < maxY - 0.2)
-          .map((segment) => round2(segment.start.y - minY)),
-        ...points
-          .map((point) => round2(point.y - minY))
-          .filter((value) => value > 0.2 && value < depth - 0.2),
-      ])
+
+  const insetFrontSegments = attachment === 'brick'
+    ? segments
+        .filter((segment) => segment.orientation === 'horizontal' && segment.start.y > minY + 0.2 && segment.start.y < maxY - 0.2)
+        .filter((segment) => round2(segment.length) > 0.5 && round2(segment.length) < round2(width - 0.2))
+        .map((segment) => {
+          const verticalAtStart = segments.find((candidate) => candidate.orientation === 'vertical' && ((Math.abs(candidate.start.x - segment.start.x) < 0.01 && Math.abs(candidate.start.y - segment.start.y) < 0.01) || (Math.abs(candidate.end.x - segment.start.x) < 0.01 && Math.abs(candidate.end.y - segment.start.y) < 0.01)));
+          const verticalAtEnd = segments.find((candidate) => candidate.orientation === 'vertical' && ((Math.abs(candidate.start.x - segment.end.x) < 0.01 && Math.abs(candidate.start.y - segment.end.y) < 0.01) || (Math.abs(candidate.end.x - segment.end.x) < 0.01 && Math.abs(candidate.end.y - segment.end.y) < 0.01)));
+          const insetDepth = Math.min(verticalAtStart?.length ?? 0, verticalAtEnd?.length ?? 0);
+          return { segment, insetDepth: round2(insetDepth), offsetFromHouse: round2(segment.start.y - minY) };
+        })
+        .filter((entry) => entry.insetDepth >= 2 || entry.segment.length <= 2)
     : [];
+  const insetBeamOffsets = insetFrontSegments.map((entry) => entry.offsetFromHouse);
   const beamOffsets = uniqueSorted((rawCustomBeams.length > 0 ? uniqueSorted(rawCustomBeams) : (() => {
     if (depth <= beamCantilever) return isFreestanding ? [0] : [depth];
     const positions: number[] = [];
@@ -310,7 +314,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     while (positions[positions.length - 1] > BEAM_TARGET_SPACING + (isFreestanding ? 0 : 0.01)) positions.push(round2(positions[positions.length - 1] - BEAM_TARGET_SPACING));
     if (isFreestanding) positions.push(0);
     return uniqueSorted(positions);
-  })()).concat(notchBeamOffsets));
+  })()).filter((value) => !insetBeamOffsets.some((offset) => Math.abs(offset - value) < 0.01)).concat(insetBeamOffsets));
 
   const supportAnchors = uniqueSorted([minY, ...beamOffsets.map((value) => value + minY), maxY]);
   const supportSpans = supportAnchors.slice(1).map((value, index) => round2(value - supportAnchors[index]));
@@ -332,7 +336,11 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const beamLines: BeamLine[] = beamOffsets.map((offsetY, beamIndex) => {
     const y = round2(offsetY + minY);
     const beamEdit = beamEdits.find((item) => item.beamIndex === beamIndex) ?? { beamIndex, startTrim: 0, endTrim: 0 };
-    const segmentsAtBeam = scanlineIntersections(points, 'horizontal', y + 0.0001).map((pair, index, list) => {
+    const insetEntry = insetFrontSegments.find((entry) => Math.abs(entry.offsetFromHouse - offsetY) < 0.01);
+    const sourcePairs = insetEntry
+      ? [{ start: insetEntry.segment.start.x, end: insetEntry.segment.end.x }]
+      : scanlineIntersections(points, 'horizontal', y + 0.0001).map((pair) => ({ start: pair.start, end: pair.end }));
+    const segmentsAtBeam = sourcePairs.map((pair, index, list) => {
       const startX = round2(pair.start + (index === 0 ? beamEdit.startTrim : 0));
       const endX = round2(pair.end - (index === list.length - 1 ? beamEdit.endTrim : 0));
       return { startX, endX, length: round2(endX - startX) };
@@ -358,6 +366,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     return { y, offsetFromHouse: round2(offsetY), segments: segmentsAtBeam, postXs: postXs.sort((a, b) => a - b), lockedPostXs: lockedForBeam.sort((a, b) => a - b), startTrim: beamEdit.startTrim, endTrim: beamEdit.endTrim };
   });
 
+  beamLines.sort((a, b) => a.y - b.y);
   const postCount = beamLines.reduce((sum, line) => sum + line.postXs.length, 0);
   const maxBeamSpan = Math.max(0, ...beamLines.flatMap((line) => {
     if (line.postXs.length < 2) return [0];

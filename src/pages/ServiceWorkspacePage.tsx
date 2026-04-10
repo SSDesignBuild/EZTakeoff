@@ -45,16 +45,6 @@ export function ServiceWorkspacePage() {
       </section>
 
       <MaterialTable items={estimate.materials} values={values} onValuesChange={setValues} />
-
-      <section className="content-card">
-        <div className="section-heading">
-          <p className="eyebrow">Estimator notes</p>
-          <h3>Order prep guidance</h3>
-        </div>
-        <ul className="plain-list">
-          {estimate.orderNotes.map((note) => <li key={note}>{note}</li>)}
-        </ul>
-      </section>
     </div>
   );
 }

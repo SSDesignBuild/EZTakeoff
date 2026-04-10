@@ -1241,3 +1241,13 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .beam-rect.infill{fill:#fde68a;stroke:#b45309;stroke-width:1.5;}
 .beam-rect.infill.secondary{fill:#fef3c7;stroke:#b45309;stroke-width:1.5;}
 .blocking-node{fill:#94a3b8;stroke:#475569;stroke-width:1.2;}
+
+
+.edge-toggle-row{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.75rem}.edge-toggle-pill{display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .55rem;border:1px solid var(--border);border-radius:999px;background:var(--panel);font-size:.78rem}.edge-toggle-pill input{margin:0}.section-card-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}.section-input-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.layout-svg{background:#fff}.preview-toolbar{flex-wrap:wrap}.sheet-title,.sheet-subtitle{letter-spacing:.08em}@media (max-width:1200px){.section-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}@media (max-width:700px){.section-card-grid{grid-template-columns:1fr;}}
+
+.deck-sheet-svg .edge-visual-hit { stroke: rgba(59,130,246,0.14); stroke-width: 14; cursor: pointer; }
+.deck-sheet-svg .edge-visual-hit.active { stroke: rgba(15,118,110,0.18); }
+.deck-sheet-svg .edge-chip { fill: rgba(255,255,255,0.88); stroke: rgba(31,41,55,0.35); stroke-width: 1; }
+.deck-sheet-svg .edge-chip.active { fill: rgba(15,118,110,0.14); stroke: rgba(15,118,110,0.55); }
+.deck-sheet-svg .edge-chip-label { font-size: 10px; font-weight: 700; fill: #111827; pointer-events: none; }
+.deck-sheet-svg .band-corner-cap { fill: #efe7db; stroke: #1f2937; stroke-width: 1.2; }

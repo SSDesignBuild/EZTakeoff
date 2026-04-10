@@ -239,7 +239,7 @@ function buildRailingNodes(deck: ReturnType<typeof buildDeckModel>) {
   return nodes;
 }
 
-function DeckPreview({ values }: { values: Record<string, string | number | boolean> }) {
+function DeckPreview({ values, onValuesChange }: { values: Record<string, string | number | boolean>; onValuesChange?: React.Dispatch<React.SetStateAction<Record<string, string | number | boolean>>> }) {
   const deck = buildDeckModel(values);
   const [layer, setLayer] = useState<DeckLayer>('framing');
   const [inspect, setInspect] = useState<InspectMember | null>(null);
@@ -268,21 +268,18 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
   const pointString = deck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ');
   const beamPlies = (segmentLength: number, offset: number) => {
     const pieces: { start: number; end: number; infill: boolean; label?: string }[] = [];
-    let remaining = segmentLength;
-    let cursor = 0;
-    let first = true;
-    while (remaining > 0.01) {
-      const pieceLen = Math.min(20, remaining);
-      pieces.push({ start: cursor, end: cursor + pieceLen, infill: !first || pieceLen < 19.99, label: pieceLen < 19.99 ? feetAndInches(pieceLen) : undefined });
-      remaining -= pieceLen;
-      cursor += first ? Math.min(20, segmentLength) : pieceLen;
-      first = false;
+    if (segmentLength <= 20.01) return [{ start: 0, end: segmentLength, infill: false }];
+    pieces.push({ start: 0, end: 20, infill: false });
+    let covered = 20;
+    while (covered < segmentLength - 0.01) {
+      const remaining = segmentLength - covered;
+      const infillLen = Math.min(20, remaining);
+      const start = Math.max(0, covered - offset);
+      const end = Math.min(segmentLength, start + infillLen);
+      pieces.push({ start, end, infill: true, label: feetAndInches(end - start) });
+      covered = end;
     }
-    if (pieces.length > 1) {
-      pieces[0].infill = false;
-      pieces.slice(1).forEach((p) => p.infill = true);
-    }
-    return pieces.map((p, idx) => ({ ...p, start: idx === 0 ? 0 : Math.max(0, p.start - offset), end: p.end }));
+    return pieces;
   };
   const showBoards = layer === 'overview' || layer === 'boards';
   const showFraming = layer === 'overview' || layer === 'framing';
@@ -298,7 +295,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
     ? Array.from({ length: Math.max(0, Math.floor(deck.width) - 1) }, (_, i) => deck.minX + 1 + i)
     : Array.from({ length: Math.max(0, Math.floor(deck.depth) - 1) }, (_, i) => deck.minY + 1 + i);
   const railingSegments = railSegmentsForDeck(deck);
-  const railingNodes = buildRailingNodes(deck).map((node) => { const edge = deck.exposedSegments.find((seg) => (Math.abs(seg.start.x - node.point.x) < 0.12 && Math.abs(seg.start.y - node.point.y) < 0.12) || (Math.abs(seg.end.x - node.point.x) < 0.12 && Math.abs(seg.end.y - node.point.y) < 0.12)); if (!edge) return node; const inward = inwardNormal(edge, deck.points); return { ...node, point: { x: node.point.x + inward.x * 0.18, y: node.point.y + inward.y * 0.18 } }; });
+  const railingNodes = Array.from(new Map(buildRailingNodes(deck).map((node) => { const edge = deck.exposedSegments.find((seg) => (Math.abs(seg.start.x - node.point.x) < 0.12 && Math.abs(seg.start.y - node.point.y) < 0.12) || (Math.abs(seg.end.x - node.point.x) < 0.12 && Math.abs(seg.end.y - node.point.y) < 0.12)); const shifted = edge ? (() => { const inward = inwardNormal(edge, deck.points); return { ...node, point: { x: node.point.x + inward.x * 0.34, y: node.point.y + inward.y * 0.34 } }; })() : node; return [`${Math.round(shifted.point.x*12)}-${Math.round(shifted.point.y*12)}-${shifted.kind}`, shifted] as const; })).values());
 
   const stairSegment = deck.stairPlacement.edgeIndex !== null ? deck.edgeSegments[deck.stairPlacement.edgeIndex] : null;
   const stairNormal = stairSegment ? outwardNormal(stairSegment, deck.points) : { x: 0, y: 1 };
@@ -334,6 +331,14 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
 
   const endPan = () => {
     dragPanRef.current.active = false;
+  };
+
+  const toggleManualEdge = (edgeIndex: number) => {
+    if (!onValuesChange) return;
+    const active = new Set(deck.manualRailingEdges.length ? deck.manualRailingEdges : deck.exposedSegments.map((s) => s.index));
+    if (active.has(edgeIndex)) active.delete(edgeIndex);
+    else active.add(edgeIndex);
+    onValuesChange((current) => ({ ...current, manualRailingEdges: JSON.stringify(Array.from(active.values()).sort((a, b) => a - b)) }));
   };
 
   return (
@@ -409,8 +414,8 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
                   const cx = toSvg(postX, beam.y).x;
                   const cy = toSvg(postX, beam.y).y;
                   return <g key={`post-${beamIdx}-${postIdx}`} onClick={() => setInspect({ title: `Post ${postIdx + 1}`, detail: `Notched ${feetAndInches(deck.postLength)} post supporting doubled beam.` })}>
-                    <rect x={cx - 14} y={cy + 3} width={28} height={28} className="post-node" />
-                    <rect x={cx - 14} y={cy - 2} width={14} height={8} className="post-notch-seat" />
+                    <rect x={cx - 16} y={cy + 4} width={32} height={32} className="post-node" />
+                    <rect x={cx - 16} y={cy - 2} width={16} height={9} className="post-notch-seat" />
                     <line x1={cx} y1={cy - 12} x2={cx} y2={cy + 31} className="post-centerline" />
                   </g>;
                 })}
@@ -435,6 +440,8 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
               </g>;
             })}
 
+            {showFraming && deck.points.map((point, idx) => { const p = toSvg(point.x, point.y); return <rect key={`band-corner-${idx}`} x={p.x - 6} y={p.y - 6} width={12} height={12} className="band-corner-cap" />; })}
+
             {showFraming && joistRuns.map((value, idx) => deck.joistDirection === 'vertical'
               ? scanlineIntersections(deck.points, 'vertical', value).map((pair, pairIdx) => {
                   const x = toSvg(value, pair.start).x;
@@ -458,21 +465,42 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
               return <g key={`blocking-${segIdx}`}>{blocks.map((pt, idx) => { const p = toSvg(pt.x + inset.x * 0.6, pt.y + inset.y * 0.6); return <rect key={idx} x={p.x - 6} y={p.y - 6} width={12} height={12} className="blocking-node" />; })}</g>;
             })}
 
-            {showRailing && railingSegments.map((segment, idx) => {
+            {onValuesChange && deck.edgeSegments.map((segment) => {
               const a = toSvg(segment.start.x, segment.start.y);
               const b = toSvg(segment.end.x, segment.end.y);
+              const enabled = deck.manualRailingEdges.length > 0 ? deck.manualRailingEdges.includes(segment.index) : deck.exposedSegments.some((s) => s.index === segment.index);
+              const midX = (a.x + b.x) / 2;
+              const midY = (a.y + b.y) / 2;
+              return <g key={`edge-visual-${segment.index}`} className="edge-visual-layer" onClick={() => toggleManualEdge(segment.index)}>
+                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={enabled ? 'edge-visual-hit active' : 'edge-visual-hit'} />
+                <rect x={midX - 24} y={midY - 11} width={48} height={22} rx={11} className={enabled ? 'edge-chip active' : 'edge-chip'} />
+                <text x={midX} y={midY + 4} textAnchor="middle" className="edge-chip-label">E{segment.index + 1}</text>
+              </g>;
+            })}
+
+            {showRailing && railingSegments.map((segment, idx) => {
+              const sourceEdge = deck.edgeSegments.find((edge) => (Math.abs(edge.start.x - segment.start.x) < 0.01 && Math.abs(edge.start.y - segment.start.y) < 0.01 && Math.abs(edge.end.x - segment.end.x) < 0.01 && Math.abs(edge.end.y - segment.end.y) < 0.01) || (Math.abs(edge.start.x - segment.end.x) < 0.01 && Math.abs(edge.start.y - segment.end.y) < 0.01 && Math.abs(edge.end.x - segment.start.x) < 0.01 && Math.abs(edge.end.y - segment.start.y) < 0.01));
+              const inward = sourceEdge ? inwardNormal(sourceEdge, deck.points) : { x: 0, y: 0 };
+              const insetFt = sourceEdge ? 0.32 : 0;
+              const start = { x: segment.start.x + inward.x * insetFt, y: segment.start.y + inward.y * insetFt };
+              const end = { x: segment.end.x + inward.x * insetFt, y: segment.end.y + inward.y * insetFt };
+              const a = toSvg(start.x, start.y);
+              const b = toSvg(end.x, end.y);
               const midX = (a.x + b.x) / 2;
               const midY = (a.y + b.y) / 2;
               return <g key={`rail-${idx}`} onClick={() => setInspect({ title: segment.kind === 'stair-side' ? 'Angled railing section' : 'Level railing section', detail: `${feetAndInches(segment.length)} railing run.` })}>
-                {(() => { const dx = b.x - a.x; const dy = b.y - a.y; const len = Math.hypot(dx, dy) || 1; const nx = -dy / len * 16; const ny = dx / len * 16; return <><line x1={a.x + nx} y1={a.y + ny} x2={b.x + nx} y2={b.y + ny} className={segment.kind === 'stair-side' ? 'stair-rail-line' : 'railing-line'} />
+                {(() => { const dx = b.x - a.x; const dy = b.y - a.y; const len = Math.hypot(dx, dy) || 1; const nx = -dy / len * 12; const ny = dx / len * 12; return <><line x1={a.x + nx} y1={a.y + ny} x2={b.x + nx} y2={b.y + ny} className={segment.kind === 'stair-side' ? 'stair-rail-line' : 'railing-line'} />
                 <text x={midX + nx + 6} y={midY + ny - 6} className="rail-label">{segment.kind === 'stair-side' ? 'ANGLED RAIL' : 'LEVEL RAIL'}</text></>; })()}
               </g>;
             })}
             {showRailing && railingNodes.map((node, idx) => {
-              const p = toSvg(node.point.x, node.point.y);
+              const nearby = deck.edgeSegments.filter((edge) => Math.abs(edge.start.x - node.point.x) < 0.01 && Math.abs(edge.start.y - node.point.y) < 0.01 || Math.abs(edge.end.x - node.point.x) < 0.01 && Math.abs(edge.end.y - node.point.y) < 0.01);
+              const offset = nearby.length ? nearby.map((edge) => inwardNormal(edge, deck.points)).reduce((acc, item) => ({ x: acc.x + item.x, y: acc.y + item.y }), { x: 0, y: 0 }) : { x: 0, y: 0 };
+              const mag = Math.hypot(offset.x, offset.y) || 1;
+              const p = toSvg(node.point.x + (offset.x / mag) * 0.26, node.point.y + (offset.y / mag) * 0.26);
               const cls = node.kind === 'stair-end' || node.kind === 'stair-inline' ? 'stair-post-node' : 'railing-post-node';
               return <g key={`rail-node-${idx}`} onClick={() => setInspect({ title: node.detail, detail: `${node.detail} at ${feetAndInches(node.point.x - deck.minX)}, ${feetAndInches(node.point.y - deck.minY)}.` })}>
-                <rect x={p.x - 9} y={p.y - 9} width={18} height={18} className={cls} />
+                <rect x={p.x - 12} y={p.y - 12} width={24} height={24} className={cls} />
               </g>;
             })}
 
@@ -511,7 +539,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
               const offset = 26;
               return renderDim(a, b, feetAndInches(segment.length), outward.x * offset, outward.y * offset, `seg-h-${segment.index}`);
             })}
-            {deck.edgeSegments.filter((segment) => segment.orientation === 'vertical').map((segment) => {
+            {deck.edgeSegments.filter((segment) => segment.orientation === 'vertical' && Math.abs(segment.start.x - deck.minX) > 0.05).map((segment) => {
               const a = toSvg(segment.start.x, segment.start.y);
               const b = toSvg(segment.end.x, segment.end.y);
               const outward = outwardNormal(segment, deck.points);
@@ -584,6 +612,7 @@ function DeckPreview({ values }: { values: Record<string, string | number | bool
 
 function ScreenPreview({ values, renaissance }: { values: Record<string, string | number | boolean>; renaissance: boolean }) {
   const sections = parseSections(values.sections, 3);
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const scale = 30;
   const gutter = 24;
   const x0 = 44;
@@ -593,8 +622,8 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
   let runningX = x0;
   return (
     <div className="visual-card">
-      <div className="visual-header"><h3>Layout preview</h3><span>Scaled installer plan with distinct material lanes, true door cut-outs, and screen/picket/kick-panel geometry that follows the opening proportions.</span></div>
-      <svg viewBox={`0 0 ${totalW + 120} ${totalH + 150}`} className="layout-svg">
+      <div className="visual-header"><div><h3>Layout preview</h3><span>Scaled installer plan with distinct material lanes, true door cut-outs, and screen/picket/kick-panel geometry that follows the opening proportions.</span></div><div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => exportSvgAsPrint(svgRef.current, renaissance ? 'Renaissance screen room plan' : 'Screen room plan')}>Export PDF</button></div></div>
+      <svg ref={svgRef} viewBox={`0 0 ${totalW + 120} ${totalH + 150}`} className="layout-svg">
         {Array.from({ length: Math.ceil(totalW / scale) + 3 }, (_, index) => <line key={`sx-${index}`} x1={x0 - 18 + index * scale} y1={y0 - 18} x2={x0 - 18 + index * scale} y2={y0 + totalH + 18} className="svg-grid" />)}
         {Array.from({ length: Math.ceil(totalH / scale) + 3 }, (_, index) => <line key={`sy-${index}`} x1={x0 - 18} y1={y0 - 18 + index * scale} x2={x0 + totalW + 18} y2={y0 - 18 + index * scale} className="svg-grid" />)}
         {sections.map((section, sectionIndex) => {
@@ -718,4 +747,4 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
   </div>;
 }
 
-export function LayoutPreview({ serviceSlug, values, onValuesChange }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; return <ScreenPreview values={values} renaissance />; }
+export function LayoutPreview({ serviceSlug, values, onValuesChange }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; return <ScreenPreview values={values} renaissance />; }
