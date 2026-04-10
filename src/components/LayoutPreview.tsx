@@ -23,11 +23,41 @@ const feetAndInches = (feet: number) => {
 
 function exportSvgAsPrint(svg: SVGSVGElement | null, title: string) {
   if (!svg) return;
-  const win = window.open('', '_blank', 'width=1700,height=1100');
-  if (!win) return;
-  const svgMarkup = svg.outerHTML.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-  win.document.write(`<!doctype html><html><head><title>${title}</title><style>@page{size:landscape;margin:0.25in}html,body{margin:0;padding:0;background:#fff;color:#111;font-family:Inter,Arial,sans-serif}body{padding:12px}svg{display:block;width:100%;height:auto;background:#fff}</style></head><body>${svgMarkup}<script>window.onload=()=>setTimeout(()=>window.print(),260);</script></body></html>`);
-  win.document.close();
+  const sourceSvg = svg.cloneNode(true) as SVGSVGElement;
+  sourceSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  sourceSvg.style.background = '#ffffff';
+  const viewBox = sourceSvg.viewBox.baseVal;
+  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bg.setAttribute('x', String(viewBox?.x ?? 0));
+  bg.setAttribute('y', String(viewBox?.y ?? 0));
+  bg.setAttribute('width', String(viewBox?.width || sourceSvg.clientWidth || 1600));
+  bg.setAttribute('height', String(viewBox?.height || sourceSvg.clientHeight || 1100));
+  bg.setAttribute('fill', '#ffffff');
+  sourceSvg.insertBefore(bg, sourceSvg.firstChild);
+  const svgMarkup = new XMLSerializer().serializeToString(sourceSvg);
+  const blob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1600, viewBox?.width ? Math.round(viewBox.width) : sourceSvg.clientWidth || 1600);
+    canvas.height = Math.max(1100, viewBox?.height ? Math.round(viewBox.height) : sourceSvg.clientHeight || 1100);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      URL.revokeObjectURL(url);
+      return;
+    }
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    URL.revokeObjectURL(url);
+    const png = canvas.toDataURL('image/png');
+    const win = window.open('', '_blank', 'width=1700,height=1100');
+    if (!win) return;
+    win.document.write(`<!doctype html><html><head><title>${title}</title><style>@page{size:landscape;margin:0.25in}html,body{margin:0;padding:0;background:#fff;color:#111;font-family:Inter,Arial,sans-serif}body{padding:12px}img{display:block;width:100%;height:auto;background:#fff}</style></head><body><img src="${png}" alt="${title}" /><script>window.onload=()=>setTimeout(()=>window.print(),260);</script></body></html>`);
+    win.document.close();
+  };
+  img.src = url;
 }
 
 function scanlineIntersections(points: DeckPoint[], axis: 'horizontal' | 'vertical', position: number) {
@@ -269,15 +299,16 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const beamPlies = (segmentLength: number, offset: number) => {
     const pieces: { start: number; end: number; infill: boolean; label?: string }[] = [];
     if (segmentLength <= 20.01) return [{ start: 0, end: segmentLength, infill: false }];
-    pieces.push({ start: 0, end: 20, infill: false });
-    let covered = 20;
-    while (covered < segmentLength - 0.01) {
-      const remaining = segmentLength - covered;
-      const infillLen = Math.min(20, remaining);
-      const start = Math.max(0, covered - offset);
+    pieces.push({ start: 0, end: 20, infill: false, label: `20'` });
+    let coverageEnd = 20;
+    while (coverageEnd < segmentLength - 0.01) {
+      const remaining = segmentLength - coverageEnd;
+      const infillLen = Math.min(20, remaining + offset);
+      const start = Math.max(0, coverageEnd - offset);
       const end = Math.min(segmentLength, start + infillLen);
       pieces.push({ start, end, infill: true, label: feetAndInches(end - start) });
-      covered = end;
+      coverageEnd = start + 20;
+      if (coverageEnd <= start + 0.01) break;
     }
     return pieces;
   };
@@ -295,7 +326,8 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
     ? Array.from({ length: Math.max(0, Math.floor(deck.width) - 1) }, (_, i) => deck.minX + 1 + i)
     : Array.from({ length: Math.max(0, Math.floor(deck.depth) - 1) }, (_, i) => deck.minY + 1 + i);
   const railingSegments = railSegmentsForDeck(deck);
-  const railingNodes = Array.from(new Map(buildRailingNodes(deck).map((node) => { const edge = deck.exposedSegments.find((seg) => (Math.abs(seg.start.x - node.point.x) < 0.12 && Math.abs(seg.start.y - node.point.y) < 0.12) || (Math.abs(seg.end.x - node.point.x) < 0.12 && Math.abs(seg.end.y - node.point.y) < 0.12)); const shifted = edge ? (() => { const inward = inwardNormal(edge, deck.points); return { ...node, point: { x: node.point.x + inward.x * 0.34, y: node.point.y + inward.y * 0.34 } }; })() : node; return [`${Math.round(shifted.point.x*12)}-${Math.round(shifted.point.y*12)}-${shifted.kind}`, shifted] as const; })).values());
+  const railingInsetFt = 0.42;
+  const railingNodes = Array.from(new Map(buildRailingNodes(deck).map((node) => { const edge = deck.exposedSegments.find((seg) => (Math.abs(seg.start.x - node.point.x) < 0.12 && Math.abs(seg.start.y - node.point.y) < 0.12) || (Math.abs(seg.end.x - node.point.x) < 0.12 && Math.abs(seg.end.y - node.point.y) < 0.12)); const shifted = edge ? (() => { const inward = inwardNormal(edge, deck.points); return { ...node, point: { x: node.point.x + inward.x * railingInsetFt, y: node.point.y + inward.y * railingInsetFt } }; })() : node; return [`${Math.round(shifted.point.x*12)}-${Math.round(shifted.point.y*12)}-${shifted.kind}`, shifted] as const; })).values());
 
   const stairSegment = deck.stairPlacement.edgeIndex !== null ? deck.edgeSegments[deck.stairPlacement.edgeIndex] : null;
   const stairNormal = stairSegment ? outwardNormal(stairSegment, deck.points) : { x: 0, y: 1 };
@@ -424,23 +456,45 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
 
             {showFraming && deck.edgeSegments.map((segment) => {
               const band = 9;
+              const normal = inwardNormal(segment, deck.points);
+              const normalPx = { x: normal.x * band, y: normal.y * band };
               const isHorizontal = segment.orientation === 'horizontal';
-              const primaryTrim = isHorizontal ? 0 : band;
-              const secondaryTrim = isHorizontal ? band : 0;
-              const pStart = pointAlong(segment, primaryTrim / Math.max(scale, 1));
-              const pEnd = pointAlong(segment, segment.length - primaryTrim / Math.max(scale, 1));
-              const sStart = pointAlong(segment, secondaryTrim / Math.max(scale, 1));
-              const sEnd = pointAlong(segment, segment.length - secondaryTrim / Math.max(scale, 1));
-              const rectProps = (x1:number,y1:number,x2:number,y2:number)=>({x:Math.min(x1,x2)-(isHorizontal?0:band/2),y:Math.min(y1,y2)-(isHorizontal?band/2:0),width:Math.max(isHorizontal?Math.abs(x2-x1):band,band),height:Math.max(isHorizontal?band:Math.abs(y2-y1),band)});
-              const primarySegs = staggeredSegments(Math.max(0, segment.length - (primaryTrim * 2 / Math.max(scale,1))), 20, 0);
-              const secondarySegs = staggeredSegments(Math.max(0, segment.length - (secondaryTrim * 2 / Math.max(scale,1))), 20, 10);
+              const primaryTrim = isHorizontal ? 0 : 0.18;
+              const secondaryTrim = isHorizontal ? 0.18 : 0;
+              const pStart = pointAlong(segment, primaryTrim);
+              const pEnd = pointAlong(segment, segment.length - primaryTrim);
+              const sStart = pointAlong(segment, secondaryTrim);
+              const sEnd = pointAlong(segment, segment.length - secondaryTrim);
+              const rectProps = (x1:number,y1:number,x2:number,y2:number, offset:number)=>({
+                x: Math.min(x1,x2) - (isHorizontal ? 0 : band/2) + normalPx.x * offset,
+                y: Math.min(y1,y2) - (isHorizontal ? band/2 : 0) + normalPx.y * offset,
+                width: Math.max(isHorizontal ? Math.abs(x2-x1) : band, band),
+                height: Math.max(isHorizontal ? band : Math.abs(y2-y1), band)
+              });
+              const primaryLength = Math.max(0, segment.length - primaryTrim * 2);
+              const secondaryLength = Math.max(0, segment.length - secondaryTrim * 2);
+              const primarySegs = staggeredSegments(primaryLength, 20, 0);
+              const secondarySegs = staggeredSegments(secondaryLength, 20, 10);
               return <g key={`band-${segment.index}`}>
-                {primarySegs.map((seg, idx) => { const st = pointAlong({ ...segment, length: Math.max(0, segment.length - primaryTrim * 2 / Math.max(scale,1)), start:pStart, end:pEnd }, seg.start); const en = pointAlong({ ...segment, length: Math.max(0, segment.length - primaryTrim * 2 / Math.max(scale,1)), start:pStart, end:pEnd }, seg.end); const aa=toSvg(st.x,st.y); const bb=toSvg(en.x,en.y); const props=rectProps(aa.x,aa.y,bb.x,bb.y); return <g key={`bp-${idx}`}><rect {...props} className="double-band-rect" />{seg.end < Math.max(0, segment.length - (primaryTrim * 2 / Math.max(scale,1))) - 0.05 && <line x1={bb.x - 5} y1={bb.y - 5} x2={bb.x + 5} y2={bb.y + 5} className="seam-tick" />}</g>; })}
-                {secondarySegs.map((seg, idx) => { const st = pointAlong({ ...segment, length: Math.max(0, segment.length - secondaryTrim * 2 / Math.max(scale,1)), start:sStart, end:sEnd }, seg.start); const en = pointAlong({ ...segment, length: Math.max(0, segment.length - secondaryTrim * 2 / Math.max(scale,1)), start:sStart, end:sEnd }, seg.end); const aa=toSvg(st.x,st.y); const bb=toSvg(en.x,en.y); const props=rectProps(aa.x,aa.y,bb.x,bb.y); return <g key={`bs-${idx}`}><rect {...props} className="double-band-rect secondary" />{seg.end < Math.max(0, segment.length - (secondaryTrim * 2 / Math.max(scale,1))) - 0.05 && <line x1={bb.x - 5} y1={bb.y + 5} x2={bb.x + 5} y2={bb.y - 5} className="seam-tick" />}</g>; })}
+                {primarySegs.map((seg, idx) => {
+                  const st = pointAlong({ ...segment, length: primaryLength, start:pStart, end:pEnd }, seg.start);
+                  const en = pointAlong({ ...segment, length: primaryLength, start:pStart, end:pEnd }, seg.end);
+                  const aa = toSvg(st.x, st.y);
+                  const bb = toSvg(en.x, en.y);
+                  const props = rectProps(aa.x, aa.y, bb.x, bb.y, 0);
+                  return <g key={`bp-${idx}`}><rect {...props} className="double-band-rect" />{seg.end < primaryLength - 0.05 && <line x1={bb.x + normalPx.x * 0.15 - 5} y1={bb.y + normalPx.y * 0.15 - 5} x2={bb.x + normalPx.x * 0.15 + 5} y2={bb.y + normalPx.y * 0.15 + 5} className="seam-tick" />}</g>;
+                })}
+                {secondarySegs.map((seg, idx) => {
+                  const st = pointAlong({ ...segment, length: secondaryLength, start:sStart, end:sEnd }, seg.start);
+                  const en = pointAlong({ ...segment, length: secondaryLength, start:sStart, end:sEnd }, seg.end);
+                  const aa = toSvg(st.x, st.y);
+                  const bb = toSvg(en.x, en.y);
+                  const props = rectProps(aa.x, aa.y, bb.x, bb.y, 1.02);
+                  return <g key={`bs-${idx}`}><rect {...props} className="double-band-rect secondary" />{seg.end < secondaryLength - 0.05 && <line x1={bb.x + normalPx.x * 1.02 - 5} y1={bb.y + normalPx.y * 1.02 + 5} x2={bb.x + normalPx.x * 1.02 + 5} y2={bb.y + normalPx.y * 1.02 - 5} className="seam-tick" />}</g>;
+                })}
               </g>;
             })}
 
-            {showFraming && deck.points.map((point, idx) => { const p = toSvg(point.x, point.y); return <rect key={`band-corner-${idx}`} x={p.x - 6} y={p.y - 6} width={12} height={12} className="band-corner-cap" />; })}
 
             {showFraming && joistRuns.map((value, idx) => deck.joistDirection === 'vertical'
               ? scanlineIntersections(deck.points, 'vertical', value).map((pair, pairIdx) => {
@@ -458,12 +512,29 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   return <rect key={`joist-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - 3} width={Math.max(0, Math.abs(x2 - x1))} height={6} className="joist-rect" onClick={() => setInspect({ title: `Joist ${idx + 1}`, detail: `${deck.joistSize} joist at 12 in O.C.` })} />;
                 }))}
 
-            {showFraming && Boolean(values.borderSameBoard) && deck.exposedSegments.filter((segment) => segment.orientation !== 'horizontal' || Math.abs(segment.start.y - deck.minY) > 0.05).map((segment, segIdx) => {
-              const inset = inwardNormal(segment, deck.points);
-              const span = segment.length;
-              const blocks = symmetricPostOffsets(span, 2).map((distance) => pointAlong(segment, distance));
-              return <g key={`blocking-${segIdx}`}>{blocks.map((pt, idx) => { const p = toSvg(pt.x + inset.x * 0.6, pt.y + inset.y * 0.6); return <rect key={idx} x={p.x - 6} y={p.y - 6} width={12} height={12} className="blocking-node" />; })}</g>;
-            })}
+            {showFraming && Boolean(values.borderSameBoard) && deck.exposedSegments
+              .filter((segment) => segment.orientation === 'vertical' || Math.abs(segment.start.y - deck.maxY) > 0.05)
+              .map((segment, segIdx) => {
+                const inset = inwardNormal(segment, deck.points);
+                const tangent = directionBetween(segment.start, segment.end);
+                const span = segment.length;
+                const blocks = symmetricPostOffsets(span, 2).map((distance) => pointAlong(segment, distance));
+                return <g key={`blocking-${segIdx}`}>{blocks.map((pt, idx) => {
+                  const center = toSvg(pt.x + inset.x * 0.58, pt.y + inset.y * 0.58);
+                  const blockW = 14;
+                  const blockL = 22;
+                  return <rect
+                    key={idx}
+                    x={center.x - blockL / 2}
+                    y={center.y - blockW / 2}
+                    width={blockL}
+                    height={blockW}
+                    rx={1.5}
+                    transform={`rotate(${Math.atan2(tangent.y, tangent.x) * 180 / Math.PI} ${center.x} ${center.y})`}
+                    className="blocking-node"
+                  />;
+                })}</g>;
+              })}
 
             {onValuesChange && deck.edgeSegments.map((segment) => {
               const a = toSvg(segment.start.x, segment.start.y);
@@ -481,16 +552,21 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             {showRailing && railingSegments.map((segment, idx) => {
               const sourceEdge = deck.edgeSegments.find((edge) => (Math.abs(edge.start.x - segment.start.x) < 0.01 && Math.abs(edge.start.y - segment.start.y) < 0.01 && Math.abs(edge.end.x - segment.end.x) < 0.01 && Math.abs(edge.end.y - segment.end.y) < 0.01) || (Math.abs(edge.start.x - segment.end.x) < 0.01 && Math.abs(edge.start.y - segment.end.y) < 0.01 && Math.abs(edge.end.x - segment.start.x) < 0.01 && Math.abs(edge.end.y - segment.start.y) < 0.01));
               const inward = sourceEdge ? inwardNormal(sourceEdge, deck.points) : { x: 0, y: 0 };
-              const insetFt = sourceEdge ? 0.32 : 0;
+              const insetFt = sourceEdge ? railingInsetFt : 0;
               const start = { x: segment.start.x + inward.x * insetFt, y: segment.start.y + inward.y * insetFt };
               const end = { x: segment.end.x + inward.x * insetFt, y: segment.end.y + inward.y * insetFt };
               const a = toSvg(start.x, start.y);
               const b = toSvg(end.x, end.y);
               const midX = (a.x + b.x) / 2;
               const midY = (a.y + b.y) / 2;
+              const dx = b.x - a.x;
+              const dy = b.y - a.y;
+              const len = Math.hypot(dx, dy) || 1;
+              const labelX = midX + (-dy / len) * 10;
+              const labelY = midY + (dx / len) * 10 - 4;
               return <g key={`rail-${idx}`} onClick={() => setInspect({ title: segment.kind === 'stair-side' ? 'Angled railing section' : 'Level railing section', detail: `${feetAndInches(segment.length)} railing run.` })}>
-                {(() => { const dx = b.x - a.x; const dy = b.y - a.y; const len = Math.hypot(dx, dy) || 1; const nx = -dy / len * 12; const ny = dx / len * 12; return <><line x1={a.x + nx} y1={a.y + ny} x2={b.x + nx} y2={b.y + ny} className={segment.kind === 'stair-side' ? 'stair-rail-line' : 'railing-line'} />
-                <text x={midX + nx + 6} y={midY + ny - 6} className="rail-label">{segment.kind === 'stair-side' ? 'ANGLED RAIL' : 'LEVEL RAIL'}</text></>; })()}
+                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={segment.kind === 'stair-side' ? 'stair-rail-line' : 'railing-line'} />
+                <text x={labelX} y={labelY} className="rail-label">{segment.kind === 'stair-side' ? 'ANGLED RAIL' : 'LEVEL RAIL'}</text>
               </g>;
             })}
             {showRailing && railingNodes.map((node, idx) => {

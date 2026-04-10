@@ -137,7 +137,9 @@ function comboScore(pieces: PatioPanelPiece[], preferredPanelFt: number, fanCoun
   const symmetryPenalty = Math.abs(edgeLeft - edgeRight);
   const regular4 = pieces.filter((piece) => piece.panelWidth === 4 && piece.kind !== 'cut').length;
   const regular2 = pieces.filter((piece) => piece.panelWidth === 2 && piece.kind !== 'cut').length;
-  const preferencePenalty = preferredPanelFt === 4 ? (regular2 * 140) - (regular4 * 22) : (regular4 * 24);
+  const preferencePenalty = preferredPanelFt === 4
+    ? (regular2 * 220) + (pieces.length * 14) - (regular4 * 70)
+    : (regular4 * 28) - (regular2 * 14);
   const interiorCutPenalty = pieces.slice(1, -1).filter((piece) => piece.kind === 'cut').length * 250;
   const cutPenalty = cuts.length * 30 + cuts.reduce((sum, piece) => sum + Math.abs(24 - piece.widthIn), 0) * 0.9;
   const fanEval = chooseFanOptions(pieces, fanCount, placementMode, 0, fanMode);
