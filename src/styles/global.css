@@ -1251,3 +1251,9 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .deck-sheet-svg .edge-chip.active { fill: rgba(15,118,110,0.14); stroke: rgba(15,118,110,0.55); }
 .deck-sheet-svg .edge-chip-label { font-size: 10px; font-weight: 700; fill: #111827; pointer-events: none; }
 .deck-sheet-svg .band-corner-cap { fill: #efe7db; stroke: #1f2937; stroke-width: 1.2; }
+.deck-sheet-svg .selected-rail{stroke:#fb923c;stroke-width:4.2;filter:drop-shadow(0 0 6px rgba(251,146,60,.45));}
+.deck-sheet-svg .rail-handle{fill:#fff;stroke:#f97316;stroke-width:2;cursor:ew-resize;}
+.deck-sheet-svg .rail-edit-label{font-size:11px;font-weight:700;fill:#9a3412;paint-order:stroke;stroke:#fff;stroke-width:3px;}
+.deck-sheet-svg .rail-toolbar-box{fill:rgba(255,255,255,.96);stroke:#cbd5e1;stroke-width:1.2;}
+.deck-sheet-svg .rail-toolbar-btn{font-size:10px;font-weight:700;fill:#0f172a;cursor:pointer;}
+.deck-sheet-svg .rail-toolbar-sub{font-size:9px;fill:#64748b;}

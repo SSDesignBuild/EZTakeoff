@@ -136,3 +136,64 @@ export async function exportSvgAsPdf(svg: SVGSVGElement | null, title: string, f
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+
+async function htmlElementToCanvas(element: HTMLElement, title: string) {
+  const clone = element.cloneNode(true) as HTMLElement;
+  const wrapper = document.createElement('div');
+  wrapper.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+  wrapper.style.background = '#ffffff';
+  wrapper.style.padding = '24px';
+  wrapper.style.width = `${Math.max(1200, element.scrollWidth + 64)}px`;
+  wrapper.style.fontFamily = 'Inter, Arial, sans-serif';
+  wrapper.style.color = '#111111';
+  wrapper.style.boxSizing = 'border-box';
+  const heading = document.createElement('h1');
+  heading.textContent = title;
+  heading.style.margin = '0 0 16px';
+  heading.style.fontSize = '24px';
+  heading.style.fontWeight = '700';
+  heading.style.color = '#111111';
+  wrapper.appendChild(heading);
+  wrapper.appendChild(clone);
+
+  const width = Math.max(1400, element.scrollWidth + 96);
+  const height = Math.max(900, element.scrollHeight + 160);
+  const data = new XMLSerializer().serializeToString(wrapper);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><foreignObject width="100%" height="100%">${data}</foreignObject></svg>`;
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Unable to render HTML for export.'));
+      image.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas context unavailable.');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+    return canvas;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export async function exportElementAsPdf(element: HTMLElement | null, title: string, filename: string) {
+  if (!element) return;
+  const canvas = await htmlElementToCanvas(element, title);
+  const jpeg = canvas.toDataURL('image/jpeg', 0.95).split(',')[1] || '';
+  const blob = makePdfFromJpeg(base64ToBytes(jpeg), canvas.width, canvas.height, title);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

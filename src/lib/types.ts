@@ -31,6 +31,13 @@ export interface LockedPostPoint {
   x: number;
 }
 
+export interface DeckRailCoverage {
+  edgeIndex: number;
+  start: number;
+  end: number;
+  kind: "level" | "angled";
+}
+
 export interface SectionConfig {
   id: string;
   label: string;

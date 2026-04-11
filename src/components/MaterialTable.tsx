@@ -1,4 +1,5 @@
 import { useMemo, useRef } from 'react';
+import { exportElementAsPdf } from '../lib/export';
 import { MaterialItem } from '../lib/types';
 
 interface MaterialTableProps {
@@ -45,13 +46,9 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
     </style></head><body><h1>S&S Design Build · Material order list</h1>${headerHtml}${bodyHtml}</body></html>`;
   };
 
-  const exportPdf = () => {
-    const win = window.open('', '_blank', 'width=1400,height=1000');
-    if (!win) return;
-    win.document.write(buildPrintHtml());
-    win.document.close();
-    win.focus();
-    window.setTimeout(() => win.print(), 180);
+  const exportPdf = async () => {
+    if (!tableRef.current) return;
+    await exportElementAsPdf(tableRef.current, 'S&S Design Build · Material order list', 'sns-material-order-list.pdf');
   };
 
   const exportPng = async () => {

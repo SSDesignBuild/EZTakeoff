@@ -3,7 +3,7 @@ import { exportSvgAsPdf } from '../lib/export';
 import { buildDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout } from '../lib/patioLayout';
 import { parseSections } from '../lib/sectioning';
-import { DeckEdgeSegment, DeckPoint, SectionConfig } from '../lib/types';
+import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, SectionConfig } from '../lib/types';
 
 interface LayoutPreviewProps {
   serviceSlug: string;
@@ -13,6 +13,7 @@ interface LayoutPreviewProps {
 
 type DeckLayer = 'overview' | 'boards' | 'framing' | 'railing' | 'stairs';
 type InspectMember = { title: string; detail: string };
+type RailSegment = { edgeIndex: number; start: DeckPoint; end: DeckPoint; length: number; kind: 'deck' | 'stair-side'; railKind: 'level' | 'angled'; coverageStart?: number; coverageEnd?: number };
 
 const feetAndInches = (feet: number) => {
   const totalInches = Math.round(feet * 12);
@@ -133,22 +134,21 @@ function sectionSpansExcludingDoor(section: SectionConfig) {
 
 
 function railSegmentsForDeck(deck: ReturnType<typeof buildDeckModel>) {
-  const result: { start: DeckPoint; end: DeckPoint; length: number; kind: 'deck' | 'stair-side' }[] = [];
-  deck.exposedSegments.forEach((segment) => {
-    if (segment.index !== deck.stairPlacement.edgeIndex || !deck.stairPlacement.start || !deck.stairPlacement.end) {
-      result.push({ start: segment.start, end: segment.end, length: segment.length, kind: 'deck' });
+  const result: RailSegment[] = [];
+  deck.railCoverage.forEach((coverage) => {
+    const edge = deck.edgeSegments[coverage.edgeIndex];
+    if (!edge) return;
+    if (edge.index !== deck.stairPlacement.edgeIndex || !deck.stairPlacement.start || !deck.stairPlacement.end) {
+      result.push({ start: pointAlong(edge, coverage.start), end: pointAlong(edge, coverage.end), length: coverage.end - coverage.start, kind: 'deck', railKind: coverage.kind, edgeIndex: edge.index, coverageStart: coverage.start, coverageEnd: coverage.end });
       return;
     }
-    const stairOffset = deck.stairPlacement.offset;
-    const stairWidth = Math.min(deck.stairPlacement.width, segment.length);
-    if (stairOffset > 0.05) {
-      const ratio = stairOffset / segment.length;
-      result.push({ start: segment.start, end: { x: segment.start.x + (segment.end.x - segment.start.x) * ratio, y: segment.start.y + (segment.end.y - segment.start.y) * ratio }, length: stairOffset, kind: 'deck' });
+    const stairStart = deck.stairPlacement.offset;
+    const stairEnd = deck.stairPlacement.offset + deck.stairPlacement.width;
+    if (coverage.start < stairStart - 0.05) {
+      result.push({ start: pointAlong(edge, coverage.start), end: pointAlong(edge, Math.min(coverage.end, stairStart)), length: Math.min(coverage.end, stairStart) - coverage.start, kind: 'deck', railKind: coverage.kind, edgeIndex: edge.index, coverageStart: coverage.start, coverageEnd: Math.min(coverage.end, stairStart) });
     }
-    const rightLength = segment.length - (stairOffset + stairWidth);
-    if (rightLength > 0.05) {
-      const ratio = (stairOffset + stairWidth) / segment.length;
-      result.push({ start: { x: segment.start.x + (segment.end.x - segment.start.x) * ratio, y: segment.start.y + (segment.end.y - segment.start.y) * ratio }, end: segment.end, length: rightLength, kind: 'deck' });
+    if (coverage.end > stairEnd + 0.05) {
+      result.push({ start: pointAlong(edge, Math.max(coverage.start, stairEnd)), end: pointAlong(edge, coverage.end), length: coverage.end - Math.max(coverage.start, stairEnd), kind: 'deck', railKind: coverage.kind, edgeIndex: edge.index, coverageStart: Math.max(coverage.start, stairEnd), coverageEnd: coverage.end });
     }
   });
   if (deck.stairRisers > 3 && deck.stairPlacement.start && deck.stairPlacement.end) {
@@ -156,11 +156,11 @@ function railSegmentsForDeck(deck: ReturnType<typeof buildDeckModel>) {
     const normal = outwardNormal(segment, deck.points);
     const run = deck.stairRunFt;
     result.push(
-      { start: deck.stairPlacement.start, end: { x: deck.stairPlacement.start.x + normal.x * run, y: deck.stairPlacement.start.y + normal.y * run }, length: run, kind: 'stair-side' },
-      { start: deck.stairPlacement.end, end: { x: deck.stairPlacement.end.x + normal.x * run, y: deck.stairPlacement.end.y + normal.y * run }, length: run, kind: 'stair-side' },
+      { start: deck.stairPlacement.start, end: { x: deck.stairPlacement.start.x + normal.x * run, y: deck.stairPlacement.start.y + normal.y * run }, length: run, kind: 'stair-side', railKind: 'angled', edgeIndex: segment.index },
+      { start: deck.stairPlacement.end, end: { x: deck.stairPlacement.end.x + normal.x * run, y: deck.stairPlacement.end.y + normal.y * run }, length: run, kind: 'stair-side', railKind: 'angled', edgeIndex: segment.index },
     );
   }
-  return result;
+  return result.filter((item) => item.length > 0.05);
 }
 
 function pointKey(point: DeckPoint) {
@@ -176,8 +176,9 @@ type RailingNodeKind = 'corner' | 'inside-corner' | 'inline' | 'level-end' | 'st
 type RailingNode = { point: DeckPoint; kind: RailingNodeKind; detail: string };
 
 function buildRailingNodes(deck: ReturnType<typeof buildDeckModel>) {
-  const topRuns = railSegmentsForDeck(deck).filter((segment) => segment.kind === 'deck');
-  const stairRuns = railSegmentsForDeck(deck).filter((segment) => segment.kind === 'stair-side');
+  const allRuns = railSegmentsForDeck(deck);
+  const topRuns = allRuns.filter((segment) => segment.kind === 'deck');
+  const stairRuns = allRuns.filter((segment) => segment.kind === 'stair-side');
   const orientation = polygonOrientation(deck.points);
   const reflexVertices = new Set<number>();
   deck.points.forEach((_, index) => {
@@ -231,11 +232,25 @@ function buildRailingNodes(deck: ReturnType<typeof buildDeckModel>) {
   return nodes;
 }
 
+function parseRailCoverageValue(raw: string | number | boolean | undefined) {
+  if (typeof raw !== 'string' || !raw.trim()) return [] as DeckRailCoverage[];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as DeckRailCoverage[] : [];
+  } catch { return []; }
+}
+
+function serializeRailCoverage(items: DeckRailCoverage[]) {
+  return JSON.stringify(items.map((item) => ({ ...item, start: Math.round(item.start * 12) / 12, end: Math.round(item.end * 12) / 12 })).sort((a, b) => a.edgeIndex - b.edgeIndex || a.start - b.start));
+}
+
 function DeckPreview({ values, onValuesChange }: { values: Record<string, string | number | boolean>; onValuesChange?: React.Dispatch<React.SetStateAction<Record<string, string | number | boolean>>> }) {
   const deck = buildDeckModel(values);
   const [layer, setLayer] = useState<DeckLayer>('framing');
   const [inspect, setInspect] = useState<InspectMember | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [selectedRail, setSelectedRail] = useState<number | null>(null);
+  const [dragRail, setDragRail] = useState<{ index: number; handle: 'start' | 'end' } | null>(null);
   const panRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragPanRef = useRef<{ active: boolean; x: number; y: number; left: number; top: number }>({ active: false, x: 0, y: 0, left: 0, top: 0 });
@@ -288,6 +303,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
     ? Array.from({ length: Math.max(0, Math.floor(deck.width) - 1) }, (_, i) => deck.minX + 1 + i)
     : Array.from({ length: Math.max(0, Math.floor(deck.depth) - 1) }, (_, i) => deck.minY + 1 + i);
   const railingSegments = railSegmentsForDeck(deck);
+  const editableCoverage = useMemo(() => parseRailCoverageValue(values.railCoverage), [values.railCoverage]);
   const railingInsetFt = 0.42;
   const railingNodes = Array.from(new Map(buildRailingNodes(deck).map((node) => { const edge = deck.exposedSegments.find((seg) => (Math.abs(seg.start.x - node.point.x) < 0.12 && Math.abs(seg.start.y - node.point.y) < 0.12) || (Math.abs(seg.end.x - node.point.x) < 0.12 && Math.abs(seg.end.y - node.point.y) < 0.12)); const shifted = edge ? (() => { const inward = inwardNormal(edge, deck.points); return { ...node, point: { x: node.point.x + inward.x * railingInsetFt, y: node.point.y + inward.y * railingInsetFt } }; })() : node; return [`${Math.round(shifted.point.x*12)}-${Math.round(shifted.point.y*12)}-${shifted.kind}`, shifted] as const; })).values());
 
@@ -327,12 +343,86 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
     dragPanRef.current.active = false;
   };
 
-  const toggleManualEdge = (edgeIndex: number) => {
+  const updateCoverage = (next: DeckRailCoverage[]) => {
     if (!onValuesChange) return;
-    const active = new Set(deck.manualRailingEdges.length ? deck.manualRailingEdges : deck.exposedSegments.map((s) => s.index));
-    if (active.has(edgeIndex)) active.delete(edgeIndex);
-    else active.add(edgeIndex);
-    onValuesChange((current) => ({ ...current, manualRailingEdges: JSON.stringify(Array.from(active.values()).sort((a, b) => a - b)) }));
+    onValuesChange((current) => ({ ...current, railCoverage: serializeRailCoverage(next), manualRailingEdges: JSON.stringify(Array.from(new Set(next.map((item) => item.edgeIndex))).sort((a, b) => a - b)) }));
+  };
+
+  const ensureEdgeCoverage = (edgeIndex: number) => {
+    const edge = deck.edgeSegments[edgeIndex];
+    if (!edge || !onValuesChange) return;
+    const next = [...editableCoverage];
+    if (!next.some((item) => item.edgeIndex === edgeIndex)) {
+      next.push({ edgeIndex, start: 0, end: edge.length, kind: 'level' });
+      updateCoverage(next);
+      setSelectedRail(next.length - 1);
+      return;
+    }
+    const firstIndex = next.findIndex((item) => item.edgeIndex === edgeIndex);
+    setSelectedRail(firstIndex);
+  };
+
+  const nudgeRail = (direction: 'start' | 'end', delta: number) => {
+    if (selectedRail === null || !editableCoverage[selectedRail]) return;
+    const next = [...editableCoverage];
+    const item = { ...next[selectedRail] };
+    const minLen = 1;
+    const edge = deck.edgeSegments[item.edgeIndex];
+    if (!edge) return;
+    if (direction === 'start') item.start = Math.max(0, Math.min(item.start + delta, item.end - minLen));
+    else item.end = Math.min(edge.length, Math.max(item.end + delta, item.start + minLen));
+    next[selectedRail] = item;
+    updateCoverage(next);
+  };
+
+  const splitRail = () => {
+    if (selectedRail === null || !editableCoverage[selectedRail]) return;
+    const item = editableCoverage[selectedRail];
+    const mid = Math.round((((item.start + item.end) / 2) * 12)) / 12;
+    if (mid - item.start < 1 || item.end - mid < 1) return;
+    const next = editableCoverage.filter((_, index) => index !== selectedRail);
+    next.push({ ...item, end: mid }, { ...item, start: mid });
+    updateCoverage(next);
+    setSelectedRail(null);
+  };
+
+  const deleteRail = () => {
+    if (selectedRail === null) return;
+    updateCoverage(editableCoverage.filter((_, index) => index !== selectedRail));
+    setSelectedRail(null);
+  };
+
+  const toggleRailKind = () => {
+    if (selectedRail === null || !editableCoverage[selectedRail]) return;
+    const next = [...editableCoverage];
+    next[selectedRail] = { ...next[selectedRail], kind: next[selectedRail].kind === 'level' ? 'angled' : 'level' };
+    updateCoverage(next);
+  };
+
+  const moveRailHandle = (clientX: number, clientY: number) => {
+    if (!dragRail || !svgRef.current || !editableCoverage[dragRail.index]) return;
+    const rect = svgRef.current.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * sheetW;
+    const y = ((clientY - rect.top) / rect.height) * sheetH;
+    const item = editableCoverage[dragRail.index];
+    const edge = deck.edgeSegments[item.edgeIndex];
+    if (!edge) return;
+    const a = toSvg(edge.start.x, edge.start.y);
+    const b = toSvg(edge.end.x, edge.end.y);
+    const dx = b.x - a.x; const dy = b.y - a.y; const lenSq = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, (((x - a.x) * dx) + ((y - a.y) * dy)) / lenSq));
+    const pos = Math.round((edge.length * t) * 12) / 12;
+    const minLen = 1;
+    const next = [...editableCoverage];
+    const updated = { ...item };
+    if (dragRail.handle === 'start') updated.start = Math.max(0, Math.min(pos, updated.end - minLen));
+    else updated.end = Math.min(edge.length, Math.max(pos, updated.start + minLen));
+    next[dragRail.index] = updated;
+    updateCoverage(next);
+  };
+
+  const toggleManualEdge = (edgeIndex: number) => {
+    ensureEdgeCoverage(edgeIndex);
   };
 
   return (
@@ -351,7 +441,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
           <button type="button" className="ghost-btn small-btn" onClick={printPlan}>Export PDF</button>
         </div>
       </div>
-      <div ref={panRef} className="zoom-shell deck-sheet-shell" onMouseDown={startPan} onMouseMove={movePan} onMouseUp={endPan} onMouseLeave={endPan}>
+      <div ref={panRef} className="zoom-shell deck-sheet-shell" onMouseDown={startPan} onMouseMove={(event) => { movePan(event); moveRailHandle(event.clientX, event.clientY); }} onMouseUp={() => { endPan(); setDragRail(null); }} onMouseLeave={() => { endPan(); setDragRail(null); }}>
         <div className="deck-sheet-stage">
           <svg ref={svgRef} viewBox={`0 0 ${sheetW} ${sheetH}`} className="layout-svg deck-sheet-svg" style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}>
             <rect x="18" y="18" width={sheetW - 36} height={sheetH - 36} className="sheet-border" />
@@ -498,18 +588,55 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                 })}</g>;
               })}
 
-            {onValuesChange && deck.edgeSegments.map((segment) => {
-              const a = toSvg(segment.start.x, segment.start.y);
-              const b = toSvg(segment.end.x, segment.end.y);
-              const enabled = deck.manualRailingEdges.length > 0 ? deck.manualRailingEdges.includes(segment.index) : deck.exposedSegments.some((s) => s.index === segment.index);
-              const midX = (a.x + b.x) / 2;
-              const midY = (a.y + b.y) / 2;
-              return <g key={`edge-visual-${segment.index}`} className="edge-visual-layer" onClick={() => toggleManualEdge(segment.index)}>
-                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={enabled ? 'edge-visual-hit active' : 'edge-visual-hit'} />
-                <rect x={midX - 24} y={midY - 11} width={48} height={22} rx={11} className={enabled ? 'edge-chip active' : 'edge-chip'} />
-                <text x={midX} y={midY + 4} textAnchor="middle" className="edge-chip-label">E{segment.index + 1}</text>
+            {onValuesChange && showRailing && deck.edgeSegments.map((segment) => {
+              const inward = inwardNormal(segment, deck.points);
+              const insetA = { x: segment.start.x + inward.x * railingInsetFt, y: segment.start.y + inward.y * railingInsetFt };
+              const insetB = { x: segment.end.x + inward.x * railingInsetFt, y: segment.end.y + inward.y * railingInsetFt };
+              const ia = toSvg(insetA.x, insetA.y);
+              const ib = toSvg(insetB.x, insetB.y);
+              const edgeItems = editableCoverage.map((item, index) => ({ item, index })).filter(({ item }) => item.edgeIndex === segment.index);
+              return <g key={`edge-visual-${segment.index}`} className="edge-visual-layer">
+                <line x1={ia.x} y1={ia.y} x2={ib.x} y2={ib.y} className="edge-visual-hit" onClick={() => toggleManualEdge(segment.index)} />
+                {edgeItems.map(({ item, index }) => {
+                  const start = pointAlong(segment, item.start);
+                  const end = pointAlong(segment, item.end);
+                  const sa = toSvg(start.x + inward.x * railingInsetFt, start.y + inward.y * railingInsetFt);
+                  const sb = toSvg(end.x + inward.x * railingInsetFt, end.y + inward.y * railingInsetFt);
+                  const selected = selectedRail === index;
+                  const midX = (sa.x + sb.x) / 2;
+                  const midY = (sa.y + sb.y) / 2;
+                  return <g key={`coverage-${segment.index}-${index}`}>
+                    <line x1={sa.x} y1={sa.y} x2={sb.x} y2={sb.y} className={selected ? 'railing-line selected-rail' : 'railing-line'} onClick={() => setSelectedRail(index)} />
+                    <circle cx={sa.x} cy={sa.y} r={selected ? 8 : 6} className="rail-handle" onMouseDown={(event) => { event.stopPropagation(); setSelectedRail(index); setDragRail({ index, handle: 'start' }); }} />
+                    <circle cx={sb.x} cy={sb.y} r={selected ? 8 : 6} className="rail-handle" onMouseDown={(event) => { event.stopPropagation(); setSelectedRail(index); setDragRail({ index, handle: 'end' }); }} />
+                    <text x={midX} y={midY - 10} textAnchor="middle" className="rail-edit-label">{feetAndInches(item.end - item.start)}</text>
+                  </g>;
+                })}
               </g>;
             })}
+
+            {showRailing && selectedRail !== null && editableCoverage[selectedRail] && (() => {
+              const item = editableCoverage[selectedRail];
+              const segment = deck.edgeSegments[item.edgeIndex];
+              const inward = inwardNormal(segment, deck.points);
+              const start = pointAlong(segment, item.start);
+              const end = pointAlong(segment, item.end);
+              const sa = toSvg(start.x + inward.x * railingInsetFt, start.y + inward.y * railingInsetFt);
+              const sb = toSvg(end.x + inward.x * railingInsetFt, end.y + inward.y * railingInsetFt);
+              const midX = (sa.x + sb.x) / 2;
+              const midY = (sa.y + sb.y) / 2;
+              return <g className="rail-toolbar">
+                <rect x={midX - 130} y={midY - 56} width={260} height={40} rx={10} className="rail-toolbar-box" />
+                <text x={midX - 118} y={midY - 31} className="rail-toolbar-btn" onClick={() => nudgeRail('start', -0.5)}>Extend L</text>
+                <text x={midX - 64} y={midY - 31} className="rail-toolbar-btn" onClick={() => nudgeRail('start', 0.5)}>Shorten L</text>
+                <text x={midX + 2} y={midY - 31} className="rail-toolbar-btn" onClick={() => nudgeRail('end', -0.5)}>Shorten R</text>
+                <text x={midX + 70} y={midY - 31} className="rail-toolbar-btn" onClick={() => nudgeRail('end', 0.5)}>Extend R</text>
+                <text x={midX - 116} y={midY - 14} className="rail-toolbar-sub">{feetAndInches(item.end - item.start)} · {item.kind.toUpperCase()}</text>
+                <text x={midX + 18} y={midY - 14} className="rail-toolbar-btn" onClick={splitRail}>Split</text>
+                <text x={midX + 56} y={midY - 14} className="rail-toolbar-btn" onClick={toggleRailKind}>Toggle type</text>
+                <text x={midX + 120} y={midY - 14} className="rail-toolbar-btn" onClick={deleteRail}>Delete</text>
+              </g>;
+            })()}
 
             {showRailing && railingSegments.map((segment, idx) => {
               const sourceEdge = deck.edgeSegments.find((edge) => (Math.abs(edge.start.x - segment.start.x) < 0.01 && Math.abs(edge.start.y - segment.start.y) < 0.01 && Math.abs(edge.end.x - segment.end.x) < 0.01 && Math.abs(edge.end.y - segment.end.y) < 0.01) || (Math.abs(edge.start.x - segment.end.x) < 0.01 && Math.abs(edge.start.y - segment.end.y) < 0.01 && Math.abs(edge.end.x - segment.start.x) < 0.01 && Math.abs(edge.end.y - segment.start.y) < 0.01));

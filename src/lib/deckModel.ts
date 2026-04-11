@@ -1,4 +1,4 @@
-import { DeckEdgeSegment, DeckPoint, LockedPostPoint } from './types';
+import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, LockedPostPoint } from './types';
 
 export interface DeckInputs {
   deckShape?: string | number | boolean;
@@ -16,6 +16,7 @@ export interface DeckInputs {
   stairEdgeIndex?: string | number | boolean;
   stairOffset?: string | number | boolean;
   manualRailingEdges?: string | number | boolean;
+  railCoverage?: string | number | boolean;
   lockedPosts?: string | number | boolean;
   beamEdits?: string | number | boolean;
   beamCantilever?: string | number | boolean;
@@ -108,6 +109,7 @@ export interface DeckModel {
   railingSections6: number;
   railingSections8: number;
   railingPosts: number;
+  railCoverage: DeckRailCoverage[];
   edgeSegments: DeckEdgeSegment[];
   exposedSegments: DeckEdgeSegment[];
   manualRailingEdges: number[];
@@ -165,6 +167,42 @@ function parseBeamEdits(raw: string | number | boolean | undefined) {
 
 function parseIndexArray(raw: string | number | boolean | undefined) {
   return Array.from(new Set(parseNumberArray(raw).map((item) => Math.round(item)).filter((item) => item >= 0)));
+}
+function parseRailCoverage(raw: string | number | boolean | undefined, segments: DeckEdgeSegment[]) {
+  if (typeof raw !== 'string' || !raw.trim()) return [] as DeckRailCoverage[];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [] as DeckRailCoverage[];
+    return parsed.map((item) => ({
+      edgeIndex: Math.max(0, Math.round(Number(item.edgeIndex ?? 0))),
+      start: round2(Math.max(0, Number(item.start ?? 0))),
+      end: round2(Math.max(0, Number(item.end ?? 0))),
+      kind: String(item.kind ?? 'level') === 'angled' ? 'angled' : 'level',
+    })).filter((item) => segments[item.edgeIndex] && item.end > item.start + 0.01 && item.start < segments[item.edgeIndex].length + 0.01)
+      .map((item) => ({ ...item, end: Math.min(item.end, segments[item.edgeIndex].length), kind: item.kind as 'level' | 'angled' }))
+      .sort((a, b) => a.edgeIndex - b.edgeIndex || a.start - b.start) as DeckRailCoverage[];
+  } catch {
+    return [] as DeckRailCoverage[];
+  }
+}
+
+function buildDefaultRailCoverage(segments: DeckEdgeSegment[], indices: number[]) {
+  return indices.map((edgeIndex) => ({ edgeIndex, start: 0, end: round2(segments[edgeIndex].length), kind: 'level' as const }));
+}
+
+function deriveTopRailSegments(coverage: DeckRailCoverage[], stairPlacement: StairPlacement): DeckRailCoverage[] {
+  const top: DeckRailCoverage[] = [];
+  coverage.forEach((item) => {
+    if (stairPlacement.edgeIndex === null || item.edgeIndex !== stairPlacement.edgeIndex || !stairPlacement.start || !stairPlacement.end) {
+      top.push(item);
+      return;
+    }
+    const stairStart = stairPlacement.offset;
+    const stairEnd = stairPlacement.offset + stairPlacement.width;
+    if (item.start < stairStart - 0.01) top.push({ ...item, end: Math.min(item.end, stairStart), kind: item.kind as 'level' | 'angled' });
+    if (item.end > stairEnd + 0.01) top.push({ ...item, start: Math.max(item.start, stairEnd), kind: item.kind as 'level' | 'angled' });
+  });
+  return top.filter((item) => item.end - item.start > 0.05);
 }
 
 export function parseDeckShape(raw: string | number | boolean | undefined): DeckPoint[] {
@@ -278,8 +316,13 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
 
   const manualRailingEdges = parseIndexArray(inputs.manualRailingEdges).filter((index) => index < segments.length);
   const defaultExposedSegments = isFreestanding ? segments : segments.filter((segment) => !(segment.orientation === 'horizontal' && Math.abs(segment.start.y - minY) < 1e-6 && Math.abs(segment.end.y - minY) < 1e-6));
-  const exposedSegments = manualRailingEdges.length > 0 ? segments.filter((segment) => manualRailingEdges.includes(segment.index)) : defaultExposedSegments;
-  const exposedPerimeter = round2(exposedSegments.reduce((sum, segment) => sum + segment.length, 0));
+  const defaultRailIndices = manualRailingEdges.length > 0 ? manualRailingEdges : defaultExposedSegments.map((segment) => segment.index);
+  const railCoverage = (() => {
+    const parsed = parseRailCoverage(inputs.railCoverage, segments);
+    return parsed.length ? parsed : buildDefaultRailCoverage(segments, defaultRailIndices);
+  })();
+  const exposedSegments = segments.filter((segment) => railCoverage.some((item) => item.edgeIndex === segment.index));
+  const exposedPerimeter = round2(railCoverage.reduce((sum, item) => sum + (item.end - item.start), 0));
 
   const boardLengths: number[] = [];
   if (boardRun === 'width') {
@@ -414,16 +457,20 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const stairEnd = stairEdge ? segmentPointAtOffset(stairEdge, stairOffset + Math.min(stairWidth, stairEdge.length)) : null;
   const stairPlacement: StairPlacement = { edgeIndex: stairEdge ? stairEdge.index : null, offset: stairOffset, width: stairWidth, landingProjection: stairRunFt, start: stairStart, end: stairEnd };
 
-  const railingRun = round2(Number(inputs.perimeterRailingFt ?? 0) || exposedPerimeter);
+  const topRailSegments = deriveTopRailSegments(railCoverage, stairPlacement);
+  const topRailRun = round2(topRailSegments.reduce((sum, item) => sum + (item.end - item.start), 0));
+  const stairRailRun = stairRisers > 3 ? round2(stairRunFt * 2) : 0;
+  const railingRun = round2(Number(inputs.perimeterRailingFt ?? 0) || (topRailRun + stairRailRun));
   let railingSections6 = 0;
   let railingSections8 = 0;
-  exposedSegments.forEach((segment) => {
+  topRailSegments.forEach((segment) => {
+    const length = segment.end - segment.start;
     let segmentBest = { six: 0, eight: 0, waste: Number.POSITIVE_INFINITY, pieces: Number.POSITIVE_INFINITY };
     for (let six = 0; six < 10; six += 1) {
       for (let eight = 0; eight < 10; eight += 1) {
         const covered = (six * 6) + (eight * 8);
-        if (covered + 1e-6 < segment.length) continue;
-        const waste = covered - segment.length;
+        if (covered + 1e-6 < length) continue;
+        const waste = covered - length;
         const pieces = six + eight;
         if (waste < segmentBest.waste - 1e-6 || (Math.abs(waste - segmentBest.waste) < 1e-6 && pieces < segmentBest.pieces) || (Math.abs(waste - segmentBest.waste) < 1e-6 && pieces == segmentBest.pieces && six > segmentBest.six)) {
           segmentBest = { six, eight, waste, pieces };
@@ -433,8 +480,22 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     railingSections6 += segmentBest.six;
     railingSections8 += segmentBest.eight;
   });
+  if (stairRisers > 3) {
+    const stairBest = (() => {
+      let best = { six: 0, eight: 0, waste: Number.POSITIVE_INFINITY, pieces: Number.POSITIVE_INFINITY };
+      for (let six = 0; six < 10; six += 1) for (let eight = 0; eight < 10; eight += 1) {
+        const covered = (six * 6) + (eight * 8);
+        if (covered + 1e-6 < stairRunFt) continue;
+        const waste = covered - stairRunFt; const pieces = six + eight;
+        if (waste < best.waste - 1e-6 || (Math.abs(waste - best.waste) < 1e-6 && pieces < best.pieces) || (Math.abs(waste - best.waste) < 1e-6 && pieces == best.pieces && six > best.six)) best = { six, eight, waste, pieces };
+      }
+      return best;
+    })();
+    railingSections6 += stairBest.six * 2;
+    railingSections8 += stairBest.eight * 2;
+  }
   const railingType = String(inputs.railingType ?? 'aluminum');
-  const railingPosts = railingType === 'aluminum' ? 0 : Math.max(2, Math.ceil(railingRun / 6) + 1);
+  const railingPosts = railingType === 'aluminum' ? 0 : Math.max(0, topRailSegments.reduce((sum, item) => sum + Math.max(0, Math.ceil((item.end - item.start) / 8) - 1), 0) + topRailSegments.length * 2 + (stairRisers > 3 ? Math.max(4, Math.ceil(stairRunFt / 8) * 2 + 2) : 0));
   const carriageBolts = postCount * 2 + (railingPosts > 0 ? railingPosts * 2 : 0);
   const lateralLoadBrackets = isFreestanding ? 0 : Math.max(2, Math.ceil(houseContactLength / 2));
   const sdsCorners = Math.max(4, segments.length) * 4;
@@ -442,5 +503,5 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const deckFastenerBoxes = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? Math.ceil(deckFastenerCount / 365) : Math.ceil(deckFastenerCount / 1750);
   const fastenerType = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'top screws' : 'hidden camo screws';
 
-  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingBoardCount, joistTapeLf, joistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerLength, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, manualRailingEdges, stairPlacement };
+  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingBoardCount, joistTapeLf, joistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerLength, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), stairPlacement };
 }
