@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
+import { exportSvgAsPdf } from '../lib/export';
 import { buildDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout } from '../lib/patioLayout';
 import { parseSections } from '../lib/sectioning';
@@ -20,45 +21,6 @@ const feetAndInches = (feet: number) => {
   return inches ? `${ft}' ${inches}"` : `${ft}'`;
 };
 
-
-function exportSvgAsPrint(svg: SVGSVGElement | null, title: string) {
-  if (!svg) return;
-  const sourceSvg = svg.cloneNode(true) as SVGSVGElement;
-  sourceSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-  sourceSvg.style.background = '#ffffff';
-  const viewBox = sourceSvg.viewBox.baseVal;
-  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  bg.setAttribute('x', String(viewBox?.x ?? 0));
-  bg.setAttribute('y', String(viewBox?.y ?? 0));
-  bg.setAttribute('width', String(viewBox?.width || sourceSvg.clientWidth || 1600));
-  bg.setAttribute('height', String(viewBox?.height || sourceSvg.clientHeight || 1100));
-  bg.setAttribute('fill', '#ffffff');
-  sourceSvg.insertBefore(bg, sourceSvg.firstChild);
-  const svgMarkup = new XMLSerializer().serializeToString(sourceSvg);
-  const blob = new Blob([svgMarkup], { type: 'image/svg+xml;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const img = new Image();
-  img.onload = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.max(1600, viewBox?.width ? Math.round(viewBox.width) : sourceSvg.clientWidth || 1600);
-    canvas.height = Math.max(1100, viewBox?.height ? Math.round(viewBox.height) : sourceSvg.clientHeight || 1100);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      URL.revokeObjectURL(url);
-      return;
-    }
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    URL.revokeObjectURL(url);
-    const png = canvas.toDataURL('image/png');
-    const win = window.open('', '_blank', 'width=1700,height=1100');
-    if (!win) return;
-    win.document.write(`<!doctype html><html><head><title>${title}</title><style>@page{size:landscape;margin:0.25in}html,body{margin:0;padding:0;background:#fff;color:#111;font-family:Inter,Arial,sans-serif}body{padding:12px}img{display:block;width:100%;height:auto;background:#fff}</style></head><body><img src="${png}" alt="${title}" /><script>window.onload=()=>setTimeout(()=>window.print(),260);</script></body></html>`);
-    win.document.close();
-  };
-  img.src = url;
-}
 
 function scanlineIntersections(points: DeckPoint[], axis: 'horizontal' | 'vertical', position: number) {
   const intersections: number[] = [];
@@ -317,7 +279,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const showRailing = layer === 'overview' || layer === 'railing';
   const showStairs = layer === 'overview' || layer === 'stairs';
 
-  const printPlan = () => exportSvgAsPrint(svgRef.current, 'Deck framing plan');
+  const printPlan = () => { void exportSvgAsPdf(svgRef.current, 'Deck framing plan', 'sns-deck-plan.pdf'); };
 
   const boardRuns = deck.boardRun === 'width'
     ? Array.from({ length: Math.max(1, Math.floor(deck.depth / 0.47)) }, (_, i) => deck.minY + 0.22 + i * 0.47)
@@ -698,7 +660,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
   let runningX = x0;
   return (
     <div className="visual-card">
-      <div className="visual-header"><div><h3>Layout preview</h3><span>Scaled installer plan with distinct material lanes, true door cut-outs, and screen/picket/kick-panel geometry that follows the opening proportions.</span></div><div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => exportSvgAsPrint(svgRef.current, renaissance ? 'Renaissance screen room plan' : 'Screen room plan')}>Export PDF</button></div></div>
+      <div className="visual-header"><div><h3>Layout preview</h3><span>Scaled installer plan with distinct material lanes, true door cut-outs, and screen/picket/kick-panel geometry that follows the opening proportions.</span></div><div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, renaissance ? 'Renaissance screen room plan' : 'Screen room plan', renaissance ? 'sns-renaissance-plan.pdf' : 'sns-screen-room-plan.pdf'); }}>Export PDF</button></div></div>
       <svg ref={svgRef} viewBox={`0 0 ${totalW + 120} ${totalH + 150}`} className="layout-svg">
         {Array.from({ length: Math.ceil(totalW / scale) + 3 }, (_, index) => <line key={`sx-${index}`} x1={x0 - 18 + index * scale} y1={y0 - 18} x2={x0 - 18 + index * scale} y2={y0 + totalH + 18} className="svg-grid" />)}
         {Array.from({ length: Math.ceil(totalH / scale) + 3 }, (_, index) => <line key={`sy-${index}`} x1={x0 - 18} y1={y0 - 18 + index * scale} x2={x0 + totalW + 18} y2={y0 - 18 + index * scale} className="svg-grid" />)}
@@ -780,7 +742,7 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
         <h3>Layout preview</h3>
         <span>Scaled roof plan with beam line, support beams, post layout, gutter, fascia, and strategic fan-beam placement.</span>
       </div>
-      <div className="preview-toolbar">{fanBeam !== 'none' && onValuesChange && <><button type="button" className="ghost-btn small-btn" onClick={() => shiftFan(-1)}>← Fan beam</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftFan(1)}>Fan beam →</button></>}<button type="button" className="ghost-btn small-btn" onClick={() => exportSvgAsPrint(svgRef.current, 'Patio cover plan')}>Export PDF</button></div>
+      <div className="preview-toolbar">{fanBeam !== 'none' && onValuesChange && <><button type="button" className="ghost-btn small-btn" onClick={() => shiftFan(-1)}>← Fan beam</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftFan(1)}>Fan beam →</button></>}<button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, 'Patio cover plan', 'sns-patio-cover-plan.pdf'); }}>Export PDF</button></div>
     </div>
     <svg ref={svgRef} viewBox={`0 0 ${roofW + 130} ${roofD + 180}`} className="layout-svg patio-sheet-svg">
       {Array.from({ length: Math.ceil(width) + 2 }, (_, index) => <line key={`px-${index}`} x1={x0 + index * scale} y1={y0 - 20} x2={x0 + index * scale} y2={y0 + roofD + 40} className="svg-grid" />)}
