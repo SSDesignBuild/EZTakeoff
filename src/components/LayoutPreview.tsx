@@ -118,6 +118,42 @@ function symmetricPostOffsets(length: number, maxSection = 8) {
   return Array.from({ length: Math.max(0, sectionCount - 1) }, (_, index) => ((index + 1) * length) / sectionCount);
 }
 
+
+function optimizeRailMix(length: number) {
+  let best = { six: 0, eight: 0, waste: Number.POSITIVE_INFINITY, pieces: Number.POSITIVE_INFINITY };
+  for (let six = 0; six < 12; six += 1) {
+    for (let eight = 0; eight < 12; eight += 1) {
+      const covered = six * 6 + eight * 8;
+      if (covered + 1e-6 < length) continue;
+      const waste = covered - length;
+      const pieces = six + eight;
+      if (waste < best.waste - 1e-6 || (Math.abs(waste - best.waste) < 1e-6 && pieces < best.pieces)) {
+        best = { six, eight, waste, pieces };
+      }
+    }
+  }
+  if (!Number.isFinite(best.waste)) return { six: 1, eight: 0, waste: Math.max(0, 6 - length), pieces: 1 };
+  return best;
+}
+
+function railPostCount(length: number, maxSection = 8) {
+  const sectionCount = Math.max(1, Math.ceil(length / maxSection));
+  return sectionCount + 1;
+}
+
+function railSummary(length: number) {
+  const mix = optimizeRailMix(length);
+  const posts = railPostCount(length);
+  const parts = [] as string[];
+  if (mix.eight) parts.push(`${mix.eight}×8'`);
+  if (mix.six) parts.push(`${mix.six}×6'`);
+  return {
+    mix,
+    posts,
+    label: parts.length ? parts.join(' + ') : "1×6'",
+  };
+}
+
 function sectionSpansExcludingDoor(section: SectionConfig) {
   const doorWidth = section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
   const doorLeftFt = sectionDoorLeft(section) / 12;
@@ -251,19 +287,34 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const [zoom, setZoom] = useState(1);
   const [selectedRail, setSelectedRail] = useState<number | null>(null);
   const [dragRail, setDragRail] = useState<{ index: number; handle: 'start' | 'end' } | null>(null);
+  const [dragPreview, setDragPreview] = useState<{ index: number; length: number; posts: number; breakdown: string; start: number; end: number } | null>(null);
   const panRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragPanRef = useRef<{ active: boolean; x: number; y: number; left: number; top: number }>({ active: false, x: 0, y: 0, left: 0, top: 0 });
 
-  const widthFt = Math.max(deck.width, 1);
-  const depthFt = Math.max(deck.depth, 1);
+  const stairEdgeForBounds = deck.stairPlacement.edgeIndex !== null ? deck.edgeSegments[deck.stairPlacement.edgeIndex] : null;
+  const stairNormalForBounds = stairEdgeForBounds ? outwardNormal(stairEdgeForBounds, deck.points) : { x: 0, y: 1 };
+  const stairBounds = deck.stairPlacement.start && deck.stairPlacement.end
+    ? {
+        minX: Math.min(deck.stairPlacement.start.x, deck.stairPlacement.end.x, deck.stairPlacement.start.x + stairNormalForBounds.x * deck.stairRunFt, deck.stairPlacement.end.x + stairNormalForBounds.x * deck.stairRunFt),
+        maxX: Math.max(deck.stairPlacement.start.x, deck.stairPlacement.end.x, deck.stairPlacement.start.x + stairNormalForBounds.x * deck.stairRunFt, deck.stairPlacement.end.x + stairNormalForBounds.x * deck.stairRunFt),
+        minY: Math.min(deck.stairPlacement.start.y, deck.stairPlacement.end.y, deck.stairPlacement.start.y + stairNormalForBounds.y * deck.stairRunFt, deck.stairPlacement.end.y + stairNormalForBounds.y * deck.stairRunFt),
+        maxY: Math.max(deck.stairPlacement.start.y, deck.stairPlacement.end.y, deck.stairPlacement.start.y + stairNormalForBounds.y * deck.stairRunFt, deck.stairPlacement.end.y + stairNormalForBounds.y * deck.stairRunFt),
+      }
+    : { minX: deck.minX, maxX: deck.maxX, minY: deck.minY, maxY: deck.maxY };
+  const layoutMinX = Math.min(deck.minX, stairBounds.minX);
+  const layoutMaxX = Math.max(deck.maxX, stairBounds.maxX);
+  const layoutMinY = Math.min(deck.minY, stairBounds.minY);
+  const layoutMaxY = Math.max(deck.maxY, stairBounds.maxY);
+  const widthFt = Math.max(layoutMaxX - layoutMinX, 1);
+  const depthFt = Math.max(layoutMaxY - layoutMinY, 1);
   const titleBlockW = 430;
   const titleBlockH = 164;
   const sheetMarginX = 54;
   const sheetMarginTop = 110;
   const sheetMarginBottom = 54;
   const planScaleW = 1180;
-  const planScaleH = 720;
+  const planScaleH = 760;
   const scale = Math.min(planScaleW / widthFt, planScaleH / depthFt);
   const planW = widthFt * scale;
   const planH = depthFt * scale;
@@ -271,7 +322,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const sheetH = Math.max(1260, planH + titleBlockH + sheetMarginTop + sheetMarginBottom + 90);
   const planX = (sheetW - planW) / 2;
   const planY = sheetMarginTop;
-  const toSvg = (x: number, y: number) => ({ x: planX + (x - deck.minX) * scale, y: planY + (y - deck.minY) * scale });
+  const toSvg = (x: number, y: number) => ({ x: planX + (x - layoutMinX) * scale, y: planY + (y - layoutMinY) * scale });
   const pointString = deck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ');
   const beamPlies = (segmentLength: number, offset: number) => {
     const pieces: { start: number; end: number; infill: boolean; label?: string }[] = [];
@@ -341,6 +392,8 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
 
   const endPan = () => {
     dragPanRef.current.active = false;
+    setDragRail(null);
+    setDragPreview(null);
   };
 
   const updateCoverage = (next: DeckRailCoverage[]) => {
@@ -399,6 +452,34 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
     updateCoverage(next);
   };
 
+  const snappedRailPosition = (edge: DeckEdgeSegment, raw: number, item: DeckRailCoverage) => {
+    const fineStep = zoom >= 1.75 ? 1 / 12 : 0.5;
+    const stairStops = deck.stairPlacement.edgeIndex === edge.index
+      ? [deck.stairPlacement.offset, deck.stairPlacement.offset + deck.stairPlacement.width]
+      : [];
+    const postStops = symmetricPostOffsets(edge.length, 8);
+    const anchors = Array.from(new Set([
+      0,
+      edge.length,
+      ...stairStops,
+      ...postStops,
+      ...editableCoverage.filter((coverage) => coverage.edgeIndex === edge.index).flatMap((coverage) => [coverage.start, coverage.end]),
+    ].map((value) => Math.round(value * 12) / 12))).sort((a, b) => a - b);
+    const stepped = Math.round(raw / fineStep) * fineStep;
+    let snapped = Math.max(0, Math.min(edge.length, stepped));
+    let bestDist = Infinity;
+    anchors.forEach((anchor) => {
+      const dist = Math.abs(anchor - raw);
+      if (dist <= 0.34 && dist < bestDist) {
+        snapped = anchor;
+        bestDist = dist;
+      }
+    });
+    const minLen = 1;
+    if (dragRail?.handle === 'start') return Math.max(0, Math.min(snapped, item.end - minLen));
+    return Math.min(edge.length, Math.max(snapped, item.start + minLen));
+  };
+
   const moveRailHandle = (clientX: number, clientY: number) => {
     if (!dragRail || !svgRef.current || !editableCoverage[dragRail.index]) return;
     const rect = svgRef.current.getBoundingClientRect();
@@ -411,13 +492,15 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
     const b = toSvg(edge.end.x, edge.end.y);
     const dx = b.x - a.x; const dy = b.y - a.y; const lenSq = dx * dx + dy * dy || 1;
     const t = Math.max(0, Math.min(1, (((x - a.x) * dx) + ((y - a.y) * dy)) / lenSq));
-    const pos = Math.round((edge.length * t) * 12) / 12;
-    const minLen = 1;
+    const rawPos = edge.length * t;
     const next = [...editableCoverage];
     const updated = { ...item };
-    if (dragRail.handle === 'start') updated.start = Math.max(0, Math.min(pos, updated.end - minLen));
-    else updated.end = Math.min(edge.length, Math.max(pos, updated.start + minLen));
+    const snapped = snappedRailPosition(edge, rawPos, updated);
+    if (dragRail.handle === 'start') updated.start = snapped;
+    else updated.end = snapped;
     next[dragRail.index] = updated;
+    const summary = railSummary(updated.end - updated.start);
+    setDragPreview({ index: dragRail.index, length: updated.end - updated.start, posts: summary.posts, breakdown: summary.label, start: updated.start, end: updated.end });
     updateCoverage(next);
   };
 
@@ -605,11 +688,14 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   const selected = selectedRail === index;
                   const midX = (sa.x + sb.x) / 2;
                   const midY = (sa.y + sb.y) / 2;
+                  const summary = railSummary(item.end - item.start);
+                  const activePreview = dragPreview && dragPreview.index === index ? dragPreview : null;
                   return <g key={`coverage-${segment.index}-${index}`}>
-                    <line x1={sa.x} y1={sa.y} x2={sb.x} y2={sb.y} className={selected ? 'railing-line selected-rail' : 'railing-line'} onClick={() => setSelectedRail(index)} />
-                    <circle cx={sa.x} cy={sa.y} r={selected ? 8 : 6} className="rail-handle" onMouseDown={(event) => { event.stopPropagation(); setSelectedRail(index); setDragRail({ index, handle: 'start' }); }} />
-                    <circle cx={sb.x} cy={sb.y} r={selected ? 8 : 6} className="rail-handle" onMouseDown={(event) => { event.stopPropagation(); setSelectedRail(index); setDragRail({ index, handle: 'end' }); }} />
-                    <text x={midX} y={midY - 10} textAnchor="middle" className="rail-edit-label">{feetAndInches(item.end - item.start)}</text>
+                    <line x1={sa.x} y1={sa.y} x2={sb.x} y2={sb.y} className={selected ? `railing-line ${item.kind === 'angled' ? 'angled-rail' : 'level-rail'} selected-rail` : `railing-line ${item.kind === 'angled' ? 'angled-rail' : 'level-rail'}`} onClick={() => setSelectedRail(index)} />
+                    <circle cx={sa.x} cy={sa.y} r={selected ? 8 : 6} className={dragRail?.index === index && dragRail.handle === 'start' ? 'rail-handle active' : 'rail-handle'} onMouseDown={(event) => { event.stopPropagation(); setSelectedRail(index); setDragRail({ index, handle: 'start' }); }} />
+                    <circle cx={sb.x} cy={sb.y} r={selected ? 8 : 6} className={dragRail?.index === index && dragRail.handle === 'end' ? 'rail-handle active' : 'rail-handle'} onMouseDown={(event) => { event.stopPropagation(); setSelectedRail(index); setDragRail({ index, handle: 'end' }); }} />
+                    <text x={midX} y={midY - 12} textAnchor="middle" className="rail-edit-label">{feetAndInches((activePreview?.length ?? (item.end - item.start)))}</text>
+                    {selected && <text x={midX} y={midY + 2} textAnchor="middle" className="rail-edit-sub">{activePreview ? `${activePreview.breakdown} · ${activePreview.posts} posts` : `${summary.label} · ${summary.posts} posts`}</text>}
                   </g>;
                 })}
               </g>;
@@ -625,16 +711,23 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               const sb = toSvg(end.x + inward.x * railingInsetFt, end.y + inward.y * railingInsetFt);
               const midX = (sa.x + sb.x) / 2;
               const midY = (sa.y + sb.y) / 2;
+              const preview = dragPreview && dragPreview.index === selectedRail ? dragPreview : null;
+              const summary = railSummary((preview?.length ?? (item.end - item.start)));
+              const toolbarY = midY - 74;
+              const buttons = [
+                { x: midX - 138, w: 44, label: 'Ext L', onClick: () => nudgeRail('start', -0.5) },
+                { x: midX - 88, w: 54, label: 'Short L', onClick: () => nudgeRail('start', 0.5) },
+                { x: midX - 26, w: 58, label: 'Short R', onClick: () => nudgeRail('end', -0.5) },
+                { x: midX + 40, w: 48, label: 'Ext R', onClick: () => nudgeRail('end', 0.5) },
+                { x: midX + 96, w: 42, label: 'Split', onClick: splitRail },
+              ];
               return <g className="rail-toolbar">
-                <rect x={midX - 130} y={midY - 56} width={260} height={40} rx={10} className="rail-toolbar-box" />
-                <text x={midX - 118} y={midY - 31} className="rail-toolbar-btn" onClick={() => nudgeRail('start', -0.5)}>Extend L</text>
-                <text x={midX - 64} y={midY - 31} className="rail-toolbar-btn" onClick={() => nudgeRail('start', 0.5)}>Shorten L</text>
-                <text x={midX + 2} y={midY - 31} className="rail-toolbar-btn" onClick={() => nudgeRail('end', -0.5)}>Shorten R</text>
-                <text x={midX + 70} y={midY - 31} className="rail-toolbar-btn" onClick={() => nudgeRail('end', 0.5)}>Extend R</text>
-                <text x={midX - 116} y={midY - 14} className="rail-toolbar-sub">{feetAndInches(item.end - item.start)} · {item.kind.toUpperCase()}</text>
-                <text x={midX + 18} y={midY - 14} className="rail-toolbar-btn" onClick={splitRail}>Split</text>
-                <text x={midX + 56} y={midY - 14} className="rail-toolbar-btn" onClick={toggleRailKind}>Toggle type</text>
-                <text x={midX + 120} y={midY - 14} className="rail-toolbar-btn" onClick={deleteRail}>Delete</text>
+                <rect x={midX - 152} y={toolbarY} width={304} height={58} rx={16} className="rail-toolbar-box" />
+                <text x={midX - 136} y={toolbarY + 18} className="rail-toolbar-title">{item.kind === 'angled' ? 'ANGLED RAIL' : 'LEVEL RAIL'}</text>
+                <text x={midX - 136} y={toolbarY + 34} className="rail-toolbar-sub">{feetAndInches(preview?.length ?? (item.end - item.start))} · {preview?.breakdown ?? summary.label} · {preview?.posts ?? summary.posts} posts</text>
+                {buttons.map((button) => <g key={button.label} onClick={button.onClick}><rect x={button.x} y={toolbarY + 40} width={button.w} height={14} rx={7} className="rail-toolbar-pill" /><text x={button.x + button.w / 2} y={toolbarY + 50} textAnchor="middle" className="rail-toolbar-pill-text">{button.label}</text></g>)}
+                <g onClick={toggleRailKind}><rect x={midX + 146} y={toolbarY + 8} width={76} height={14} rx={7} className="rail-toolbar-pill accent" /><text x={midX + 184} y={toolbarY + 18} textAnchor="middle" className="rail-toolbar-pill-text accent">Toggle</text></g>
+                <g onClick={deleteRail}><rect x={midX + 146} y={toolbarY + 28} width={76} height={14} rx={7} className="rail-toolbar-pill danger" /><text x={midX + 184} y={toolbarY + 38} textAnchor="middle" className="rail-toolbar-pill-text danger">Delete</text></g>
               </g>;
             })()}
 
@@ -777,13 +870,17 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
 
 function ScreenPreview({ values, renaissance }: { values: Record<string, string | number | boolean>; renaissance: boolean }) {
   const sections = parseSections(values.sections, 3);
+  const gableEnabled = Boolean(values.gableEnabled ?? false);
+  const gableWidth = Number(values.gableWidth ?? 0);
+  const gableHeight = Number(values.gableHeight ?? 0);
+  const gableStyle = String(values.gableStyle ?? 'king-post');
   const svgRef = useRef<SVGSVGElement | null>(null);
   const scale = 30;
   const gutter = 24;
   const x0 = 44;
   const y0 = 48;
   const totalW = sections.reduce((sum, section) => sum + section.width * scale, 0) + ((sections.length - 1) * gutter);
-  const totalH = Math.max(...sections.map((section) => section.height * scale), 220);
+  const totalH = Math.max(...sections.map((section) => section.height * scale), 220) + (gableEnabled ? Math.max(0, gableHeight * scale) + 40 : 0);
   let runningX = x0;
   return (
     <div className="visual-card">
@@ -791,6 +888,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
       <svg ref={svgRef} viewBox={`0 0 ${totalW + 120} ${totalH + 150}`} className="layout-svg">
         {Array.from({ length: Math.ceil(totalW / scale) + 3 }, (_, index) => <line key={`sx-${index}`} x1={x0 - 18 + index * scale} y1={y0 - 18} x2={x0 - 18 + index * scale} y2={y0 + totalH + 18} className="svg-grid" />)}
         {Array.from({ length: Math.ceil(totalH / scale) + 3 }, (_, index) => <line key={`sy-${index}`} x1={x0 - 18} y1={y0 - 18 + index * scale} x2={x0 + totalW + 18} y2={y0 - 18 + index * scale} className="svg-grid" />)}
+        {gableEnabled && gableWidth > 0 && gableHeight > 0 && (() => { const gW = Math.min(totalW, gableWidth * 44); const baseLeft = x0 + (totalW - gW) / 2; const baseRight = baseLeft + gW; const baseY = y0; const apexX = baseLeft + gW / 2; const apexY = y0 - gableHeight * 44; return <g><polygon points={`${baseLeft},${baseY} ${apexX},${apexY} ${baseRight},${baseY}`} className="screen-box" /><line x1={baseLeft} y1={baseY} x2={apexX} y2={apexY} className={renaissance ? 'reno-2x2-line' : 'twobytwo-line'} /><line x1={apexX} y1={apexY} x2={baseRight} y2={baseY} className={renaissance ? 'reno-2x2-line' : 'twobytwo-line'} />{(gableStyle === 'king-post' || gableStyle === 'tied-king-post' || gableStyle === 'braced-king-post' || gableStyle === 'queen-king-post') && <line x1={apexX} y1={apexY + 4} x2={apexX} y2={baseY} className={renaissance ? 'reno-2x2-line' : 'twobytwo-line'} />}{gableStyle === 'tied-king-post' && <line x1={baseLeft + 16} y1={baseY - 16} x2={baseRight - 16} y2={baseY - 16} className={renaissance ? 'reno-2x2-line' : 'twobytwo-line'} />}{gableStyle === 'braced-king-post' && <><line x1={apexX} y1={apexY + 14} x2={baseLeft + gW * 0.22} y2={baseY - 18} className={renaissance ? 'reno-2x2-line' : 'twobytwo-line'} /><line x1={apexX} y1={apexY + 14} x2={baseRight - gW * 0.22} y2={baseY - 18} className={renaissance ? 'reno-2x2-line' : 'twobytwo-line'} /></>}{gableStyle === 'queen-king-post' && <><line x1={baseLeft + gW * 0.28} y1={baseY - 6} x2={baseLeft + gW * 0.28} y2={apexY + gableHeight * 22} className={renaissance ? 'reno-2x2-line' : 'twobytwo-line'} /><line x1={baseRight - gW * 0.28} y1={baseY - 6} x2={baseRight - gW * 0.28} y2={apexY + gableHeight * 22} className={renaissance ? 'reno-2x2-line' : 'twobytwo-line'} /></>}{<text x={baseLeft} y={apexY - 8} className="svg-note">{`Gable · ${feetAndInches(gableWidth)} × ${feetAndInches(gableHeight)} · ${gableStyle.replace(/-/g, ' ')}`}</text>}</g>; })()}
         {sections.map((section, sectionIndex) => {
           const sectionW = section.width * scale; const sectionH = section.height * scale; const left = runningX; const right = left + sectionW; const top = y0; const bottom = y0 + sectionH; runningX += sectionW + gutter;
           const doorWidth = section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
@@ -912,4 +1010,22 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
   </div>;
 }
 
-export function LayoutPreview({ serviceSlug, values, onValuesChange }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; return <ScreenPreview values={values} renaissance />; }
+
+function SunroomPreview({ values }: { values: Record<string, string | number | boolean> }) {
+  const frontWidth = Number(values.frontWidth ?? 16);
+  const leftProjection = Number(values.leftProjection ?? 12);
+  const rightProjection = Number(values.rightProjection ?? 12);
+  const roomHeight = Number(values.roomHeight ?? 10);
+  const kickPanelHeight = Number(values.kickPanelHeight ?? 2);
+  const transomMode = String(values.transomMode ?? 'auto');
+  const pictureWindow = Boolean(values.pictureWindow ?? false);
+  const transomHeight = Number(values.transomHeight ?? 1);
+  const transomNeeded = transomMode === 'yes' || (transomMode === 'auto' && roomHeight > 10 && !pictureWindow);
+  const roofStyle = String(values.roofStyle ?? 'studio');
+  const scale = Math.min(520 / Math.max(frontWidth, leftProjection + rightProjection, 1), 280 / Math.max(roomHeight, 1));
+  const x0 = 90; const y0 = 70; const w = frontWidth * scale; const h = roomHeight * scale;
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  return <div className="visual-card"><div className="visual-header"><div><h3>Layout preview</h3><span>Elite Add-A-Room wall / roof diagram using 24 ft stock extrusions and fill sections.</span></div><div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, 'Sunroom plan', 'sns-sunroom-plan.pdf'); }}>Export PDF</button></div></div><svg ref={svgRef} viewBox={`0 0 ${w + 180} ${h + 180}`} className="layout-svg patio-sheet-svg"><rect x={x0} y={y0} width={w} height={h} className="screen-box" rx="8" /><line x1={x0} y1={y0 + h - kickPanelHeight * scale} x2={x0 + w} y2={y0 + h - kickPanelHeight * scale} className="receiver-line" />{transomNeeded && <line x1={x0} y1={y0 + transomHeight * scale} x2={x0 + w} y2={y0 + transomHeight * scale} className="trim-line" />}{Array.from({ length: Math.max(2, Math.ceil(frontWidth / 4)) - 1 }, (_, i) => { const x = x0 + ((i + 1) * w) / Math.max(2, Math.ceil(frontWidth / 4)); return <line key={i} x1={x} y1={y0} x2={x} y2={y0 + h} className="twobytwo-line" />; })}{roofStyle === 'gable' ? <polygon points={`${x0},${y0} ${x0 + w / 2},${y0 - 46} ${x0 + w},${y0}`} className="roof-panel" /> : <line x1={x0} y1={y0} x2={x0 + w} y2={y0 - 28} className="roof-panel" />}<text x={x0} y={y0 + h + 22} className="svg-note">Front wall {feetAndInches(frontWidth)} · Left proj {feetAndInches(leftProjection)} · Right proj {feetAndInches(rightProjection)}</text><text x={x0} y={y0 - 12} className="svg-note">{pictureWindow ? 'Picture window package' : 'Window / kick panel stack'}{transomNeeded ? ` · transom ${feetAndInches(transomHeight)}` : ''}</text></svg><div className="legend-row wrap-legend"><span><i className="legend-swatch receiver-swatch" /> channels / caps</span><span><i className="legend-swatch twobytwo-swatch" /> H-beam / verticals</span><span><i className="legend-swatch roof-panel-swatch" /> roof / header</span></div></div>;
+}
+
+export function LayoutPreview({ serviceSlug, values, onValuesChange }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; if (serviceSlug === 'renaissance-screen-rooms') return <ScreenPreview values={values} renaissance />; return <SunroomPreview values={values} />; }

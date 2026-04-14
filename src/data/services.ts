@@ -128,6 +128,10 @@ export const SERVICES: ServiceDefinition[] = [
       screenType: 'suntex-80',
       mountingSurface: 'concrete',
       sections: sharedScreenDefaults,
+      gableEnabled: false,
+      gableWidth: 8,
+      gableHeight: 2,
+      gableStyle: 'king-post',
     },
     fields: [
       {
@@ -171,6 +175,15 @@ export const SERVICES: ServiceDefinition[] = [
           { label: '17/20 Tuff Screen', value: 'tuff-screen' },
         ],
       },
+      { key: 'gableEnabled', label: 'Add gable section', type: 'boolean' },
+      { key: 'gableWidth', label: 'Gable width (ft)', type: 'number', min: 1, step: 0.1 },
+      { key: 'gableHeight', label: 'Gable rise (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'gableStyle', label: 'Gable framing style', type: 'select', options: [
+        { label: 'King post', value: 'king-post' },
+        { label: 'Tied king post', value: 'tied-king-post' },
+        { label: 'Braced king post', value: 'braced-king-post' },
+        { label: 'Queen and king post', value: 'queen-king-post' },
+      ] },
     ],
     formulaNotes: [
       'Standard screen room framing uses 24 ft stock sections for receiver, 1x2, 2x2, U-channel, and kick trim parts.',
@@ -302,6 +315,10 @@ export const SERVICES: ServiceDefinition[] = [
       screenType: 'suntex-80',
       mountingSurface: 'concrete',
       sections: sharedScreenDefaults,
+      gableEnabled: false,
+      gableWidth: 8,
+      gableHeight: 2,
+      gableStyle: 'king-post',
     },
     fields: [
       {
@@ -344,6 +361,15 @@ export const SERVICES: ServiceDefinition[] = [
           { label: '17/20 Tuff Screen', value: 'tuff-screen' },
         ],
       },
+      { key: 'gableEnabled', label: 'Add gable section', type: 'boolean' },
+      { key: 'gableWidth', label: 'Gable width (ft)', type: 'number', min: 1, step: 0.1 },
+      { key: 'gableHeight', label: 'Gable rise (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'gableStyle', label: 'Gable framing style', type: 'select', options: [
+        { label: 'King post', value: 'king-post' },
+        { label: 'Tied king post', value: 'tied-king-post' },
+        { label: 'Braced king post', value: 'braced-king-post' },
+        { label: 'Queen and king post', value: 'queen-king-post' },
+      ] },
     ],
     formulaNotes: [
       'Renaissance framing is ordered as custom lengths: 1x2 7/8, 2x2 7/8 no groove, and 2x2 7/8 with groove are split apart in the cut list.',
@@ -351,6 +377,82 @@ export const SERVICES: ServiceDefinition[] = [
       'Screen rolls still use 10 ft x 100 ft stock, with spline switching from screen type.',
     ],
   },
+  {
+    slug: 'sunrooms',
+    label: 'Sunrooms',
+    intro: 'Build an Elite Add-A-Room take-off with wall lengths, room height, kick panel / transom decisions, and 24 ft stock optimization for fillers and extrusions.',
+    highlights: ['2 in or 3 in system', 'Existing structure vs new build', 'Electric chase option', 'Kick panel + transom logic'],
+    defaults: {
+      roomSystem: '3-thermal',
+      buildMode: 'existing-structure',
+      frontWidth: 16,
+      leftProjection: 12,
+      rightProjection: 12,
+      sideStartHeight: 8,
+      frontHeight: 8,
+      roomHeight: 10,
+      electricChase: false,
+      kickPanelType: 'insulated',
+      kickPanelHeight: 2,
+      transomMode: 'auto',
+      transomHeight: 1,
+      pictureWindow: false,
+      pictureWindowHeight: 6,
+      doorType: 'single',
+      doorCount: 1,
+      wallPanelFacing: 'durashield',
+      roofStyle: 'studio',
+    },
+    fields: [
+      { key: 'roomSystem', label: 'System type', type: 'select', options: [
+        { label: '3 in thermally broken', value: '3-thermal' },
+        { label: '2 in non-thermal', value: '2-nonthermal' },
+      ] },
+      { key: 'buildMode', label: 'Structure type', type: 'select', options: [
+        { label: 'Existing structure', value: 'existing-structure' },
+        { label: 'Build from scratch', value: 'new-structure' },
+      ] },
+      { key: 'frontWidth', label: 'Front wall width (ft)', type: 'number', min: 1, step: 0.1 },
+      { key: 'leftProjection', label: 'Left wall projection (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'rightProjection', label: 'Right wall projection (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'sideStartHeight', label: 'Side wall start height (ft)', type: 'number', min: 1, step: 0.1 },
+      { key: 'frontHeight', label: 'Front wall height (ft)', type: 'number', min: 1, step: 0.1 },
+      { key: 'roomHeight', label: 'Overall room height (ft)', type: 'number', min: 1, step: 0.1 },
+      { key: 'roofStyle', label: 'Roof style', type: 'select', options: [
+        { label: 'Studio', value: 'studio' },
+        { label: 'Gable', value: 'gable' },
+      ] },
+      { key: 'electricChase', label: 'Electric chase', type: 'boolean' },
+      { key: 'kickPanelType', label: 'Kick panel type', type: 'select', options: [
+        { label: 'Window kick panels', value: 'window' },
+        { label: 'Insulated kick panels', value: 'insulated' },
+      ] },
+      { key: 'kickPanelHeight', label: 'Kick panel height (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'transomMode', label: 'Transom', type: 'select', options: [
+        { label: 'Auto', value: 'auto' },
+        { label: 'Yes', value: 'yes' },
+        { label: 'No', value: 'no' },
+      ] },
+      { key: 'transomHeight', label: 'Transom height (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'pictureWindow', label: 'Picture window package', type: 'boolean' },
+      { key: 'pictureWindowHeight', label: 'Picture window / slider height (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'doorType', label: 'Door type', type: 'select', options: [
+        { label: "Single swinging door 3' x 6'8\"", value: 'single' },
+        { label: "Sliding door 6' x 6'8\"", value: 'slider' },
+      ] },
+      { key: 'doorCount', label: 'Door count', type: 'number', min: 0, step: 1 },
+      { key: 'wallPanelFacing', label: 'Wall panel facing', type: 'select', options: [
+        { label: 'Durashield', value: 'durashield' },
+        { label: 'Aluminum', value: 'aluminum' },
+      ] },
+    ],
+    formulaNotes: [
+      'Elite Add-A-Room uses 24 ft extrusions such as base channel, receiving channel, DRC, H-beam, self-mating H-beam, top cap, and optional chase channel, with cut waste tracked from 24 ft stock. ',
+      'The catalog and installation sheets show 3 in thermally broken and 2 in non-thermal systems, with corner post used mainly when building free-standing room structure rather than tying into existing walls.',
+      'The app auto-uses a transom when overall room height exceeds 10 ft unless the picture-window package covers the remaining height another way.',
+    ],
+  },
+
 ];
 
 export function getServiceBySlug(slug = '') {

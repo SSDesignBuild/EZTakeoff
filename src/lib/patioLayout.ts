@@ -69,6 +69,40 @@ function buildWidthCombos(totalIn: number) {
   return combos.length ? combos : [[totalIn]];
 }
 
+
+function preferredSymmetricSideWidths(sideIn: number) {
+  const widths: number[] = [];
+  let remaining = sideIn;
+  while (remaining >= 48) {
+    widths.push(48);
+    remaining -= 48;
+  }
+  if (remaining === 24) widths.push(24);
+  else if (remaining > 0) widths.push(remaining);
+  return widths;
+}
+
+function buildCenteredSingleFanLayout(totalIn: number) {
+  const candidates: number[][] = [];
+  for (const center of [48, 24]) {
+    const remain = totalIn - center;
+    if (remain < 0 || remain % 2 !== 0) continue;
+    const side = remain / 2;
+    const sideWidths = preferredSymmetricSideWidths(side);
+    if (sideWidths.some((item) => item > 48 || item <= 0)) continue;
+    candidates.push([...sideWidths, center, ...[...sideWidths].reverse()]);
+  }
+  if (!candidates.length) return null;
+  return candidates.sort((a, b) => {
+    const aCuts = a.filter((item) => item !== 24 && item !== 48).length;
+    const bCuts = b.filter((item) => item !== 24 && item !== 48).length;
+    if (aCuts !== bCuts) return aCuts - bCuts;
+    const aFours = a.filter((item) => item === 48).length;
+    const bFours = b.filter((item) => item === 48).length;
+    return bFours - aFours;
+  })[0];
+}
+
 function fanSlots(pieces: PatioPanelPiece[]) {
   return pieces.flatMap((piece, pieceIndex) => {
     const base = piece.positionIn;
@@ -160,9 +194,21 @@ export function buildPatioPanelLayout(widthFt: number, fanBeam: string, preferre
   let bestPieces = expandWidths(combos[0]);
   let bestScore = Number.POSITIVE_INFINITY;
   const targetFanCount = fanBeam === 'none' ? 0 : Math.max(1, fanBeamCount);
+  const specialCentered = fanBeam === 'centered' && targetFanCount === 1 ? buildCenteredSingleFanLayout(totalIn) : null;
+  if (specialCentered) {
+    bestPieces = expandWidths(specialCentered);
+    bestScore = comboScore(bestPieces, preferredPanelFt, targetFanCount, placementMode, fanBeam) - 2200;
+  }
   for (const combo of combos) {
     const pieces = expandWidths(combo);
-    const score = comboScore(pieces, preferredPanelFt, targetFanCount, placementMode, fanBeam);
+    let score = comboScore(pieces, preferredPanelFt, targetFanCount, placementMode, fanBeam);
+    if (fanBeam === 'centered' && targetFanCount === 1) {
+      const center = totalIn / 2;
+      const exactCentered = fanSlots(pieces).some((slot) => slot.placement === 'centered' && Math.abs(slot.centerIn - center) < 0.01);
+      if (exactCentered) score -= 1400;
+      const usesFours = pieces.filter((piece) => piece.panelWidth === 4 && piece.kind !== 'cut').length;
+      score -= usesFours * 60;
+    }
     if (score < bestScore) {
       bestScore = score;
       bestPieces = pieces;

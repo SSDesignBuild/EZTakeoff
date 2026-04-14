@@ -9,7 +9,12 @@ interface FieldRendererProps {
 
 export function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
   const handleNumber = (event: ChangeEvent<HTMLInputElement>) => {
-    onChange(field.key, Number(event.target.value));
+    const nextValue = event.target.value;
+    if (nextValue === '') {
+      onChange(field.key, '');
+      return;
+    }
+    onChange(field.key, Number(nextValue));
   };
 
   if (field.type === 'text') {
@@ -64,10 +69,12 @@ export function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
       <span>{field.label}</span>
       <input
         type="number"
-        value={Number(value)}
+        value={value === '' || value === undefined ? '' : String(value)}
         min={field.min}
         step={field.step ?? 1}
         onChange={handleNumber}
+        inputMode={field.step && field.step < 1 ? 'decimal' : 'numeric'}
+        onFocus={(event) => event.currentTarget.select()}
       />
       {field.helper && <small>{field.helper}</small>}
     </label>

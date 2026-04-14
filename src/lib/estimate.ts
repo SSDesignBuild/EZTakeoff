@@ -49,67 +49,77 @@ function sectionDoorWidth(section: SectionConfig) {
 
 
 
-function polygonOrientation(points: { x: number; y: number }[]) {
-  let sum = 0;
-  for (let index = 0; index < points.length; index += 1) {
-    const current = points[index];
-    const next = points[(index + 1) % points.length];
-    sum += (next.x - current.x) * (next.y + current.y);
-  }
-  return sum > 0 ? 'clockwise' : 'counterclockwise';
+function railNodeKey(point: { x: number; y: number }) {
+  return `${Math.round(point.x * 12)}-${Math.round(point.y * 12)}`;
 }
 
-function cornerRole(points: { x: number; y: number }[], index: number) {
-  const prev = points[(index - 1 + points.length) % points.length];
-  const curr = points[index];
-  const next = points[(index + 1) % points.length];
-  const cross = (curr.x - prev.x) * (next.y - curr.y) - (curr.y - prev.y) * (next.x - curr.x);
-  const orientation = polygonOrientation(points);
-  const reflex = orientation === 'counterclockwise' ? cross < 0 : cross > 0;
-  return reflex ? 'inside-corner' : 'corner';
+function isOppositeDirection(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return Math.abs(a.x + b.x) < 0.2 && Math.abs(a.y + b.y) < 0.2;
+}
+
+function deriveTopRailRuns(deck: ReturnType<typeof buildDeckModel>) {
+  const topRuns: { start: { x: number; y: number }; end: { x: number; y: number }; length: number }[] = [];
+  deck.railCoverage.forEach((coverage) => {
+    const edge = deck.edgeSegments[coverage.edgeIndex];
+    if (!edge) return;
+    const stairStart = deck.stairPlacement.edgeIndex === coverage.edgeIndex ? deck.stairPlacement.offset : null;
+    const stairEnd = deck.stairPlacement.edgeIndex === coverage.edgeIndex ? deck.stairPlacement.offset + deck.stairPlacement.width : null;
+    const ranges = stairStart === null ? [[coverage.start, coverage.end]] : [[coverage.start, Math.min(coverage.end, stairStart)], [Math.max(coverage.start, stairEnd ?? coverage.end), coverage.end]];
+    ranges.forEach(([start, end]) => {
+      if (end - start <= 0.05) return;
+      const sRatio = start / edge.length;
+      const eRatio = end / edge.length;
+      const startPt = { x: edge.start.x + (edge.end.x - edge.start.x) * sRatio, y: edge.start.y + (edge.end.y - edge.start.y) * sRatio };
+      const endPt = { x: edge.start.x + (edge.end.x - edge.start.x) * eRatio, y: edge.start.y + (edge.end.y - edge.start.y) * eRatio };
+      topRuns.push({ start: startPt, end: endPt, length: end - start });
+    });
+  });
+  return topRuns;
+}
+
+function interiorPostCount(length: number, maxSpan = 8) {
+  const totalPosts = Math.max(2, Math.ceil(length / maxSpan) + 1);
+  return Math.max(0, totalPosts - 2);
 }
 
 function classifyRailing(deck: ReturnType<typeof buildDeckModel>) {
-  const approxEq = (a: number, b: number) => Math.abs(a - b) < 0.12;
-  const stairSegmentIndex = deck.stairPlacement.edgeIndex;
-  const topRuns = deck.exposedSegments.flatMap((segment) => {
-    if (segment.index !== stairSegmentIndex || !deck.stairPlacement.width) return [{ length: segment.length, kind: 'level' as const }];
-    const left = deck.stairPlacement.offset;
-    const right = segment.length - deck.stairPlacement.offset - deck.stairPlacement.width;
-    return [left, right].filter((value) => value > 0.05).map((length) => ({ length, kind: 'level' as const }));
-  });
+  const topRuns = deriveTopRailRuns(deck);
   const stairRuns = deck.stairRisers > 3 && deck.stairCount > 0
     ? Array.from({ length: deck.stairCount * 2 }, () => ({ length: deck.stairRunFt, kind: 'stair' as const }))
     : [];
   const levelMix = topRuns.reduce((sum, run) => { const opt = optimizeRail(run.length); return { six: sum.six + opt.six, eight: sum.eight + opt.eight }; }, { six: 0, eight: 0 });
   const stairMix = stairRuns.reduce((sum, run) => { const opt = optimizeRail(run.length); return { six: sum.six + opt.six, eight: sum.eight + opt.eight }; }, { six: 0, eight: 0 });
-  const vertexRoles = new Map<string, string>();
-  deck.exposedSegments.forEach((segment) => {
-    const startIndex = deck.points.findIndex((point) => approxEq(point.x, segment.start.x) && approxEq(point.y, segment.start.y));
-    const endIndex = deck.points.findIndex((point) => approxEq(point.x, segment.end.x) && approxEq(point.y, segment.end.y));
-    if (startIndex >= 0) vertexRoles.set(`${Math.round(segment.start.x * 12)}-${Math.round(segment.start.y * 12)}`, cornerRole(deck.points, startIndex));
-    if (endIndex >= 0) vertexRoles.set(`${Math.round(segment.end.x * 12)}-${Math.round(segment.end.y * 12)}`, cornerRole(deck.points, endIndex));
-  });
-  let inlinePosts = 0;
-  let levelEndPosts = 0;
+  const nodes = new Map<string, { point: { x: number; y: number }; dirs: { x: number; y: number }[] }>();
   topRuns.forEach((run) => {
-    const postCount = Math.max(2, Math.ceil(run.length / 6) + 1);
-    inlinePosts += Math.max(0, postCount - 2);
-    levelEndPosts += 2;
+    const len = Math.hypot(run.end.x - run.start.x, run.end.y - run.start.y) || 1;
+    const dir = { x: (run.end.x - run.start.x) / len, y: (run.end.y - run.start.y) / len };
+    const startKey = railNodeKey(run.start);
+    const endKey = railNodeKey(run.end);
+    nodes.set(startKey, nodes.has(startKey) ? { ...nodes.get(startKey)!, dirs: [...nodes.get(startKey)!.dirs, dir] } : { point: run.start, dirs: [dir] });
+    nodes.set(endKey, nodes.has(endKey) ? { ...nodes.get(endKey)!, dirs: [...nodes.get(endKey)!.dirs, { x: -dir.x, y: -dir.y }] } : { point: run.end, dirs: [{ x: -dir.x, y: -dir.y }] });
   });
-  const stairPosts = stairRuns.reduce((sum, run) => sum + Math.max(2, Math.ceil(run.length / 6) + 1), 0);
-  const stairInlinePosts = stairRuns.reduce((sum, run) => sum + Math.max(0, Math.max(2, Math.ceil(run.length / 6) + 1) - 2), 0);
-  const stairEndPosts = stairRuns.length * 2;
+  let endLevelPosts = 0;
+  let inlineLevelPosts = 0;
+  let cornerLevelPosts = 0;
+  nodes.forEach((entry) => {
+    const unique = entry.dirs.slice(0, 2);
+    if (unique.length <= 1) endLevelPosts += 1;
+    else if (isOppositeDirection(unique[0], unique[1])) inlineLevelPosts += 1;
+    else cornerLevelPosts += 1;
+  });
+  inlineLevelPosts += topRuns.reduce((sum, run) => sum + interiorPostCount(run.length), 0);
+  const stairsLevelToAngledCornerPosts = stairRuns.length ? deck.stairCount * 2 : 0;
+  const stairsEndPosts = stairRuns.length ? deck.stairCount * 2 : 0;
+  const stairsInlinePosts = stairRuns.reduce((sum, run) => sum + interiorPostCount(run.length), 0);
   return {
     levelMix,
     stairMix,
-    cornerPosts: [...vertexRoles.values()].filter((role) => role === 'corner').length,
-    insideCornerPosts: [...vertexRoles.values()].filter((role) => role === 'inside-corner').length,
-    inlinePosts,
-    levelEndPosts,
-    stairPosts,
-    stairEndPosts,
-    stairInlinePosts,
+    endLevelPosts,
+    inlineLevelPosts,
+    cornerLevelPosts,
+    stairsLevelToAngledCornerPosts,
+    stairsInlinePosts,
+    stairsEndPosts,
   };
 }
 
@@ -143,6 +153,8 @@ export function calculateEstimate(serviceSlug: string, inputs: EstimateInputs): 
       return estimatePatioCover(inputs);
     case 'renaissance-screen-rooms':
       return estimateScreenRoom(inputs, true);
+    case 'sunrooms':
+      return estimateSunroom(inputs);
     default:
       return { summary: [], materials: [], orderNotes: [] };
   }
@@ -173,9 +185,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   }
   const railingBreakdown = classifyRailing(deck);
 
-  const railingPosts = railingType === 'aluminum'
-    ? railingBreakdown.cornerPosts + railingBreakdown.insideCornerPosts + railingBreakdown.inlinePosts + railingBreakdown.stairPosts
-    : adjustedRailSegments.reduce((sum, length) => sum + Math.max(2, Math.ceil(length / 6) + 1), 0);
+  const railingPosts = railingBreakdown.endLevelPosts + railingBreakdown.inlineLevelPosts + railingBreakdown.cornerLevelPosts + railingBreakdown.stairsLevelToAngledCornerPosts + railingBreakdown.stairsInlinePosts + railingBreakdown.stairsEndPosts;
 
   materials.push(
     toMaterial('Blocking', 'Framing', deck.blockingBoardCount, 'boards', '8 ft stock', `${deck.blockingCount} blocks across ${deck.blockingRows} rows`),
@@ -204,23 +214,20 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     if (railingBreakdown.levelMix.six) materials.push(toMaterial('6 ft level railing sections', 'Railing', railingBreakdown.levelMix.six, 'sections', '6 ft sections', 'Top-level straight runs'));
     if (railingBreakdown.stairMix.eight) materials.push(toMaterial('8 ft angled railing sections', 'Railing', railingBreakdown.stairMix.eight, 'sections', '8 ft sections', 'Stair-side or angled runs'));
     if (railingBreakdown.stairMix.six) materials.push(toMaterial('6 ft angled railing sections', 'Railing', railingBreakdown.stairMix.six, 'sections', '6 ft sections', 'Stair-side or angled runs'));
-    if (railingBreakdown.cornerPosts) materials.push(toMaterial('Corner posts', 'Railing', railingBreakdown.cornerPosts, 'ea', 'Match railing system', 'Top-level outside corners'));
-    if (railingBreakdown.insideCornerPosts) materials.push(toMaterial('Inside corner posts', 'Railing', railingBreakdown.insideCornerPosts, 'ea', 'Match railing system', 'Top-level inside corners'));
-    if (railingBreakdown.inlinePosts) materials.push(toMaterial('Inline posts', 'Railing', railingBreakdown.inlinePosts, 'ea', 'Match railing system', 'Top-level inline posts between corners'));
-    if (railingBreakdown.levelEndPosts) materials.push(toMaterial('Level end posts', 'Railing', railingBreakdown.levelEndPosts, 'ea', 'Match railing system', 'Terminations at top-level railing runs'));
-    if (railingBreakdown.stairEndPosts) materials.push(toMaterial('Stair end posts', 'Railing', railingBreakdown.stairEndPosts, 'ea', 'Match railing system', 'Ends of stair-side railing runs'));
-    if (railingBreakdown.stairInlinePosts) materials.push(toMaterial('Stair inline posts', 'Railing', railingBreakdown.stairInlinePosts, 'ea', 'Match railing system', 'Intermediate stair-side posts on long runs'));
-    if (railingBreakdown.stairPosts) materials.push(toMaterial('Stair posts', 'Railing', railingBreakdown.stairPosts, 'ea', 'Match railing system', 'Posts serving stair-side railing'));
+    if (railingBreakdown.endLevelPosts) materials.push(toMaterial('End level posts', 'Railing', railingBreakdown.endLevelPosts, 'ea', 'Match railing system', 'Post with only one top-level rail attached'));
+    if (railingBreakdown.inlineLevelPosts) materials.push(toMaterial('Inline level posts', 'Railing', railingBreakdown.inlineLevelPosts, 'ea', 'Match railing system', 'Post with two opposite top-level rails attached'));
+    if (railingBreakdown.cornerLevelPosts) materials.push(toMaterial('Corner level posts', 'Railing', railingBreakdown.cornerLevelPosts, 'ea', 'Match railing system', 'Post with adjacent top-level rails attached'));
+    if (railingBreakdown.stairsLevelToAngledCornerPosts) materials.push(toMaterial('Stairs level-to-angled corner posts', 'Railing', railingBreakdown.stairsLevelToAngledCornerPosts, 'ea', 'Match railing system', 'Top posts where level rail turns onto stair rail'));
+    if (railingBreakdown.stairsInlinePosts) materials.push(toMaterial('Stairs inline posts', 'Railing', railingBreakdown.stairsInlinePosts, 'ea', 'Match railing system', 'Intermediate stair-side posts'));
+    if (railingBreakdown.stairsEndPosts) materials.push(toMaterial('Stairs end posts', 'Railing', railingBreakdown.stairsEndPosts, 'ea', 'Match railing system', 'Bottom stair-end posts'));
     if (railingPosts) materials.push(toMaterial('Blocking under top-mount aluminum posts', 'Railing', railingPosts, 'locations', '2x framing blocking', 'Blocking required under each aluminum post location'));
   } else {
-    materials.push(toMaterial('4x4 wood level posts', 'Railing', Math.max(0, railingBreakdown.cornerPosts + railingBreakdown.insideCornerPosts + railingBreakdown.inlinePosts + railingBreakdown.levelEndPosts), 'ea', '4x4 stock', 'Top-level wood/vinyl/composite posts'));
-    if (railingBreakdown.stairPosts) materials.push(toMaterial('4x4 wood stair posts', 'Railing', railingBreakdown.stairPosts, 'ea', '4x4 stock', 'Posts serving stair-side railing'));
-    if (railingBreakdown.cornerPosts) materials.push(toMaterial('Corner posts', 'Railing', railingBreakdown.cornerPosts, 'ea', '4x4 stock', 'Top-level outside corners'));
-    if (railingBreakdown.insideCornerPosts) materials.push(toMaterial('Inside corner posts', 'Railing', railingBreakdown.insideCornerPosts, 'ea', '4x4 stock', 'Top-level inside corners'));
-    if (railingBreakdown.inlinePosts) materials.push(toMaterial('Inline posts', 'Railing', railingBreakdown.inlinePosts, 'ea', '4x4 stock', 'Top-level inline posts between corners'));
-    if (railingBreakdown.levelEndPosts) materials.push(toMaterial('Level end posts', 'Railing', railingBreakdown.levelEndPosts, 'ea', '4x4 stock', 'Terminations at top-level railing runs'));
-    if (railingBreakdown.stairEndPosts) materials.push(toMaterial('Stair end posts', 'Railing', railingBreakdown.stairEndPosts, 'ea', '4x4 stock', 'Ends of stair-side railing runs'));
-    if (railingBreakdown.stairInlinePosts) materials.push(toMaterial('Stair inline posts', 'Railing', railingBreakdown.stairInlinePosts, 'ea', '4x4 stock', 'Intermediate stair-side posts on long runs'));
+    if (railingBreakdown.endLevelPosts) materials.push(toMaterial('4x4 wood end level posts', 'Railing', railingBreakdown.endLevelPosts, 'ea', '4x4 stock', 'Post with only one top-level rail attached'));
+    if (railingBreakdown.inlineLevelPosts) materials.push(toMaterial('4x4 wood inline level posts', 'Railing', railingBreakdown.inlineLevelPosts, 'ea', '4x4 stock', 'Post with two opposite top-level rails attached'));
+    if (railingBreakdown.cornerLevelPosts) materials.push(toMaterial('4x4 wood corner level posts', 'Railing', railingBreakdown.cornerLevelPosts, 'ea', '4x4 stock', 'Post with adjacent top-level rails attached'));
+    if (railingBreakdown.stairsLevelToAngledCornerPosts) materials.push(toMaterial('4x4 wood stairs level-to-angled corner posts', 'Railing', railingBreakdown.stairsLevelToAngledCornerPosts, 'ea', '4x4 stock', 'Top posts where level rail turns onto stair rail'));
+    if (railingBreakdown.stairsInlinePosts) materials.push(toMaterial('4x4 wood stairs inline posts', 'Railing', railingBreakdown.stairsInlinePosts, 'ea', '4x4 stock', 'Intermediate stair-side posts'));
+    if (railingBreakdown.stairsEndPosts) materials.push(toMaterial('4x4 wood stairs end posts', 'Railing', railingBreakdown.stairsEndPosts, 'ea', '4x4 stock', 'Bottom stair-end posts'));
     if (railingBreakdown.levelMix.eight) materials.push(toMaterial('8 ft level railing infill sections', 'Railing', railingBreakdown.levelMix.eight, 'sections', '8 ft sections', 'Top-level straight runs'));
     if (railingBreakdown.levelMix.six) materials.push(toMaterial('6 ft level railing infill sections', 'Railing', railingBreakdown.levelMix.six, 'sections', '6 ft sections', 'Top-level straight runs'));
     if (railingBreakdown.stairMix.eight) materials.push(toMaterial('8 ft angled railing infill sections', 'Railing', railingBreakdown.stairMix.eight, 'sections', '8 ft sections', 'Stair-side or angled runs'));
@@ -275,6 +282,10 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   const oneByTwoCustom: number[] = [];
   const twoByTwoCustomGroove: number[] = [];
   const twoByTwoCustomNoGroove: number[] = [];
+  const gableEnabled = Boolean(inputs.gableEnabled ?? false);
+  const gableWidth = Number(inputs.gableWidth ?? 0);
+  const gableHeight = Number(inputs.gableHeight ?? 0);
+  const gableStyle = String(inputs.gableStyle ?? 'king-post');
 
   sections.forEach((section) => {
     const doorWidth = sectionDoorWidth(section);
@@ -361,6 +372,21 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   const spline = screenType === 'suntex-80' ? '.285 spline' : '.315 spline';
   const sealantTubes = renaissance ? Math.max(1, Math.ceil(oneByTwoCustom.reduce((sum, len) => sum + len, 0) / 24)) : Math.max(1, Math.ceil(receiverFastenerTubesLf / 24));
 
+  if (gableEnabled && gableWidth > 0 && gableHeight > 0) {
+    const rafterLength = Math.sqrt((gableWidth / 2) ** 2 + gableHeight ** 2);
+    if (renaissance) {
+      oneByTwoCustom.push(gableWidth);
+      if (gableStyle === 'queen-king-post') twoByTwoCustomNoGroove.push(gableHeight, gableHeight, gableHeight);
+      else twoByTwoCustomNoGroove.push(gableHeight);
+      if (gableStyle === 'tied-king-post' || gableStyle === 'queen-king-post') twoByTwoCustomNoGroove.push(gableWidth);
+      if (gableStyle === 'braced-king-post') twoByTwoCustomNoGroove.push(rafterLength / 2, rafterLength / 2);
+    } else {
+      receiverLf += gableWidth + (2 * rafterLength);
+      oneByTwoLf += gableWidth + (2 * rafterLength);
+      twoByTwoLf += gableHeight + ((gableStyle === 'queen-king-post') ? gableHeight * 2 : 0) + ((gableStyle === 'tied-king-post' || gableStyle === 'queen-king-post') ? gableWidth : 0) + (gableStyle === 'braced-king-post' ? rafterLength : 0);
+    }
+  }
+
   if (renaissance) {
     addCustomCutGroups(materials, '1x2 7/8', 'Frame', oneByTwoCustom, `${framingColor} · perimeter pieces`);
     addCustomCutGroups(materials, '2x2 7/8 no-channel', 'Frame', twoByTwoCustomNoGroove, `${framingColor} · uprights, chair rail only, and door framing`);
@@ -405,18 +431,102 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     );
   }
 
+  if (gableEnabled && gableWidth > 0 && gableHeight > 0) {
+    materials.push(toMaterial('Gable framing set', 'Gable', 1, 'set', `${feetAndInches(gableWidth)} wide × ${feetAndInches(gableHeight)} rise`, `${gableStyle.replace(/-/g, ' ')}`));
+  }
+
   return {
     summary: [
       { label: 'Sections', value: `${sections.length}` },
       { label: 'Screen area', value: `${screenSf.toFixed(1)} sq ft` },
       { label: 'Doors', value: `${singleDoors} single · ${frenchDoors} french` },
       { label: 'Mounting mix', value: `${sections.filter((s) => s.floorMount === 'concrete').length} concrete floor · ${sections.filter((s) => s.wallMount === 'concrete').length} masonry walls` },
+      ...(gableEnabled && gableWidth > 0 ? [{ label: 'Gable', value: `${feetAndInches(gableWidth)} × ${feetAndInches(gableHeight)} · ${gableStyle.replace(/-/g, ' ')}` }] : []),
     ],
     materials: materials.filter((item) => item.quantity > 0),
     orderNotes: [
       renaissance ? 'Renaissance output is cut-list driven: 1x2 7/8 and 2x2 7/8 members are grouped by exact required length.' : 'Standard screen output groups framing into 24 ft stock so it matches field ordering.',
       'Door openings subtract out receiver, chair rail, pickets, kick panel, and other infill the full width of the door, then add jamb/header framing back in.',
       'New sections inherit the first section so repeated bays are faster to build out, but every section stays editable.',
+    ],
+  };
+}
+
+
+function estimateSunroom(inputs: EstimateInputs): EstimateResult {
+  const system = String(inputs.roomSystem ?? '3-thermal');
+  const isThreeIn = system === '3-thermal';
+  const buildMode = String(inputs.buildMode ?? 'existing-structure');
+  const frontWidth = Number(inputs.frontWidth ?? 16);
+  const leftProjection = Number(inputs.leftProjection ?? 12);
+  const rightProjection = Number(inputs.rightProjection ?? 12);
+  const sideStartHeight = Number(inputs.sideStartHeight ?? 8);
+  const frontHeight = Number(inputs.frontHeight ?? 8);
+  const roomHeight = Number(inputs.roomHeight ?? Math.max(sideStartHeight, frontHeight));
+  const electricChase = Boolean(inputs.electricChase ?? false);
+  const kickPanelType = String(inputs.kickPanelType ?? 'insulated');
+  const kickPanelHeight = Number(inputs.kickPanelHeight ?? 2);
+  const pictureWindow = Boolean(inputs.pictureWindow ?? false);
+  const pictureWindowHeight = Number(inputs.pictureWindowHeight ?? 6);
+  const transomMode = String(inputs.transomMode ?? 'auto');
+  const transomNeeded = transomMode === 'yes' || (transomMode === 'auto' && roomHeight > 10 && !pictureWindow);
+  const transomHeight = transomNeeded ? Number(inputs.transomHeight ?? Math.max(0.5, roomHeight - (kickPanelHeight + 6))) : 0;
+  const doorType = String(inputs.doorType ?? 'single');
+  const doorCount = Math.max(0, Number(inputs.doorCount ?? 1));
+  const wallPanelFacing = String(inputs.wallPanelFacing ?? 'durashield');
+  const roofStyle = String(inputs.roofStyle ?? 'studio');
+  const wallPerimeter = frontWidth + leftProjection + rightProjection;
+  const extrusionName = (three: string, two: string) => isThreeIn ? three : two;
+  const baseLf = wallPerimeter;
+  const starterLf = wallPerimeter;
+  const topCapLf = wallPerimeter;
+  const hostHeaderLf = frontWidth + (roofStyle === 'studio' ? Math.max(leftProjection, rightProjection) : frontWidth);
+  const verticalSupportCount = Math.max(4, Math.ceil(frontWidth / 4) + Math.ceil(leftProjection / 4) + Math.ceil(rightProjection / 4));
+  const hBeamLf = verticalSupportCount * roomHeight;
+  const kneePanelArea = wallPerimeter * Math.min(kickPanelHeight, 4);
+  const transomArea = transomNeeded ? wallPerimeter * transomHeight : 0;
+  const cornerPosts = buildMode === 'new-structure' ? 2 : 0;
+  const doorWidth = doorType === 'slider' ? 6 : 3;
+  const doorHeight = 6 + 8/12;
+  const drcLf = doorCount * (doorHeight * 2 + doorWidth);
+  const chaseLf = electricChase ? wallPerimeter : 0;
+  const roofPanelCount = Math.max(1, Math.ceil(frontWidth / 4));
+  const roofPanelLf = roofPanelCount * Math.max(leftProjection, rightProjection);
+  const sealBulbRolls = Math.max(1, Math.ceil((frontWidth * 2 + leftProjection * 2 + rightProjection * 2) / 500));
+  const lagBolts = Math.max(1, Math.ceil(hostHeaderLf * 2));
+  const sealantTubes = Math.max(2, Math.ceil((wallPerimeter * 3 + roofPanelLf + hostHeaderLf) / 10));
+  const materials: MaterialItem[] = [];
+  add24FtStock(materials, extrusionName('Base channel with weep', 'Cabana base / base channel'), 'Sunroom frame', baseLf, 'Perimeter base around front and side walls');
+  add24FtStock(materials, electricChase ? extrusionName('Channel with chase & snap', 'Top cap / chase channel') : extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', starterLf, electricChase ? 'Use chase where electric raceway is required' : 'Starter / receiving channel against host structure and panel caps');
+  add24FtStock(materials, extrusionName('H-beam', 'H-beam'), 'Sunroom frame', hBeamLf, 'Vertical supports between fillers, windows, and doors');
+  add24FtStock(materials, extrusionName('DRC', 'DRC'), 'Sunroom frame', drcLf, 'Door/window finish channel');
+  add24FtStock(materials, electricChase ? extrusionName('Channel with chase & snap', 'Top cap') : extrusionName(roofStyle === 'studio' ? '3/12 top cap' : 'Top cap, flat', roofStyle === 'studio' ? '3/12 top cap' : 'Top cap'), 'Sunroom frame', topCapLf, roofStyle === 'studio' ? 'Sloped top cap for studio roof conditions' : 'Flat top cap for wall cap / roof connection');
+  add24FtStock(materials, extrusionName('Wall header', 'Wall header'), 'Roof system', hostHeaderLf, 'Host wall header / attachment channel');
+  materials.push(
+    toMaterial('Insulated roof panels', 'Roof system', roofPanelCount, 'panels', 'Factory-cut to room projection', `${roofStyle} roof · panels install left-to-right female left / male right`),
+    toMaterial(kickPanelType === 'insulated' ? 'Wall panel stock' : 'Window kick / filler stock', 'Sunroom panels', Math.ceil((kneePanelArea + transomArea) / 32), 'panels', `Cut from stock · ${wallPanelFacing}`, `${(kneePanelArea + transomArea).toFixed(1)} sq ft total fillers, knee walls, and transoms`),
+    toMaterial('Rounded weather seal bulb vinyl', 'Hardware', sealBulbRolls, 'rolls', '500 ft rolls', 'For glazing clip weather seal'),
+    toMaterial('Lag bolts with neoprene washers', 'Hardware', lagBolts, 'ea', 'Perimeter roof anchorage', 'Header / roof attachment'),
+    toMaterial('Structural adhesive sealant', 'Hardware', sealantTubes, 'tubes', 'Approx. 10 lf per tube', 'Base channel, receiver, panel seams, gutter/fascia, and attachment wall joints')
+  );
+  if (cornerPosts) materials.push(toMaterial(extrusionName('Corner post', 'Corner post'), 'Sunroom frame', cornerPosts, 'ea', isThreeIn ? '8 ft or 25 ft stock' : '8 ft or 24 ft stock', 'Needed when building new free-standing corners'));
+  if (electricChase) materials.push(toMaterial(extrusionName('Self mating H-beam / chase channel', 'Channel with chase'), 'Sunroom frame', Math.max(1, Math.ceil(chaseLf / 24)), 'sticks', '24 ft stock', 'Raceway-ready members for electric runs'));
+  if (transomNeeded) materials.push(toMaterial('Transom fill sections', 'Sunroom panels', Math.max(1, Math.ceil(transomArea / 16)), 'sections', 'Cut from 24 ft stock wall panels', `${transomArea.toFixed(1)} sq ft transom area`));
+  if (doorCount) materials.push(toMaterial(doorType === 'slider' ? "Sliding doors 6' × 6'8\"" : "Single swinging doors 3' × 6'8\"", 'Doors', doorCount, 'ea', 'Standard unit', 'Door width and threshold opening deducted from wall fill calculations'));
+  return {
+    summary: [
+      { label: 'System', value: isThreeIn ? '3 in thermally broken' : '2 in non-thermal' },
+      { label: 'Wall perimeter', value: `${wallPerimeter.toFixed(1)} lf` },
+      { label: 'Room height', value: feetAndInches(roomHeight) },
+      { label: 'Transom', value: transomNeeded ? `${feetAndInches(transomHeight)} transom` : 'Not required' },
+    ],
+    materials: materials.filter((item) => item.quantity > 0),
+    orderNotes: [
+      isThreeIn ? '3 in Add-A-Room uses 24 ft base channel, receiving channel, DRC, H-beam, self-mating H-beam, corner post, and top cap extrusions per the Elite catalog.' : '2 in Add-A-Room uses 24 ft cabana base/basechannel, receiving channel, DRC, H-beam, corner post, and top cap extrusions per the Elite catalog.',
+      buildMode === 'existing-structure' ? 'Existing structure mode minimizes corner-post usage and assumes you are tying the room into the host walls/roof.' : 'Build-from-scratch mode adds corner posts at free-standing corners.',
+      electricChase ? 'Electric chase is enabled, so chase-compatible channel / self-mating members are included.' : 'Electric chase not enabled, so standard receiving / top cap members are used.',
+      transomNeeded ? 'Transom was added because the selected room height exceeds the standard kick-panel plus 6 ft window stack.' : 'No transom was added under the current height/package selection.',
+      pictureWindow ? `Picture window package selected at ${feetAndInches(pictureWindowHeight)}.` : `Kick panels set as ${kickPanelType}.`,
     ],
   };
 }
