@@ -73,13 +73,16 @@ function buildWidthCombos(totalIn: number) {
 function preferredSymmetricSideWidths(sideIn: number) {
   const widths: number[] = [];
   let remaining = sideIn;
+  const remainder = remaining % 48;
+  if (remainder > 0) {
+    widths.push(remainder);
+    remaining -= remainder;
+  }
   while (remaining >= 48) {
     widths.push(48);
     remaining -= 48;
   }
-  if (remaining === 24) widths.push(24);
-  else if (remaining > 0) widths.push(remaining);
-  return widths;
+  return widths.filter(Boolean);
 }
 
 function buildCenteredSingleFanLayout(totalIn: number) {

@@ -57,3 +57,26 @@ export interface SectionConfig {
   floorMount: 'concrete' | 'wood';
   wallMount: 'concrete' | 'wood';
 }
+
+export interface GableSectionConfig {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+  style: 'king-post' | 'tied-king-post' | 'braced-king-post' | 'queen-king-post';
+}
+
+export interface SunroomSectionConfig {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+  uprights: number;
+  windowCount: number;
+  mainSection: 'horizontal-sliders' | 'panel' | 'picture-window';
+  kickSection: 'panel' | 'window' | 'insulated' | 'none';
+  kickHeight: number;
+  transomType: 'none' | 'panel' | 'picture-window' | 'auto';
+  transomHeight: number;
+  doorType: 'none' | 'single' | 'slider';
+}

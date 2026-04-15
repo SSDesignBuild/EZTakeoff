@@ -1,4 +1,4 @@
-import { createSection } from '../lib/sectioning';
+import { createGableSection, createSection, createSunroomSection } from '../lib/sectioning';
 
 export interface ServiceFieldOption {
   label: string;
@@ -29,6 +29,13 @@ const sharedScreenDefaults = JSON.stringify([
   createSection(0, { width: 8, height: 8, chairRail: true }),
   createSection(1, { width: 6, height: 8, chairRail: true, pickets: true }),
   createSection(2, { width: 3, height: 8, chairRail: false, doorType: 'single', doorPlacement: 'right', doorSwing: 'inswing' }),
+]);
+
+const sharedGableDefaults = JSON.stringify([createGableSection(0, { width: 8, height: 2, style: 'king-post' })]);
+const sharedSunroomDefaults = JSON.stringify([
+  createSunroomSection(0, { width: 8, mainSection: 'horizontal-sliders', kickSection: 'insulated', kickHeight: 2 }),
+  createSunroomSection(1, { width: 8, mainSection: 'horizontal-sliders', kickSection: 'insulated', kickHeight: 2 }),
+  createSunroomSection(2, { width: 3, mainSection: 'panel', kickSection: 'insulated', kickHeight: 2, doorType: 'single' }),
 ]);
 
 export const SERVICES: ServiceDefinition[] = [
@@ -128,10 +135,7 @@ export const SERVICES: ServiceDefinition[] = [
       screenType: 'suntex-80',
       mountingSurface: 'concrete',
       sections: sharedScreenDefaults,
-      gableEnabled: false,
-      gableWidth: 8,
-      gableHeight: 2,
-      gableStyle: 'king-post',
+gableSections: sharedGableDefaults,
     },
     fields: [
       {
@@ -175,15 +179,7 @@ export const SERVICES: ServiceDefinition[] = [
           { label: '17/20 Tuff Screen', value: 'tuff-screen' },
         ],
       },
-      { key: 'gableEnabled', label: 'Add gable section', type: 'boolean' },
-      { key: 'gableWidth', label: 'Gable width (ft)', type: 'number', min: 1, step: 0.1 },
-      { key: 'gableHeight', label: 'Gable rise (ft)', type: 'number', min: 0, step: 0.1 },
-      { key: 'gableStyle', label: 'Gable framing style', type: 'select', options: [
-        { label: 'King post', value: 'king-post' },
-        { label: 'Tied king post', value: 'tied-king-post' },
-        { label: 'Braced king post', value: 'braced-king-post' },
-        { label: 'Queen and king post', value: 'queen-king-post' },
-      ] },
+
     ],
     formulaNotes: [
       'Standard screen room framing uses 24 ft stock sections for receiver, 1x2, 2x2, U-channel, and kick trim parts.',
@@ -315,10 +311,7 @@ export const SERVICES: ServiceDefinition[] = [
       screenType: 'suntex-80',
       mountingSurface: 'concrete',
       sections: sharedScreenDefaults,
-      gableEnabled: false,
-      gableWidth: 8,
-      gableHeight: 2,
-      gableStyle: 'king-post',
+gableSections: sharedGableDefaults,
     },
     fields: [
       {
@@ -361,15 +354,7 @@ export const SERVICES: ServiceDefinition[] = [
           { label: '17/20 Tuff Screen', value: 'tuff-screen' },
         ],
       },
-      { key: 'gableEnabled', label: 'Add gable section', type: 'boolean' },
-      { key: 'gableWidth', label: 'Gable width (ft)', type: 'number', min: 1, step: 0.1 },
-      { key: 'gableHeight', label: 'Gable rise (ft)', type: 'number', min: 0, step: 0.1 },
-      { key: 'gableStyle', label: 'Gable framing style', type: 'select', options: [
-        { label: 'King post', value: 'king-post' },
-        { label: 'Tied king post', value: 'tied-king-post' },
-        { label: 'Braced king post', value: 'braced-king-post' },
-        { label: 'Queen and king post', value: 'queen-king-post' },
-      ] },
+
     ],
     formulaNotes: [
       'Renaissance framing is ordered as custom lengths: 1x2 7/8, 2x2 7/8 no groove, and 2x2 7/8 with groove are split apart in the cut list.',
@@ -402,6 +387,7 @@ export const SERVICES: ServiceDefinition[] = [
       doorCount: 1,
       wallPanelFacing: 'durashield',
       roofStyle: 'studio',
+      sunroomSections: sharedSunroomDefaults,
     },
     fields: [
       { key: 'roomSystem', label: 'System type', type: 'select', options: [
