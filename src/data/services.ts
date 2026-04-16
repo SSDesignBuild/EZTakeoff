@@ -33,9 +33,9 @@ const sharedScreenDefaults = JSON.stringify([
 
 const sharedGableDefaults = JSON.stringify([createGableSection(0, { width: 8, height: 2, style: 'king-post' })]);
 const sharedSunroomDefaults = JSON.stringify([
-  createSunroomSection(0, { width: 8, mainSection: 'horizontal-sliders', kickSection: 'insulated', kickHeight: 2 }),
-  createSunroomSection(1, { width: 8, mainSection: 'horizontal-sliders', kickSection: 'insulated', kickHeight: 2 }),
-  createSunroomSection(2, { width: 3, mainSection: 'panel', kickSection: 'insulated', kickHeight: 2, doorType: 'single' }),
+  createSunroomSection(0, { width: 8, mainSection: 'horizontal-sliders', kickSection: 'insulated', kickHeight: 2, mainWindowCount: 2, kickWindowCount: 1, transomWindowCount: 1 }),
+  createSunroomSection(1, { width: 8, mainSection: 'horizontal-sliders', kickSection: 'insulated', kickHeight: 2, mainWindowCount: 2, kickWindowCount: 1, transomWindowCount: 1 }),
+  createSunroomSection(2, { width: 3, mainSection: 'panel', kickSection: 'insulated', kickHeight: 2, doorType: 'single', mainWindowCount: 0, kickWindowCount: 0, transomWindowCount: 0 }),
 ]);
 
 export const SERVICES: ServiceDefinition[] = [
@@ -365,34 +365,28 @@ gableSections: sharedGableDefaults,
   {
     slug: 'sunrooms',
     label: 'Sunrooms',
-    intro: 'Build an Elite Add-A-Room take-off with wall lengths, room height, kick panel / transom decisions, and 24 ft stock optimization for fillers and extrusions.',
-    highlights: ['2 in or 3 in system', 'Existing structure vs new build', 'Electric chase option', 'Kick panel + transom logic'],
+    intro: 'Build an Elite Add-A-Room wall take-off with editable front sections, 24 ft stock optimization, and section-by-section glazing / panel choices.',
+    highlights: ['2 in or 3 in system', 'Section-by-section wall editor', '24 ft stock cut logic', 'Existing structure aware'],
     defaults: {
       roomSystem: '3-thermal',
+      roomColor: 'white',
       buildMode: 'existing-structure',
       frontWidth: 16,
       leftProjection: 12,
       rightProjection: 12,
-      sideStartHeight: 8,
-      frontHeight: 8,
       roomHeight: 10,
-      electricChase: false,
-      kickPanelType: 'insulated',
-      kickPanelHeight: 2,
-      transomMode: 'auto',
-      transomHeight: 1,
-      pictureWindow: false,
-      pictureWindowHeight: 6,
-      doorType: 'single',
-      doorCount: 1,
-      wallPanelFacing: 'durashield',
-      roofStyle: 'studio',
       sunroomSections: sharedSunroomDefaults,
     },
     fields: [
       { key: 'roomSystem', label: 'System type', type: 'select', options: [
         { label: '3 in thermally broken', value: '3-thermal' },
         { label: '2 in non-thermal', value: '2-nonthermal' },
+      ] },
+      { key: 'roomColor', label: 'Color', type: 'select', options: [
+        { label: 'White', value: 'white' },
+        { label: 'Wheat', value: 'wheat' },
+        { label: 'Clay', value: 'clay' },
+        { label: 'Bronze', value: 'bronze' },
       ] },
       { key: 'buildMode', label: 'Structure type', type: 'select', options: [
         { label: 'Existing structure', value: 'existing-structure' },
@@ -401,41 +395,12 @@ gableSections: sharedGableDefaults,
       { key: 'frontWidth', label: 'Front wall width (ft)', type: 'number', min: 1, step: 0.1 },
       { key: 'leftProjection', label: 'Left wall projection (ft)', type: 'number', min: 0, step: 0.1 },
       { key: 'rightProjection', label: 'Right wall projection (ft)', type: 'number', min: 0, step: 0.1 },
-      { key: 'sideStartHeight', label: 'Side wall start height (ft)', type: 'number', min: 1, step: 0.1 },
-      { key: 'frontHeight', label: 'Front wall height (ft)', type: 'number', min: 1, step: 0.1 },
       { key: 'roomHeight', label: 'Overall room height (ft)', type: 'number', min: 1, step: 0.1 },
-      { key: 'roofStyle', label: 'Roof style', type: 'select', options: [
-        { label: 'Studio', value: 'studio' },
-        { label: 'Gable', value: 'gable' },
-      ] },
-      { key: 'electricChase', label: 'Electric chase', type: 'boolean' },
-      { key: 'kickPanelType', label: 'Kick panel type', type: 'select', options: [
-        { label: 'Window kick panels', value: 'window' },
-        { label: 'Insulated kick panels', value: 'insulated' },
-      ] },
-      { key: 'kickPanelHeight', label: 'Kick panel height (ft)', type: 'number', min: 0, step: 0.1 },
-      { key: 'transomMode', label: 'Transom', type: 'select', options: [
-        { label: 'Auto', value: 'auto' },
-        { label: 'Yes', value: 'yes' },
-        { label: 'No', value: 'no' },
-      ] },
-      { key: 'transomHeight', label: 'Transom height (ft)', type: 'number', min: 0, step: 0.1 },
-      { key: 'pictureWindow', label: 'Picture window package', type: 'boolean' },
-      { key: 'pictureWindowHeight', label: 'Picture window / slider height (ft)', type: 'number', min: 0, step: 0.1 },
-      { key: 'doorType', label: 'Door type', type: 'select', options: [
-        { label: "Single swinging door 3' x 6'8\"", value: 'single' },
-        { label: "Sliding door 6' x 6'8\"", value: 'slider' },
-      ] },
-      { key: 'doorCount', label: 'Door count', type: 'number', min: 0, step: 1 },
-      { key: 'wallPanelFacing', label: 'Wall panel facing', type: 'select', options: [
-        { label: 'Durashield', value: 'durashield' },
-        { label: 'Aluminum', value: 'aluminum' },
-      ] },
     ],
     formulaNotes: [
-      'Elite Add-A-Room uses 24 ft extrusions such as base channel, receiving channel, DRC, H-beam, self-mating H-beam, top cap, and optional chase channel, with cut waste tracked from 24 ft stock. ',
+      'Elite Add-A-Room uses 24 ft extrusions such as base channel, receiving channel, DRC, H-beam, self-mating H-beam, top cap, and optional chase channel, with cut waste tracked from 24 ft stock.',
       'The catalog and installation sheets show 3 in thermally broken and 2 in non-thermal systems, with corner post used mainly when building free-standing room structure rather than tying into existing walls.',
-      'The app auto-uses a transom when overall room height exceeds 10 ft unless the picture-window package covers the remaining height another way.',
+      'Per-section glazing / panel choices drive whether DRC, receiver, H-beam, channels, and wall panels are ordered and how much cut waste remains from 24 ft stock.',
     ],
   },
 

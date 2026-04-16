@@ -66,17 +66,25 @@ export interface GableSectionConfig {
   style: 'king-post' | 'tied-king-post' | 'braced-king-post' | 'queen-king-post';
 }
 
+export type SunroomUprightMode = 'main-only' | 'main-kick' | 'main-transom' | 'all';
+export type SunroomSectionKind = 'horizontal-sliders' | 'panel' | 'picture-window' | 'window' | 'insulated' | 'none';
+
 export interface SunroomSectionConfig {
   id: string;
   label: string;
   width: number;
   height: number;
   uprights: number;
-  windowCount: number;
+  uprightMode: SunroomUprightMode;
+  electricChase: boolean;
+  mainWindowCount: number;
+  kickWindowCount: number;
+  transomWindowCount: number;
   mainSection: 'horizontal-sliders' | 'panel' | 'picture-window';
   kickSection: 'panel' | 'window' | 'insulated' | 'none';
   kickHeight: number;
   transomType: 'none' | 'panel' | 'picture-window' | 'auto';
   transomHeight: number;
+  trapezoidFill: 'panel' | 'transom';
   doorType: 'none' | 'single' | 'slider';
 }

@@ -50,7 +50,8 @@ function sectionDoorWidth(section: SectionConfig) {
 
 
 function railNodeKey(point: { x: number; y: number }) {
-  return `${Math.round(point.x * 12)}-${Math.round(point.y * 12)}`;
+  const snap = (value: number) => Math.round(value * 4) / 4;
+  return `${snap(point.x).toFixed(2)}-${snap(point.y).toFixed(2)}`;
 }
 
 function isOppositeDirection(a: { x: number; y: number }, b: { x: number; y: number }) {
@@ -298,6 +299,11 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   const twoByTwoCustomGroove: number[] = [];
   const twoByTwoCustomNoGroove: number[] = [];
   const gableSections = parseGableSections(inputs.gableSections, 0);
+  const gableReceiverCuts: number[] = [];
+  const gableOneByTwoCuts: number[] = [];
+  const gableTwoByTwoCuts: number[] = [];
+  const gableRenoNoGrooveCuts: number[] = [];
+  const gableRenoGrooveCuts: number[] = [];
 
   sections.forEach((section) => {
     const doorWidth = sectionDoorWidth(section);
@@ -388,16 +394,41 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     if (gable.width <= 0 || gable.height <= 0) return;
     const rafterLength = Math.sqrt((gable.width / 2) ** 2 + gable.height ** 2);
     const style = gable.style;
+    const postCount = style === 'queen-king-post' ? 3 : 1;
+    const tieCount = style === 'tied-king-post' || style === 'queen-king-post' ? 1 : 0;
+    const braceCount = style === 'braced-king-post' ? 2 : 0;
     if (renaissance) {
-      oneByTwoCustom.push(gable.width + 1.5, rafterLength + 1.5, rafterLength + 1.5);
-      if (style === 'queen-king-post') twoByTwoCustomNoGroove.push(gable.height, gable.height, gable.height);
-      else twoByTwoCustomNoGroove.push(gable.height);
-      if (style === 'tied-king-post' || style === 'queen-king-post') twoByTwoCustomNoGroove.push(gable.width);
-      if (style === 'braced-king-post') twoByTwoCustomNoGroove.push(rafterLength / 2, rafterLength / 2);
+      oneByTwoCustom.push(gable.width, rafterLength, rafterLength);
+      gableOneByTwoCuts.push(gable.width, rafterLength, rafterLength);
+      for (let i = 0; i < postCount; i += 1) {
+        twoByTwoCustomNoGroove.push(gable.height);
+        gableRenoNoGrooveCuts.push(gable.height);
+      }
+      for (let i = 0; i < tieCount; i += 1) {
+        twoByTwoCustomNoGroove.push(gable.width);
+        gableRenoNoGrooveCuts.push(gable.width);
+      }
+      for (let i = 0; i < braceCount; i += 1) {
+        twoByTwoCustomNoGroove.push(rafterLength / 2);
+        gableRenoNoGrooveCuts.push(rafterLength / 2);
+      }
     } else {
       receiverLf += gable.width + (2 * rafterLength);
       oneByTwoLf += gable.width + (2 * rafterLength);
-      twoByTwoLf += gable.height + ((style === 'queen-king-post') ? gable.height * 2 : 0) + ((style === 'tied-king-post' || style === 'queen-king-post') ? gable.width : 0) + (style === 'braced-king-post' ? rafterLength : 0);
+      gableReceiverCuts.push(gable.width, rafterLength, rafterLength);
+      gableOneByTwoCuts.push(gable.width, rafterLength, rafterLength);
+      for (let i = 0; i < postCount; i += 1) {
+        twoByTwoLf += gable.height;
+        gableTwoByTwoCuts.push(gable.height);
+      }
+      for (let i = 0; i < tieCount; i += 1) {
+        twoByTwoLf += gable.width;
+        gableTwoByTwoCuts.push(gable.width);
+      }
+      for (let i = 0; i < braceCount; i += 1) {
+        twoByTwoLf += rafterLength / 2;
+        gableTwoByTwoCuts.push(rafterLength / 2);
+      }
     }
   });
 
@@ -445,9 +476,16 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     );
   }
 
-  gableSections.forEach((gable) => {
-    materials.push(toMaterial('Gable framing set', 'Gable', 1, 'set', `${feetAndInches(gable.width)} wide × ${feetAndInches(gable.height)} rise`, `${gable.style.replace(/-/g, ' ')}`));
-  });
+  if (gableSections.length) {
+    if (renaissance) {
+      addCustomCutGroups(materials, 'Gable 1x2 7/8', 'Gable', gableOneByTwoCuts, `${framingColor} · gable perimeter`);
+      addCustomCutGroups(materials, 'Gable 2x2 7/8 no-channel', 'Gable', gableRenoNoGrooveCuts, `${framingColor} · king/queen/tie/braced members`);
+    } else {
+      addCustomCutGroups(materials, 'Gable receiver', 'Gable', gableReceiverCuts, `${framingColor} · gable perimeter receiver`);
+      addCustomCutGroups(materials, 'Gable 1x2', 'Gable', gableOneByTwoCuts, `${framingColor} · gable perimeter 1x2`);
+      addCustomCutGroups(materials, 'Gable 2x2', 'Gable', gableTwoByTwoCuts, `${framingColor} · gable king/queen/tie/braced members`);
+    }
+  }
 
   return {
     summary: [
@@ -471,81 +509,94 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   const system = String(inputs.roomSystem ?? '3-thermal');
   const isThreeIn = system === '3-thermal';
   const buildMode = String(inputs.buildMode ?? 'existing-structure');
-  const electricChase = Boolean(inputs.electricChase ?? false);
-  const wallPanelFacing = String(inputs.wallPanelFacing ?? 'durashield');
-  const roofStyle = String(inputs.roofStyle ?? 'studio');
+  const roomColor = String(inputs.roomColor ?? 'white');
   const sections = parseSunroomSections(inputs.sunroomSections, 3);
   const frontWidth = sections.reduce((sum, section) => sum + section.width, 0);
   const leftProjection = Number(inputs.leftProjection ?? 12);
   const rightProjection = Number(inputs.rightProjection ?? 12);
   const roomHeight = Number(inputs.roomHeight ?? Math.max(...sections.map((s) => s.height)));
   const extrusionName = (three: string, two: string) => isThreeIn ? three : two;
-  const wallPerimeter = frontWidth + leftProjection + rightProjection;
   const materials: MaterialItem[] = [];
-
-  let baseLf = buildMode === 'existing-structure' ? frontWidth + leftProjection + rightProjection : wallPerimeter + frontWidth;
-  let starterLf = buildMode === 'existing-structure' ? frontWidth : wallPerimeter;
-  let topCapLf = buildMode === 'existing-structure' ? frontWidth + leftProjection + rightProjection : wallPerimeter;
-  let hBeamLf = 0;
-  let drcLf = 0;
-  let wallPanelArea = 0;
-  let transomArea = 0;
-  let weatherSealLf = 0;
-  let chaseLf = 0;
+  const cutGroups = { base: [] as number[], receiver: [] as number[], topCap: [] as number[], hBeam: [] as number[], drc: [] as number[], chase: [] as number[], wallPanelArea: 0 };
   let doorSingles = 0;
   let doorSliders = 0;
+  let sealantLf = 0;
+  let lagBoltLf = 0;
+  let weatherSealLf = 0;
 
   sections.forEach((section) => {
     const doorWidth = section.doorType === 'slider' ? 6 : section.doorType === 'single' ? 3 : 0;
-    const openWidth = Math.max(0, section.width - doorWidth);
-    const mainHeight = Math.max(0, section.height - section.kickHeight - ((section.transomType === 'none') ? 0 : section.transomHeight));
+    const usableWidth = Math.max(0, section.width - doorWidth);
     const transomNeeded = section.transomType === 'panel' || section.transomType === 'picture-window' || (section.transomType === 'auto' && section.height > 10 && section.mainSection !== 'picture-window');
-    const actualTransomHeight = transomNeeded ? section.transomHeight : 0;
-    hBeamLf += (section.uprights + 2) * section.height;
-    if (section.doorType !== 'none') {
-      drcLf += (doorWidth + (6 + 8/12) * 2);
-      if (section.doorType === 'single') doorSingles += 1;
-      if (section.doorType === 'slider') doorSliders += 1;
+    const transomHeight = transomNeeded ? section.transomHeight : 0;
+    const kickHeight = Math.max(0, Math.min(section.kickHeight, 4));
+    const mainHeight = Math.max(0, section.height - kickHeight - transomHeight);
+    const addHBeams = (height: number) => { for (let i = 0; i < section.uprights; i += 1) cutGroups.hBeam.push(height); };
+    if (section.uprightMode === 'main-only') addHBeams(mainHeight);
+    if (section.uprightMode === 'main-kick') addHBeams(mainHeight + kickHeight);
+    if (section.uprightMode === 'main-transom') addHBeams(mainHeight + transomHeight);
+    if (section.uprightMode === 'all') addHBeams(section.height);
+    if (section.electricChase) cutGroups.chase.push(...cutGroups.hBeam.slice(-section.uprights));
+    cutGroups.base.push(section.width);
+    cutGroups.topCap.push(section.width);
+    if (buildMode !== 'existing-structure') cutGroups.receiver.push(section.width);
+    const addWindowBay = (count: number, totalWidth: number, bayHeight: number) => {
+      if (count <= 0 || totalWidth <= 0 || bayHeight <= 0) return;
+      const bayWidth = totalWidth / Math.max(1, count);
+      for (let i = 0; i < count; i += 1) {
+        cutGroups.receiver.push(bayWidth);
+        cutGroups.drc.push(bayHeight, bayHeight);
+        weatherSealLf += bayWidth + bayHeight * 2;
+      }
+    };
+    if (section.mainSection !== 'panel') addWindowBay(section.mainWindowCount, usableWidth, mainHeight);
+    else if (buildMode !== 'existing-structure') cutGroups.wallPanelArea += usableWidth * mainHeight;
+    if (section.kickSection === 'window') addWindowBay(section.kickWindowCount, usableWidth, kickHeight);
+    else if (section.kickSection === 'panel' || section.kickSection === 'insulated') { if (buildMode !== 'existing-structure') cutGroups.wallPanelArea += usableWidth * kickHeight; }
+    if (transomNeeded) {
+      if (section.transomType === 'picture-window') addWindowBay(section.transomWindowCount, usableWidth, transomHeight);
+      else if (buildMode !== 'existing-structure') cutGroups.wallPanelArea += usableWidth * transomHeight;
     }
-    if (section.kickSection !== 'none') wallPanelArea += openWidth * section.kickHeight;
-    if (transomNeeded) transomArea += openWidth * actualTransomHeight;
-    if (section.mainSection === 'panel') wallPanelArea += openWidth * mainHeight;
-    weatherSealLf += openWidth * Math.max(1, section.windowCount) * 2;
-    if (electricChase) chaseLf += section.width;
+    if (section.trapezoidFill === 'transom' && transomHeight > 0) addWindowBay(Math.max(1, section.transomWindowCount), usableWidth, transomHeight / 2);
+    else if (section.trapezoidFill === 'panel' && transomHeight > 0 && buildMode !== 'existing-structure') cutGroups.wallPanelArea += usableWidth * (transomHeight / 2);
+    if (section.doorType !== 'none') {
+      cutGroups.drc.push(6 + 8/12, 6 + 8/12, doorWidth);
+      if (section.doorType === 'single') doorSingles += 1; else doorSliders += 1;
+    }
+    sealantLf += section.width * 2 + section.height * 2;
+    lagBoltLf += section.width;
   });
 
-  add24FtStock(materials, extrusionName('Base channel with weep', 'Cabana base / base channel'), 'Sunroom frame', baseLf, 'Perimeter base around installed walls');
-  add24FtStock(materials, extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', starterLf, 'Host structure starters / caps');
-  add24FtStock(materials, electricChase ? extrusionName('Channel with chase & snap', 'Channel with chase') : extrusionName('H-beam', 'H-beam'), 'Sunroom frame', hBeamLf, electricChase ? 'Vertical raceway-ready members' : 'Vertical supports between openings');
-  add24FtStock(materials, extrusionName('DRC', 'DRC'), 'Sunroom frame', drcLf, 'Door/window finish channel');
-  add24FtStock(materials, roofStyle === 'studio' ? extrusionName('3/12 top cap', '3/12 top cap') : extrusionName('Top cap, flat', 'Top cap'), 'Sunroom frame', topCapLf, 'Wall cap / roof connection');
-  add24FtStock(materials, extrusionName('Wall header', 'Wall header'), 'Roof system', frontWidth + Math.max(leftProjection, rightProjection), 'Host wall header / attachment');
-  if (buildMode === 'new-structure') {
-    materials.push(toMaterial(extrusionName('Corner post', 'Corner post'), 'Sunroom frame', 2, 'ea', isThreeIn ? '8 ft or 25 ft stock' : '8 ft or 24 ft stock', 'Needed when building from scratch'));
-  }
-  if (electricChase) add24FtStock(materials, extrusionName('Channel with chase & snap', 'Channel with chase'), 'Sunroom frame', chaseLf, 'Electric chase enabled');
-  if (wallPanelArea > 0) materials.push(toMaterial('Wall panel stock', 'Sunroom panels', Math.ceil(wallPanelArea / 32), 'panels', `Cut from stock · ${wallPanelFacing}`, `${wallPanelArea.toFixed(1)} sq ft main / kick panel area`));
-  if (transomArea > 0) materials.push(toMaterial('Transom fill sections', 'Sunroom panels', Math.ceil(transomArea / 16), 'sections', 'Cut from 24 ft stock wall panels', `${transomArea.toFixed(1)} sq ft transom area`));
-  materials.push(toMaterial('Insulated roof panels', 'Roof system', Math.max(1, Math.ceil(frontWidth / 4)), 'panels', 'Factory-cut to room projection', `${roofStyle} roof`));
-  materials.push(toMaterial('Rounded weather seal bulb vinyl', 'Hardware', Math.max(1, Math.ceil(weatherSealLf / 500)), 'rolls', '500 ft rolls', 'For glazing clip weather seal'));
-  materials.push(toMaterial('Lag bolts with neoprene washers', 'Hardware', Math.max(1, Math.ceil((frontWidth + Math.max(leftProjection, rightProjection)) * 2)), 'ea', 'Perimeter roof anchorage', 'Header / roof attachment'));
-  materials.push(toMaterial('Structural adhesive sealant', 'Hardware', Math.max(2, Math.ceil((wallPerimeter * 3 + frontWidth + Math.max(leftProjection, rightProjection)) / 10)), 'tubes', 'Approx. 10 lf per tube', 'Base channel, receiver, panel seams, and attachment wall joints'));
-  if (doorSingles) materials.push(toMaterial("Single swinging doors 3 ft x 6 ft 8 in", 'Doors', doorSingles, 'ea', 'Standard unit', 'Per selected section'));
-  if (doorSliders) materials.push(toMaterial("Sliding doors 6 ft x 6 ft 8 in", 'Doors', doorSliders, 'ea', 'Standard unit', 'Per selected section'));
+  const add24 = (name: string, category: string, lengths: number[], notes?: string) => {
+    const total = lengths.reduce((sum, value) => sum + value, 0);
+    if (total > 0) materials.push(toMaterial(name, category, Math.ceil(total / 24), 'sticks', '24 ft stock', `${total.toFixed(1)} lf total${notes ? ` · ${notes}` : ''}`));
+  };
+  add24(extrusionName('Base channel with weep', 'Cabana base / base channel'), 'Sunroom frame', cutGroups.base, `${roomColor} · perimeter base`);
+  add24(extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', cutGroups.receiver, `${roomColor} · windows and caps`);
+  add24(extrusionName('Top cap, flat', 'Top cap'), 'Sunroom frame', cutGroups.topCap, `${roomColor} · wall caps`);
+  add24(extrusionName('H-beam', 'H-beam'), 'Sunroom frame', cutGroups.hBeam, `${roomColor} · uprights`);
+  add24(extrusionName('DRC', 'DRC'), 'Sunroom frame', cutGroups.drc, `${roomColor} · sides of H-beams / openings`);
+  if (cutGroups.chase.length) add24(extrusionName('Channel with chase & snap', 'Channel with chase'), 'Sunroom frame', cutGroups.chase, `${roomColor} · electric chase enabled in selected sections`);
+  if (buildMode === 'new-structure') materials.push(toMaterial(extrusionName('Corner post', 'Corner post'), 'Sunroom frame', 2, 'ea', isThreeIn ? '8 ft or 25 ft stock' : '8 ft or 24 ft stock', 'Only for build-from-scratch corners'));
+  if (cutGroups.wallPanelArea > 0) materials.push(toMaterial('Wall panel stock', 'Sunroom panels', Math.ceil(cutGroups.wallPanelArea / 32), 'panels', `Cut from 24 ft stock · ${roomColor}`, `${cutGroups.wallPanelArea.toFixed(1)} sq ft panel fill`));
+  if (doorSingles) materials.push(toMaterial("Single swinging doors 3 ft x 6 ft 8 in", 'Doors', doorSingles, 'ea', 'Standard unit', undefined));
+  if (doorSliders) materials.push(toMaterial("Sliding doors 6 ft x 6 ft 8 in", 'Doors', doorSliders, 'ea', 'Standard unit', undefined));
+  if (weatherSealLf > 0) materials.push(toMaterial('Rounded weather seal bulb vinyl', 'Hardware', Math.max(1, Math.ceil(weatherSealLf / 500)), 'rolls', '500 ft rolls', `${weatherSealLf.toFixed(1)} lf glazing seal`));
+  materials.push(toMaterial('Structural adhesive sealant', 'Hardware', Math.max(2, Math.ceil(sealantLf / 10)), 'tubes', 'Approx. 10 lf per tube', `${sealantLf.toFixed(1)} lf around channels, windows, seams`));
+  materials.push(toMaterial('1/4 in lag bolts with neoprene washers', 'Hardware', Math.max(1, Math.ceil(lagBoltLf * 2)), 'ea', 'Perimeter roof / attachment', `${lagBoltLf.toFixed(1)} lf around attachment perimeter`));
 
   return {
     summary: [
       { label: 'System', value: isThreeIn ? '3 in thermally broken' : '2 in non-thermal' },
-      { label: 'Front sections', value: `${sections.length} section(s) · ${frontWidth.toFixed(1)} lf` },
+      { label: 'Sections', value: `${sections.length} front sections · ${frontWidth.toFixed(1)} lf` },
       { label: 'Room height', value: feetAndInches(roomHeight) },
-      { label: 'Electric chase', value: electricChase ? 'Included' : 'Not included' },
+      { label: 'Structure', value: buildMode === 'existing-structure' ? 'Existing structure' : 'Build from scratch' },
     ],
     materials: materials.filter((item) => item.quantity > 0),
     orderNotes: [
-      isThreeIn ? '3 in Add-A-Room uses 24 ft receiving channel, DRC, H-beam, corner post, and top cap extrusion families from the Elite catalog.' : '2 in Add-A-Room uses the 24 ft non-thermal extrusion families from the Elite catalog.',
-      buildMode === 'existing-structure' ? 'Existing structure mode avoids free-standing corner-post assumptions and reduces extra wall/header material.' : 'Build-from-scratch mode adds corner posts for free-standing corners.',
-      electricChase ? 'Electric chase enabled, so chase-compatible members are included.' : 'Electric chase not enabled, so chase members are excluded.',
-      'Front wall sections are estimated individually so different window / panel / transom packages can be priced separately.',
+      buildMode === 'existing-structure' ? 'Existing-structure mode avoids unnecessary corner-post assumptions and does not add free-standing wall headers / extra panels by default.' : 'Build-from-scratch mode adds corner-post assumptions.',
+      'Sunroom framing is grouped from 24 ft stock lengths, so leftover stock can be reused on equal-or-shorter cuts before waste occurs.',
+      'Windows use receiver + DRC logic, while panel areas are only counted where the section fill is panel / insulated and the room is not relying on an existing structure there.',
     ],
   };
 }
