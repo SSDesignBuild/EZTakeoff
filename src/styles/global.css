@@ -192,7 +192,7 @@ button, input, select { font: inherit; }
 .house-line { stroke: var(--accent); stroke-width: 5; }
 .roof-box { fill: color-mix(in srgb, var(--green-soft) 85%, transparent); stroke: var(--green-strong); stroke-width: 4; }
 .roof-bay { stroke: color-mix(in srgb, var(--green-strong) 50%, transparent); stroke-width: 2; }
-.screen-box { fill: color-mix(in srgb, var(--panel-strong) 90%, transparent); stroke: var(--green-strong); stroke-width: 4; }
+.screen-box { fill: rgba(255,255,255,0.98); stroke: #206a4f; stroke-width: 4; }
 .screen-divider { stroke: var(--accent); stroke-width: 4; }
 .screen-chair-rail { stroke: color-mix(in srgb, var(--green-strong) 60%, transparent); stroke-width: 4; stroke-dasharray: 10 6; }
 
@@ -761,7 +761,7 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 }
 
 .compact-workspace-grid{align-items:start;}
-.project-config-card{align-self:start;height:auto;position:sticky;top:1rem;}
+.project-config-card{align-self:start;height:auto;position:static;top:auto;}
 .organized-config-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:.8rem;align-items:start;}
 .organized-config-grid .form-field,.organized-config-grid .toggle-field{padding:.8rem .9rem;border:1px solid var(--border);border-radius:16px;background:color-mix(in srgb,var(--panel) 96%,transparent);min-height:94px;align-content:start;}
 .organized-config-grid .toggle-field{display:grid;grid-template-columns:auto 1fr;gap:.65rem;}

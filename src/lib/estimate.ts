@@ -322,6 +322,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   let selfTappingScrews = 0;
   let flushMountScrews = 0;
   let receiverFastenerTubesLf = 0;
+  let gableSealantLf = 0;
   const receiverCuts24: number[] = [];
   const oneByTwoCuts24: number[] = [];
   const twoByTwoCuts24: number[] = [];
@@ -435,7 +436,6 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   const screenSf = Math.max(0, sections.reduce((sum, section) => sum + (section.width * section.height), 0) - panelSqFt - (totalDoorWidth * (totalHeight / sections.length || 0)));
   const screenRolls = Math.max(1, Math.ceil(screenSf / 1000));
   const spline = screenType === 'suntex-80' ? '.285 spline' : '.315 spline';
-  const sealantTubes = renaissance ? Math.max(1, Math.ceil(oneByTwoCustom.reduce((sum, len) => sum + len, 0) / 24)) : Math.max(1, Math.ceil(receiverFastenerTubesLf / 24));
 
   const gableCutsFromStyle = (gable: { width: number; height: number; style: string; uprights?: number }) => {
     const half = gable.width / 2;
@@ -475,16 +475,35 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   gableSections.forEach((gable) => {
     if (gable.width <= 0 || gable.height <= 0) return;
     const { perimeterCuts, innerDoubleCuts, uprightCuts } = gableCutsFromStyle(gable);
+    const half = gable.width / 2;
+    const rafter = Math.sqrt(half ** 2 + gable.height ** 2);
+    const connectionCount = perimeterCuts.length + innerDoubleCuts.length + uprightCuts.length;
+    const addFasteners = (mount: string, lf: number, spacing = 2) => {
+      const qty = Math.max(0, Math.ceil(lf / spacing));
+      if (mount === 'concrete') concreteScrews += qty;
+      else if (mount === 'metal') selfTappingScrews += Math.max(1, Math.ceil(lf / 2.5));
+      else woodScrews += qty;
+    };
+    addFasteners(gable.mountingSurface, gable.width);
+    addFasteners(gable.sideMount, rafter * 2);
+    gableSealantLf += perimeterCuts.reduce((sum, len) => sum + len, 0) + innerDoubleCuts.reduce((sum, len) => sum + len, 0);
     if (renaissance) {
       gableOneByTwoCuts.push(...perimeterCuts, ...innerDoubleCuts);
       oneByTwoCustom.push(...perimeterCuts, ...innerDoubleCuts);
       gableUprightCuts.push(...uprightCuts);
+      bracketCount += connectionCount;
+      flushMountScrews += connectionCount * 4;
     } else {
       gableReceiverCuts.push(...perimeterCuts, ...innerDoubleCuts);
       gableOneByTwoCuts.push(...perimeterCuts, ...innerDoubleCuts);
       gableUprightCuts.push(...uprightCuts);
+      capriClips += connectionCount;
+      tekScrewCount += connectionCount * 4;
+      receiverFastenerTubesLf += gable.width + (rafter * 2);
     }
   });
+
+  const sealantTubes = renaissance ? Math.max(1, Math.ceil(oneByTwoCustom.reduce((sum, len) => sum + len, 0) / 24)) : Math.max(1, Math.ceil((receiverFastenerTubesLf + gableSealantLf) / 24));
 
   if (renaissance) {
 

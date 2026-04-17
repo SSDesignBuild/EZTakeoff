@@ -93,6 +93,8 @@ export function SectionEditor({ renaissance = false, values, onValuesChange }: S
               <label className="form-field"><span>Rise (ft)</span><input type="number" step="0.1" value={gable.height} onChange={(event) => updateGable(gable.id, { height: Number(event.target.value) })} /></label>
               <label className="form-field"><span>Style</span><select value={gable.style} onChange={(event) => updateGable(gable.id, { style: event.target.value as GableSectionConfig['style'] })}><option value="none">None</option><option value="king-post">King post</option><option value="tied-king-post">Tied king post</option><option value="braced-king-post">Braced king post</option><option value="queen-king-post">Queen and king post</option></select></label>
               <label className="form-field"><span>Uprights</span><input type="number" min="0" step="1" value={gable.uprights} onChange={(event) => updateGable(gable.id, { uprights: Number(event.target.value) })} /></label>
+              <label className="form-field"><span>Mounting surface</span><select value={gable.mountingSurface} onChange={(event) => updateGable(gable.id, { mountingSurface: event.target.value as GableSectionConfig['mountingSurface'] })}><option value="wood">Wood</option><option value="concrete">Masonry</option><option value="metal">Metal</option></select></label>
+              <label className="form-field"><span>Mounting to sides</span><select value={gable.sideMount} onChange={(event) => updateGable(gable.id, { sideMount: event.target.value as GableSectionConfig['sideMount'] })}><option value="wood">Wood</option><option value="concrete">Masonry</option><option value="metal">Metal</option></select></label>
             </div>
           </div>
         ))}</div>}

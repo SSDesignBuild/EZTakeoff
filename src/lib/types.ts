@@ -65,6 +65,8 @@ export interface GableSectionConfig {
   height: number;
   style: 'none' | 'king-post' | 'tied-king-post' | 'braced-king-post' | 'queen-king-post';
   uprights: number;
+  mountingSurface: 'concrete' | 'wood' | 'metal';
+  sideMount: 'concrete' | 'wood' | 'metal';
 }
 
 export type SunroomUprightMode = 'main-only' | 'main-kick' | 'main-transom' | 'all';

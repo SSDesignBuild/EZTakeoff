@@ -27,6 +27,8 @@ export const DEFAULT_GABLE_SECTION: GableSectionConfig = {
   height: 2,
   style: 'none',
   uprights: 0,
+  mountingSurface: 'wood',
+  sideMount: 'wood',
 };
 
 export const DEFAULT_SUNROOM_SECTION: SunroomSectionConfig = {
@@ -119,6 +121,8 @@ export function parseGableSections(raw: string | number | boolean | undefined, c
           height: Number(item.height ?? DEFAULT_GABLE_SECTION.height),
           style: (item.style ?? 'none') as GableSectionConfig['style'],
           uprights: Number(item.uprights ?? DEFAULT_GABLE_SECTION.uprights),
+          mountingSurface: (item.mountingSurface ?? DEFAULT_GABLE_SECTION.mountingSurface) as GableSectionConfig['mountingSurface'],
+          sideMount: (item.sideMount ?? item.wallMount ?? DEFAULT_GABLE_SECTION.sideMount) as GableSectionConfig['sideMount'],
         }));
       }
     } catch {}
