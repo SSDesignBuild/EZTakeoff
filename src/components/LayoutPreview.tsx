@@ -869,34 +869,50 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
 }
 
 
+type GableWoodSegment = { x1: number; y1: number; x2: number; y2: number; boundary?: boolean };
+
 function gableStyleWoodSegments(style: string, left: number, apexX: number, right: number, baseY: number, apexY: number) {
   const midY = (baseY + apexY) / 2;
   const quarterLeft = left + (right - left) * 0.25;
   const quarterRight = right - (right - left) * 0.25;
-  const nearApexLeft = left + (right - left) * 0.38;
-  const nearApexRight = right - (right - left) * 0.38;
-  const centerBaseY = baseY;
-  const segments: Array<{ x1: number; y1: number; x2: number; y2: number }> = [
-    { x1: left, y1: baseY, x2: apexX, y2: apexY },
-    { x1: apexX, y1: apexY, x2: right, y2: baseY },
-    { x1: left, y1: baseY, x2: right, y2: baseY },
+  const nearApexLeft = left + (right - left) * 0.34;
+  const nearApexRight = right - (right - left) * 0.34;
+  const braceY = (baseY + apexY) * 0.56;
+  const queenTopY = midY + 10;
+  const segments: GableWoodSegment[] = [
+    { x1: left, y1: baseY, x2: apexX, y2: apexY, boundary: true },
+    { x1: apexX, y1: apexY, x2: right, y2: baseY, boundary: true },
+    { x1: left, y1: baseY, x2: right, y2: baseY, boundary: true },
   ];
   if (style === 'king-post' || style === 'tied-king-post' || style === 'braced-king-post' || style === 'queen-king-post') {
     segments.push({ x1: apexX, y1: apexY, x2: apexX, y2: baseY });
   }
   if (style === 'tied-king-post') {
-    segments.push({ x1: quarterLeft, y1: midY, x2: apexX, y2: centerBaseY });
-    segments.push({ x1: quarterRight, y1: midY, x2: apexX, y2: centerBaseY });
+    segments.push({ x1: quarterLeft, y1: midY, x2: apexX, y2: baseY });
+    segments.push({ x1: quarterRight, y1: midY, x2: apexX, y2: baseY });
   }
   if (style === 'braced-king-post') {
-    segments.push({ x1: nearApexLeft, y1: midY, x2: apexX, y2: (baseY + apexY) * 0.56 });
-    segments.push({ x1: apexX, y1: (baseY + apexY) * 0.56, x2: nearApexRight, y2: midY });
+    segments.push({ x1: nearApexLeft, y1: midY, x2: apexX, y2: braceY });
+    segments.push({ x1: apexX, y1: braceY, x2: nearApexRight, y2: midY });
   }
   if (style === 'queen-king-post') {
-    segments.push({ x1: quarterLeft, y1: baseY, x2: quarterLeft, y2: midY + 10 });
-    segments.push({ x1: quarterRight, y1: baseY, x2: quarterRight, y2: midY + 10 });
+    segments.push({ x1: quarterLeft, y1: baseY, x2: quarterLeft, y2: queenTopY });
+    segments.push({ x1: quarterRight, y1: baseY, x2: quarterRight, y2: queenTopY });
   }
   return segments;
+}
+
+function offsetTowardPoint(segment: GableWoodSegment, towardX: number, towardY: number, offset: number) {
+  const dx = segment.x2 - segment.x1;
+  const dy = segment.y2 - segment.y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len;
+  const ny = dx / len;
+  const mx = (segment.x1 + segment.x2) / 2;
+  const my = (segment.y1 + segment.y2) / 2;
+  const plusDist = Math.hypot(mx + nx * offset - towardX, my + ny * offset - towardY);
+  const minusDist = Math.hypot(mx - nx * offset - towardX, my - ny * offset - towardY);
+  return plusDist <= minusDist ? { x: nx * offset, y: ny * offset } : { x: -nx * offset, y: -ny * offset };
 }
 
 function gableFrameCuts(width: number, height: number, style: string) {
@@ -929,36 +945,33 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
   const totalW = Math.max(sectionWidth, gableWidths, 260);
   const gableHeight = gableSections.length ? Math.max(...gableSections.map((gable) => gable.height * scale)) : 0;
   const sectionHeight = Math.max(...sections.map((section) => section.height * scale), 220);
-  const totalH = sectionHeight + (gableSections.length ? gableHeight + 150 : 0);
-  const viewW = totalW + 120;
-  const viewH = totalH + 160;
+  const gableGap = gableSections.length ? 95 : 0;
+  const legendRows = renaissance ? 2 : 2;
+  const legendHeight = 68 + legendRows * 18;
+  const totalH = sectionHeight + (gableSections.length ? gableHeight + gableGap : 0);
+  const viewW = totalW + 140;
+  const viewH = totalH + 210 + legendHeight;
   const sectionStartX = x0 + (totalW - sectionWidth) / 2;
   const gableStartX = x0 + (totalW - gableWidths) / 2;
   let runningX = sectionStartX;
   let runningGX = gableStartX;
-  const hasScreenPickets = sections.some((section) => section.pickets);
-  const hasScreenUChannel = hasScreenPickets;
-  const hasScreenTwoByTwo = sections.some((section) => section.uprights > 0 || section.chairRail || section.doorType !== 'none' || section.kickPanel === 'insulated' || section.kickPanel === 'trim-coil');
-  const hasScreenTrimCoil = sections.some((section) => section.kickPanel === 'trim-coil');
-  const hasRenoNoGroove = sections.some((section) => section.uprights > 0 || section.chairRail || section.doorType !== 'none');
-  const hasRenoGroove = sections.some((section) => section.pickets || section.kickPanel === 'insulated');
-  const hasRenoPickets = sections.some((section) => section.pickets);
   const screenLegendItems = renaissance
     ? [
         { label: '1x2 7/8', className: 'reno-1x2-line' },
-        ...(hasRenoNoGroove ? [{ label: '2x2 7/8 no groove', className: 'reno-2x2-line' }] : []),
-        ...(hasRenoGroove ? [{ label: '2x2 7/8 groove', className: 'reno-2x2-groove-line' }] : []),
-        ...(hasRenoPickets ? [{ label: 'pickets', className: 'reno-picket-line' }] : []),
-        ...(gableSections.length ? [{ label: 'wood gable structure', className: 'svg-outline' }] : []),
+        { label: '2x2 7/8 no groove', className: 'reno-2x2-line' },
+        { label: '2x2 7/8 groove', className: 'reno-2x2-groove-line' },
+        { label: 'pickets', className: 'reno-picket-line' },
+        { label: 'wood gable structure', className: 'svg-outline' },
       ]
     : [
         { label: 'receiver', className: 'receiver-line' },
         { label: '1x2', className: 'onebytwo-line' },
-        ...(hasScreenTwoByTwo ? [{ label: '2x2', className: 'twobytwo-line' }] : []),
-        ...(hasScreenUChannel ? [{ label: 'u-channel', className: 'picket-rail-line' }] : []),
-        ...(hasScreenPickets ? [{ label: 'pickets', className: 'picket-line' }] : []),
-        ...(hasScreenTrimCoil ? [{ label: '1x2 v-groove', className: 'vgroove1-line' }, { label: '2x2 v-groove', className: 'vgroove2-line' }] : []),
-        ...(gableSections.length ? [{ label: 'wood gable structure', className: 'svg-outline' }] : []),
+        { label: '2x2', className: 'twobytwo-line' },
+        { label: 'u-channel', className: 'picket-rail-line' },
+        { label: 'pickets', className: 'picket-line' },
+        { label: '1x2 v-groove', className: 'vgroove1-line' },
+        { label: '2x2 v-groove', className: 'vgroove2-line' },
+        { label: 'wood gable structure', className: 'svg-outline' },
       ];
   return (
     <div className="visual-card">
@@ -976,7 +989,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
         {Array.from({ length: Math.ceil(totalH / scale) + 4 }, (_, index) => <line key={`sy-${index}`} x1={20} y1={28 + index * scale} x2={viewW - 20} y2={28 + index * scale} className="svg-grid" />)}
 
         {gableSections.map((gable) => {
-          const baseY = 70 + gableHeight;
+          const baseY = 72 + gableHeight;
           const gW = gable.width * scale;
           const baseLeft = runningGX;
           const baseRight = baseLeft + gW;
@@ -985,29 +998,38 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const apexY = baseY - gable.height * scale;
           const woodSegments = gableStyleWoodSegments(gable.style, baseLeft, apexX, baseRight, baseY, apexY);
           const cuts = gableFrameCuts(gable.width, gable.height, gable.style);
+          const centroidX = apexX;
+          const centroidY = (baseY * 2 + apexY) / 3;
+          const materialOffset = renaissance ? 7 : 9;
+          const secondaryOffset = renaissance ? 0 : 18;
+          const boundaryFrameClass = renaissance ? 'reno-1x2-line' : 'onebytwo-line';
           return (
             <g key={gable.id}>
-              {woodSegments.map((seg, idx) => <line key={idx} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} className="svg-outline" />)}
-              {!renaissance && woodSegments.map((seg, idx) => {
-                const dx = seg.x2 - seg.x1;
-                const dy = seg.y2 - seg.y1;
-                const len = Math.hypot(dx, dy) || 1;
-                const nx = (-dy / len) * 7;
-                const ny = (dx / len) * 7;
-                const isCenterPost = Math.abs(seg.x1 - seg.x2) < 0.001 && Math.abs(seg.x1 - apexX) < 0.001;
-                return <g key={`receiver-${idx}`}><line x1={seg.x1 + nx} y1={seg.y1 + ny} x2={seg.x2 + nx} y2={seg.y2 + ny} className="receiver-line" />{isCenterPost && <line x1={seg.x1 - nx} y1={seg.y1 - ny} x2={seg.x2 - nx} y2={seg.y2 - ny} className="receiver-line" />}</g>;
-              })}
+              {woodSegments.map((seg, idx) => <line key={`wood-${idx}`} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} className="svg-outline" />)}
               {woodSegments.map((seg, idx) => {
+                const inward = offsetTowardPoint(seg, centroidX, centroidY, materialOffset);
                 const dx = seg.x2 - seg.x1;
                 const dy = seg.y2 - seg.y1;
                 const len = Math.hypot(dx, dy) || 1;
-                const nx = (-dy / len) * (renaissance ? 7 : 14);
-                const ny = (dx / len) * (renaissance ? 7 : 14);
-                const isCenterPost = Math.abs(seg.x1 - seg.x2) < 0.001 && Math.abs(seg.x1 - apexX) < 0.001;
-                return <g key={`frame-${idx}`}><line x1={seg.x1 + nx} y1={seg.y1 + ny} x2={seg.x2 + nx} y2={seg.y2 + ny} className={renaissance ? 'reno-1x2-line' : 'onebytwo-line'} />{isCenterPost && <line x1={seg.x1 - nx} y1={seg.y1 - ny} x2={seg.x2 - nx} y2={seg.y2 - ny} className={renaissance ? 'reno-1x2-line' : 'onebytwo-line'} />}</g>;
+                const nx = -dy / len;
+                const ny = dx / len;
+                const drawBothSides = !seg.boundary;
+                const neg = { x: -nx * materialOffset, y: -ny * materialOffset };
+                const pos = { x: nx * materialOffset, y: ny * materialOffset };
+                const second = drawBothSides ? (Math.hypot(centroidX - ((seg.x1 + seg.x2) / 2 + pos.x), centroidY - ((seg.y1 + seg.y2) / 2 + pos.y)) < Math.hypot(centroidX - ((seg.x1 + seg.x2) / 2 + neg.x), centroidY - ((seg.y1 + seg.y2) / 2 + neg.y)) ? neg : pos) : inward;
+                return (
+                  <g key={`mat-${idx}`}>
+                    {!renaissance && <line x1={seg.x1 + inward.x} y1={seg.y1 + inward.y} x2={seg.x2 + inward.x} y2={seg.y2 + inward.y} className="receiver-line" />}
+                    <line x1={seg.x1 + inward.x + (renaissance ? 0 : secondaryOffset * inward.x / materialOffset)} y1={seg.y1 + inward.y + (renaissance ? 0 : secondaryOffset * inward.y / materialOffset)} x2={seg.x2 + inward.x + (renaissance ? 0 : secondaryOffset * inward.x / materialOffset)} y2={seg.y2 + inward.y + (renaissance ? 0 : secondaryOffset * inward.y / materialOffset)} className={boundaryFrameClass} />
+                    {drawBothSides && <>
+                      {!renaissance && <line x1={seg.x1 + second.x} y1={seg.y1 + second.y} x2={seg.x2 + second.x} y2={seg.y2 + second.y} className="receiver-line" />}
+                      <line x1={seg.x1 + second.x + (renaissance ? 0 : secondaryOffset * second.x / materialOffset)} y1={seg.y1 + second.y + (renaissance ? 0 : secondaryOffset * second.y / materialOffset)} x2={seg.x2 + second.x + (renaissance ? 0 : secondaryOffset * second.x / materialOffset)} y2={seg.y2 + second.y + (renaissance ? 0 : secondaryOffset * second.y / materialOffset)} className={boundaryFrameClass} />
+                    </>}
+                  </g>
+                );
               })}
-              <text x={baseLeft} y={apexY - 14} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text>
-              <text x={baseLeft} y={baseY + 20} className="svg-note">{`${cuts.length} cut pieces`}</text>
+              <text x={baseLeft} y={apexY - 16} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text>
+              <text x={baseLeft} y={baseY + 22} className="svg-note">{`${cuts.length} gable cuts`}</text>
             </g>
           );
         })}
@@ -1017,7 +1039,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const sectionH = section.height * scale;
           const left = runningX;
           const right = left + sectionW;
-          const top = 120 + gableHeight;
+          const top = 154 + gableHeight;
           const bottom = top + sectionH;
           runningX += sectionW + gutter;
           const doorWidth = section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
@@ -1071,13 +1093,14 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
             </g>
           );
         })}
-        <g transform={`translate(${x0}, ${viewH - 52})`}>
+        <g transform={`translate(${x0}, ${viewH - 86})`}>
+          <rect x={-14} y={-20} width={Math.max(520, totalW + 24)} height={56} rx="10" className="legend-box" />
           {screenLegendItems.map((item, idx) => {
             const row = Math.floor(idx / 4);
             const col = idx % 4;
-            const baseX = col * 190;
-            const baseY = row * 18;
-            return <g key={`${item.label}-${idx}`} transform={`translate(${baseX}, ${baseY})`}><line x1={0} y1={0} x2={20} y2={0} className={item.className} /><text x={26} y={4} className="svg-note">{item.label}</text></g>;
+            const baseX = col * 188;
+            const baseY = row * 22;
+            return <g key={`${item.label}-${idx}`} transform={`translate(${baseX}, ${baseY})`}><line x1={0} y1={0} x2={22} y2={0} className={item.className} /><text x={30} y={4} className="svg-note">{item.label}</text></g>;
           })}
         </g>
       </svg>
