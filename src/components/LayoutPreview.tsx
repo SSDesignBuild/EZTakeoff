@@ -945,12 +945,12 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
   const totalW = Math.max(sectionWidth, gableWidths, 260);
   const gableHeight = gableSections.length ? Math.max(...gableSections.map((gable) => gable.height * scale)) : 0;
   const sectionHeight = Math.max(...sections.map((section) => section.height * scale), 220);
-  const gableGap = gableSections.length ? 120 : 0;
+  const gableGap = gableSections.length ? 130 : 0;
   const legendRows = renaissance ? 3 : 4;
-  const legendHeight = 86 + legendRows * 20;
+  const legendHeight = 112 + legendRows * 18;
   const totalH = sectionHeight + (gableSections.length ? gableHeight + gableGap : 0);
   const viewW = totalW + 140;
-  const viewH = totalH + 220 + legendHeight;
+  const viewH = totalH + 240 + legendHeight;
   const sectionStartX = x0 + (totalW - sectionWidth) / 2;
   const gableStartX = x0 + (totalW - gableWidths) / 2;
   let runningX = sectionStartX;
@@ -973,7 +973,6 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
         { label: '2x2 v-groove', className: 'vgroove2-line' },
         { label: 'wood gable structure', className: 'svg-outline' },
       ];
-  const screenLegendColumns = renaissance ? 2 : 2;
   return (
     <div className="visual-card">
       <div className="visual-header">
@@ -990,7 +989,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
         {Array.from({ length: Math.ceil(totalH / scale) + 4 }, (_, index) => <line key={`sy-${index}`} x1={20} y1={28 + index * scale} x2={viewW - 20} y2={28 + index * scale} className="svg-grid" />)}
 
         {gableSections.map((gable) => {
-          const baseY = 72 + gableHeight;
+          const baseY = 92 + gableHeight;
           const gW = gable.width * scale;
           const baseLeft = runningGX;
           const baseRight = baseLeft + gW;
@@ -1001,15 +1000,15 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const cuts = gableFrameCuts(gable.width, gable.height, gable.style);
           const centroidX = apexX;
           const centroidY = (baseY * 2 + apexY) / 3;
-          const materialOffset = renaissance ? 8 : 10;
-          const secondaryOffset = renaissance ? 0 : 20;
+          const materialOffset = renaissance ? 7 : 9;
+          const secondaryOffset = renaissance ? 0 : 18;
           const boundaryFrameClass = renaissance ? 'reno-1x2-line' : 'onebytwo-line';
           return (
             <g key={gable.id}>
               {woodSegments.map((seg, idx) => {
                 const inward = offsetTowardPoint(seg, centroidX, centroidY, materialOffset);
                 const outward = { x: -inward.x, y: -inward.y };
-                const drawBothSides = !seg.boundary || seg.x1 === seg.x2 || seg.y1 === seg.y2;
+                const drawBothSides = true;
                 const primaryFrame = { x: inward.x + (renaissance ? 0 : secondaryOffset * inward.x / materialOffset), y: inward.y + (renaissance ? 0 : secondaryOffset * inward.y / materialOffset) };
                 const secondaryFrame = { x: outward.x + (renaissance ? 0 : secondaryOffset * outward.x / materialOffset), y: outward.y + (renaissance ? 0 : secondaryOffset * outward.y / materialOffset) };
                 return (
@@ -1024,8 +1023,9 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
                 );
               })}
               {woodSegments.map((seg, idx) => <line key={`wood-${idx}`} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} className="gable-wood-line" />)}
-              <text x={baseLeft} y={apexY - 22} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text>
-              <text x={baseLeft} y={baseY + 30} className="svg-note">{cuts.map((cut) => feetAndInches(cut)).join(' · ')}</text>
+              <rect x={baseLeft - 10} y={apexY - 34} width={Math.min(gW + 20, 260)} height={26} rx="6" className="legend-box" />
+              <text x={baseLeft} y={apexY - 18} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text>
+              <text x={baseLeft} y={baseY + 28} className="svg-note">{`${cuts.length} gable cuts`}</text>
             </g>
           );
         })}
@@ -1089,18 +1089,14 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
             </g>
           );
         })}
-        <g transform={`translate(${x0}, ${viewH - legendHeight - 8})`}>
-          <rect x={-12} y={-18} width={Math.max(420, totalW + 24)} height={legendHeight} rx={12} className="legend-box" />
-          <text x={0} y={0} className="svg-note">{renaissance ? 'Renaissance legend' : 'Screen room legend'}</text>
-          {screenLegendItems.map((item, index) => {
-            const col = index % screenLegendColumns;
-            const row = Math.floor(index / screenLegendColumns);
-            const lx = col * 280;
-            const ly = 30 + row * 20;
-            return <g key={item.label} transform={`translate(${lx}, ${ly})`}>
-              <line x1={0} y1={0} x2={30} y2={0} className={item.className} />
-              <text x={40} y={4} className="svg-note">{item.label}</text>
-            </g>;
+        <g transform={`translate(${x0}, ${viewH - 86})`}>
+          <rect x={-18} y={-30} width={Math.max(760, totalW + 36)} height={legendHeight - 18} rx="12" className="legend-box" />
+          {screenLegendItems.map((item, idx) => {
+            const row = Math.floor(idx / 4);
+            const col = idx % 4;
+            const baseX = col * 188;
+            const baseY = row * 22;
+            return <g key={`${item.label}-${idx}`} transform={`translate(${baseX}, ${baseY})`}><line x1={0} y1={0} x2={22} y2={0} className={item.className} /><text x={30} y={4} className="svg-note">{item.label}</text></g>;
           })}
         </g>
       </svg>
@@ -1240,7 +1236,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           const kickHeight = Math.max(0, Math.min(section.kickHeight, 4));
           const transomNeeded = section.transomType === 'panel' || section.transomType === 'picture-window' || (section.transomType === 'auto' && section.height > 10 && section.mainSection !== 'picture-window');
           const transomMaxHeight = transomNeeded ? Math.max(section.leftTransomHeight, section.rightTransomHeight) : 0;
-          const mainTop = top + transomMaxHeight * scale;
+                    const mainTop = top + transomMaxHeight * scale;
           const kickTop = bottom - kickHeight * scale;
           const mainBottom = section.kickSection === 'none' ? bottom : kickTop;
           const receiverInset = 4;

@@ -85,6 +85,7 @@ function inlineComputedStyles(source: Element, target: Element) {
 async function svgToCanvas(svg: SVGSVGElement) {
   const clone = svg.cloneNode(true) as SVGSVGElement;
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.querySelectorAll('[data-export-ignore="true"]').forEach((node) => node.remove());
   inlineComputedStyles(svg, clone);
   const viewBox = svg.viewBox.baseVal;
   const width = Math.max(1200, Math.round(viewBox?.width || svg.clientWidth || 1200));
@@ -140,6 +141,7 @@ export async function exportSvgAsPdf(svg: SVGSVGElement | null, title: string, f
 
 async function htmlElementToCanvas(element: HTMLElement, title: string) {
   const clone = element.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll('[data-export-ignore="true"]').forEach((node) => node.remove());
   const wrapper = document.createElement('div');
   wrapper.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
   wrapper.style.background = '#ffffff';

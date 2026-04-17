@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { exportElementAsPdf } from '../lib/export';
 import { MaterialItem } from '../lib/types';
 
@@ -8,6 +8,15 @@ interface MaterialTableProps {
   onValuesChange: (updater: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => void;
 }
 
+interface CustomMaterialItem extends MaterialItem {
+  id: string;
+}
+
+interface DisplayMaterialItem extends MaterialItem {
+  rowKey: string;
+  source: 'estimate' | 'custom';
+}
+
 const infoFields = [
   { key: 'poJobName', label: 'P.O / Job name', type: 'text' as const },
   { key: 'jobAddress', label: 'Address', type: 'text' as const },
@@ -15,15 +24,112 @@ const infoFields = [
   { key: 'deliverDate', label: 'Deliver date', type: 'date' as const },
 ];
 
+const customDefaults = {
+  category: 'Custom items',
+  name: '',
+  quantity: '1',
+  unit: 'ea',
+  stockRecommendation: '',
+  notes: '',
+};
+
+function parseJsonArray<T>(raw: string | number | boolean | undefined, fallback: T[]): T[] {
+  if (typeof raw !== 'string' || raw.trim() === '') return fallback;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as T[] : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function sanitizeFilePart(value: string) {
+  return value.trim().replace(/[^a-z0-9-_ ]/gi, '').replace(/\s+/g, '-').toLowerCase() || 'sns-material-order-list';
+}
+
 export function MaterialTable({ items, values, onValuesChange }: MaterialTableProps) {
   const tableRef = useRef<HTMLDivElement | null>(null);
-  const grouped = useMemo(() => items.reduce<Record<string, MaterialItem[]>>((accumulator, item) => {
-    accumulator[item.category] = accumulator[item.category] ?? [];
-    accumulator[item.category].push(item);
-    return accumulator;
-  }, {}), [items]);
+  const [customDraft, setCustomDraft] = useState(customDefaults);
+
+  const customItems = useMemo(
+    () => parseJsonArray<CustomMaterialItem>(values.customMaterialItems, []),
+    [values.customMaterialItems],
+  );
+  const deletedKeys = useMemo(
+    () => new Set(parseJsonArray<string>(values.deletedMaterialKeys, [])),
+    [values.deletedMaterialKeys],
+  );
+
+  const displayItems = useMemo<DisplayMaterialItem[]>(() => {
+    const estimateItems = items.map((item, index) => ({
+      ...item,
+      rowKey: `estimate:${item.category}::${item.name}::${index}`,
+      source: 'estimate' as const,
+    }));
+    const appendedCustom = customItems.map((item) => ({
+      ...item,
+      rowKey: `custom:${item.id}`,
+      source: 'custom' as const,
+    }));
+    return [...estimateItems, ...appendedCustom].filter((item) => !deletedKeys.has(item.rowKey));
+  }, [items, customItems, deletedKeys]);
+
+  const grouped = useMemo(
+    () => displayItems.reduce<Record<string, DisplayMaterialItem[]>>((accumulator, item) => {
+      accumulator[item.category] = accumulator[item.category] ?? [];
+      accumulator[item.category].push(item);
+      return accumulator;
+    }, {}),
+    [displayItems],
+  );
+
+  const hiddenItemCount = deletedKeys.size;
 
   const updateValue = (key: string, value: string) => onValuesChange((current) => ({ ...current, [key]: value }));
+
+  const persistCustomItems = (nextItems: CustomMaterialItem[]) => {
+    onValuesChange((current) => ({
+      ...current,
+      customMaterialItems: JSON.stringify(nextItems),
+    }));
+  };
+
+  const persistDeletedKeys = (nextKeys: Set<string>) => {
+    onValuesChange((current) => ({
+      ...current,
+      deletedMaterialKeys: JSON.stringify(Array.from(nextKeys)),
+    }));
+  };
+
+  const addCustomItem = () => {
+    if (!customDraft.name.trim()) return;
+    const quantity = Number(customDraft.quantity || 0);
+    const nextItem: CustomMaterialItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      category: customDraft.category.trim() || 'Custom items',
+      name: customDraft.name.trim(),
+      quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
+      unit: customDraft.unit.trim() || 'ea',
+      stockRecommendation: customDraft.stockRecommendation.trim() || 'Custom order item',
+      notes: customDraft.notes.trim() || undefined,
+    };
+    persistCustomItems([...customItems, nextItem]);
+    setCustomDraft(customDefaults);
+  };
+
+  const deleteRow = (item: DisplayMaterialItem) => {
+    if (item.source === 'custom') {
+      persistCustomItems(customItems.filter((entry) => entry.id !== item.rowKey.replace('custom:', '')));
+      return;
+    }
+    const nextKeys = new Set(deletedKeys);
+    nextKeys.add(item.rowKey);
+    persistDeletedKeys(nextKeys);
+  };
+
+  const restoreAllHidden = () => {
+    persistDeletedKeys(new Set());
+  };
 
   const buildPrintHtml = () => {
     const headerHtml = `
@@ -46,9 +152,11 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
     </style></head><body><h1>S&S Design Build · Material order list</h1>${headerHtml}${bodyHtml}</body></html>`;
   };
 
+  const exportBaseName = sanitizeFilePart(String(values.poJobName ?? 'sns-material-order-list'));
+
   const exportPdf = async () => {
     if (!tableRef.current) return;
-    await exportElementAsPdf(tableRef.current, 'S&S Design Build · Material order list', 'sns-material-order-list.pdf');
+    await exportElementAsPdf(tableRef.current, 'S&S Design Build · Material order list', `${exportBaseName}.pdf`);
   };
 
   const exportPng = async () => {
@@ -76,7 +184,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
       URL.revokeObjectURL(url);
       const link = document.createElement('a');
       link.href = canvas.toDataURL('image/png');
-      link.download = 'sns-material-order-list.png';
+      link.download = `${exportBaseName}.png`;
       link.click();
     };
     img.src = url;
@@ -111,6 +219,25 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
         ))}
       </div>
 
+      <div className="content-card" style={{ marginBottom: '1rem', padding: '1rem' }} data-export-ignore="true">
+        <div className="section-heading" style={{ marginBottom: '0.8rem' }}>
+          <p className="eyebrow">Custom items</p>
+          <h3 style={{ marginBottom: 0 }}>Add anything extra you want ordered on this job</h3>
+        </div>
+        <div className="compact-grid-4" style={{ display: 'grid', gap: '0.75rem' }}>
+          <label className="form-field compact-form-field"><span>Category</span><input value={customDraft.category} onChange={(e) => setCustomDraft((cur) => ({ ...cur, category: e.target.value }))} /></label>
+          <label className="form-field compact-form-field"><span>Material name</span><input value={customDraft.name} onChange={(e) => setCustomDraft((cur) => ({ ...cur, name: e.target.value }))} placeholder="Custom order item" /></label>
+          <label className="form-field compact-form-field"><span>Quantity</span><input type="number" min="0" step="1" value={customDraft.quantity} onChange={(e) => setCustomDraft((cur) => ({ ...cur, quantity: e.target.value }))} /></label>
+          <label className="form-field compact-form-field"><span>Unit</span><input value={customDraft.unit} onChange={(e) => setCustomDraft((cur) => ({ ...cur, unit: e.target.value }))} placeholder="ea" /></label>
+          <label className="form-field compact-form-field"><span>Stock recommendation</span><input value={customDraft.stockRecommendation} onChange={(e) => setCustomDraft((cur) => ({ ...cur, stockRecommendation: e.target.value }))} placeholder="Special order / stock size" /></label>
+          <label className="form-field compact-form-field" style={{ gridColumn: 'span 2' }}><span>Notes</span><input value={customDraft.notes} onChange={(e) => setCustomDraft((cur) => ({ ...cur, notes: e.target.value }))} placeholder="Vendor, color, or reminder" /></label>
+          <div style={{ display: 'flex', alignItems: 'end', gap: '0.75rem' }}>
+            <button type="button" className="secondary-btn" onClick={addCustomItem}>Add custom item</button>
+            {hiddenItemCount > 0 && <button type="button" className="ghost-btn" onClick={restoreAllHidden}>Restore deleted items ({hiddenItemCount})</button>}
+          </div>
+        </div>
+      </div>
+
       <div className="stack-list material-groups" ref={tableRef}>
         {Object.entries(grouped).map(([category, categoryItems]) => (
           <div key={category} className="material-group">
@@ -127,16 +254,20 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
                     <th>Unit</th>
                     <th>Stock recommendation</th>
                     <th>Notes</th>
+                    <th data-export-ignore="true">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {categoryItems.map((item) => (
-                    <tr key={`${item.category}-${item.name}`}>
+                    <tr key={item.rowKey}>
                       <td>{item.name}</td>
                       <td>{item.quantity}</td>
                       <td>{item.unit}</td>
                       <td>{item.stockRecommendation}</td>
                       <td>{item.notes ?? '—'}</td>
+                      <td data-export-ignore="true">
+                        <button type="button" className="ghost-btn small-btn" onClick={() => deleteRow(item)}>Delete</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
