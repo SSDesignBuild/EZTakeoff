@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { exportElementAsPdf } from '../lib/export';
+import { exportCanvasAsPdf, exportCanvasAsPng, exportCanvasesAsPdf, svgElementToCanvas } from '../lib/export';
 import { MaterialItem } from '../lib/types';
 
 interface MaterialTableProps {
@@ -8,14 +8,8 @@ interface MaterialTableProps {
   onValuesChange: (updater: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => void;
 }
 
-interface CustomMaterialItem extends MaterialItem {
-  id: string;
-}
-
-interface DisplayMaterialItem extends MaterialItem {
-  rowKey: string;
-  source: 'estimate' | 'custom';
-}
+interface CustomMaterialItem extends MaterialItem { id: string; }
+interface DisplayMaterialItem extends MaterialItem { rowKey: string; source: 'estimate' | 'custom'; }
 
 const infoFields = [
   { key: 'poJobName', label: 'P.O / Job name', type: 'text' as const },
@@ -24,20 +18,13 @@ const infoFields = [
   { key: 'deliverDate', label: 'Deliver date', type: 'date' as const },
 ];
 
-const customDefaults = {
-  category: 'Custom items',
-  name: '',
-  quantity: '1',
-  unit: 'ea',
-  stockRecommendation: '',
-  notes: '',
-};
+const customDefaults = { category: 'Custom items', name: '', quantity: '1', unit: 'ea', stockRecommendation: '', notes: '' };
 
 function parseJsonArray<T>(raw: string | number | boolean | undefined, fallback: T[]): T[] {
   if (typeof raw !== 'string' || raw.trim() === '') return fallback;
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed as T[] : fallback;
+    return Array.isArray(parsed) ? (parsed as T[]) : fallback;
   } catch {
     return fallback;
   }
@@ -47,84 +34,124 @@ function sanitizeFilePart(value: string) {
   return value.trim().replace(/[^a-z0-9-_ ]/gi, '').replace(/\s+/g, '-').toLowerCase() || 'sns-material-order-list';
 }
 
+function fitText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number) {
+  let out = value;
+  while (out.length > 0 && ctx.measureText(out).width > maxWidth) out = `${out.slice(0, -2)}…`;
+  return out;
+}
+
+function renderMaterialCanvas(title: string, values: Record<string, string | number | boolean>, grouped: Record<string, DisplayMaterialItem[]>) {
+  const pageWidth = 1600;
+  const margin = 32;
+  const rowHeight = 28;
+  let pageHeight = 130;
+  Object.values(grouped).forEach((rows) => {
+    pageHeight += 44 + 28 + rows.length * rowHeight + 18;
+  });
+  pageHeight += 32;
+  const canvas = document.createElement('canvas');
+  canvas.width = pageWidth;
+  canvas.height = Math.max(900, pageHeight);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas unavailable');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, pageWidth, canvas.height);
+
+  ctx.fillStyle = '#111111';
+  ctx.font = '700 28px Arial';
+  ctx.fillText(title, margin, 44);
+  const info = [
+    ['P.O / Job name', String(values.poJobName ?? '') || '—'],
+    ['Address', String(values.jobAddress ?? '') || '—'],
+    ['Deliver', String(values.deliverYesNo ?? 'No')],
+    ['Deliver date', String(values.deliverDate ?? '') || '—'],
+  ];
+  ctx.font = '12px Arial';
+  info.forEach(([label, value], idx) => {
+    const x = margin + idx * 380;
+    ctx.fillStyle = '#6b7280';
+    ctx.fillText(label, x, 68);
+    ctx.fillStyle = '#111111';
+    ctx.font = '600 14px Arial';
+    ctx.fillText(value, x, 88);
+    ctx.font = '12px Arial';
+  });
+
+  const cols = [margin, 520, 620, 730, 1050, 1360];
+  let y = 116;
+  Object.entries(grouped).forEach(([category, rows]) => {
+    ctx.fillStyle = '#111111';
+    ctx.font = '700 18px Arial';
+    ctx.fillText(category, margin, y);
+    ctx.font = '12px Arial';
+    ctx.fillStyle = '#6b7280';
+    ctx.fillText(`${rows.length} line items`, margin + 220, y);
+    y += 16;
+    ctx.fillStyle = '#f3f4f6';
+    ctx.fillRect(margin, y, pageWidth - margin * 2, 28);
+    ctx.fillStyle = '#111111';
+    ctx.font = '600 12px Arial';
+    ['Material', 'Qty', 'Unit', 'Stock recommendation', 'Notes'].forEach((label, idx) => ctx.fillText(label, cols[idx] + 8, y + 18));
+    y += 28;
+    ctx.font = '12px Arial';
+    rows.forEach((row, idx) => {
+      const rowY = y + idx * rowHeight;
+      ctx.fillStyle = idx % 2 ? '#fafafa' : '#ffffff';
+      ctx.fillRect(margin, rowY, pageWidth - margin * 2, rowHeight);
+      ctx.strokeStyle = '#d1d5db';
+      ctx.strokeRect(margin, rowY, pageWidth - margin * 2, rowHeight);
+      ctx.fillStyle = '#111111';
+      const rowValues = [row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.notes ?? '—'];
+      rowValues.forEach((value, colIdx) => {
+        const x = cols[colIdx] + 8;
+        const maxWidth = (cols[colIdx + 1] ?? (pageWidth - margin)) - cols[colIdx] - 16;
+        ctx.fillText(fitText(ctx, value, maxWidth), x, rowY + 18);
+      });
+    });
+    y += rows.length * rowHeight + 20;
+  });
+  return canvas;
+}
+
 export function MaterialTable({ items, values, onValuesChange }: MaterialTableProps) {
   const tableRef = useRef<HTMLDivElement | null>(null);
   const [customDraft, setCustomDraft] = useState(customDefaults);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingQuantity, setEditingQuantity] = useState<string>('');
 
-  const customItems = useMemo(
-    () => parseJsonArray<CustomMaterialItem>(values.customMaterialItems, []),
-    [values.customMaterialItems],
-  );
-  const deletedKeys = useMemo(
-    () => new Set(parseJsonArray<string>(values.deletedMaterialKeys, [])),
-    [values.deletedMaterialKeys],
-  );
-  const quantityOverrides = useMemo(
-    () => {
-      const raw = values.materialQuantityOverrides;
-      if (typeof raw !== 'string' || raw.trim() === '') return {} as Record<string, number>;
-      try {
-        const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' ? parsed as Record<string, number> : {};
-      } catch {
-        return {} as Record<string, number>;
-      }
-    },
-    [values.materialQuantityOverrides],
-  );
+  const customItems = useMemo(() => parseJsonArray<CustomMaterialItem>(values.customMaterialItems, []), [values.customMaterialItems]);
+  const deletedKeys = useMemo(() => new Set(parseJsonArray<string>(values.deletedMaterialKeys, [])), [values.deletedMaterialKeys]);
+  const quantityOverrides = useMemo(() => {
+    const raw = values.materialQuantityOverrides;
+    if (typeof raw !== 'string' || raw.trim() === '') return {} as Record<string, number>;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, number>) : {};
+    } catch {
+      return {} as Record<string, number>;
+    }
+  }, [values.materialQuantityOverrides]);
 
   const displayItems = useMemo<DisplayMaterialItem[]>(() => {
-    const estimateItems = items.map((item, index) => ({
-      ...item,
-      rowKey: `estimate:${item.category}::${item.name}::${index}`,
-      source: 'estimate' as const,
-    }));
-    const appendedCustom = customItems.map((item) => ({
-      ...item,
-      rowKey: `custom:${item.id}`,
-      source: 'custom' as const,
-    }));
+    const estimateItems = items.map((item, index) => ({ ...item, rowKey: `estimate:${item.category}::${item.name}::${index}`, source: 'estimate' as const }));
+    const appendedCustom = customItems.map((item) => ({ ...item, rowKey: `custom:${item.id}`, source: 'custom' as const }));
     return [...estimateItems, ...appendedCustom]
       .map((item) => ({ ...item, quantity: quantityOverrides[item.rowKey] ?? item.quantity }))
       .filter((item) => !deletedKeys.has(item.rowKey));
   }, [items, customItems, deletedKeys, quantityOverrides]);
 
-  const grouped = useMemo(
-    () => displayItems.reduce<Record<string, DisplayMaterialItem[]>>((accumulator, item) => {
-      accumulator[item.category] = accumulator[item.category] ?? [];
-      accumulator[item.category].push(item);
-      return accumulator;
-    }, {}),
-    [displayItems],
-  );
+  const grouped = useMemo(() => displayItems.reduce<Record<string, DisplayMaterialItem[]>>((acc, item) => {
+    acc[item.category] = acc[item.category] ?? [];
+    acc[item.category].push(item);
+    return acc;
+  }, {}), [displayItems]);
 
   const hiddenItemCount = deletedKeys.size;
-
+  const exportBaseName = sanitizeFilePart(String(values.poJobName ?? 'sns-material-order-list'));
   const updateValue = (key: string, value: string) => onValuesChange((current) => ({ ...current, [key]: value }));
-
-  const persistCustomItems = (nextItems: CustomMaterialItem[]) => {
-    onValuesChange((current) => ({
-      ...current,
-      customMaterialItems: JSON.stringify(nextItems),
-    }));
-  };
-
-  const persistDeletedKeys = (nextKeys: Set<string>) => {
-    onValuesChange((current) => ({
-      ...current,
-      deletedMaterialKeys: JSON.stringify(Array.from(nextKeys)),
-    }));
-  };
-
-
-  const persistQuantityOverrides = (nextOverrides: Record<string, number>) => {
-    onValuesChange((current) => ({
-      ...current,
-      materialQuantityOverrides: JSON.stringify(nextOverrides),
-    }));
-  };
+  const persistCustomItems = (nextItems: CustomMaterialItem[]) => onValuesChange((current) => ({ ...current, customMaterialItems: JSON.stringify(nextItems) }));
+  const persistDeletedKeys = (nextKeys: Set<string>) => onValuesChange((current) => ({ ...current, deletedMaterialKeys: JSON.stringify(Array.from(nextKeys)) }));
+  const persistQuantityOverrides = (nextOverrides: Record<string, number>) => onValuesChange((current) => ({ ...current, materialQuantityOverrides: JSON.stringify(nextOverrides) }));
 
   const addCustomItem = () => {
     if (!customDraft.name.trim()) return;
@@ -152,96 +179,35 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
     persistDeletedKeys(nextKeys);
   };
 
-  const restoreAllHidden = () => {
-    persistDeletedKeys(new Set());
-  };
-
-
-  const startEdit = (item: DisplayMaterialItem) => {
-    setEditingKey(item.rowKey);
-    setEditingQuantity(String(quantityOverrides[item.rowKey] ?? item.quantity));
-  };
-
+  const restoreAllHidden = () => persistDeletedKeys(new Set());
+  const startEdit = (item: DisplayMaterialItem) => { setEditingKey(item.rowKey); setEditingQuantity(String(quantityOverrides[item.rowKey] ?? item.quantity)); };
   const saveQuantity = (item: DisplayMaterialItem) => {
     const qty = Number(editingQuantity);
     const normalized = Number.isFinite(qty) && qty >= 0 ? qty : item.quantity;
-    if (item.source === 'custom') {
-      persistCustomItems(customItems.map((entry) => entry.id === item.rowKey.replace('custom:', '') ? { ...entry, quantity: normalized } : entry));
-    } else {
-      persistQuantityOverrides({ ...quantityOverrides, [item.rowKey]: normalized });
-    }
-    setEditingKey(null);
-    setEditingQuantity('');
+    if (item.source === 'custom') persistCustomItems(customItems.map((entry) => entry.id === item.rowKey.replace('custom:', '') ? { ...entry, quantity: normalized } : entry));
+    else persistQuantityOverrides({ ...quantityOverrides, [item.rowKey]: normalized });
+    setEditingKey(null); setEditingQuantity('');
+  };
+  const cancelEdit = () => { setEditingKey(null); setEditingQuantity(''); };
+
+  const exportPdf = async () => {
+    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
+    await exportCanvasAsPdf(canvas, 'S&S Design Build · Material order list', `${exportBaseName}.pdf`);
   };
 
-  const cancelEdit = () => {
-    setEditingKey(null);
-    setEditingQuantity('');
+  const exportPng = async () => {
+    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
+    await exportCanvasAsPng(canvas, `${exportBaseName}.png`);
   };
 
   const exportCombinedPdf = async () => {
     const root = document.getElementById('service-export-root');
-    if (!root) return;
-    await exportElementAsPdf(root as HTMLElement, 'S&S Design Build · Layout and material order list', `${exportBaseName}-layout-materials.pdf`);
-  };
-
-  const buildPrintHtml = () => {
-    const headerHtml = `
-      <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px;font-family:Inter,Arial,sans-serif;">
-        <div><div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.08em">P.O / Job name</div><div style="font-weight:600">${String(values.poJobName ?? '') || '—'}</div></div>
-        <div><div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.08em">Address</div><div style="font-weight:600">${String(values.jobAddress ?? '') || '—'}</div></div>
-        <div><div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.08em">Deliver</div><div style="font-weight:600">${String(values.deliverYesNo ?? 'No')}</div></div>
-        <div><div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.08em">Deliver date</div><div style="font-weight:600">${String(values.deliverDate ?? '') || '—'}</div></div>
-      </div>`;
-    const bodyHtml = tableRef.current?.innerHTML ?? '';
-    return `<!doctype html><html><head><title>Material order list</title><style>
-      @page { size: letter landscape; margin: 0.35in; }
-      body{font-family:Inter,Arial,sans-serif;margin:0;padding:18px;color:#111;background:#fff}
-      h1{font-size:20px;margin:0 0 14px}
-      .material-group{margin-bottom:18px}
-      .material-group-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
-      table{width:100%;border-collapse:collapse;font-size:12px}
-      th,td{border:1px solid #d1d5db;padding:6px 7px;text-align:left;vertical-align:top}
-      th{background:#f3f4f6;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
-    </style></head><body><h1>S&S Design Build · Material order list</h1>${headerHtml}${bodyHtml}</body></html>`;
-  };
-
-  const exportBaseName = sanitizeFilePart(String(values.poJobName ?? 'sns-material-order-list'));
-
-  const exportPdf = async () => {
-    if (!tableRef.current) return;
-    await exportElementAsPdf(tableRef.current, 'S&S Design Build · Material order list', `${exportBaseName}.pdf`);
-  };
-
-  const exportPng = async () => {
-    if (!tableRef.current) return;
-    const wrapper = document.createElement('div');
-    wrapper.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
-    wrapper.style.background = '#ffffff';
-    wrapper.style.padding = '20px';
-    wrapper.style.width = '1400px';
-    wrapper.style.fontFamily = 'Inter, Arial, sans-serif';
-    wrapper.innerHTML = `<h1 style="margin:0 0 14px;font-size:22px;color:#111">S&S Design Build · Material order list</h1>${buildPrintHtml().match(/<body>([\s\S]*)<\/body>/)?.[1] ?? tableRef.current.outerHTML}`;
-    const data = new XMLSerializer().serializeToString(wrapper);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="${Math.max(900, tableRef.current.scrollHeight + 280)}"><foreignObject width="100%" height="100%">${data}</foreignObject></svg>`;
-    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1500;
-      canvas.height = Math.max(900, tableRef.current?.scrollHeight ? tableRef.current.scrollHeight + 280 : 900);
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-      URL.revokeObjectURL(url);
-      const link = document.createElement('a');
-      link.href = canvas.toDataURL('image/png');
-      link.download = `${exportBaseName}.png`;
-      link.click();
-    };
-    img.src = url;
+    const svg = root?.querySelector('svg') as SVGSVGElement | null;
+    if (!svg) return;
+    const layoutCanvas = await svgElementToCanvas(svg);
+    if (!layoutCanvas) return;
+    const materialCanvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
+    await exportCanvasesAsPdf([layoutCanvas, materialCanvas], 'S&S Design Build · Layout and material order list', `${exportBaseName}-layout-materials.pdf`);
   };
 
   return (

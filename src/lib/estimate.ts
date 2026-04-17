@@ -350,7 +350,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     const addFasteners = (mount: string, lf: number, spacing = 2) => {
       const qty = Math.max(0, Math.ceil(lf / spacing));
       if (mount === 'concrete') concreteScrews += qty;
-      else if (mount === 'metal') selfTappingScrews += qty;
+      else if (mount === 'metal') selfTappingScrews += Math.max(1, Math.ceil(lf / 2.5));
       else woodScrews += qty;
     };
     addFasteners(section.floorMount, floorMountLf);
@@ -437,65 +437,52 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   const spline = screenType === 'suntex-80' ? '.285 spline' : '.315 spline';
   const sealantTubes = renaissance ? Math.max(1, Math.ceil(oneByTwoCustom.reduce((sum, len) => sum + len, 0) / 24)) : Math.max(1, Math.ceil(receiverFastenerTubesLf / 24));
 
-  const gableOpenings = (gable: { width: number; height: number; style: string; uprights?: number }) => {
+  const gableCutsFromStyle = (gable: { width: number; height: number; style: string; uprights?: number }) => {
     const half = gable.width / 2;
     const rafter = Math.sqrt(half ** 2 + gable.height ** 2);
-    const diag = Math.sqrt((half * 0.42) ** 2 + (gable.height * 0.45) ** 2);
-    const cuts: number[] = [half, rafter, half, rafter];
+    const perimeterCuts = [gable.width, rafter, rafter];
+    const innerDoubleCuts: number[] = [];
+    const braceDiag = Math.sqrt((half * 0.42) ** 2 + (gable.height * 0.45) ** 2);
     switch (gable.style) {
-      case 'none':
-        break;
       case 'king-post':
-        cuts.push(gable.height, gable.height);
+        innerDoubleCuts.push(gable.height, gable.height);
         break;
       case 'tied-king-post':
-        cuts.push(diag, diag, diag, diag, gable.height * 0.55, gable.height * 0.55);
+        innerDoubleCuts.push(gable.height, gable.height, braceDiag, braceDiag, braceDiag, braceDiag);
         break;
       case 'braced-king-post':
-        cuts.push(diag, diag, diag, diag, diag, diag, gable.height * 0.55, gable.height * 0.55);
+        innerDoubleCuts.push(gable.height, gable.height, braceDiag, braceDiag, braceDiag, braceDiag);
         break;
-      case 'queen-king-post':
-        cuts.push(gable.height, gable.height, half * 0.2, half * 0.2, half * 0.2, half * 0.2);
+      case 'queen-king-post': {
+        const queenHeight = gable.height * 0.58;
+        innerDoubleCuts.push(gable.height, gable.height, queenHeight, queenHeight, queenHeight, queenHeight);
         break;
+      }
+      case 'none':
       default:
-        cuts.push(gable.height, gable.height);
         break;
     }
+    const uprightCuts: number[] = [];
     const uprightCount = Math.max(0, Math.floor(gable.uprights ?? 0));
     for (let i = 1; i <= uprightCount; i += 1) {
       const x = (gable.width * i) / (uprightCount + 1);
       const localHeight = x <= half ? (gable.height * x) / half : (gable.height * (gable.width - x)) / half;
-      const h = Math.max(0, localHeight);
-      if (h > 0.05) cuts.push(h, h);
+      if (localHeight > 0.05) uprightCuts.push(localHeight);
     }
-    return cuts;
+    return { perimeterCuts, innerDoubleCuts, uprightCuts };
   };
 
   gableSections.forEach((gable) => {
     if (gable.width <= 0 || gable.height <= 0) return;
-    const cuts = gableOpenings(gable);
+    const { perimeterCuts, innerDoubleCuts, uprightCuts } = gableCutsFromStyle(gable);
     if (renaissance) {
-      oneByTwoCustom.push(...cuts);
-      gableOneByTwoCuts.push(...cuts);
-      const uprightCount = Math.max(0, Math.floor(gable.uprights ?? 0));
-      if (uprightCount > 0) {
-        for (let i = 1; i <= uprightCount; i += 1) {
-          const x = (gable.width * i) / (uprightCount + 1);
-          const localHeight = x <= gable.width / 2 ? (gable.height * x) / (gable.width / 2) : (gable.height * (gable.width - x)) / (gable.width / 2);
-          if (localHeight > 0.05) gableUprightCuts.push(localHeight);
-        }
-      }
+      gableOneByTwoCuts.push(...perimeterCuts, ...innerDoubleCuts);
+      oneByTwoCustom.push(...perimeterCuts, ...innerDoubleCuts);
+      gableUprightCuts.push(...uprightCuts);
     } else {
-      gableReceiverCuts.push(...cuts);
-      gableOneByTwoCuts.push(...cuts);
-      const uprightCount = Math.max(0, Math.floor(gable.uprights ?? 0));
-      if (uprightCount > 0) {
-        for (let i = 1; i <= uprightCount; i += 1) {
-          const x = (gable.width * i) / (uprightCount + 1);
-          const localHeight = x <= gable.width / 2 ? (gable.height * x) / (gable.width / 2) : (gable.height * (gable.width - x)) / (gable.width / 2);
-          if (localHeight > 0.05) gableUprightCuts.push(localHeight);
-        }
-      }
+      gableReceiverCuts.push(...perimeterCuts, ...innerDoubleCuts);
+      gableOneByTwoCuts.push(...perimeterCuts, ...innerDoubleCuts);
+      gableUprightCuts.push(...uprightCuts);
     }
   });
 

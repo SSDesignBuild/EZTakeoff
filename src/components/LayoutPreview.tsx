@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { exportSvgAsPdf } from '../lib/export';
+import { exportSvgAsPdf, exportSvgSectionsAsPdf } from '../lib/export';
 import { buildDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout } from '../lib/patioLayout';
 import { parseGableSections, parseSections, parseSunroomSections } from '../lib/sectioning';
@@ -961,6 +961,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
   const sections = parseSections(values.sections, 3);
   const gableSections = parseGableSections(values.gableSections, 0);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const [zoom, setZoom] = useState(1);
   const scale = 34;
   const gutter = 20;
   const x0 = 48;
@@ -1003,10 +1004,10 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           <span>Scaled installer plan with separate centered gable section layouts.</span>
         </div>
         <div className="preview-toolbar">
-          <button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, renaissance ? 'Renaissance screen room plan' : 'Screen room plan', renaissance ? 'sns-renaissance-plan.pdf' : 'sns-screen-room-plan.pdf'); }}>Export PDF</button>
+          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((z) => Math.max(0.8, z - 0.2))}>−</button><button type="button" className="ghost-btn small-btn" onClick={() => setZoom((z) => Math.min(2.2, z + 0.2))}>+</button><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgSectionsAsPdf(svgRef.current, renaissance ? 'Renaissance screen room plan' : 'Screen room plan', renaissance ? 'sns-renaissance-plan.pdf' : 'sns-screen-room-plan.pdf'); }}>Export PDF</button>
         </div>
       </div>
-      <svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg">
+      <div style={{ overflow: 'auto' }}><svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg" style={{ width: `${Math.max(100, zoom * 100)}%`, height: 'auto' }}>
         {Array.from({ length: Math.ceil(totalW / scale) + 4 }, (_, index) => <line key={`sx-${index}`} x1={x0 - 20 + index * scale} y1={28} x2={x0 - 20 + index * scale} y2={viewH - 20} className="svg-grid" />)}
         {Array.from({ length: Math.ceil(totalH / scale) + 4 }, (_, index) => <line key={`sy-${index}`} x1={20} y1={28 + index * scale} x2={viewW - 20} y2={28 + index * scale} className="svg-grid" />)}
 
@@ -1026,7 +1027,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const secondaryOffset = renaissance ? 0 : 18;
           const boundaryFrameClass = renaissance ? 'reno-1x2-line' : 'onebytwo-line';
           return (
-            <g key={gable.id}>
+            <g key={gable.id} data-export-section="true">
               {woodSegments.map((seg, idx) => {
                 const inward = offsetTowardPoint(seg, centroidX, centroidY, materialOffset);
                 const outward = { x: -inward.x, y: -inward.y };
@@ -1093,7 +1094,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const picketBottom = section.kickPanel === 'none' ? bottom - 16 : kickTop + 10;
           const uprightXs = Array.from({ length: section.uprights }, (_, index) => ((index + 1) * section.width) / (section.uprights + 1)).filter((x) => spans.some((span) => x > span.start && x < span.end));
           return (
-            <g key={section.id}>
+            <g key={section.id} data-export-section="true">
               <rect x={left} y={top} width={sectionW} height={sectionH} className="screen-box" rx="8" />
               <text x={left} y={top - 12} className="svg-note">{`${section.label} · ${feetAndInches(section.width)} x ${feetAndInches(section.height)}`}</text>
               {!renaissance && <>
@@ -1123,7 +1124,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
             </g>
           );
         })})()}
-        <g transform={`translate(${x0}, ${viewH - 86})`}>
+        <g transform={`translate(${x0}, ${viewH - 86})`} data-export-legend="true">
           <rect x={-18} y={-30} width={Math.max(760, totalW + 36)} height={legendHeight - 18} rx="12" className="legend-box" />
           {screenLegendItems.map((item, idx) => {
             const row = Math.floor(idx / 4);
@@ -1133,7 +1134,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
             return <g key={`${item.label}-${idx}`} transform={`translate(${baseX}, ${baseY})`}><line x1={0} y1={0} x2={22} y2={0} className={item.className} /><text x={30} y={4} className="svg-note">{item.label}</text></g>;
           })}
         </g>
-      </svg>
+      </svg></div>
     </div>
   );
 }
@@ -1286,7 +1287,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           const transomFillColor = !transomNeeded ? 'transparent' : section.transomType === 'picture-window' ? windowFill : panelFill;
           const transomPoly = transomNeeded ? `${left + frameInset},${top + section.leftTransomHeight * scale} ${left + w - frameInset},${top + section.rightTransomHeight * scale} ${left + w - frameInset},${mainTop} ${left + frameInset},${mainTop}` : '';
           return (
-            <g key={section.id}>
+            <g key={section.id} data-export-section="true">
               <rect x={left} y={top} width={w} height={h} className="screen-box" rx="6" />
               <text x={left} y={top - 10} className="svg-note">{`${section.label} · ${feetAndInches(section.width)}`}</text>
               <line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="sunroom-receiver-line" />
