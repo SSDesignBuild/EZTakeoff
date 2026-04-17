@@ -33,9 +33,9 @@ const sharedScreenDefaults = JSON.stringify([
 
 const sharedGableDefaults = JSON.stringify([createGableSection(0, { width: 8, height: 2, style: 'king-post' })]);
 const sharedSunroomDefaults = JSON.stringify([
-  createSunroomSection(0, { width: 8, mainSection: 'horizontal-sliders', kickSection: 'insulated', kickHeight: 2, mainWindowCount: 2, kickWindowCount: 1, transomWindowCount: 1 }),
-  createSunroomSection(1, { width: 8, mainSection: 'horizontal-sliders', kickSection: 'insulated', kickHeight: 2, mainWindowCount: 2, kickWindowCount: 1, transomWindowCount: 1 }),
-  createSunroomSection(2, { width: 3, mainSection: 'panel', kickSection: 'insulated', kickHeight: 2, doorType: 'single', mainWindowCount: 0, kickWindowCount: 0, transomWindowCount: 0 }),
+  createSunroomSection(0, { width: 8, mainSection: 'horizontal-sliders', kickSection: 'insulated', kickHeight: 2 }),
+  createSunroomSection(1, { width: 8, mainSection: 'horizontal-sliders', kickSection: 'insulated', kickHeight: 2 }),
+  createSunroomSection(2, { width: 3, mainSection: 'panel', kickSection: 'insulated', kickHeight: 2, doorType: 'single' }),
 ]);
 
 export const SERVICES: ServiceDefinition[] = [

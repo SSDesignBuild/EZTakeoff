@@ -929,9 +929,9 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
   const totalW = Math.max(sectionWidth, gableWidths, 260);
   const gableHeight = gableSections.length ? Math.max(...gableSections.map((gable) => gable.height * scale)) : 0;
   const sectionHeight = Math.max(...sections.map((section) => section.height * scale), 220);
-  const totalH = sectionHeight + (gableSections.length ? gableHeight + 90 : 0);
+  const totalH = sectionHeight + (gableSections.length ? gableHeight + 150 : 0);
   const viewW = totalW + 120;
-  const viewH = totalH + 120;
+  const viewH = totalH + 160;
   const sectionStartX = x0 + (totalW - sectionWidth) / 2;
   const gableStartX = x0 + (totalW - gableWidths) / 2;
   let runningX = sectionStartX;
@@ -952,7 +952,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
         {Array.from({ length: Math.ceil(totalH / scale) + 4 }, (_, index) => <line key={`sy-${index}`} x1={20} y1={28 + index * scale} x2={viewW - 20} y2={28 + index * scale} className="svg-grid" />)}
 
         {gableSections.map((gable) => {
-          const baseY = 48 + gableHeight;
+          const baseY = 70 + gableHeight;
           const gW = gable.width * scale;
           const baseLeft = runningGX;
           const baseRight = baseLeft + gW;
@@ -980,8 +980,8 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
                 const ny = (dx / len) * (renaissance ? 7 : 14);
                 return <line key={`frame-${idx}`} x1={seg.x1 + nx} y1={seg.y1 + ny} x2={seg.x2 + nx} y2={seg.y2 + ny} className={renaissance ? 'reno-1x2-line' : 'onebytwo-line'} />;
               })}
-              <text x={baseLeft} y={apexY - 12} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text>
-              <text x={baseLeft} y={baseY + 18} className="svg-note">{`${cuts.length} cut pieces · ${renaissance ? '1x2 7/8 around each wood-framed opening' : 'receiver + 1x2 around each wood-framed opening'}`}</text>
+              <text x={baseLeft} y={apexY - 16} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text>
+              <text x={baseLeft} y={baseY + 22} className="svg-note">{`${cuts.length} cut pieces`}</text>
             </g>
           );
         })}
@@ -991,7 +991,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const sectionH = section.height * scale;
           const left = runningX;
           const right = left + sectionW;
-          const top = 70 + gableHeight;
+          const top = 120 + gableHeight;
           const bottom = top + sectionH;
           runningX += sectionW + gutter;
           const doorWidth = section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
@@ -1045,8 +1045,17 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
             </g>
           );
         })}
+        <g transform={`translate(${x0}, ${viewH - 32})`}>
+          {renaissance ? <>
+            <line x1={0} y1={0} x2={20} y2={0} className="reno-1x2-line" /><text x={26} y={4} className="svg-note">1x2 7/8</text>
+            <line x1={120} y1={0} x2={140} y2={0} className="svg-outline" /><text x={146} y={4} className="svg-note">wood gable structure</text>
+          </> : <>
+            <line x1={0} y1={0} x2={20} y2={0} className="receiver-line" /><text x={26} y={4} className="svg-note">receiver</text>
+            <line x1={110} y1={0} x2={130} y2={0} className="onebytwo-line" /><text x={136} y={4} className="svg-note">1x2</text>
+            <line x1={190} y1={0} x2={210} y2={0} className="svg-outline" /><text x={216} y={4} className="svg-note">wood gable structure</text>
+          </>}
+        </g>
       </svg>
-      <div className="legend-row wrap-legend"><span><i className="legend-swatch receiver-swatch" /> receiver</span><span><i className="legend-swatch onebytwo-swatch" /> 1x2 / 1x2 7/8</span><span><i className="legend-swatch twobytwo-swatch" /> 2x2 no groove</span><span><i className="legend-swatch groove-swatch" /> groove / U-channel</span><span><i className="legend-swatch picket-swatch" /> pickets</span><span><i className="legend-swatch" style={{ background: '#111827' }} /> wood gable structure</span></div>
     </div>
   );
 }
@@ -1154,13 +1163,13 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
   const totalW = sections.reduce((sum, section) => sum + section.width * scale, 0) + Math.max(0, sections.length - 1) * gutter;
   const totalH = Math.max(...sections.map((section) => section.height * scale), 220);
   const viewW = totalW + 180;
-  const viewH = totalH + 180;
+  const viewH = totalH + 220;
   const x0 = (viewW - totalW) / 2;
   const y0 = 80;
   const frontWidth = sections.reduce((sum, section) => sum + section.width, 0);
   let runningX = x0;
-  const windowFill = 'rgba(77,131,209,0.16)';
-  const panelFill = 'rgba(255,255,255,0.65)';
+  const windowFill = 'rgba(77,131,209,0.18)';
+  const panelFill = 'rgba(255,255,255,0.72)';
   return (
     <div className="visual-card">
       <div className="visual-header">
@@ -1171,7 +1180,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
         <div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, 'Sunroom plan', 'sns-sunroom-plan.pdf'); }}>Export PDF</button></div>
       </div>
       <svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg patio-sheet-svg">
-        {Array.from({ length: Math.ceil(totalW / scale) + 4 }, (_, index) => <line key={`sun-gx-${index}`} x1={x0 - 20 + index * scale} y1={24} x2={x0 - 20 + index * scale} y2={viewH - 24} className="svg-grid" />)}
+        {Array.from({ length: Math.ceil(totalW / scale) + 4 }, (_, index) => <line key={`sun-gx-${index}`} x1={x0 - 20 + index * scale} y1={24} x2={x0 - 20 + index * scale} y2={viewH - 50} className="svg-grid" />)}
         {Array.from({ length: Math.ceil(totalH / scale) + 4 }, (_, index) => <line key={`sun-gy-${index}`} x1={24} y1={24 + index * scale} x2={viewW - 24} y2={24 + index * scale} className="svg-grid" />)}
         {sections.map((section) => {
           const w = section.width * scale;
@@ -1182,44 +1191,61 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           runningX += w + gutter;
           const kickHeight = Math.max(0, Math.min(section.kickHeight, 4));
           const transomNeeded = section.transomType === 'panel' || section.transomType === 'picture-window' || (section.transomType === 'auto' && section.height > 10 && section.mainSection !== 'picture-window');
-          const transomMaxHeight = transomNeeded ? Math.max(section.leftTransomHeight, section.transomHeight, section.rightTransomHeight) : 0;
+          const transomMaxHeight = transomNeeded ? Math.max(section.leftTransomHeight, section.rightTransomHeight) : 0;
+          const transomAvgHeight = transomNeeded ? (section.leftTransomHeight + section.rightTransomHeight) / 2 : 0;
           const mainTop = top + transomMaxHeight * scale;
           const kickTop = bottom - kickHeight * scale;
           const mainBottom = section.kickSection === 'none' ? bottom : kickTop;
           const receiverInset = 4;
-          const capInset = 12;
+          const frameInset = 12;
+          const bayCount = Math.max(1, section.uprights + 1);
+          const showKickUprights = section.uprightMode === 'main-kick' || section.uprightMode === 'all';
+          const showTransomUprights = section.uprightMode === 'main-transom' || section.uprightMode === 'all';
           const uprightXs = Array.from({ length: section.uprights }, (_, idx) => left + ((idx + 1) * w) / (section.uprights + 1));
           const doorWidth = section.doorType === 'slider' ? 6 * scale : section.doorType === 'single' ? 3 * scale : 0;
           const doorLeft = left + Math.max(0, (w - doorWidth) / 2);
-          const transomPoly = transomNeeded ? `${left + capInset},${top + section.leftTransomHeight * scale} ${left + w / 2},${top + section.transomHeight * scale} ${left + w - capInset},${top + section.rightTransomHeight * scale} ${left + w - capInset},${mainTop} ${left + capInset},${mainTop}` : '';
           const mainFillColor = section.mainSection === 'panel' ? panelFill : windowFill;
           const kickFillColor = section.kickSection === 'panel' || section.kickSection === 'insulated' ? panelFill : section.kickSection === 'window' ? windowFill : 'transparent';
           const transomFillColor = !transomNeeded ? 'transparent' : section.transomType === 'picture-window' ? windowFill : panelFill;
+          const transomPoly = transomNeeded ? `${left + frameInset},${top + section.leftTransomHeight * scale} ${left + w - frameInset},${top + section.rightTransomHeight * scale} ${left + w - frameInset},${mainTop} ${left + frameInset},${mainTop}` : '';
           return (
             <g key={section.id}>
               <rect x={left} y={top} width={w} height={h} className="screen-box" rx="6" />
               <text x={left} y={top - 10} className="svg-note">{`${section.label} · ${feetAndInches(section.width)}`}</text>
-              <line x1={left + receiverInset} y1={bottom - receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="trim-line" />
-              <line x1={left + receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={top + receiverInset} className="trim-line" />
-              <line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="trim-line" />
-              <line x1={left + w - receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="trim-line" />
-              <line x1={left + capInset} y1={top + capInset} x2={left + capInset} y2={bottom - capInset} className="receiver-line" />
-              <line x1={left + w - capInset} y1={top + capInset} x2={left + w - capInset} y2={bottom - capInset} className="receiver-line" />
-              <line x1={left + capInset} y1={top + capInset} x2={left + w - capInset} y2={top + capInset} className="onebytwo-line" />
-              <line x1={left + capInset} y1={bottom - capInset} x2={left + w - capInset} y2={bottom - capInset} className="onebytwo-line" />
-              {uprightXs.map((x, idx) => <g key={idx}><line x1={x} y1={mainTop} x2={x} y2={bottom - capInset} className="twobytwo-line" /><line x1={x - 6} y1={mainTop} x2={x - 6} y2={bottom - capInset} className="receiver-line" /><line x1={x + 6} y1={mainTop} x2={x + 6} y2={bottom - capInset} className="receiver-line" />{section.electricChase && <line x1={x} y1={mainTop} x2={x} y2={bottom - capInset} className="groove-line" />}</g>)}
-              {transomNeeded && <polygon points={transomPoly} fill={transomFillColor} stroke="rgba(0,0,0,0.12)" />}
+              <line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="receiver-line" />
+              <line x1={left + w - receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="receiver-line" />
+              <line x1={left + receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={top + receiverInset} className="topcap-line" />
+              <line x1={left + receiverInset} y1={bottom - receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="base-line" />
+              <line x1={left + frameInset} y1={top + frameInset} x2={left + frameInset} y2={bottom - frameInset} className="drc-line" />
+              <line x1={left + w - frameInset} y1={top + frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="drc-line" />
+              {uprightXs.map((x, idx) => {
+                const y1 = showTransomUprights ? top + frameInset : mainTop;
+                const y2 = showKickUprights ? bottom - frameInset : mainBottom;
+                return <g key={idx}><line x1={x} y1={y1} x2={x} y2={y2} className="twobytwo-line" /><line x1={x - 6} y1={y1} x2={x - 6} y2={y2} className="drc-line" /><line x1={x + 6} y1={y1} x2={x + 6} y2={y2} className="drc-line" />{section.electricChase && <line x1={x} y1={y1} x2={x} y2={y2} className="groove-line" />}</g>;
+              })}
               {mainBottom > mainTop && <rect x={left + 18} y={mainTop + 6} width={Math.max(0, w - 36)} height={Math.max(0, mainBottom - mainTop - 12)} fill={mainFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />}
               {section.kickSection !== 'none' && <rect x={left + 18} y={kickTop + 6} width={Math.max(0, w - 36)} height={Math.max(0, bottom - kickTop - 12)} fill={kickFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />}
-              {section.kickSection !== 'none' && <line x1={left + capInset} y1={kickTop} x2={left + w - capInset} y2={kickTop} className={section.kickSection === 'window' ? 'receiver-line' : 'twobytwo-line'} />}
-              {transomNeeded && <line x1={left + capInset} y1={mainTop} x2={left + w - capInset} y2={mainTop} className={section.transomType === 'picture-window' ? 'receiver-line' : 'trim-line'} />}
+              {section.kickSection !== 'none' && <line x1={left + frameInset} y1={kickTop} x2={left + w - frameInset} y2={kickTop} className={section.kickSection === 'window' ? 'receiver-line' : 'twobytwo-line'} />}
+              {section.kickSection === 'window' && <line x1={left + frameInset} y1={bottom - frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="receiver-line" />}
+              {transomNeeded && <polygon points={transomPoly} fill={transomFillColor} stroke="rgba(0,0,0,0.12)" />}
+              {transomNeeded && <line x1={left + frameInset} y1={mainTop} x2={left + w - frameInset} y2={mainTop} className={section.transomType === 'picture-window' ? 'receiver-line' : 'topcap-line'} />}
               {section.doorType !== 'none' && <rect x={doorLeft} y={bottom - (6 + 8/12) * scale} width={doorWidth} height={(6 + 8/12) * scale} className="door-fill" rx="4" />}
+              <text x={left + 6} y={bottom + 16} className="svg-note">{`${bayCount} bay${bayCount === 1 ? '' : 's'}`}</text>
             </g>
           );
         })}
         <text x={x0} y={y0 + totalH + 24} className="svg-note">{`Front ${feetAndInches(frontWidth)} · ${framingColor} frame · ${panelColor} panel · ${windowColor} window`}</text>
+        <g transform={`translate(${x0}, ${viewH - 28})`}>
+          <line x1={0} y1={0} x2={18} y2={0} className="receiver-line" /><text x={24} y={4} className="svg-note">Receiver</text>
+          <line x1={104} y1={0} x2={122} y2={0} className="drc-line" /><text x={128} y={4} className="svg-note">DRC</text>
+          <line x1={180} y1={0} x2={198} y2={0} className="topcap-line" /><text x={204} y={4} className="svg-note">Top cap</text>
+          <line x1={280} y1={0} x2={298} y2={0} className="base-line" /><text x={304} y={4} className="svg-note">Base channel</text>
+          <line x1={400} y1={0} x2={418} y2={0} className="twobytwo-line" /><text x={424} y={4} className="svg-note">H-beam</text>
+          <line x1={500} y1={0} x2={518} y2={0} className="groove-line" /><text x={524} y={4} className="svg-note">Electric chase</text>
+          <rect x={620} y={-8} width={18} height={12} fill="rgba(77,131,209,0.18)" stroke="rgba(0,0,0,0.12)" /><text x={644} y={4} className="svg-note">Window zone</text>
+          <rect x={744} y={-8} width={18} height={12} fill="rgba(255,255,255,0.72)" stroke="rgba(0,0,0,0.12)" /><text x={768} y={4} className="svg-note">Panel zone</text>
+        </g>
       </svg>
-      <div className="legend-row wrap-legend"><span><i className="legend-swatch receiver-swatch" /> DRC / receiver</span><span><i className="legend-swatch onebytwo-swatch" /> base / top cap / adapters</span><span><i className="legend-swatch twobytwo-swatch" /> H-beam uprights</span><span><i className="legend-swatch groove-swatch" /> electric chase</span><span><i className="legend-swatch" style={{ background: '#9ec5ff' }} /> window zones</span><span><i className="legend-swatch" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.2)' }} /> panel zones</span></div>
     </div>
   );
 }

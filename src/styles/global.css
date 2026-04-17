@@ -419,6 +419,10 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .picket-line { stroke: #7b3fd4; stroke-width: 1.8; }
 .reno-1x2-line { stroke: #d74a4a; stroke-width: 3; }
 .reno-2x2-line { stroke: #3378ff; stroke-width: 3.2; }
+
+.drc-line { stroke: #2d7dd2; stroke-width: 2.5; }
+.topcap-line { stroke: #ef8c2f; stroke-width: 2.5; }
+.base-line { stroke: #8b5e3c; stroke-width: 2.5; }
 .reno-2x2-groove-line { stroke: #e5b91e; stroke-width: 3.2; }
 .kick-panel-fill { fill: rgba(180, 191, 205, 0.24); stroke: rgba(127, 140, 160, 0.5); stroke-width: 1.2; }
 .door-panel { fill: rgba(255,255,255,0.22); stroke: var(--green-strong); stroke-width: 2; }

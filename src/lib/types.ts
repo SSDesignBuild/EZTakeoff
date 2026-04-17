@@ -77,14 +77,10 @@ export interface SunroomSectionConfig {
   uprights: number;
   uprightMode: SunroomUprightMode;
   electricChase: boolean;
-  mainWindowCount: number;
-  kickWindowCount: number;
-  transomWindowCount: number;
   mainSection: 'horizontal-sliders' | 'panel' | 'picture-window';
   kickSection: 'panel' | 'window' | 'insulated' | 'none';
   kickHeight: number;
   transomType: 'none' | 'panel' | 'picture-window' | 'auto';
-  transomHeight: number;
   leftTransomHeight: number;
   rightTransomHeight: number;
   doorType: 'none' | 'single' | 'slider';
