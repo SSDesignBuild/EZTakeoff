@@ -303,7 +303,6 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   const gableOneByTwoCuts: number[] = [];
   const gableTwoByTwoCuts: number[] = [];
   const gableRenoNoGrooveCuts: number[] = [];
-  const gableRenoGrooveCuts: number[] = [];
 
   sections.forEach((section) => {
     const doorWidth = sectionDoorWidth(section);
@@ -512,8 +511,6 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   const roomColor = String(inputs.roomColor ?? 'white');
   const sections = parseSunroomSections(inputs.sunroomSections, 3);
   const frontWidth = sections.reduce((sum, section) => sum + section.width, 0);
-  const leftProjection = Number(inputs.leftProjection ?? 12);
-  const rightProjection = Number(inputs.rightProjection ?? 12);
   const roomHeight = Number(inputs.roomHeight ?? Math.max(...sections.map((s) => s.height)));
   const extrusionName = (three: string, two: string) => isThreeIn ? three : two;
   const materials: MaterialItem[] = [];
