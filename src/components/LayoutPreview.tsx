@@ -868,6 +868,55 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   );
 }
 
+
+function gableStyleWoodSegments(style: string, left: number, apexX: number, right: number, baseY: number, apexY: number) {
+  const midY = (baseY + apexY) / 2;
+  const quarterLeft = left + (right - left) * 0.25;
+  const quarterRight = right - (right - left) * 0.25;
+  const nearApexLeft = left + (right - left) * 0.38;
+  const nearApexRight = right - (right - left) * 0.38;
+  const centerBaseY = baseY;
+  const segments: Array<{ x1: number; y1: number; x2: number; y2: number }> = [
+    { x1: left, y1: baseY, x2: apexX, y2: apexY },
+    { x1: apexX, y1: apexY, x2: right, y2: baseY },
+    { x1: left, y1: baseY, x2: right, y2: baseY },
+  ];
+  if (style === 'king-post' || style === 'tied-king-post' || style === 'braced-king-post' || style === 'queen-king-post') {
+    segments.push({ x1: apexX, y1: apexY, x2: apexX, y2: baseY });
+  }
+  if (style === 'tied-king-post') {
+    segments.push({ x1: quarterLeft, y1: midY, x2: apexX, y2: centerBaseY });
+    segments.push({ x1: quarterRight, y1: midY, x2: apexX, y2: centerBaseY });
+  }
+  if (style === 'braced-king-post') {
+    segments.push({ x1: nearApexLeft, y1: midY, x2: apexX, y2: (baseY + apexY) * 0.56 });
+    segments.push({ x1: apexX, y1: (baseY + apexY) * 0.56, x2: nearApexRight, y2: midY });
+  }
+  if (style === 'queen-king-post') {
+    segments.push({ x1: quarterLeft, y1: baseY, x2: quarterLeft, y2: midY + 10 });
+    segments.push({ x1: quarterRight, y1: baseY, x2: quarterRight, y2: midY + 10 });
+  }
+  return segments;
+}
+
+function gableFrameCuts(width: number, height: number, style: string) {
+  const half = width / 2;
+  const rafter = Math.sqrt(half ** 2 + height ** 2);
+  const diag = Math.sqrt((half * 0.42) ** 2 + (height * 0.45) ** 2);
+  switch (style) {
+    case 'king-post':
+      return [half, rafter, height, half, rafter, height];
+    case 'tied-king-post':
+      return [half, rafter * 0.55, diag, half, rafter * 0.55, diag, height * 0.55, height * 0.55];
+    case 'braced-king-post':
+      return [half, rafter * 0.52, diag, half, rafter * 0.52, diag, height * 0.55, diag, diag];
+    case 'queen-king-post':
+      return [half * 0.4, rafter * 0.45, height * 0.62, half * 0.2, height, half * 0.2, half * 0.4, rafter * 0.45, height * 0.62];
+    default:
+      return [half, rafter, height, half, rafter, height];
+  }
+}
+
 function ScreenPreview({ values, renaissance }: { values: Record<string, string | number | boolean>; renaissance: boolean }) {
   const sections = parseSections(values.sections, 3);
   const gableSections = parseGableSections(values.gableSections, 0);
@@ -878,17 +927,130 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
   const sectionWidth = sections.reduce((sum, section) => sum + section.width * scale, 0) + Math.max(0, sections.length - 1) * gutter;
   const gableWidths = gableSections.reduce((sum, gable) => sum + gable.width * scale, 0) + Math.max(0, gableSections.length - 1) * gutter;
   const totalW = Math.max(sectionWidth, gableWidths, 260);
-  const totalH = Math.max(...sections.map((section) => section.height * scale), 220) + (gableSections.length ? (Math.max(...gableSections.map((gable) => gable.height * scale)) + 70) : 0);
+  const gableHeight = gableSections.length ? Math.max(...gableSections.map((gable) => gable.height * scale)) : 0;
+  const sectionHeight = Math.max(...sections.map((section) => section.height * scale), 220);
+  const totalH = sectionHeight + (gableSections.length ? gableHeight + 90 : 0);
   const viewW = totalW + 120;
   const viewH = totalH + 120;
   const sectionStartX = x0 + (totalW - sectionWidth) / 2;
   const gableStartX = x0 + (totalW - gableWidths) / 2;
   let runningX = sectionStartX;
   let runningGX = gableStartX;
-  return <div className="visual-card"><div className="visual-header"><div><h3>Layout preview</h3><span>Scaled installer plan with separate gable section area and centered wall layout.</span></div><div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, renaissance ? 'Renaissance screen room plan' : 'Screen room plan', renaissance ? 'sns-renaissance-plan.pdf' : 'sns-screen-room-plan.pdf'); }}>Export PDF</button></div></div><svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg">{Array.from({ length: Math.ceil(totalW / scale) + 4 }, (_, index) => <line key={`sx-${index}`} x1={x0 - 20 + index * scale} y1={28} x2={x0 - 20 + index * scale} y2={viewH - 20} className="svg-grid" />)}{Array.from({ length: Math.ceil(totalH / scale) + 4 }, (_, index) => <line key={`sy-${index}`} x1={20} y1={28 + index * scale} x2={viewW - 20} y2={28 + index * scale} className="svg-grid" />)}
-  {gableSections.map((gable) => { const baseY = 48 + Math.max(...gableSections.map((item)=>item.height*scale)); const gW = gable.width * scale; const baseLeft = runningGX; const baseRight = baseLeft + gW; runningGX += gW + gutter; const apexX = (baseLeft + baseRight) / 2; const apexY = baseY - gable.height * scale; const receiverInset = 4; const oneByInset = renaissance ? 12 : 10; const insetApexY = apexY + (renaissance ? 10 : 8); const midBottomY = baseY - 10; const primaryPostClass = renaissance ? 'reno-2x2-line' : 'twobytwo-line'; return <g key={gable.id}><polygon points={`${baseLeft},${baseY} ${apexX},${apexY} ${baseRight},${baseY}`} className="screen-box" /><line x1={baseLeft + receiverInset} y1={baseY} x2={apexX} y2={apexY + receiverInset} className={renaissance ? 'reno-1x2-line' : 'receiver-line'} /><line x1={apexX} y1={apexY + receiverInset} x2={baseRight - receiverInset} y2={baseY} className={renaissance ? 'reno-1x2-line' : 'receiver-line'} /><line x1={baseLeft + oneByInset} y1={baseY - 6} x2={apexX} y2={insetApexY} className={renaissance ? 'reno-1x2-line' : 'onebytwo-line'} /><line x1={apexX} y1={insetApexY} x2={baseRight - oneByInset} y2={baseY - 6} className={renaissance ? 'reno-1x2-line' : 'onebytwo-line'} /><line x1={apexX} y1={apexY + 8} x2={apexX} y2={baseY - 8} className={primaryPostClass} />{gable.style === 'tied-king-post' && <line x1={baseLeft + gW * 0.2} y1={baseY - 28} x2={baseRight - gW * 0.2} y2={baseY - 28} className={primaryPostClass} />}{gable.style === 'braced-king-post' && <><line x1={apexX} y1={baseY - gable.height * scale * 0.35} x2={baseLeft + gW * 0.24} y2={midBottomY - 18} className={primaryPostClass} /><line x1={apexX} y1={baseY - gable.height * scale * 0.35} x2={baseRight - gW * 0.24} y2={midBottomY - 18} className={primaryPostClass} /></>}{gable.style === 'queen-king-post' && <><line x1={baseLeft + gW * 0.3} y1={baseY - 8} x2={baseLeft + gW * 0.3} y2={apexY + 20} className={primaryPostClass} /><line x1={baseRight - gW * 0.3} y1={baseY - 8} x2={baseRight - gW * 0.3} y2={apexY + 20} className={primaryPostClass} /><line x1={baseLeft + gW * 0.22} y1={baseY - 26} x2={baseRight - gW * 0.22} y2={baseY - 26} className={primaryPostClass} /></>}<text x={baseLeft} y={apexY - 12} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text><text x={baseLeft} y={baseY + 18} className="svg-note">{renaissance ? '1x2 7/8 + 2x2 7/8 gable members' : 'Receiver + 1x2 + 2x2 gable members'}</text></g>; })}
-  {sections.map((section) => { const sectionW = section.width * scale; const sectionH = section.height * scale; const left = runningX; const right = left + sectionW; const top = 70 + (gableSections.length ? Math.max(...gableSections.map((g)=>g.height*scale)) : 0); const bottom = top + sectionH; runningX += sectionW + gutter; const doorWidth = section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width); const doorLeftFt = sectionDoorLeft(section) / 12; const doorRightFt = doorLeftFt + doorWidth; const doorLeft = left + doorLeftFt * scale; const doorRight = left + doorRightFt * scale; const doorTop = top + Math.max(18, sectionH * 0.12); const spans = sectionSpansExcludingDoor(section); const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4); const kickTop = bottom - kickHeight * scale; const picketTop = bottom - 3 * scale; const chairOnlyY = bottom - Math.max(kickHeight + 3, section.height * 0.55) * scale; const perimeterClass = renaissance ? 'reno-1x2-line' : section.kickPanel === 'trim-coil' ? 'vgroove1-line' : 'onebytwo-line'; const uprightClass = renaissance ? ((section.pickets || section.kickPanel === 'insulated') ? 'reno-2x2-groove-line' : 'reno-2x2-line') : (section.kickPanel === 'trim-coil' ? 'vgroove2-line' : 'twobytwo-line'); const chairRailClass = renaissance ? (section.pickets || section.kickPanel === 'insulated' ? 'reno-2x2-groove-line' : 'reno-2x2-line') : (section.kickPanel === 'trim-coil' ? 'vgroove2-line' : 'twobytwo-line'); const doorFrameClass = renaissance ? 'reno-2x2-line' : 'twobytwo-line'; const receiverInset = 4; const oneByInset = 12; const frameInset = 20; const picketBottom = section.kickPanel === 'none' ? bottom - 16 : kickTop + 10; const uprightXs = Array.from({ length: section.uprights }, (_, index) => ((index + 1) * section.width) / (section.uprights + 1)).filter((x) => spans.some((span) => x > span.start && x < span.end)); return <g key={section.id}><rect x={left} y={top} width={sectionW} height={sectionH} className="screen-box" rx="8" /><text x={left} y={top - 12} className="svg-note">{`${section.label} · ${feetAndInches(section.width)} x ${feetAndInches(section.height)}`}</text>{!renaissance && <><line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="receiver-line" /><line x1={right - receiverInset} y1={top + receiverInset} x2={right - receiverInset} y2={bottom - receiverInset} className="receiver-line" /><line x1={left + receiverInset} y1={top + receiverInset} x2={right - receiverInset} y2={top + receiverInset} className="receiver-line" />{spans.map((span, idx) => <line key={`rb-${idx}`} x1={left + span.start * scale + receiverInset} y1={bottom - receiverInset} x2={left + span.end * scale - receiverInset} y2={bottom - receiverInset} className="receiver-line" />)}{section.kickPanel === 'insulated' && spans.map((span, idx) => <line key={`rk-${idx}`} x1={left + span.start * scale + receiverInset + 6} y1={kickTop + receiverInset + 4} x2={left + span.end * scale - receiverInset - 6} y2={kickTop + receiverInset + 4} className="receiver-line" />)}</>}{renaissance && <><line x1={left + oneByInset} y1={top + oneByInset} x2={left + oneByInset} y2={bottom - oneByInset} className="reno-1x2-line" /><line x1={right - oneByInset} y1={top + oneByInset} x2={right - oneByInset} y2={bottom - oneByInset} className="reno-1x2-line" /><line x1={left + oneByInset} y1={top + oneByInset} x2={right - oneByInset} y2={top + oneByInset} className="reno-1x2-line" />{spans.map((span, idx) => <line key={`rbase-${idx}`} x1={left + span.start * scale + oneByInset} y1={bottom - oneByInset} x2={left + span.end * scale - oneByInset} y2={bottom - oneByInset} className="reno-1x2-line" />)}</>}{!renaissance && <><line x1={left + oneByInset} y1={top + oneByInset} x2={left + oneByInset} y2={bottom - oneByInset} className={perimeterClass} /><line x1={right - oneByInset} y1={top + oneByInset} x2={right - oneByInset} y2={bottom - oneByInset} className={perimeterClass} /><line x1={left + oneByInset} y1={top + oneByInset} x2={right - oneByInset} y2={top + oneByInset} className={perimeterClass} />{section.kickPanel !== 'insulated' && spans.map((span, idx) => <line key={`base-${idx}`} x1={left + span.start * scale + oneByInset} y1={bottom - oneByInset} x2={left + span.end * scale - oneByInset} y2={bottom - oneByInset} className={perimeterClass} />)}</>}{section.kickPanel !== 'none' && spans.map((span, idx) => <g key={`kick-${idx}`}><rect x={left + span.start * scale + frameInset - 2} y={kickTop + 10} width={Math.max(0, (span.end - span.start) * scale - frameInset * 2 + 4)} height={Math.max(0, bottom - kickTop - 20)} className="kick-panel-fill" rx="4" /><line x1={left + span.start * scale + frameInset} y1={kickTop} x2={left + span.end * scale - frameInset} y2={kickTop} className={chairRailClass} /></g>)}{section.pickets && spans.map((span, idx) => <g key={`p-${idx}`}><line x1={left + span.start * scale + frameInset} y1={picketTop} x2={left + span.end * scale - frameInset} y2={picketTop} className={renaissance ? 'reno-picket-line' : 'picket-rail-line'} />{Array.from({ length: Math.max(0, Math.ceil(((span.end - span.start) * 12) / 4)) }, (_, picketIndex) => { const px = left + span.start * scale + frameInset + (((span.end - span.start) * scale - frameInset * 2) * (picketIndex + 0.5)) / Math.max(Math.ceil(((span.end - span.start) * 12) / 4), 1); return <line key={picketIndex} x1={px} y1={picketTop + 4} x2={px} y2={picketBottom} className="picket-line" />; })}</g>)}{section.chairRail && !section.pickets && spans.map((span, idx) => <line key={`chair-${idx}`} x1={left + span.start * scale + frameInset} y1={chairOnlyY} x2={left + span.end * scale - frameInset} y2={chairOnlyY} className={chairRailClass} />)}{uprightXs.map((x, idx) => <line key={`upr-${idx}`} x1={left + x * scale} y1={top + frameInset} x2={left + x * scale} y2={bottom - frameInset} className={uprightClass} />)}{section.doorType !== 'none' && <><rect x={doorLeft + frameInset - 8} y={doorTop} width={Math.max(0, doorRight - doorLeft - frameInset * 2 + 16)} height={Math.max(0, bottom - doorTop - 18)} className="door-fill" rx="8" /><line x1={doorLeft + frameInset} y1={top + frameInset} x2={doorLeft + frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorRight - frameInset} y1={top + frameInset} x2={doorRight - frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorLeft + frameInset} y1={doorTop} x2={doorRight - frameInset} y2={doorTop} className={doorFrameClass} /></>}</g>; })}</svg><div className="legend-row wrap-legend"><span><i className="legend-swatch receiver-swatch" /> receiver</span><span><i className="legend-swatch onebytwo-swatch" /> 1x2 / 1x2 7/8</span><span><i className="legend-swatch twobytwo-swatch" /> 2x2 no groove</span><span><i className="legend-swatch groove-swatch" /> groove / U-channel</span><span><i className="legend-swatch picket-swatch" /> pickets</span></div></div>;
+  return (
+    <div className="visual-card">
+      <div className="visual-header">
+        <div>
+          <h3>Layout preview</h3>
+          <span>Scaled installer plan with separate centered gable section layouts.</span>
+        </div>
+        <div className="preview-toolbar">
+          <button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, renaissance ? 'Renaissance screen room plan' : 'Screen room plan', renaissance ? 'sns-renaissance-plan.pdf' : 'sns-screen-room-plan.pdf'); }}>Export PDF</button>
+        </div>
+      </div>
+      <svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg">
+        {Array.from({ length: Math.ceil(totalW / scale) + 4 }, (_, index) => <line key={`sx-${index}`} x1={x0 - 20 + index * scale} y1={28} x2={x0 - 20 + index * scale} y2={viewH - 20} className="svg-grid" />)}
+        {Array.from({ length: Math.ceil(totalH / scale) + 4 }, (_, index) => <line key={`sy-${index}`} x1={20} y1={28 + index * scale} x2={viewW - 20} y2={28 + index * scale} className="svg-grid" />)}
+
+        {gableSections.map((gable) => {
+          const baseY = 48 + gableHeight;
+          const gW = gable.width * scale;
+          const baseLeft = runningGX;
+          const baseRight = baseLeft + gW;
+          runningGX += gW + gutter;
+          const apexX = (baseLeft + baseRight) / 2;
+          const apexY = baseY - gable.height * scale;
+          const woodSegments = gableStyleWoodSegments(gable.style, baseLeft, apexX, baseRight, baseY, apexY);
+          const cuts = gableFrameCuts(gable.width, gable.height, gable.style);
+          return (
+            <g key={gable.id}>
+              {woodSegments.map((seg, idx) => <line key={idx} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} className="svg-outline" />)}
+              {!renaissance && woodSegments.map((seg, idx) => {
+                const dx = seg.x2 - seg.x1;
+                const dy = seg.y2 - seg.y1;
+                const len = Math.hypot(dx, dy) || 1;
+                const nx = (-dy / len) * 7;
+                const ny = (dx / len) * 7;
+                return <line key={`receiver-${idx}`} x1={seg.x1 + nx} y1={seg.y1 + ny} x2={seg.x2 + nx} y2={seg.y2 + ny} className="receiver-line" />;
+              })}
+              {woodSegments.map((seg, idx) => {
+                const dx = seg.x2 - seg.x1;
+                const dy = seg.y2 - seg.y1;
+                const len = Math.hypot(dx, dy) || 1;
+                const nx = (-dy / len) * (renaissance ? 7 : 14);
+                const ny = (dx / len) * (renaissance ? 7 : 14);
+                return <line key={`frame-${idx}`} x1={seg.x1 + nx} y1={seg.y1 + ny} x2={seg.x2 + nx} y2={seg.y2 + ny} className={renaissance ? 'reno-1x2-line' : 'onebytwo-line'} />;
+              })}
+              <text x={baseLeft} y={apexY - 12} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text>
+              <text x={baseLeft} y={baseY + 18} className="svg-note">{`${cuts.length} cut pieces · ${renaissance ? '1x2 7/8 around each wood-framed opening' : 'receiver + 1x2 around each wood-framed opening'}`}</text>
+            </g>
+          );
+        })}
+
+        {sections.map((section) => {
+          const sectionW = section.width * scale;
+          const sectionH = section.height * scale;
+          const left = runningX;
+          const right = left + sectionW;
+          const top = 70 + gableHeight;
+          const bottom = top + sectionH;
+          runningX += sectionW + gutter;
+          const doorWidth = section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
+          const doorLeftFt = sectionDoorLeft(section) / 12;
+          const doorRightFt = doorLeftFt + doorWidth;
+          const doorLeft = left + doorLeftFt * scale;
+          const doorRight = left + doorRightFt * scale;
+          const doorTop = top + Math.max(18, sectionH * 0.12);
+          const spans = sectionSpansExcludingDoor(section);
+          const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
+          const kickTop = bottom - kickHeight * scale;
+          const picketTop = bottom - 3 * scale;
+          const chairOnlyY = bottom - Math.max(kickHeight + 3, section.height * 0.55) * scale;
+          const perimeterClass = renaissance ? 'reno-1x2-line' : section.kickPanel === 'trim-coil' ? 'vgroove1-line' : 'onebytwo-line';
+          const uprightClass = renaissance ? ((section.pickets || section.kickPanel === 'insulated') ? 'reno-2x2-groove-line' : 'reno-2x2-line') : (section.kickPanel === 'trim-coil' ? 'vgroove2-line' : 'twobytwo-line');
+          const chairRailClass = renaissance ? (section.pickets || section.kickPanel === 'insulated' ? 'reno-2x2-groove-line' : 'reno-2x2-line') : (section.kickPanel === 'trim-coil' ? 'vgroove2-line' : 'twobytwo-line');
+          const doorFrameClass = renaissance ? 'reno-2x2-line' : 'twobytwo-line';
+          const receiverInset = 4;
+          const oneByInset = 12;
+          const frameInset = 20;
+          const picketBottom = section.kickPanel === 'none' ? bottom - 16 : kickTop + 10;
+          const uprightXs = Array.from({ length: section.uprights }, (_, index) => ((index + 1) * section.width) / (section.uprights + 1)).filter((x) => spans.some((span) => x > span.start && x < span.end));
+          return (
+            <g key={section.id}>
+              <rect x={left} y={top} width={sectionW} height={sectionH} className="screen-box" rx="8" />
+              <text x={left} y={top - 12} className="svg-note">{`${section.label} · ${feetAndInches(section.width)} x ${feetAndInches(section.height)}`}</text>
+              {!renaissance && <>
+                <line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="receiver-line" />
+                <line x1={right - receiverInset} y1={top + receiverInset} x2={right - receiverInset} y2={bottom - receiverInset} className="receiver-line" />
+                <line x1={left + receiverInset} y1={top + receiverInset} x2={right - receiverInset} y2={top + receiverInset} className="receiver-line" />
+                {spans.map((span, idx) => <line key={`rb-${idx}`} x1={left + span.start * scale + receiverInset} y1={bottom - receiverInset} x2={left + span.end * scale - receiverInset} y2={bottom - receiverInset} className="receiver-line" />)}
+                {section.kickPanel === 'insulated' && spans.map((span, idx) => <line key={`rk-${idx}`} x1={left + span.start * scale + receiverInset + 6} y1={kickTop + receiverInset + 4} x2={left + span.end * scale - receiverInset - 6} y2={kickTop + receiverInset + 4} className="receiver-line" />)}
+              </>}
+              {renaissance && <>
+                <line x1={left + oneByInset} y1={top + oneByInset} x2={left + oneByInset} y2={bottom - oneByInset} className="reno-1x2-line" />
+                <line x1={right - oneByInset} y1={top + oneByInset} x2={right - oneByInset} y2={bottom - oneByInset} className="reno-1x2-line" />
+                <line x1={left + oneByInset} y1={top + oneByInset} x2={right - oneByInset} y2={top + oneByInset} className="reno-1x2-line" />
+                {spans.map((span, idx) => <line key={`rbase-${idx}`} x1={left + span.start * scale + oneByInset} y1={bottom - oneByInset} x2={left + span.end * scale - oneByInset} y2={bottom - oneByInset} className="reno-1x2-line" />)}
+              </>}
+              {!renaissance && <>
+                <line x1={left + oneByInset} y1={top + oneByInset} x2={left + oneByInset} y2={bottom - oneByInset} className={perimeterClass} />
+                <line x1={right - oneByInset} y1={top + oneByInset} x2={right - oneByInset} y2={bottom - oneByInset} className={perimeterClass} />
+                <line x1={left + oneByInset} y1={top + oneByInset} x2={right - oneByInset} y2={top + oneByInset} className={perimeterClass} />
+                {section.kickPanel !== 'insulated' && spans.map((span, idx) => <line key={`base-${idx}`} x1={left + span.start * scale + oneByInset} y1={bottom - oneByInset} x2={left + span.end * scale - oneByInset} y2={bottom - oneByInset} className={perimeterClass} />)}
+              </>}
+              {section.kickPanel !== 'none' && spans.map((span, idx) => <g key={`kick-${idx}`}><rect x={left + span.start * scale + frameInset - 2} y={kickTop + 10} width={Math.max(0, (span.end - span.start) * scale - frameInset * 2 + 4)} height={Math.max(0, bottom - kickTop - 20)} className="kick-panel-fill" rx="4" /><line x1={left + span.start * scale + frameInset} y1={kickTop} x2={left + span.end * scale - frameInset} y2={kickTop} className={chairRailClass} /></g>)}
+              {section.pickets && spans.map((span, idx) => <g key={`p-${idx}`}><line x1={left + span.start * scale + frameInset} y1={picketTop} x2={left + span.end * scale - frameInset} y2={picketTop} className={renaissance ? 'reno-picket-line' : 'picket-rail-line'} />{Array.from({ length: Math.max(0, Math.ceil(((span.end - span.start) * 12) / 4)) }, (_, picketIndex) => { const px = left + span.start * scale + frameInset + (((span.end - span.start) * scale - frameInset * 2) * (picketIndex + 0.5)) / Math.max(Math.ceil(((span.end - span.start) * 12) / 4), 1); return <line key={picketIndex} x1={px} y1={picketTop + 4} x2={px} y2={picketBottom} className="picket-line" />; })}</g>)}
+              {section.chairRail && !section.pickets && spans.map((span, idx) => <line key={`chair-${idx}`} x1={left + span.start * scale + frameInset} y1={chairOnlyY} x2={left + span.end * scale - frameInset} y2={chairOnlyY} className={chairRailClass} />)}
+              {uprightXs.map((x, idx) => <line key={`upr-${idx}`} x1={left + x * scale} y1={top + frameInset} x2={left + x * scale} y2={bottom - frameInset} className={uprightClass} />)}
+              {section.doorType !== 'none' && <><rect x={doorLeft + frameInset - 8} y={doorTop} width={Math.max(0, doorRight - doorLeft - frameInset * 2 + 16)} height={Math.max(0, bottom - doorTop - 18)} className="door-fill" rx="8" /><line x1={doorLeft + frameInset} y1={top + frameInset} x2={doorLeft + frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorRight - frameInset} y1={top + frameInset} x2={doorRight - frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorLeft + frameInset} y1={doorTop} x2={doorRight - frameInset} y2={doorTop} className={doorFrameClass} /></>}
+            </g>
+          );
+        })}
+      </svg>
+      <div className="legend-row wrap-legend"><span><i className="legend-swatch receiver-swatch" /> receiver</span><span><i className="legend-swatch onebytwo-swatch" /> 1x2 / 1x2 7/8</span><span><i className="legend-swatch twobytwo-swatch" /> 2x2 no groove</span><span><i className="legend-swatch groove-swatch" /> groove / U-channel</span><span><i className="legend-swatch picket-swatch" /> pickets</span><span><i className="legend-swatch" style={{ background: '#111827' }} /> wood gable structure</span></div>
+    </div>
+  );
 }
+
 
 function PatioPreview({ values, onValuesChange }: { values: Record<string, string | number | boolean>; onValuesChange?: React.Dispatch<React.SetStateAction<Record<string, string | number | boolean>>> }) {
   const width = Number(values.width ?? 21);
@@ -981,24 +1143,85 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
   </div>;
 }
 
-
 function SunroomPreview({ values }: { values: Record<string, string | number | boolean> }) {
   const sections = parseSunroomSections(values.sunroomSections, 3);
-  const leftProjection = Number(values.leftProjection ?? 12);
-  const rightProjection = Number(values.rightProjection ?? 12);
-  const roomHeight = Number(values.roomHeight ?? 10);
+  const framingColor = String(values.framingColor ?? 'white');
+  const panelColor = String(values.panelColor ?? framingColor);
+  const windowColor = String(values.windowColor ?? framingColor);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const scale = 34;
   const gutter = 22;
-  const frontWidth = sections.reduce((sum, section) => sum + section.width, 0);
   const totalW = sections.reduce((sum, section) => sum + section.width * scale, 0) + Math.max(0, sections.length - 1) * gutter;
-  const totalH = Math.max(...sections.map((section) => section.height * scale), roomHeight * scale, 220);
+  const totalH = Math.max(...sections.map((section) => section.height * scale), 220);
   const viewW = totalW + 180;
   const viewH = totalH + 180;
   const x0 = (viewW - totalW) / 2;
   const y0 = 80;
+  const frontWidth = sections.reduce((sum, section) => sum + section.width, 0);
   let runningX = x0;
-  return <div className="visual-card"><div className="visual-header"><div><h3>Layout preview</h3><span>Elite Add-A-Room front wall sections with color-coded channels, DRC, uprights, and section fill packages.</span></div><div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, 'Sunroom plan', 'sns-sunroom-plan.pdf'); }}>Export PDF</button></div></div><svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg patio-sheet-svg">{Array.from({ length: Math.ceil(totalW / scale) + 4 }, (_, index) => <line key={`sun-gx-${index}`} x1={x0 - 20 + index * scale} y1={24} x2={x0 - 20 + index * scale} y2={viewH - 24} className="svg-grid" />)}{Array.from({ length: Math.ceil(totalH / scale) + 4 }, (_, index) => <line key={`sun-gy-${index}`} x1={24} y1={24 + index * scale} x2={viewW - 24} y2={24 + index * scale} className="svg-grid" />)}<rect x={x0} y={y0} width={totalW} height={totalH} className="screen-box" rx="8" />{sections.map((section) => { const w = section.width * scale; const h = section.height * scale; const left = runningX; const top = y0 + (totalH - h); const bottom = top + h; runningX += w + gutter; const kickTop = bottom - section.kickHeight * scale; const transomNeeded = section.transomType === 'panel' || section.transomType === 'picture-window' || (section.transomType === 'auto' && section.height > 10 && section.mainSection !== 'picture-window'); const transomY = transomNeeded ? top + section.transomHeight * scale : null; const doorWidth = section.doorType === 'slider' ? 6 * scale : section.doorType === 'single' ? 3 * scale : 0; const doorLeft = left + Math.max(0, (w - doorWidth) / 2); const receiverInset = 4; const channelInset = 12; const uprightXs = Array.from({ length: section.uprights }, (_, idx) => left + ((idx + 1) * w) / (section.uprights + 1)); const mainBottom = section.kickSection === 'none' ? bottom : kickTop; return <g key={section.id}><rect x={left} y={top} width={w} height={h} className="screen-box" rx="6" /><text x={left} y={top - 10} className="svg-note">{`${section.label} · ${feetAndInches(section.width)}`}</text><line x1={left + receiverInset} y1={bottom - receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="receiver-line" /><line x1={left + receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={top + receiverInset} className="receiver-line" /><line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="receiver-line" /><line x1={left + w - receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="receiver-line" /><line x1={left + channelInset} y1={top + channelInset} x2={left + channelInset} y2={bottom - channelInset} className="onebytwo-line" /><line x1={left + w - channelInset} y1={top + channelInset} x2={left + w - channelInset} y2={bottom - channelInset} className="onebytwo-line" />{section.kickSection !== 'insulated' && <line x1={left + channelInset} y1={bottom - channelInset} x2={left + w - channelInset} y2={bottom - channelInset} className="onebytwo-line" />}{section.kickSection !== 'none' && <line x1={left + channelInset} y1={kickTop} x2={left + w - channelInset} y2={kickTop} className={section.kickSection === 'window' ? 'receiver-line' : 'twobytwo-line'} />}{transomY !== null && <line x1={left + channelInset} y1={transomY} x2={left + w - channelInset} y2={transomY} className={section.transomType === 'picture-window' ? 'receiver-line' : 'trim-line'} />}{uprightXs.map((x, idx) => <line key={idx} x1={x} y1={top + channelInset} x2={x} y2={bottom - channelInset} className={section.electricChase ? 'groove-line' : 'twobytwo-line'} />)}{section.kickSection !== 'none' && <rect x={left + 16} y={kickTop + 6} width={Math.max(0, w - 32)} height={Math.max(0, bottom - kickTop - 12)} className="kick-panel-fill" rx="4" />}{transomY !== null && section.transomType === 'picture-window' && <text x={left + 10} y={transomY + 16} className="svg-note">{`${section.transomWindowCount} transom window(s)`}</text>}{section.mainSection !== 'panel' && doorWidth === 0 && <text x={left + 10} y={mainBottom - 12} className="svg-note">{`${section.mainWindowCount} main window(s)`}</text>}{section.kickSection === 'window' && <text x={left + 10} y={bottom - 12} className="svg-note">{`${section.kickWindowCount} kick window(s)`}</text>}{section.doorType !== 'none' && <rect x={doorLeft} y={bottom - (6 + 8/12) * scale} width={doorWidth} height={(6 + 8/12) * scale} className="door-fill" rx="4" />}</g>; })}<text x={x0} y={y0 + totalH + 24} className="svg-note">{`Front ${feetAndInches(frontWidth)} · Left proj ${feetAndInches(leftProjection)} · Right proj ${feetAndInches(rightProjection)}`}</text></svg><div className="legend-row wrap-legend"><span><i className="legend-swatch receiver-swatch" /> receiver / DRC</span><span><i className="legend-swatch onebytwo-swatch" /> 1x2 / caps</span><span><i className="legend-swatch twobytwo-swatch" /> H-beam / uprights</span><span><i className="legend-swatch groove-swatch" /> electric chase</span><span><i className="legend-swatch roof-panel-swatch" /> panel / transom fill</span></div></div>;
+  const windowFill = 'rgba(77,131,209,0.16)';
+  const panelFill = 'rgba(255,255,255,0.65)';
+  return (
+    <div className="visual-card">
+      <div className="visual-header">
+        <div>
+          <h3>Layout preview</h3>
+          <span>Elite Add-A-Room wall sections with color-coded channels, DRC, uprights, and fill zones.</span>
+        </div>
+        <div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, 'Sunroom plan', 'sns-sunroom-plan.pdf'); }}>Export PDF</button></div>
+      </div>
+      <svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg patio-sheet-svg">
+        {Array.from({ length: Math.ceil(totalW / scale) + 4 }, (_, index) => <line key={`sun-gx-${index}`} x1={x0 - 20 + index * scale} y1={24} x2={x0 - 20 + index * scale} y2={viewH - 24} className="svg-grid" />)}
+        {Array.from({ length: Math.ceil(totalH / scale) + 4 }, (_, index) => <line key={`sun-gy-${index}`} x1={24} y1={24 + index * scale} x2={viewW - 24} y2={24 + index * scale} className="svg-grid" />)}
+        {sections.map((section) => {
+          const w = section.width * scale;
+          const h = section.height * scale;
+          const left = runningX;
+          const top = y0 + (totalH - h);
+          const bottom = top + h;
+          runningX += w + gutter;
+          const kickHeight = Math.max(0, Math.min(section.kickHeight, 4));
+          const transomNeeded = section.transomType === 'panel' || section.transomType === 'picture-window' || (section.transomType === 'auto' && section.height > 10 && section.mainSection !== 'picture-window');
+          const transomMaxHeight = transomNeeded ? Math.max(section.leftTransomHeight, section.transomHeight, section.rightTransomHeight) : 0;
+          const mainTop = top + transomMaxHeight * scale;
+          const kickTop = bottom - kickHeight * scale;
+          const mainBottom = section.kickSection === 'none' ? bottom : kickTop;
+          const receiverInset = 4;
+          const capInset = 12;
+          const uprightXs = Array.from({ length: section.uprights }, (_, idx) => left + ((idx + 1) * w) / (section.uprights + 1));
+          const doorWidth = section.doorType === 'slider' ? 6 * scale : section.doorType === 'single' ? 3 * scale : 0;
+          const doorLeft = left + Math.max(0, (w - doorWidth) / 2);
+          const transomPoly = transomNeeded ? `${left + capInset},${top + section.leftTransomHeight * scale} ${left + w / 2},${top + section.transomHeight * scale} ${left + w - capInset},${top + section.rightTransomHeight * scale} ${left + w - capInset},${mainTop} ${left + capInset},${mainTop}` : '';
+          const mainFillColor = section.mainSection === 'panel' ? panelFill : windowFill;
+          const kickFillColor = section.kickSection === 'panel' || section.kickSection === 'insulated' ? panelFill : section.kickSection === 'window' ? windowFill : 'transparent';
+          const transomFillColor = !transomNeeded ? 'transparent' : section.transomType === 'picture-window' ? windowFill : panelFill;
+          return (
+            <g key={section.id}>
+              <rect x={left} y={top} width={w} height={h} className="screen-box" rx="6" />
+              <text x={left} y={top - 10} className="svg-note">{`${section.label} · ${feetAndInches(section.width)}`}</text>
+              <line x1={left + receiverInset} y1={bottom - receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="trim-line" />
+              <line x1={left + receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={top + receiverInset} className="trim-line" />
+              <line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="trim-line" />
+              <line x1={left + w - receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="trim-line" />
+              <line x1={left + capInset} y1={top + capInset} x2={left + capInset} y2={bottom - capInset} className="receiver-line" />
+              <line x1={left + w - capInset} y1={top + capInset} x2={left + w - capInset} y2={bottom - capInset} className="receiver-line" />
+              <line x1={left + capInset} y1={top + capInset} x2={left + w - capInset} y2={top + capInset} className="onebytwo-line" />
+              <line x1={left + capInset} y1={bottom - capInset} x2={left + w - capInset} y2={bottom - capInset} className="onebytwo-line" />
+              {uprightXs.map((x, idx) => <g key={idx}><line x1={x} y1={mainTop} x2={x} y2={bottom - capInset} className="twobytwo-line" /><line x1={x - 6} y1={mainTop} x2={x - 6} y2={bottom - capInset} className="receiver-line" /><line x1={x + 6} y1={mainTop} x2={x + 6} y2={bottom - capInset} className="receiver-line" />{section.electricChase && <line x1={x} y1={mainTop} x2={x} y2={bottom - capInset} className="groove-line" />}</g>)}
+              {transomNeeded && <polygon points={transomPoly} fill={transomFillColor} stroke="rgba(0,0,0,0.12)" />}
+              {mainBottom > mainTop && <rect x={left + 18} y={mainTop + 6} width={Math.max(0, w - 36)} height={Math.max(0, mainBottom - mainTop - 12)} fill={mainFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />}
+              {section.kickSection !== 'none' && <rect x={left + 18} y={kickTop + 6} width={Math.max(0, w - 36)} height={Math.max(0, bottom - kickTop - 12)} fill={kickFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />}
+              {section.kickSection !== 'none' && <line x1={left + capInset} y1={kickTop} x2={left + w - capInset} y2={kickTop} className={section.kickSection === 'window' ? 'receiver-line' : 'twobytwo-line'} />}
+              {transomNeeded && <line x1={left + capInset} y1={mainTop} x2={left + w - capInset} y2={mainTop} className={section.transomType === 'picture-window' ? 'receiver-line' : 'trim-line'} />}
+              {section.doorType !== 'none' && <rect x={doorLeft} y={bottom - (6 + 8/12) * scale} width={doorWidth} height={(6 + 8/12) * scale} className="door-fill" rx="4" />}
+            </g>
+          );
+        })}
+        <text x={x0} y={y0 + totalH + 24} className="svg-note">{`Front ${feetAndInches(frontWidth)} · ${framingColor} frame · ${panelColor} panel · ${windowColor} window`}</text>
+      </svg>
+      <div className="legend-row wrap-legend"><span><i className="legend-swatch receiver-swatch" /> DRC / receiver</span><span><i className="legend-swatch onebytwo-swatch" /> base / top cap / adapters</span><span><i className="legend-swatch twobytwo-swatch" /> H-beam uprights</span><span><i className="legend-swatch groove-swatch" /> electric chase</span><span><i className="legend-swatch" style={{ background: '#9ec5ff' }} /> window zones</span><span><i className="legend-swatch" style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.2)' }} /> panel zones</span></div>
+    </div>
+  );
 }
 
 export function LayoutPreview({ serviceSlug, values, onValuesChange }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; if (serviceSlug === 'renaissance-screen-rooms') return <ScreenPreview values={values} renaissance />; return <SunroomPreview values={values} />; }

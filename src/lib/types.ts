@@ -85,6 +85,7 @@ export interface SunroomSectionConfig {
   kickHeight: number;
   transomType: 'none' | 'panel' | 'picture-window' | 'auto';
   transomHeight: number;
-  trapezoidFill: 'panel' | 'transom';
+  leftTransomHeight: number;
+  rightTransomHeight: number;
   doorType: 'none' | 'single' | 'slider';
 }

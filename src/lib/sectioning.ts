@@ -44,7 +44,8 @@ export const DEFAULT_SUNROOM_SECTION: SunroomSectionConfig = {
   kickHeight: 2,
   transomType: 'auto',
   transomHeight: 1,
-  trapezoidFill: 'panel',
+  leftTransomHeight: 1,
+  rightTransomHeight: 1,
   doorType: 'none',
 };
 
@@ -150,7 +151,8 @@ export function parseSunroomSections(raw: string | number | boolean | undefined,
           kickHeight: Number(item.kickHeight ?? DEFAULT_SUNROOM_SECTION.kickHeight),
           transomType: (item.transomType ?? DEFAULT_SUNROOM_SECTION.transomType) as SunroomSectionConfig['transomType'],
           transomHeight: Number(item.transomHeight ?? DEFAULT_SUNROOM_SECTION.transomHeight),
-          trapezoidFill: (item.trapezoidFill ?? DEFAULT_SUNROOM_SECTION.trapezoidFill) as SunroomSectionConfig['trapezoidFill'],
+          leftTransomHeight: Number(item.leftTransomHeight ?? item.transomHeight ?? DEFAULT_SUNROOM_SECTION.leftTransomHeight),
+          rightTransomHeight: Number(item.rightTransomHeight ?? item.transomHeight ?? DEFAULT_SUNROOM_SECTION.rightTransomHeight),
           doorType: (item.doorType ?? DEFAULT_SUNROOM_SECTION.doorType) as SunroomSectionConfig['doorType'],
         }));
       }
