@@ -321,12 +321,20 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   let concreteScrews = 0;
   let flushMountScrews = 0;
   let receiverFastenerTubesLf = 0;
+  const receiverCuts24: number[] = [];
+  const oneByTwoCuts24: number[] = [];
+  const twoByTwoCuts24: number[] = [];
+  const uChannelCuts24: number[] = [];
+  const vGroove1x2Cuts24: number[] = [];
+  const vGroove2x2Cuts24: number[] = [];
+  const insulatedReceiverCuts24: number[] = [];
   const oneByTwoCustom: number[] = [];
   const twoByTwoCustomGroove: number[] = [];
   const twoByTwoCustomNoGroove: number[] = [];
   const gableSections = parseGableSections(inputs.gableSections, 0);
   const gableReceiverCuts: number[] = [];
   const gableOneByTwoCuts: number[] = [];
+  const gableUprightCuts: number[] = [];
 
   sections.forEach((section) => {
     const doorWidth = sectionDoorWidth(section);
@@ -420,22 +428,38 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   const spline = screenType === 'suntex-80' ? '.285 spline' : '.315 spline';
   const sealantTubes = renaissance ? Math.max(1, Math.ceil(oneByTwoCustom.reduce((sum, len) => sum + len, 0) / 24)) : Math.max(1, Math.ceil(receiverFastenerTubesLf / 24));
 
-  const gableOpenings = (gable: { width: number; height: number; style: string }) => {
+  const gableOpenings = (gable: { width: number; height: number; style: string; uprights?: number }) => {
     const half = gable.width / 2;
     const rafter = Math.sqrt(half ** 2 + gable.height ** 2);
     const diag = Math.sqrt((half * 0.42) ** 2 + (gable.height * 0.45) ** 2);
+    const cuts: number[] = [half, rafter, half, rafter];
     switch (gable.style) {
+      case 'none':
+        break;
       case 'king-post':
-        return [half, rafter, gable.height, half, rafter, gable.height];
+        cuts.push(gable.height, gable.height);
+        break;
       case 'tied-king-post':
-        return [half, rafter * 0.55, diag, half, rafter * 0.55, diag, gable.height * 0.55, gable.height * 0.55];
+        cuts.push(diag, diag, diag, diag, gable.height * 0.55, gable.height * 0.55);
+        break;
       case 'braced-king-post':
-        return [half, rafter * 0.52, diag, half, rafter * 0.52, diag, gable.height * 0.55, diag, diag];
+        cuts.push(diag, diag, diag, diag, diag, diag, gable.height * 0.55, gable.height * 0.55);
+        break;
       case 'queen-king-post':
-        return [half * 0.4, rafter * 0.45, gable.height * 0.62, half * 0.2, gable.height, half * 0.2, half * 0.4, rafter * 0.45, gable.height * 0.62];
+        cuts.push(gable.height, gable.height, half * 0.2, half * 0.2, half * 0.2, half * 0.2);
+        break;
       default:
-        return [half, rafter, gable.height, half, rafter, gable.height];
+        cuts.push(gable.height, gable.height);
+        break;
     }
+    const uprightCount = Math.max(0, Math.floor(gable.uprights ?? 0));
+    for (let i = 1; i <= uprightCount; i += 1) {
+      const x = (gable.width * i) / (uprightCount + 1);
+      const localHeight = x <= half ? (gable.height * x) / half : (gable.height * (gable.width - x)) / half;
+      const h = Math.max(0, localHeight);
+      if (h > 0.05) cuts.push(h, h);
+    }
+    return cuts;
   };
 
   gableSections.forEach((gable) => {
@@ -444,9 +468,25 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     if (renaissance) {
       oneByTwoCustom.push(...cuts);
       gableOneByTwoCuts.push(...cuts);
+      const uprightCount = Math.max(0, Math.floor(gable.uprights ?? 0));
+      if (uprightCount > 0) {
+        for (let i = 1; i <= uprightCount; i += 1) {
+          const x = (gable.width * i) / (uprightCount + 1);
+          const localHeight = x <= gable.width / 2 ? (gable.height * x) / (gable.width / 2) : (gable.height * (gable.width - x)) / (gable.width / 2);
+          if (localHeight > 0.05) gableUprightCuts.push(localHeight);
+        }
+      }
     } else {
       gableReceiverCuts.push(...cuts);
       gableOneByTwoCuts.push(...cuts);
+      const uprightCount = Math.max(0, Math.floor(gable.uprights ?? 0));
+      if (uprightCount > 0) {
+        for (let i = 1; i <= uprightCount; i += 1) {
+          const x = (gable.width * i) / (uprightCount + 1);
+          const localHeight = x <= gable.width / 2 ? (gable.height * x) / (gable.width / 2) : (gable.height * (gable.width - x)) / (gable.width / 2);
+          if (localHeight > 0.05) gableUprightCuts.push(localHeight);
+        }
+      }
     }
   });
 
@@ -498,9 +538,11 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   if (gableSections.length) {
     if (renaissance) {
       addCustomCutGroups(materials, 'Gable 1x2 7/8', 'Gable', gableOneByTwoCuts, `${framingColor} · gable screen framing around wood members`);
+      addCustomCutGroups(materials, 'Gable 2x2 7/8', 'Gable', gableUprightCuts, `${framingColor} · gable uprights`);
     } else {
       add24FtStockFromCuts(materials, 'Gable receiver', 'Gable', gableReceiverCuts, `${framingColor} · gable screen framing receiver`);
       add24FtStockFromCuts(materials, 'Gable 1x2', 'Gable', gableOneByTwoCuts, `${framingColor} · gable screen framing 1x2`);
+      add24FtStockFromCuts(materials, 'Gable 2x2 uprights', 'Gable', gableUprightCuts, `${framingColor} · gable uprights`);
     }
   }
 

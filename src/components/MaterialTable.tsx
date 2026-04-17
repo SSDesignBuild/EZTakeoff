@@ -50,6 +50,8 @@ function sanitizeFilePart(value: string) {
 export function MaterialTable({ items, values, onValuesChange }: MaterialTableProps) {
   const tableRef = useRef<HTMLDivElement | null>(null);
   const [customDraft, setCustomDraft] = useState(customDefaults);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editingQuantity, setEditingQuantity] = useState<string>('');
 
   const customItems = useMemo(
     () => parseJsonArray<CustomMaterialItem>(values.customMaterialItems, []),
@@ -58,6 +60,19 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
   const deletedKeys = useMemo(
     () => new Set(parseJsonArray<string>(values.deletedMaterialKeys, [])),
     [values.deletedMaterialKeys],
+  );
+  const quantityOverrides = useMemo(
+    () => {
+      const raw = values.materialQuantityOverrides;
+      if (typeof raw !== 'string' || raw.trim() === '') return {} as Record<string, number>;
+      try {
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === 'object' ? parsed as Record<string, number> : {};
+      } catch {
+        return {} as Record<string, number>;
+      }
+    },
+    [values.materialQuantityOverrides],
   );
 
   const displayItems = useMemo<DisplayMaterialItem[]>(() => {
@@ -71,8 +86,10 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
       rowKey: `custom:${item.id}`,
       source: 'custom' as const,
     }));
-    return [...estimateItems, ...appendedCustom].filter((item) => !deletedKeys.has(item.rowKey));
-  }, [items, customItems, deletedKeys]);
+    return [...estimateItems, ...appendedCustom]
+      .map((item) => ({ ...item, quantity: quantityOverrides[item.rowKey] ?? item.quantity }))
+      .filter((item) => !deletedKeys.has(item.rowKey));
+  }, [items, customItems, deletedKeys, quantityOverrides]);
 
   const grouped = useMemo(
     () => displayItems.reduce<Record<string, DisplayMaterialItem[]>>((accumulator, item) => {
@@ -98,6 +115,14 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
     onValuesChange((current) => ({
       ...current,
       deletedMaterialKeys: JSON.stringify(Array.from(nextKeys)),
+    }));
+  };
+
+
+  const persistQuantityOverrides = (nextOverrides: Record<string, number>) => {
+    onValuesChange((current) => ({
+      ...current,
+      materialQuantityOverrides: JSON.stringify(nextOverrides),
     }));
   };
 
@@ -129,6 +154,35 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
 
   const restoreAllHidden = () => {
     persistDeletedKeys(new Set());
+  };
+
+
+  const startEdit = (item: DisplayMaterialItem) => {
+    setEditingKey(item.rowKey);
+    setEditingQuantity(String(quantityOverrides[item.rowKey] ?? item.quantity));
+  };
+
+  const saveQuantity = (item: DisplayMaterialItem) => {
+    const qty = Number(editingQuantity);
+    const normalized = Number.isFinite(qty) && qty >= 0 ? qty : item.quantity;
+    if (item.source === 'custom') {
+      persistCustomItems(customItems.map((entry) => entry.id === item.rowKey.replace('custom:', '') ? { ...entry, quantity: normalized } : entry));
+    } else {
+      persistQuantityOverrides({ ...quantityOverrides, [item.rowKey]: normalized });
+    }
+    setEditingKey(null);
+    setEditingQuantity('');
+  };
+
+  const cancelEdit = () => {
+    setEditingKey(null);
+    setEditingQuantity('');
+  };
+
+  const exportCombinedPdf = async () => {
+    const root = document.getElementById('service-export-root');
+    if (!root) return;
+    await exportElementAsPdf(root as HTMLElement, 'S&S Design Build · Layout and material order list', `${exportBaseName}-layout-materials.pdf`);
   };
 
   const buildPrintHtml = () => {
@@ -200,6 +254,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
         <div className="preview-toolbar">
           <button type="button" className="ghost-btn small-btn" onClick={exportPdf}>Export PDF</button>
           <button type="button" className="ghost-btn small-btn" onClick={exportPng}>Export image</button>
+          <button type="button" className="ghost-btn small-btn" onClick={exportCombinedPdf}>Export layout + materials</button>
         </div>
       </div>
 
@@ -261,12 +316,22 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
                   {categoryItems.map((item) => (
                     <tr key={item.rowKey}>
                       <td>{item.name}</td>
-                      <td>{item.quantity}</td>
+                      <td>{editingKey === item.rowKey ? <input type="number" min="0" step="0.01" value={editingQuantity} onChange={(event) => setEditingQuantity(event.target.value)} style={{ width: '82px' }} /> : item.quantity}</td>
                       <td>{item.unit}</td>
                       <td>{item.stockRecommendation}</td>
                       <td>{item.notes ?? '—'}</td>
                       <td data-export-ignore="true">
-                        <button type="button" className="ghost-btn small-btn" onClick={() => deleteRow(item)}>Delete</button>
+                        {editingKey === item.rowKey ? (
+                          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <button type="button" className="ghost-btn small-btn" onClick={() => saveQuantity(item)}>Save</button>
+                            <button type="button" className="ghost-btn small-btn" onClick={cancelEdit}>Cancel</button>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            <button type="button" className="ghost-btn small-btn" onClick={() => startEdit(item)}>Edit qty</button>
+                            <button type="button" className="ghost-btn small-btn" onClick={() => deleteRow(item)}>Delete</button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}

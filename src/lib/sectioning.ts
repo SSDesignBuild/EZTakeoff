@@ -25,7 +25,8 @@ export const DEFAULT_GABLE_SECTION: GableSectionConfig = {
   label: 'Gable 1',
   width: 8,
   height: 2,
-  style: 'king-post',
+  style: 'none',
+  uprights: 0,
 };
 
 export const DEFAULT_SUNROOM_SECTION: SunroomSectionConfig = {
@@ -116,7 +117,8 @@ export function parseGableSections(raw: string | number | boolean | undefined, c
           label: String(item.label ?? `Gable ${index + 1}`),
           width: Number(item.width ?? DEFAULT_GABLE_SECTION.width),
           height: Number(item.height ?? DEFAULT_GABLE_SECTION.height),
-          style: (item.style ?? 'king-post') as GableSectionConfig['style'],
+          style: (item.style ?? 'none') as GableSectionConfig['style'],
+          uprights: Number(item.uprights ?? DEFAULT_GABLE_SECTION.uprights),
         }));
       }
     } catch {}

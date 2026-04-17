@@ -63,7 +63,8 @@ export interface GableSectionConfig {
   label: string;
   width: number;
   height: number;
-  style: 'king-post' | 'tied-king-post' | 'braced-king-post' | 'queen-king-post';
+  style: 'none' | 'king-post' | 'tied-king-post' | 'braced-king-post' | 'queen-king-post';
+  uprights: number;
 }
 
 export type SunroomUprightMode = 'main-only' | 'main-kick' | 'main-transom' | 'all';

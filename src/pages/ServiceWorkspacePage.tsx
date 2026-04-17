@@ -38,15 +38,14 @@ export function ServiceWorkspacePage() {
           </div>
         </article>
 
-        <div className="workspace-right-col">
+        <div className="workspace-right-col" id="service-export-root">
           <LayoutPreview serviceSlug={service.slug} values={values} onValuesChange={setValues} />
           <div className="metrics-grid">
             {estimate.summary.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} />)}
           </div>
+          <MaterialTable items={estimate.materials} values={values} onValuesChange={setValues} />
         </div>
       </section>
-
-      <MaterialTable items={estimate.materials} values={values} onValuesChange={setValues} />
     </div>
   );
 }

@@ -871,7 +871,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
 
 type GableWoodSegment = { x1: number; y1: number; x2: number; y2: number; boundary?: boolean };
 
-function gableStyleWoodSegments(style: string, left: number, apexX: number, right: number, baseY: number, apexY: number) {
+function gableStyleWoodSegments(style: string, left: number, apexX: number, right: number, baseY: number, apexY: number, uprights = 0) {
   const midY = (baseY + apexY) / 2;
   const quarterLeft = left + (right - left) * 0.25;
   const quarterRight = right - (right - left) * 0.25;
@@ -884,7 +884,7 @@ function gableStyleWoodSegments(style: string, left: number, apexX: number, righ
     { x1: apexX, y1: apexY, x2: right, y2: baseY, boundary: true },
     { x1: left, y1: baseY, x2: right, y2: baseY, boundary: true },
   ];
-  if (style === 'king-post' || style === 'tied-king-post' || style === 'braced-king-post' || style === 'queen-king-post') {
+  if (style !== 'none') {
     segments.push({ x1: apexX, y1: apexY, x2: apexX, y2: baseY });
   }
   if (style === 'tied-king-post') {
@@ -898,6 +898,15 @@ function gableStyleWoodSegments(style: string, left: number, apexX: number, righ
   if (style === 'queen-king-post') {
     segments.push({ x1: quarterLeft, y1: baseY, x2: quarterLeft, y2: queenTopY });
     segments.push({ x1: quarterRight, y1: baseY, x2: quarterRight, y2: queenTopY });
+  }
+  const uprightCount = Math.max(0, Math.floor(uprights));
+  for (let i = 1; i <= uprightCount; i += 1) {
+    const x = left + ((right - left) * i) / (uprightCount + 1);
+    const distToCenter = Math.abs(x - apexX);
+    const halfW = Math.max(1, (right - left) / 2);
+    const t = Math.max(0, 1 - distToCenter / halfW);
+    const topY = baseY + (apexY - baseY) * t;
+    segments.push({ x1: x, y1: baseY, x2: x, y2: topY });
   }
   return segments;
 }
@@ -915,22 +924,37 @@ function offsetTowardPoint(segment: GableWoodSegment, towardX: number, towardY: 
   return plusDist <= minusDist ? { x: nx * offset, y: ny * offset } : { x: -nx * offset, y: -ny * offset };
 }
 
-function gableFrameCuts(width: number, height: number, style: string) {
+function gableFrameCuts(width: number, height: number, style: string, uprights = 0) {
   const half = width / 2;
   const rafter = Math.sqrt(half ** 2 + height ** 2);
   const diag = Math.sqrt((half * 0.42) ** 2 + (height * 0.45) ** 2);
+  const cuts: number[] = [half, rafter, half, rafter];
   switch (style) {
+    case 'none':
+      break;
     case 'king-post':
-      return [half, rafter, height, half, rafter, height];
+      cuts.push(height, height);
+      break;
     case 'tied-king-post':
-      return [half, rafter * 0.55, diag, half, rafter * 0.55, diag, height * 0.55, height * 0.55];
+      cuts.push(diag, diag, diag, diag, height * 0.55, height * 0.55);
+      break;
     case 'braced-king-post':
-      return [half, rafter * 0.52, diag, half, rafter * 0.52, diag, height * 0.55, diag, diag];
+      cuts.push(diag, diag, diag, diag, diag, diag, height * 0.55, height * 0.55);
+      break;
     case 'queen-king-post':
-      return [half * 0.4, rafter * 0.45, height * 0.62, half * 0.2, height, half * 0.2, half * 0.4, rafter * 0.45, height * 0.62];
+      cuts.push(height, height, half * 0.2, half * 0.2, half * 0.2, half * 0.2);
+      break;
     default:
-      return [half, rafter, height, half, rafter, height];
+      cuts.push(height, height);
+      break;
   }
+  const uprightCount = Math.max(0, Math.floor(uprights));
+  for (let i = 1; i <= uprightCount; i += 1) {
+    const x = (width * i) / (uprightCount + 1);
+    const localHeight = x <= half ? (height * x) / half : (height * (width - x)) / half;
+    if (localHeight > 0.05) cuts.push(localHeight, localHeight);
+  }
+  return cuts;
 }
 
 function ScreenPreview({ values, renaissance }: { values: Record<string, string | number | boolean>; renaissance: boolean }) {
@@ -996,8 +1020,8 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           runningGX += gW + gutter;
           const apexX = (baseLeft + baseRight) / 2;
           const apexY = baseY - gable.height * scale;
-          const woodSegments = gableStyleWoodSegments(gable.style, baseLeft, apexX, baseRight, baseY, apexY);
-          const cuts = gableFrameCuts(gable.width, gable.height, gable.style);
+          const woodSegments = gableStyleWoodSegments(gable.style, baseLeft, apexX, baseRight, baseY, apexY, gable.uprights);
+          const cuts = gableFrameCuts(gable.width, gable.height, gable.style, gable.uprights);
           const centroidX = apexX;
           const centroidY = (baseY * 2 + apexY) / 3;
           const materialOffset = renaissance ? 7 : 9;
