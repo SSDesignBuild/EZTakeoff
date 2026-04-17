@@ -869,7 +869,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
 }
 
 
-type GableWoodSegment = { x1: number; y1: number; x2: number; y2: number; boundary?: boolean };
+type GableWoodSegment = { x1: number; y1: number; x2: number; y2: number; boundary?: boolean; kind?: 'boundary' | 'style' | 'upright' };
 
 function gableStyleWoodSegments(style: string, left: number, apexX: number, right: number, baseY: number, apexY: number, uprights = 0) {
   const midY = (baseY + apexY) / 2;
@@ -880,24 +880,24 @@ function gableStyleWoodSegments(style: string, left: number, apexX: number, righ
   const braceY = (baseY + apexY) * 0.56;
   const queenTopY = midY + 10;
   const segments: GableWoodSegment[] = [
-    { x1: left, y1: baseY, x2: apexX, y2: apexY, boundary: true },
-    { x1: apexX, y1: apexY, x2: right, y2: baseY, boundary: true },
-    { x1: left, y1: baseY, x2: right, y2: baseY, boundary: true },
+    { x1: left, y1: baseY, x2: apexX, y2: apexY, boundary: true, kind: 'boundary' },
+    { x1: apexX, y1: apexY, x2: right, y2: baseY, boundary: true, kind: 'boundary' },
+    { x1: left, y1: baseY, x2: right, y2: baseY, boundary: true, kind: 'boundary' },
   ];
   if (style !== 'none') {
-    segments.push({ x1: apexX, y1: apexY, x2: apexX, y2: baseY });
+    segments.push({ x1: apexX, y1: apexY, x2: apexX, y2: baseY, kind: 'style' });
   }
   if (style === 'tied-king-post') {
-    segments.push({ x1: quarterLeft, y1: midY, x2: apexX, y2: baseY });
-    segments.push({ x1: quarterRight, y1: midY, x2: apexX, y2: baseY });
+    segments.push({ x1: quarterLeft, y1: midY, x2: apexX, y2: baseY, kind: 'style' });
+    segments.push({ x1: quarterRight, y1: midY, x2: apexX, y2: baseY, kind: 'style' });
   }
   if (style === 'braced-king-post') {
-    segments.push({ x1: nearApexLeft, y1: midY, x2: apexX, y2: braceY });
-    segments.push({ x1: apexX, y1: braceY, x2: nearApexRight, y2: midY });
+    segments.push({ x1: nearApexLeft, y1: midY, x2: apexX, y2: braceY, kind: 'style' });
+    segments.push({ x1: apexX, y1: braceY, x2: nearApexRight, y2: midY, kind: 'style' });
   }
   if (style === 'queen-king-post') {
-    segments.push({ x1: quarterLeft, y1: baseY, x2: quarterLeft, y2: queenTopY });
-    segments.push({ x1: quarterRight, y1: baseY, x2: quarterRight, y2: queenTopY });
+    segments.push({ x1: quarterLeft, y1: baseY, x2: quarterLeft, y2: queenTopY, kind: 'style' });
+    segments.push({ x1: quarterRight, y1: baseY, x2: quarterRight, y2: queenTopY, kind: 'style' });
   }
   const uprightCount = Math.max(0, Math.floor(uprights));
   for (let i = 1; i <= uprightCount; i += 1) {
@@ -906,7 +906,7 @@ function gableStyleWoodSegments(style: string, left: number, apexX: number, righ
     const halfW = Math.max(1, (right - left) / 2);
     const t = Math.max(0, 1 - distToCenter / halfW);
     const topY = baseY + (apexY - baseY) * t;
-    segments.push({ x1: x, y1: baseY, x2: x, y2: topY });
+    segments.push({ x1: x, y1: baseY, x2: x, y2: topY, kind: 'upright' });
   }
   return segments;
 }
@@ -964,20 +964,18 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
   const scale = 34;
   const gutter = 20;
   const x0 = 48;
-  const sectionWidth = sections.reduce((sum, section) => sum + section.width * scale, 0) + Math.max(0, sections.length - 1) * gutter;
+  const sectionMaxWidth = Math.max(...sections.map((section) => section.width * scale), 260);
+  const sectionStackHeight = sections.reduce((sum, section) => sum + section.height * scale, 0) + Math.max(0, sections.length - 1) * gutter;
   const gableWidths = gableSections.reduce((sum, gable) => sum + gable.width * scale, 0) + Math.max(0, gableSections.length - 1) * gutter;
-  const totalW = Math.max(sectionWidth, gableWidths, 260);
+  const totalW = Math.max(sectionMaxWidth, gableWidths, 260);
   const gableHeight = gableSections.length ? Math.max(...gableSections.map((gable) => gable.height * scale)) : 0;
-  const sectionHeight = Math.max(...sections.map((section) => section.height * scale), 220);
   const gableGap = gableSections.length ? 130 : 0;
-  const legendRows = renaissance ? 3 : 4;
-  const legendHeight = 112 + legendRows * 18;
-  const totalH = sectionHeight + (gableSections.length ? gableHeight + gableGap : 0);
+  const legendRows = renaissance ? 2 : 2;
+  const legendHeight = 124 + legendRows * 24;
+  const totalH = sectionStackHeight + (gableSections.length ? gableHeight + gableGap : 0);
   const viewW = totalW + 140;
   const viewH = totalH + 240 + legendHeight;
-  const sectionStartX = x0 + (totalW - sectionWidth) / 2;
   const gableStartX = x0 + (totalW - gableWidths) / 2;
-  let runningX = sectionStartX;
   let runningGX = gableStartX;
   const screenLegendItems = renaissance
     ? [
@@ -1032,17 +1030,28 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
               {woodSegments.map((seg, idx) => {
                 const inward = offsetTowardPoint(seg, centroidX, centroidY, materialOffset);
                 const outward = { x: -inward.x, y: -inward.y };
-                const drawBothSides = true;
-                const primaryFrame = { x: inward.x + (renaissance ? 0 : secondaryOffset * inward.x / materialOffset), y: inward.y + (renaissance ? 0 : secondaryOffset * inward.y / materialOffset) };
-                const secondaryFrame = { x: outward.x + (renaissance ? 0 : secondaryOffset * outward.x / materialOffset), y: outward.y + (renaissance ? 0 : secondaryOffset * outward.y / materialOffset) };
+                const inwardSecondary = { x: inward.x + (renaissance ? 0 : (secondaryOffset * inward.x) / materialOffset), y: inward.y + (renaissance ? 0 : (secondaryOffset * inward.y) / materialOffset) };
+                const outwardSecondary = { x: outward.x + (renaissance ? 0 : (secondaryOffset * outward.x) / materialOffset), y: outward.y + (renaissance ? 0 : (secondaryOffset * outward.y) / materialOffset) };
+                if (seg.kind === 'upright') {
+                  const cls = renaissance ? 'reno-2x2-line' : 'twobytwo-line';
+                  return <line key={`mat-${idx}`} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} className={cls} />;
+                }
+                if (seg.kind === 'boundary') {
+                  return (
+                    <g key={`mat-${idx}`}>
+                      {!renaissance && <line x1={seg.x1 + inward.x} y1={seg.y1 + inward.y} x2={seg.x2 + inward.x} y2={seg.y2 + inward.y} className="receiver-line" />}
+                      <line x1={seg.x1 + inwardSecondary.x} y1={seg.y1 + inwardSecondary.y} x2={seg.x2 + inwardSecondary.x} y2={seg.y2 + inwardSecondary.y} className={boundaryFrameClass} />
+                    </g>
+                  );
+                }
                 return (
                   <g key={`mat-${idx}`}>
-                    {!renaissance && <line x1={seg.x1 + inward.x} y1={seg.y1 + inward.y} x2={seg.x2 + inward.x} y2={seg.y2 + inward.y} className="receiver-line" />}
-                    <line x1={seg.x1 + primaryFrame.x} y1={seg.y1 + primaryFrame.y} x2={seg.x2 + primaryFrame.x} y2={seg.y2 + primaryFrame.y} className={boundaryFrameClass} />
-                    {drawBothSides && <>
-                      {!renaissance && <line x1={seg.x1 + outward.x} y1={seg.y1 + outward.y} x2={seg.x2 + outward.x} y2={seg.y2 + outward.y} className="receiver-line" />}
-                      <line x1={seg.x1 + secondaryFrame.x} y1={seg.y1 + secondaryFrame.y} x2={seg.x2 + secondaryFrame.x} y2={seg.y2 + secondaryFrame.y} className={boundaryFrameClass} />
+                    {!renaissance && <>
+                      <line x1={seg.x1 + inward.x} y1={seg.y1 + inward.y} x2={seg.x2 + inward.x} y2={seg.y2 + inward.y} className="receiver-line" />
+                      <line x1={seg.x1 + outward.x} y1={seg.y1 + outward.y} x2={seg.x2 + outward.x} y2={seg.y2 + outward.y} className="receiver-line" />
                     </>}
+                    <line x1={seg.x1 + inwardSecondary.x} y1={seg.y1 + inwardSecondary.y} x2={seg.x2 + inwardSecondary.x} y2={seg.y2 + inwardSecondary.y} className={boundaryFrameClass} />
+                    <line x1={seg.x1 + outwardSecondary.x} y1={seg.y1 + outwardSecondary.y} x2={seg.x2 + outwardSecondary.x} y2={seg.y2 + outwardSecondary.y} className={boundaryFrameClass} />
                   </g>
                 );
               })}
@@ -1054,20 +1063,19 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           );
         })}
 
-        {sections.map((section) => {
+        {(() => { let runningY = 154 + gableHeight; return sections.map((section) => {
           const sectionW = section.width * scale;
           const sectionH = section.height * scale;
-          const left = runningX;
+          const left = x0 + (totalW - sectionW) / 2;
           const right = left + sectionW;
-          const top = 154 + gableHeight;
+          const top = runningY;
           const bottom = top + sectionH;
-          runningX += sectionW + gutter;
+          runningY += sectionH + gutter;
           const doorWidth = section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
           const doorLeftFt = sectionDoorLeft(section) / 12;
           const doorRightFt = doorLeftFt + doorWidth;
           const doorLeft = left + doorLeftFt * scale;
           const doorRight = left + doorRightFt * scale;
-          const doorTop = top + Math.max(18, sectionH * 0.12);
           const spans = sectionSpansExcludingDoor(section);
           const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
           const kickTop = bottom - kickHeight * scale;
@@ -1080,6 +1088,8 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const receiverInset = 4;
           const oneByInset = 12;
           const frameInset = 20;
+          const doorHeight = Math.min(section.height, 6 + 8 / 12) * scale;
+          const doorTop = bottom - frameInset - doorHeight;
           const picketBottom = section.kickPanel === 'none' ? bottom - 16 : kickTop + 10;
           const uprightXs = Array.from({ length: section.uprights }, (_, index) => ((index + 1) * section.width) / (section.uprights + 1)).filter((x) => spans.some((span) => x > span.start && x < span.end));
           return (
@@ -1112,7 +1122,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
               {section.doorType !== 'none' && <><rect x={doorLeft + frameInset - 8} y={doorTop} width={Math.max(0, doorRight - doorLeft - frameInset * 2 + 16)} height={Math.max(0, bottom - doorTop - 18)} className="door-fill" rx="8" /><line x1={doorLeft + frameInset} y1={top + frameInset} x2={doorLeft + frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorRight - frameInset} y1={top + frameInset} x2={doorRight - frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorLeft + frameInset} y1={doorTop} x2={doorRight - frameInset} y2={doorTop} className={doorFrameClass} /></>}
             </g>
           );
-        })}
+        })})()}
         <g transform={`translate(${x0}, ${viewH - 86})`}>
           <rect x={-18} y={-30} width={Math.max(760, totalW + 36)} height={legendHeight - 18} rx="12" className="legend-box" />
           {screenLegendItems.map((item, idx) => {

@@ -54,8 +54,8 @@ export interface SectionConfig {
   doorWidth: number;
   doorSwing: 'inswing' | 'outswing';
   dogDoor: 'none' | 'small' | 'medium' | 'large';
-  floorMount: 'concrete' | 'wood';
-  wallMount: 'concrete' | 'wood';
+  floorMount: 'concrete' | 'wood' | 'metal';
+  wallMount: 'concrete' | 'wood' | 'metal';
 }
 
 export interface GableSectionConfig {

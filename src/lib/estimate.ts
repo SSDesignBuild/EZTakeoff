@@ -319,6 +319,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   let astragals = 0;
   let woodScrews = 0;
   let concreteScrews = 0;
+  let selfTappingScrews = 0;
   let flushMountScrews = 0;
   let receiverFastenerTubesLf = 0;
   const receiverCuts24: number[] = [];
@@ -344,8 +345,16 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     const bottomReceiverCut = Math.max(0, section.width - doorWidth);
     if (!renaissance) receiverCuts24.push(topReceiverCut, bottomReceiverCut, section.height, section.height);
     receiverFastenerTubesLf += receiverPerimeter;
-    if (section.floorMount === 'concrete') concreteScrews += Math.ceil(receiverPerimeter / 2);
-    else woodScrews += Math.ceil(receiverPerimeter / 2);
+    const floorMountLf = Math.max(0, bottomReceiverCut);
+    const wallMountLf = section.height * 2;
+    const addFasteners = (mount: string, lf: number, spacing = 2) => {
+      const qty = Math.max(0, Math.ceil(lf / spacing));
+      if (mount === 'concrete') concreteScrews += qty;
+      else if (mount === 'metal') selfTappingScrews += qty;
+      else woodScrews += qty;
+    };
+    addFasteners(section.floorMount, floorMountLf);
+    addFasteners(section.wallMount, wallMountLf);
 
     const perimeter1x2Lf = renaissance ? receiverPerimeter : receiverPerimeter - (section.kickPanel === 'insulated' ? wallWidthExcludingDoor : 0);
     if (renaissance) oneByTwoCustom.push(section.width, section.width, section.height, section.height);
@@ -509,6 +518,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined),
       toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Floor / masonry mounts', undefined),
       toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', undefined),
+      toMaterial('3/4 in self-tapping screws', 'Hardware', selfTappingScrews, 'ea', 'Metal mounts', undefined),
     );
   } else {
     add24FtStockFromCuts(materials, 'Receiver', 'Frame', [...receiverCuts24, ...insulatedReceiverCuts24], `${framingColor} · includes extra receiver for insulated kick panel`);
@@ -532,6 +542,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined),
       toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Floor / masonry mounts', undefined),
       toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', undefined),
+      toMaterial('3/4 in self-tapping screws', 'Hardware', selfTappingScrews, 'ea', 'Metal mounts', undefined),
     );
   }
 
