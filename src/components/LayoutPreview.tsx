@@ -1005,29 +1005,24 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const boundaryFrameClass = renaissance ? 'reno-1x2-line' : 'onebytwo-line';
           return (
             <g key={gable.id}>
-              {woodSegments.map((seg, idx) => <line key={`wood-${idx}`} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} className="svg-outline" />)}
               {woodSegments.map((seg, idx) => {
                 const inward = offsetTowardPoint(seg, centroidX, centroidY, materialOffset);
-                const dx = seg.x2 - seg.x1;
-                const dy = seg.y2 - seg.y1;
-                const len = Math.hypot(dx, dy) || 1;
-                const nx = -dy / len;
-                const ny = dx / len;
-                const drawBothSides = !seg.boundary;
-                const neg = { x: -nx * materialOffset, y: -ny * materialOffset };
-                const pos = { x: nx * materialOffset, y: ny * materialOffset };
-                const second = drawBothSides ? (Math.hypot(centroidX - ((seg.x1 + seg.x2) / 2 + pos.x), centroidY - ((seg.y1 + seg.y2) / 2 + pos.y)) < Math.hypot(centroidX - ((seg.x1 + seg.x2) / 2 + neg.x), centroidY - ((seg.y1 + seg.y2) / 2 + neg.y)) ? neg : pos) : inward;
+                const outward = { x: -inward.x, y: -inward.y };
+                const drawBothSides = !seg.boundary || seg.x1 === seg.x2;
+                const primaryFrame = { x: inward.x + (renaissance ? 0 : secondaryOffset * inward.x / materialOffset), y: inward.y + (renaissance ? 0 : secondaryOffset * inward.y / materialOffset) };
+                const secondaryFrame = { x: outward.x + (renaissance ? 0 : secondaryOffset * outward.x / materialOffset), y: outward.y + (renaissance ? 0 : secondaryOffset * outward.y / materialOffset) };
                 return (
                   <g key={`mat-${idx}`}>
                     {!renaissance && <line x1={seg.x1 + inward.x} y1={seg.y1 + inward.y} x2={seg.x2 + inward.x} y2={seg.y2 + inward.y} className="receiver-line" />}
-                    <line x1={seg.x1 + inward.x + (renaissance ? 0 : secondaryOffset * inward.x / materialOffset)} y1={seg.y1 + inward.y + (renaissance ? 0 : secondaryOffset * inward.y / materialOffset)} x2={seg.x2 + inward.x + (renaissance ? 0 : secondaryOffset * inward.x / materialOffset)} y2={seg.y2 + inward.y + (renaissance ? 0 : secondaryOffset * inward.y / materialOffset)} className={boundaryFrameClass} />
+                    <line x1={seg.x1 + primaryFrame.x} y1={seg.y1 + primaryFrame.y} x2={seg.x2 + primaryFrame.x} y2={seg.y2 + primaryFrame.y} className={boundaryFrameClass} />
                     {drawBothSides && <>
-                      {!renaissance && <line x1={seg.x1 + second.x} y1={seg.y1 + second.y} x2={seg.x2 + second.x} y2={seg.y2 + second.y} className="receiver-line" />}
-                      <line x1={seg.x1 + second.x + (renaissance ? 0 : secondaryOffset * second.x / materialOffset)} y1={seg.y1 + second.y + (renaissance ? 0 : secondaryOffset * second.y / materialOffset)} x2={seg.x2 + second.x + (renaissance ? 0 : secondaryOffset * second.x / materialOffset)} y2={seg.y2 + second.y + (renaissance ? 0 : secondaryOffset * second.y / materialOffset)} className={boundaryFrameClass} />
+                      {!renaissance && <line x1={seg.x1 + outward.x} y1={seg.y1 + outward.y} x2={seg.x2 + outward.x} y2={seg.y2 + outward.y} className="receiver-line" />}
+                      <line x1={seg.x1 + secondaryFrame.x} y1={seg.y1 + secondaryFrame.y} x2={seg.x2 + secondaryFrame.x} y2={seg.y2 + secondaryFrame.y} className={boundaryFrameClass} />
                     </>}
                   </g>
                 );
               })}
+              {woodSegments.map((seg, idx) => <line key={`wood-${idx}`} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} className="gable-wood-line" />)}
               <text x={baseLeft} y={apexY - 16} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text>
               <text x={baseLeft} y={baseY + 22} className="svg-note">{`${cuts.length} gable cuts`}</text>
             </g>
@@ -1262,6 +1257,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
               <line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="sunroom-receiver-line" />
               <line x1={left + w - receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="sunroom-receiver-line" />
               <line x1={left + receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={top + receiverInset} className="sunroom-topcap-line" />
+              {(section.mainSection !== 'panel' || transomNeeded) && <line x1={left + frameInset} y1={top + frameInset} x2={left + w - frameInset} y2={top + frameInset} className="sunroom-receiver-line" />}
               <line x1={left + receiverInset} y1={bottom - receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="sunroom-base-line" />
               <line x1={left + frameInset} y1={top + frameInset} x2={left + frameInset} y2={bottom - frameInset} className="sunroom-drc-line" />
               <line x1={left + w - frameInset} y1={top + frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="sunroom-drc-line" />
@@ -1274,10 +1270,18 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
               {section.kickSection !== 'none' && <rect x={left + 18} y={kickTop + 6} width={Math.max(0, w - 36)} height={Math.max(0, bottom - kickTop - 12)} fill={kickFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />}
               {section.kickSection !== 'none' && !showKickUprights && <line x1={left + frameInset} y1={kickTop} x2={left + w - frameInset} y2={kickTop} className="sunroom-hbeam-support-line" />}
               {section.kickSection !== 'none' && <line x1={left + frameInset} y1={kickTop} x2={left + w - frameInset} y2={kickTop} className={section.kickSection === 'window' ? 'sunroom-receiver-line' : 'sunroom-hbeam-line'} />}
-              {section.kickSection === 'window' && <line x1={left + frameInset} y1={bottom - frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="sunroom-receiver-line" />}
+              {section.kickSection === 'window' && <>
+                <line x1={left + frameInset} y1={kickTop - 6} x2={left + w - frameInset} y2={kickTop - 6} className="sunroom-drc-line" />
+                <line x1={left + frameInset} y1={kickTop + 6} x2={left + w - frameInset} y2={kickTop + 6} className="sunroom-drc-line" />
+                <line x1={left + frameInset} y1={bottom - frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="sunroom-receiver-line" />
+              </>}
               {transomNeeded && <polygon points={transomPoly} fill={transomFillColor} stroke="rgba(0,0,0,0.12)" />}
               {transomNeeded && !showTransomUprights && <line x1={left + frameInset} y1={mainTop} x2={left + w - frameInset} y2={mainTop} className="sunroom-hbeam-support-line" />}
-              {transomNeeded && <line x1={left + frameInset} y1={mainTop} x2={left + w - frameInset} y2={mainTop} className={section.transomType === 'picture-window' ? 'sunroom-receiver-line' : 'sunroom-topcap-line'} />}
+              {transomNeeded && <line x1={left + frameInset} y1={mainTop} x2={left + w - frameInset} y2={mainTop} className="sunroom-receiver-line" />}
+              {transomNeeded && (section.transomType === 'picture-window') && <>
+                <line x1={left + frameInset} y1={mainTop - 6} x2={left + w - frameInset} y2={mainTop - 6} className="sunroom-drc-line" />
+                <line x1={left + frameInset} y1={mainTop + 6} x2={left + w - frameInset} y2={mainTop + 6} className="sunroom-drc-line" />
+              </>}
               {section.doorType !== 'none' && <rect x={doorLeft} y={bottom - (6 + 8/12) * scale} width={doorWidth} height={(6 + 8/12) * scale} className="door-fill" rx="4" />}
               <text x={left + 6} y={bottom + 16} className="svg-note">{`${bayCount} bay${bayCount === 1 ? '' : 's'}`}</text>
             </g>
