@@ -936,6 +936,30 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
   const gableStartX = x0 + (totalW - gableWidths) / 2;
   let runningX = sectionStartX;
   let runningGX = gableStartX;
+  const hasScreenPickets = sections.some((section) => section.pickets);
+  const hasScreenUChannel = hasScreenPickets;
+  const hasScreenTwoByTwo = sections.some((section) => section.uprights > 0 || section.chairRail || section.doorType !== 'none' || section.kickPanel === 'insulated' || section.kickPanel === 'trim-coil');
+  const hasScreenTrimCoil = sections.some((section) => section.kickPanel === 'trim-coil');
+  const hasRenoNoGroove = sections.some((section) => section.uprights > 0 || section.chairRail || section.doorType !== 'none');
+  const hasRenoGroove = sections.some((section) => section.pickets || section.kickPanel === 'insulated');
+  const hasRenoPickets = sections.some((section) => section.pickets);
+  const screenLegendItems = renaissance
+    ? [
+        { label: '1x2 7/8', className: 'reno-1x2-line' },
+        ...(hasRenoNoGroove ? [{ label: '2x2 7/8 no groove', className: 'reno-2x2-line' }] : []),
+        ...(hasRenoGroove ? [{ label: '2x2 7/8 groove', className: 'reno-2x2-groove-line' }] : []),
+        ...(hasRenoPickets ? [{ label: 'pickets', className: 'reno-picket-line' }] : []),
+        ...(gableSections.length ? [{ label: 'wood gable structure', className: 'svg-outline' }] : []),
+      ]
+    : [
+        { label: 'receiver', className: 'receiver-line' },
+        { label: '1x2', className: 'onebytwo-line' },
+        ...(hasScreenTwoByTwo ? [{ label: '2x2', className: 'twobytwo-line' }] : []),
+        ...(hasScreenUChannel ? [{ label: 'u-channel', className: 'picket-rail-line' }] : []),
+        ...(hasScreenPickets ? [{ label: 'pickets', className: 'picket-line' }] : []),
+        ...(hasScreenTrimCoil ? [{ label: '1x2 v-groove', className: 'vgroove1-line' }, { label: '2x2 v-groove', className: 'vgroove2-line' }] : []),
+        ...(gableSections.length ? [{ label: 'wood gable structure', className: 'svg-outline' }] : []),
+      ];
   return (
     <div className="visual-card">
       <div className="visual-header">
@@ -970,7 +994,8 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
                 const len = Math.hypot(dx, dy) || 1;
                 const nx = (-dy / len) * 7;
                 const ny = (dx / len) * 7;
-                return <line key={`receiver-${idx}`} x1={seg.x1 + nx} y1={seg.y1 + ny} x2={seg.x2 + nx} y2={seg.y2 + ny} className="receiver-line" />;
+                const isCenterPost = Math.abs(seg.x1 - seg.x2) < 0.001 && Math.abs(seg.x1 - apexX) < 0.001;
+                return <g key={`receiver-${idx}`}><line x1={seg.x1 + nx} y1={seg.y1 + ny} x2={seg.x2 + nx} y2={seg.y2 + ny} className="receiver-line" />{isCenterPost && <line x1={seg.x1 - nx} y1={seg.y1 - ny} x2={seg.x2 - nx} y2={seg.y2 - ny} className="receiver-line" />}</g>;
               })}
               {woodSegments.map((seg, idx) => {
                 const dx = seg.x2 - seg.x1;
@@ -978,10 +1003,11 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
                 const len = Math.hypot(dx, dy) || 1;
                 const nx = (-dy / len) * (renaissance ? 7 : 14);
                 const ny = (dx / len) * (renaissance ? 7 : 14);
-                return <line key={`frame-${idx}`} x1={seg.x1 + nx} y1={seg.y1 + ny} x2={seg.x2 + nx} y2={seg.y2 + ny} className={renaissance ? 'reno-1x2-line' : 'onebytwo-line'} />;
+                const isCenterPost = Math.abs(seg.x1 - seg.x2) < 0.001 && Math.abs(seg.x1 - apexX) < 0.001;
+                return <g key={`frame-${idx}`}><line x1={seg.x1 + nx} y1={seg.y1 + ny} x2={seg.x2 + nx} y2={seg.y2 + ny} className={renaissance ? 'reno-1x2-line' : 'onebytwo-line'} />{isCenterPost && <line x1={seg.x1 - nx} y1={seg.y1 - ny} x2={seg.x2 - nx} y2={seg.y2 - ny} className={renaissance ? 'reno-1x2-line' : 'onebytwo-line'} />}</g>;
               })}
-              <text x={baseLeft} y={apexY - 16} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text>
-              <text x={baseLeft} y={baseY + 22} className="svg-note">{`${cuts.length} cut pieces`}</text>
+              <text x={baseLeft} y={apexY - 14} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text>
+              <text x={baseLeft} y={baseY + 20} className="svg-note">{`${cuts.length} cut pieces`}</text>
             </g>
           );
         })}
@@ -1045,15 +1071,14 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
             </g>
           );
         })}
-        <g transform={`translate(${x0}, ${viewH - 32})`}>
-          {renaissance ? <>
-            <line x1={0} y1={0} x2={20} y2={0} className="reno-1x2-line" /><text x={26} y={4} className="svg-note">1x2 7/8</text>
-            <line x1={120} y1={0} x2={140} y2={0} className="svg-outline" /><text x={146} y={4} className="svg-note">wood gable structure</text>
-          </> : <>
-            <line x1={0} y1={0} x2={20} y2={0} className="receiver-line" /><text x={26} y={4} className="svg-note">receiver</text>
-            <line x1={110} y1={0} x2={130} y2={0} className="onebytwo-line" /><text x={136} y={4} className="svg-note">1x2</text>
-            <line x1={190} y1={0} x2={210} y2={0} className="svg-outline" /><text x={216} y={4} className="svg-note">wood gable structure</text>
-          </>}
+        <g transform={`translate(${x0}, ${viewH - 52})`}>
+          {screenLegendItems.map((item, idx) => {
+            const row = Math.floor(idx / 4);
+            const col = idx % 4;
+            const baseX = col * 190;
+            const baseY = row * 18;
+            return <g key={`${item.label}-${idx}`} transform={`translate(${baseX}, ${baseY})`}><line x1={0} y1={0} x2={20} y2={0} className={item.className} /><text x={26} y={4} className="svg-note">{item.label}</text></g>;
+          })}
         </g>
       </svg>
     </div>
@@ -1192,7 +1217,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           const kickHeight = Math.max(0, Math.min(section.kickHeight, 4));
           const transomNeeded = section.transomType === 'panel' || section.transomType === 'picture-window' || (section.transomType === 'auto' && section.height > 10 && section.mainSection !== 'picture-window');
           const transomMaxHeight = transomNeeded ? Math.max(section.leftTransomHeight, section.rightTransomHeight) : 0;
-          const mainTop = top + transomMaxHeight * scale;
+                    const mainTop = top + transomMaxHeight * scale;
           const kickTop = bottom - kickHeight * scale;
           const mainBottom = section.kickSection === 'none' ? bottom : kickTop;
           const receiverInset = 4;
@@ -1211,23 +1236,25 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
             <g key={section.id}>
               <rect x={left} y={top} width={w} height={h} className="screen-box" rx="6" />
               <text x={left} y={top - 10} className="svg-note">{`${section.label} · ${feetAndInches(section.width)}`}</text>
-              <line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="receiver-line" />
-              <line x1={left + w - receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="receiver-line" />
-              <line x1={left + receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={top + receiverInset} className="topcap-line" />
-              <line x1={left + receiverInset} y1={bottom - receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="base-line" />
-              <line x1={left + frameInset} y1={top + frameInset} x2={left + frameInset} y2={bottom - frameInset} className="drc-line" />
-              <line x1={left + w - frameInset} y1={top + frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="drc-line" />
+              <line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="sunroom-receiver-line" />
+              <line x1={left + w - receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="sunroom-receiver-line" />
+              <line x1={left + receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={top + receiverInset} className="sunroom-topcap-line" />
+              <line x1={left + receiverInset} y1={bottom - receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="sunroom-base-line" />
+              <line x1={left + frameInset} y1={top + frameInset} x2={left + frameInset} y2={bottom - frameInset} className="sunroom-drc-line" />
+              <line x1={left + w - frameInset} y1={top + frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="sunroom-drc-line" />
               {uprightXs.map((x, idx) => {
                 const y1 = showTransomUprights ? top + frameInset : mainTop;
                 const y2 = showKickUprights ? bottom - frameInset : mainBottom;
-                return <g key={idx}><line x1={x} y1={y1} x2={x} y2={y2} className="twobytwo-line" /><line x1={x - 6} y1={y1} x2={x - 6} y2={y2} className="drc-line" /><line x1={x + 6} y1={y1} x2={x + 6} y2={y2} className="drc-line" />{section.electricChase && <line x1={x} y1={y1} x2={x} y2={y2} className="groove-line" />}</g>;
+                return <g key={idx}><line x1={x} y1={y1} x2={x} y2={y2} className="sunroom-hbeam-line" /><line x1={x - 6} y1={y1} x2={x - 6} y2={y2} className="sunroom-drc-line" /><line x1={x + 6} y1={y1} x2={x + 6} y2={y2} className="sunroom-drc-line" />{section.electricChase && <line x1={x} y1={y1} x2={x} y2={y2} className="sunroom-chase-line" />}</g>;
               })}
               {mainBottom > mainTop && <rect x={left + 18} y={mainTop + 6} width={Math.max(0, w - 36)} height={Math.max(0, mainBottom - mainTop - 12)} fill={mainFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />}
               {section.kickSection !== 'none' && <rect x={left + 18} y={kickTop + 6} width={Math.max(0, w - 36)} height={Math.max(0, bottom - kickTop - 12)} fill={kickFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />}
-              {section.kickSection !== 'none' && <line x1={left + frameInset} y1={kickTop} x2={left + w - frameInset} y2={kickTop} className={section.kickSection === 'window' ? 'receiver-line' : 'twobytwo-line'} />}
-              {section.kickSection === 'window' && <line x1={left + frameInset} y1={bottom - frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="receiver-line" />}
+              {section.kickSection !== 'none' && !showKickUprights && <line x1={left + frameInset} y1={kickTop} x2={left + w - frameInset} y2={kickTop} className="sunroom-hbeam-support-line" />}
+              {section.kickSection !== 'none' && <line x1={left + frameInset} y1={kickTop} x2={left + w - frameInset} y2={kickTop} className={section.kickSection === 'window' ? 'sunroom-receiver-line' : 'sunroom-hbeam-line'} />}
+              {section.kickSection === 'window' && <line x1={left + frameInset} y1={bottom - frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="sunroom-receiver-line" />}
               {transomNeeded && <polygon points={transomPoly} fill={transomFillColor} stroke="rgba(0,0,0,0.12)" />}
-              {transomNeeded && <line x1={left + frameInset} y1={mainTop} x2={left + w - frameInset} y2={mainTop} className={section.transomType === 'picture-window' ? 'receiver-line' : 'topcap-line'} />}
+              {transomNeeded && !showTransomUprights && <line x1={left + frameInset} y1={mainTop} x2={left + w - frameInset} y2={mainTop} className="sunroom-hbeam-support-line" />}
+              {transomNeeded && <line x1={left + frameInset} y1={mainTop} x2={left + w - frameInset} y2={mainTop} className={section.transomType === 'picture-window' ? 'sunroom-receiver-line' : 'sunroom-topcap-line'} />}
               {section.doorType !== 'none' && <rect x={doorLeft} y={bottom - (6 + 8/12) * scale} width={doorWidth} height={(6 + 8/12) * scale} className="door-fill" rx="4" />}
               <text x={left + 6} y={bottom + 16} className="svg-note">{`${bayCount} bay${bayCount === 1 ? '' : 's'}`}</text>
             </g>
@@ -1235,12 +1262,12 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
         })}
         <text x={x0} y={y0 + totalH + 24} className="svg-note">{`Front ${feetAndInches(frontWidth)} · ${framingColor} frame · ${panelColor} panel · ${windowColor} window`}</text>
         <g transform={`translate(${x0}, ${viewH - 28})`}>
-          <line x1={0} y1={0} x2={18} y2={0} className="receiver-line" /><text x={24} y={4} className="svg-note">Receiver</text>
-          <line x1={104} y1={0} x2={122} y2={0} className="drc-line" /><text x={128} y={4} className="svg-note">DRC</text>
-          <line x1={180} y1={0} x2={198} y2={0} className="topcap-line" /><text x={204} y={4} className="svg-note">Top cap</text>
-          <line x1={280} y1={0} x2={298} y2={0} className="base-line" /><text x={304} y={4} className="svg-note">Base channel</text>
-          <line x1={400} y1={0} x2={418} y2={0} className="twobytwo-line" /><text x={424} y={4} className="svg-note">H-beam</text>
-          <line x1={500} y1={0} x2={518} y2={0} className="groove-line" /><text x={524} y={4} className="svg-note">Electric chase</text>
+          <line x1={0} y1={0} x2={18} y2={0} className="sunroom-receiver-line" /><text x={24} y={4} className="svg-note">Receiver</text>
+          <line x1={104} y1={0} x2={122} y2={0} className="sunroom-drc-line" /><text x={128} y={4} className="svg-note">DRC</text>
+          <line x1={180} y1={0} x2={198} y2={0} className="sunroom-topcap-line" /><text x={204} y={4} className="svg-note">Top cap</text>
+          <line x1={280} y1={0} x2={298} y2={0} className="sunroom-base-line" /><text x={304} y={4} className="svg-note">Base channel</text>
+          <line x1={400} y1={0} x2={418} y2={0} className="sunroom-hbeam-line" /><text x={424} y={4} className="svg-note">H-beam</text>
+          <line x1={500} y1={0} x2={518} y2={0} className="sunroom-chase-line" /><text x={524} y={4} className="svg-note">Electric chase</text>
           <rect x={620} y={-8} width={18} height={12} fill="rgba(77,131,209,0.18)" stroke="rgba(0,0,0,0.12)" /><text x={644} y={4} className="svg-note">Window zone</text>
           <rect x={744} y={-8} width={18} height={12} fill="rgba(255,255,255,0.72)" stroke="rgba(0,0,0,0.12)" /><text x={768} y={4} className="svg-note">Panel zone</text>
         </g>
