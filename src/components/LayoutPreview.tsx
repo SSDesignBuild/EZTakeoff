@@ -1192,7 +1192,6 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           const kickHeight = Math.max(0, Math.min(section.kickHeight, 4));
           const transomNeeded = section.transomType === 'panel' || section.transomType === 'picture-window' || (section.transomType === 'auto' && section.height > 10 && section.mainSection !== 'picture-window');
           const transomMaxHeight = transomNeeded ? Math.max(section.leftTransomHeight, section.rightTransomHeight) : 0;
-          const transomAvgHeight = transomNeeded ? (section.leftTransomHeight + section.rightTransomHeight) / 2 : 0;
           const mainTop = top + transomMaxHeight * scale;
           const kickTop = bottom - kickHeight * scale;
           const mainBottom = section.kickSection === 'none' ? bottom : kickTop;
