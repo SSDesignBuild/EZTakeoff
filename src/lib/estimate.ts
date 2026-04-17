@@ -27,9 +27,42 @@ const addBoardGroups = (materials: MaterialItem[], category: string, prefix: str
   });
 };
 
-const add24FtStock = (materials: MaterialItem[], name: string, category: string, lf: number, notes?: string) => {
-  if (lf <= 0) return;
-  materials.push(toMaterial(name, category, Math.ceil(lf / 24), 'sticks', '24 ft stock', `${lf.toFixed(1)} lf total${notes ? ` · ${notes}` : ''}`));
+const normalizeCutLength = (length: number) => Math.round(length * 12) / 12;
+
+const packStockCuts = (lengths: number[], stockLength = 24) => {
+  const cuts = lengths
+    .map((length) => normalizeCutLength(length))
+    .filter((length) => length > 0)
+    .sort((a, b) => b - a);
+
+  const bins: { remaining: number; cuts: number[] }[] = [];
+  cuts.forEach((cut) => {
+    const bin = bins.find((candidate) => candidate.remaining + 1e-6 >= cut);
+    if (bin) {
+      bin.cuts.push(cut);
+      bin.remaining = normalizeCutLength(bin.remaining - cut);
+    } else {
+      bins.push({ remaining: normalizeCutLength(stockLength - cut), cuts: [cut] });
+    }
+  });
+  return bins;
+};
+
+const add24FtStockFromCuts = (materials: MaterialItem[], name: string, category: string, lengths: number[], notes?: string) => {
+  const bins = packStockCuts(lengths, 24);
+  if (!bins.length) return;
+  const total = lengths.reduce((sum, length) => sum + length, 0);
+  const waste = bins.reduce((sum, bin) => sum + Math.max(0, bin.remaining), 0);
+  materials.push(
+    toMaterial(
+      name,
+      category,
+      bins.length,
+      'sticks',
+      '24 ft stock',
+      `${total.toFixed(1)} lf total · ${waste.toFixed(1)} lf estimated offcut${notes ? ` · ${notes}` : ''}`,
+    ),
+  );
 };
 
 const addCustomCutGroups = (materials: MaterialItem[], name: string, category: string, lengths: number[], note?: string) => {
@@ -274,19 +307,12 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   const panelColor = String(inputs.panelColor ?? 'white');
   const materials: MaterialItem[] = [];
 
-  let receiverLf = 0;
-  let oneByTwoLf = 0;
-  let twoByTwoLf = 0;
-  let uChannelLf = 0;
   let picketCount = 0;
   let picketStockLf = 0;
   let tekScrewCount = 0;
   let capriClips = 0;
   let bracketCount = 0;
-  let vGroove1x2Lf = 0;
-  let vGroove2x2Lf = 0;
   let panelSqFt = 0;
-  let insulatedReceiverLf = 0;
   let singleDoors = 0;
   let frenchDoors = 0;
   let inswingKits = 0;
@@ -306,20 +332,24 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     const doorWidth = sectionDoorWidth(section);
     const wallWidthExcludingDoor = Math.max(0, section.width - doorWidth);
     const receiverPerimeter = section.width * 2 + section.height * 2 - doorWidth;
-    receiverLf += receiverPerimeter;
+    const topReceiverCut = section.width;
+    const bottomReceiverCut = Math.max(0, section.width - doorWidth);
+    if (!renaissance) receiverCuts24.push(topReceiverCut, bottomReceiverCut, section.height, section.height);
     receiverFastenerTubesLf += receiverPerimeter;
     if (section.floorMount === 'concrete') concreteScrews += Math.ceil(receiverPerimeter / 2);
     else woodScrews += Math.ceil(receiverPerimeter / 2);
 
     const perimeter1x2Lf = renaissance ? receiverPerimeter : receiverPerimeter - (section.kickPanel === 'insulated' ? wallWidthExcludingDoor : 0);
     if (renaissance) oneByTwoCustom.push(section.width, section.width, section.height, section.height);
-    else oneByTwoLf += Math.max(0, perimeter1x2Lf);
+    else {
+      oneByTwoCuts24.push(section.width, section.height, section.height);
+      if (section.kickPanel !== 'insulated') oneByTwoCuts24.push(Math.max(0, section.width - doorWidth));
+    }
     tekScrewCount += Math.ceil(perimeter1x2Lf / 2);
 
     const chairRailOnlyLength = section.chairRail && !section.pickets ? wallWidthExcludingDoor : 0;
     const picketRailLength = section.pickets ? wallWidthExcludingDoor : 0;
     const uprightCount = Math.max(0, section.uprights);
-    const uprightsLf = uprightCount * section.height;
     const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
 
     if (renaissance) {
@@ -328,7 +358,9 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       if (section.kickPanel === 'insulated') twoByTwoCustomGroove.push(wallWidthExcludingDoor);
       if (picketRailLength > 0) twoByTwoCustomGroove.push(picketRailLength);
     } else {
-      twoByTwoLf += uprightsLf + chairRailOnlyLength + picketRailLength;
+      for (let i = 0; i < uprightCount; i += 1) twoByTwoCuts24.push(section.height);
+      if (chairRailOnlyLength > 0) twoByTwoCuts24.push(chairRailOnlyLength);
+      if (picketRailLength > 0) twoByTwoCuts24.push(picketRailLength);
       capriClips += uprightCount + ((section.chairRail || section.pickets) ? 2 : 0) + (section.doorType !== 'none' ? 3 : 0) + (section.kickPanel === 'insulated' ? 2 : 0);
       tekScrewCount += capriClips * 4;
     }
@@ -337,7 +369,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       const picketSpanIn = wallWidthExcludingDoor * 12;
       const sectionPickets = Math.max(0, Math.ceil(picketSpanIn / 4));
       picketCount += sectionPickets;
-      uChannelLf += wallWidthExcludingDoor * 2;
+      if (!renaissance) uChannelCuts24.push(wallWidthExcludingDoor, wallWidthExcludingDoor);
       if (renaissance) {
         // Precut 36 in pickets for Renaissance.
       } else {
@@ -347,25 +379,26 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     }
 
     if (section.kickPanel === 'trim-coil' && !renaissance) {
-      vGroove1x2Lf += wallWidthExcludingDoor;
-      vGroove2x2Lf += wallWidthExcludingDoor;
+      vGroove1x2Cuts24.push(wallWidthExcludingDoor);
+      vGroove2x2Cuts24.push(wallWidthExcludingDoor);
       panelSqFt += wallWidthExcludingDoor * kickHeight;
     }
 
     if (section.kickPanel === 'insulated') {
       panelSqFt += wallWidthExcludingDoor * kickHeight;
-      insulatedReceiverLf += wallWidthExcludingDoor;
+      insulatedReceiverCuts24.push(wallWidthExcludingDoor);
       if (renaissance) twoByTwoCustomGroove.push(wallWidthExcludingDoor);
-      else twoByTwoLf += wallWidthExcludingDoor;
+      else {
+        twoByTwoCuts24.push(wallWidthExcludingDoor);
+      }
     }
 
     if (section.doorType !== 'none') {
       const headerLf = doorWidth;
-      const jambLf = section.height * 2;
       if (renaissance) {
         twoByTwoCustomNoGroove.push(section.height, section.height, headerLf);
       } else {
-        twoByTwoLf += jambLf + headerLf;
+        twoByTwoCuts24.push(section.height, section.height, headerLf);
       }
       if (section.doorType === 'single') singleDoors += 1;
       else frenchDoors += 1;
@@ -412,8 +445,6 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       oneByTwoCustom.push(...cuts);
       gableOneByTwoCuts.push(...cuts);
     } else {
-      receiverLf += cuts.reduce((sum, item) => sum + item, 0);
-      oneByTwoLf += cuts.reduce((sum, item) => sum + item, 0);
       gableReceiverCuts.push(...cuts);
       gableOneByTwoCuts.push(...cuts);
     }
@@ -440,17 +471,17 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', undefined),
     );
   } else {
-    add24FtStock(materials, 'Receiver', 'Frame', receiverLf + insulatedReceiverLf, `${framingColor} · includes extra receiver for insulated kick panel`);
-    add24FtStock(materials, '1x2', 'Frame', oneByTwoLf, `${framingColor} · perimeter inside receiver`);
-    add24FtStock(materials, '2x2', 'Frame', twoByTwoLf, `${framingColor} · uprights, chair rail, kick-panel top, and door framing`);
-    add24FtStock(materials, 'U-channel', 'Railing', uChannelLf, 'Top and bottom of picket runs');
-    add24FtStock(materials, '1x2 V-groove', 'Kick panel', vGroove1x2Lf, 'Trim coil kick panel only');
-    add24FtStock(materials, '2x2 V-groove', 'Kick panel', vGroove2x2Lf, 'Trim coil kick panel only');
+    add24FtStockFromCuts(materials, 'Receiver', 'Frame', [...receiverCuts24, ...insulatedReceiverCuts24], `${framingColor} · includes extra receiver for insulated kick panel`);
+    add24FtStockFromCuts(materials, '1x2', 'Frame', oneByTwoCuts24, `${framingColor} · perimeter inside receiver`);
+    add24FtStockFromCuts(materials, '2x2', 'Frame', twoByTwoCuts24, `${framingColor} · uprights, chair rail, kick-panel top, and door framing`);
+    add24FtStockFromCuts(materials, 'U-channel', 'Railing', uChannelCuts24, 'Top and bottom of picket runs');
+    add24FtStockFromCuts(materials, '1x2 V-groove', 'Kick panel', vGroove1x2Cuts24, 'Trim coil kick panel only');
+    add24FtStockFromCuts(materials, '2x2 V-groove', 'Kick panel', vGroove2x2Cuts24, 'Trim coil kick panel only');
     materials.push(
       toMaterial('Capri clips', 'Hardware', capriClips, 'ea', '50 per box', undefined),
       toMaterial('Tek screws', 'Hardware', tekScrewCount, 'ea', 'Approx. every 2 ft + clip connections', undefined),
       toMaterial('Pickets 36 in cut pieces', 'Railing', picketCount, 'ea', 'Field cut', undefined),
-      toMaterial('24 ft picket stock', 'Railing', Math.ceil(picketStockLf / 24), 'sticks', '24 ft stock', `${picketStockLf.toFixed(1)} lf total picket stock`),
+      toMaterial('24 ft picket stock', 'Railing', packStockCuts(Array.from({ length: picketCount }, () => 3)).length, 'sticks', '24 ft stock', `${picketStockLf.toFixed(1)} lf total picket stock`),
       toMaterial('Insulated panel sheets', 'Panel', Math.ceil(panelSqFt / 40), 'sheets', `4x10 sheets · ${panelColor}`, `${panelSqFt.toFixed(1)} sq ft total`),
       toMaterial(screenType === 'suntex-80' ? 'Suntex 80 screen rolls' : '17/20 tuff screen rolls', 'Screen', screenRolls, 'rolls', '10 ft x 100 ft', `${screenSf.toFixed(1)} sq ft net screen`),
       toMaterial(spline, 'Screen', screenRolls, 'rolls', '1 per screen roll', undefined),
@@ -468,8 +499,8 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     if (renaissance) {
       addCustomCutGroups(materials, 'Gable 1x2 7/8', 'Gable', gableOneByTwoCuts, `${framingColor} · gable screen framing around wood members`);
     } else {
-      addCustomCutGroups(materials, 'Gable receiver', 'Gable', gableReceiverCuts, `${framingColor} · gable screen framing receiver`);
-      addCustomCutGroups(materials, 'Gable 1x2', 'Gable', gableOneByTwoCuts, `${framingColor} · gable screen framing 1x2`);
+      add24FtStockFromCuts(materials, 'Gable receiver', 'Gable', gableReceiverCuts, `${framingColor} · gable screen framing receiver`);
+      add24FtStockFromCuts(materials, 'Gable 1x2', 'Gable', gableOneByTwoCuts, `${framingColor} · gable screen framing 1x2`);
     }
   }
 
@@ -593,8 +624,7 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   });
 
   const add24 = (name: string, category: string, lengths: number[], notes?: string) => {
-    const total = lengths.reduce((sum, value) => sum + value, 0);
-    if (total > 0) materials.push(toMaterial(name, category, Math.ceil(total / 24), 'sticks', '24 ft stock', `${total.toFixed(1)} lf total${notes ? ` · ${notes}` : ''}`));
+    add24FtStockFromCuts(materials, name, category, lengths, notes);
   };
   add24(extrusionName('Base channel with weep', 'Cabana base / base channel'), 'Sunroom frame', cutGroups.base, `${framingColor} · perimeter base`);
   add24(extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', cutGroups.receiver, `${windowColor} · window receiving channel`);
