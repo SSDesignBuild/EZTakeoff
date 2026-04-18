@@ -85,20 +85,50 @@ function makePdfFromJpegs(images: PdfImage[], title: string) {
   return new Blob(parts, { type: 'application/pdf' });
 }
 
+function normalizeCssColor(value: string) {
+  const color = value.trim();
+  if (!color || color === 'none' || color === 'transparent') return color;
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return color;
+  try {
+    ctx.fillStyle = '#000000';
+    ctx.fillStyle = color;
+    return ctx.fillStyle;
+  } catch {
+    return color;
+  }
+}
+
 function inlineComputedStyles(source: Element, target: Element) {
   const win = source.ownerDocument?.defaultView;
   if (!win) return;
   const sourceElements = [source, ...Array.from(source.querySelectorAll('*'))];
   const targetElements = [target, ...Array.from(target.querySelectorAll('*'))];
+  const properties = ['fill', 'fill-opacity', 'stroke', 'stroke-opacity', 'stroke-width', 'stroke-dasharray', 'stroke-linecap', 'stroke-linejoin', 'opacity', 'font-size', 'font-family', 'font-weight', 'letter-spacing', 'text-anchor', 'dominant-baseline'];
   sourceElements.forEach((sourceEl, index) => {
     const targetEl = targetElements[index] as HTMLElement | SVGElement | undefined;
     if (!targetEl) return;
     const computed = win.getComputedStyle(sourceEl as Element);
-    const styleText = Array.from(computed)
-      .filter((prop) => !prop.startsWith('-webkit-tap'))
-      .map((prop) => `${prop}:${computed.getPropertyValue(prop)};`)
-      .join('');
-    targetEl.setAttribute('style', styleText);
+    properties.forEach((prop) => {
+      const value = computed.getPropertyValue(prop);
+      if (!value) return;
+      const normalized = prop === 'fill' || prop === 'stroke' ? normalizeCssColor(value) : value;
+      if (!normalized || normalized === 'none') {
+        if (prop === 'fill' || prop === 'stroke') targetEl.setAttribute(prop, 'none');
+        return;
+      }
+      targetEl.setAttribute(prop, normalized);
+    });
+    if (targetEl.classList.contains('screen-box')) {
+      targetEl.setAttribute('fill', 'rgba(255,255,255,0.98)');
+      targetEl.setAttribute('stroke', '#206a4f');
+      targetEl.setAttribute('stroke-width', '4');
+    }
+    if (targetEl.classList.contains('legend-box')) {
+      targetEl.setAttribute('fill', 'rgba(255,255,255,0.96)');
+      targetEl.setAttribute('stroke', 'rgba(15,23,42,0.18)');
+    }
   });
 }
 

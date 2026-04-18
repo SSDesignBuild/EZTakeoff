@@ -68,9 +68,10 @@ export function SectionEditor({ renaissance = false, values, onValuesChange }: S
                 <label className="form-field"><span>Kick panel height (ft)</span><input type="number" step="0.1" min="0" max={section.kickPanel === 'trim-coil' ? 2 : 4} value={section.kickPanelHeight} onChange={(event) => updateSection(section.id, { kickPanelHeight: Number(event.target.value) })} /></label>
               </div>
               <div className="toggle-cluster">
-                <label className="toggle-field"><input type="checkbox" checked={section.chairRail} onChange={(event) => updateSection(section.id, { chairRail: event.target.checked })} /><div><span>Chair rail</span></div></label>
-                <label className="toggle-field"><input type="checkbox" checked={section.pickets} onChange={(event) => updateSection(section.id, { pickets: event.target.checked, chairRail: event.target.checked ? false : section.chairRail })} /><div><span>Pickets with chair rail</span></div></label>
+                <label className="toggle-field"><input type="checkbox" checked={section.chairRail} onChange={(event) => updateSection(section.id, { chairRail: event.target.checked, chairRailCount: event.target.checked ? Math.max(1, section.chairRailCount || 1) : 0 })} /><div><span>Chair rail</span></div></label>
+                <label className="toggle-field"><input type="checkbox" checked={section.pickets} onChange={(event) => updateSection(section.id, { pickets: event.target.checked, chairRail: event.target.checked ? false : section.chairRail, chairRailCount: event.target.checked ? 0 : section.chairRailCount })} /><div><span>Pickets with chair rail</span></div></label>
               </div>
+              {section.chairRail && !section.pickets && <div className="form-grid section-input-grid"><label className="form-field"><span>Horizontal chair rails</span><input type="number" min="1" step="1" value={Math.max(1, section.chairRailCount || 1)} onChange={(event) => updateSection(section.id, { chairRail: true, chairRailCount: Math.max(1, Number(event.target.value) || 1) })} /></label></div>}
               <p className="muted">{renaissance ? 'Custom cut 1x2 7/8 and separate 2x2 7/8 with/without groove.' : '24 ft stock receiver, 1x2, 2x2, U-channel, pickets, and kick-panel parts.'} Doors cut material out of the wall layout automatically, and new sections copy the first section for faster fill-out.</p>
             </div>
           ))}

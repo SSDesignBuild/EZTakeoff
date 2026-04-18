@@ -300,6 +300,20 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   };
 }
 
+
+function sectionChairRailCount(section: { chairRail: boolean; pickets: boolean; chairRailCount?: number }) {
+  if (!section.chairRail || section.pickets) return 0;
+  return Math.max(1, Math.round(section.chairRailCount || 1));
+}
+
+function sectionDoorJambHeight(section: { height: number; chairRail: boolean; pickets: boolean; chairRailCount?: number; kickPanel: 'none' | 'trim-coil' | 'insulated'; kickPanelHeight: number }) {
+  const railCount = sectionChairRailCount(section);
+  if (section.height <= 12 || railCount <= 0) return section.height;
+  const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
+  const clearHeight = Math.max(0, section.height - kickHeight);
+  return kickHeight + clearHeight / (railCount + 1);
+}
+
 function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): EstimateResult {
   const sections = parseSections(inputs.sections, 3);
   const screenType = String(inputs.screenType ?? 'suntex-80');
@@ -365,10 +379,12 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     }
     tekScrewCount += Math.ceil(perimeter1x2Lf / 2);
 
-    const chairRailOnlyLength = section.chairRail && !section.pickets ? wallWidthExcludingDoor : 0;
+    const chairRailCount = sectionChairRailCount(section);
+    const chairRailOnlyLength = chairRailCount > 0 ? wallWidthExcludingDoor * chairRailCount : 0;
     const picketRailLength = section.pickets ? wallWidthExcludingDoor : 0;
     const uprightCount = Math.max(0, section.uprights);
     const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
+    const doorJambHeight = sectionDoorJambHeight(section);
 
     if (renaissance) {
       for (let i = 0; i < uprightCount; i += 1) twoByTwoCustomNoGroove.push(section.height);
@@ -379,7 +395,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       for (let i = 0; i < uprightCount; i += 1) twoByTwoCuts24.push(section.height);
       if (chairRailOnlyLength > 0) twoByTwoCuts24.push(chairRailOnlyLength);
       if (picketRailLength > 0) twoByTwoCuts24.push(picketRailLength);
-      capriClips += uprightCount + ((section.chairRail || section.pickets) ? 2 : 0) + (section.doorType !== 'none' ? 3 : 0) + (section.kickPanel === 'insulated' ? 2 : 0);
+      capriClips += uprightCount + (chairRailCount > 0 || section.pickets ? chairRailCount + 1 : 0) + (section.doorType !== 'none' ? 3 : 0) + (section.kickPanel === 'insulated' ? 2 : 0);
       tekScrewCount += capriClips * 4;
     }
 
@@ -414,9 +430,9 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     if (section.doorType !== 'none') {
       const headerLf = doorWidth;
       if (renaissance) {
-        twoByTwoCustomNoGroove.push(section.height, section.height, headerLf);
+        twoByTwoCustomNoGroove.push(doorJambHeight, doorJambHeight, headerLf);
       } else {
-        twoByTwoCuts24.push(section.height, section.height, headerLf);
+        twoByTwoCuts24.push(doorJambHeight, doorJambHeight, headerLf);
       }
       if (section.doorType === 'single') singleDoors += 1;
       else frenchDoors += 1;
@@ -425,7 +441,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     }
 
     if (renaissance) {
-      const clips = Math.max(0, uprightCount) + ((section.chairRail || section.pickets) ? 2 : 0) + (section.kickPanel === 'insulated' ? 2 : 0) + (section.doorType !== 'none' ? 3 : 0);
+      const clips = Math.max(0, uprightCount) + (chairRailCount > 0 || section.pickets ? chairRailCount + 1 : 0) + (section.kickPanel === 'insulated' ? 2 : 0) + (section.doorType !== 'none' ? 3 : 0);
       bracketCount += clips;
       flushMountScrews += clips * 4;
     }

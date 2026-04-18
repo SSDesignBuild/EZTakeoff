@@ -45,6 +45,7 @@ export interface SectionConfig {
   height: number;
   uprights: number;
   chairRail: boolean;
+  chairRailCount: number;
   pickets: boolean;
   kickPanel: 'none' | 'trim-coil' | 'insulated';
   kickPanelHeight: number;
