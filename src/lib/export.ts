@@ -23,9 +23,9 @@ function base64ToBytes(base64: string) {
 type PdfImage = { bytes: Uint8Array; width: number; height: number };
 
 function makePdfFromJpegs(images: PdfImage[], title: string) {
-  const pageWidth = 792;
-  const pageHeight = 612;
-  const margin = 24;
+  const pageWidth = 612;
+  const pageHeight = 792;
+  const margin = 18;
   const usableWidth = pageWidth - margin * 2;
   const usableHeight = pageHeight - margin * 2;
   const objects: Uint8Array[] = [];
@@ -229,9 +229,14 @@ export async function exportSvgSectionsAsPdf(svg: SVGSVGElement | null, title: s
   for (const section of sections) {
     const bbox = section.getBBox();
     const legendBox = legend?.getBBox();
-    const padding = 32;
-    const pageWidth = Math.max(900, bbox.width + padding * 2, (legendBox?.width ?? 0) + padding * 2);
-    const pageHeight = Math.max(700, bbox.height + padding * 3 + (legendBox?.height ?? 0));
+    const paddingX = 24;
+    const paddingTop = 42;
+    const paddingBottom = 24;
+    const legendGap = legend && legendBox ? 18 : 0;
+    const contentWidth = Math.max(bbox.width, legendBox?.width ?? 0);
+    const contentHeight = bbox.height + (legendBox?.height ?? 0) + legendGap;
+    const pageWidth = Math.max(320, contentWidth + paddingX * 2);
+    const pageHeight = Math.max(320, contentHeight + paddingTop + paddingBottom);
     const clone = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     clone.setAttribute('viewBox', `0 0 ${pageWidth} ${pageHeight}`);
@@ -245,24 +250,27 @@ export async function exportSvgSectionsAsPdf(svg: SVGSVGElement | null, title: s
     bg.setAttribute('fill', '#ffffff');
     clone.appendChild(bg);
     const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    titleText.setAttribute('x', String(padding));
-    titleText.setAttribute('y', '24');
+    titleText.setAttribute('x', String(pageWidth / 2));
+    titleText.setAttribute('y', '28');
     titleText.setAttribute('font-size', '18');
     titleText.setAttribute('font-family', 'Inter, Arial, sans-serif');
     titleText.setAttribute('font-weight', '700');
+    titleText.setAttribute('text-anchor', 'middle');
     titleText.setAttribute('fill', '#111111');
     titleText.textContent = title;
     clone.appendChild(titleText);
 
+    const sectionOffsetX = (pageWidth - bbox.width) / 2;
     const sectionClone = section.cloneNode(true) as SVGGElement;
     inlineComputedStyles(section, sectionClone);
-    sectionClone.setAttribute('transform', `translate(${padding - bbox.x}, ${padding + 16 - bbox.y})`);
+    sectionClone.setAttribute('transform', `translate(${sectionOffsetX - bbox.x}, ${paddingTop - bbox.y})`);
     clone.appendChild(sectionClone);
 
     if (legend && legendBox) {
+      const legendOffsetX = (pageWidth - legendBox.width) / 2;
       const legendClone = legend.cloneNode(true) as SVGGElement;
       inlineComputedStyles(legend, legendClone);
-      legendClone.setAttribute('transform', `translate(${padding - legendBox.x}, ${padding + bbox.height + 36 - legendBox.y})`);
+      legendClone.setAttribute('transform', `translate(${legendOffsetX - legendBox.x}, ${paddingTop + bbox.height + legendGap - legendBox.y})`);
       clone.appendChild(legendClone);
     }
     canvases.push(await svgToCanvas(clone));

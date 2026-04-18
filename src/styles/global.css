@@ -169,9 +169,25 @@ button, input, select { font: inherit; }
 .form-field input, .form-field select {
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  background: color-mix(in srgb, var(--panel-strong) 94%, transparent);
   padding: 0.8rem 0.9rem;
   color: var(--ink);
+}
+.form-field input::placeholder { color: var(--muted); }
+.form-field input:focus, .form-field select:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 1px;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+:root[data-theme='dark'] .form-field input,
+:root[data-theme='dark'] .form-field select {
+  background: #2c2521;
+  border-color: rgba(243, 236, 228, 0.22);
+  color: #fff8f1;
+}
+:root[data-theme='dark'] .toggle-field {
+  background: rgba(44, 37, 33, 0.92);
+  border-color: rgba(243, 236, 228, 0.14);
 }
 .form-field small { color: var(--muted); }
 .toggle-field { display: flex; gap: 0.8rem; align-items: center; }
@@ -1327,3 +1343,23 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .full-width-card{grid-column:1 / -1;}
 .single-column-workspace .workspace-right-col{grid-template-columns:1fr;}
 .single-column-workspace .metrics-grid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));}
+
+:root[data-theme='dark'] .form-field input,
+:root[data-theme='dark'] .form-field select {
+  background: #2c2521 !important;
+  border-color: rgba(243,236,228,0.22) !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04) !important;
+  color: #fff8f1 !important;
+}
+:root[data-theme='dark'] .form-field input::placeholder {
+  color: rgba(232,218,205,0.66) !important;
+}
+:root[data-theme='dark'] .form-field input:focus,
+:root[data-theme='dark'] .form-field select:focus {
+  outline: 2px solid rgba(210,160,113,0.42) !important;
+  border-color: rgba(210,160,113,0.6) !important;
+}
+:root[data-theme='dark'] .toggle-field {
+  background: rgba(44,37,33,0.92) !important;
+  border-color: rgba(243,236,228,0.14) !important;
+}

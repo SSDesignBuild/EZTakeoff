@@ -336,7 +336,6 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   let selfTappingScrews = 0;
   let flushMountScrews = 0;
   let receiverFastenerTubesLf = 0;
-  let gableSealantLf = 0;
   const receiverCuts24: number[] = [];
   const oneByTwoCuts24: number[] = [];
   const twoByTwoCuts24: number[] = [];
@@ -502,7 +501,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     };
     addFasteners(gable.mountingSurface, gable.width);
     addFasteners(gable.sideMount, rafter * 2);
-    gableSealantLf += perimeterCuts.reduce((sum, len) => sum + len, 0) + innerDoubleCuts.reduce((sum, len) => sum + len, 0);
+    receiverFastenerTubesLf += perimeterCuts.reduce((sum, len) => sum + len, 0);
     if (renaissance) {
       gableOneByTwoCuts.push(...perimeterCuts, ...innerDoubleCuts);
       oneByTwoCustom.push(...perimeterCuts, ...innerDoubleCuts);
@@ -515,11 +514,10 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       gableUprightCuts.push(...uprightCuts);
       capriClips += connectionCount;
       tekScrewCount += connectionCount * 4;
-      receiverFastenerTubesLf += gable.width + (rafter * 2);
     }
   });
 
-  const sealantTubes = renaissance ? Math.max(1, Math.ceil(oneByTwoCustom.reduce((sum, len) => sum + len, 0) / 24)) : Math.max(1, Math.ceil((receiverFastenerTubesLf + gableSealantLf) / 24));
+  const sealantTubes = Math.max(1, Math.ceil(receiverFastenerTubesLf / 24));
 
   if (renaissance) {
 
@@ -533,7 +531,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       toMaterial('Insulated panel sheets', 'Panel', Math.ceil(panelSqFt / 40), 'sheets', `4x10 sheets · ${panelColor}`, `${panelSqFt.toFixed(1)} sq ft total`),
       toMaterial(screenType === 'suntex-80' ? 'Suntex 80 screen rolls' : '17/20 tuff screen rolls', 'Screen', screenRolls, 'rolls', '10 ft x 100 ft', `${screenSf.toFixed(1)} sq ft net screen`),
       toMaterial(spline, 'Screen', screenRolls, 'rolls', '1 per screen roll', undefined),
-      toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 lf of 1x2 7/8', undefined),
+      toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 lf of receiver', undefined),
       toMaterial('Single doors', 'Doors', singleDoors, 'ea', 'Custom door width', undefined),
       toMaterial('French doors', 'Doors', frenchDoors, 'sets', 'Custom door width', undefined),
       toMaterial('Inswing kits', 'Doors', inswingKits, 'ea', 'Hydraulic jack kit', undefined),
