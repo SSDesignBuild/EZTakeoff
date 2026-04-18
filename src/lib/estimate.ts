@@ -78,6 +78,24 @@ const addCustomCutGroups = (materials: MaterialItem[], name: string, category: s
   });
 };
 
+
+const totalCutLength = (lengths: number[]) => lengths.reduce((sum, length) => sum + normalizeCutLength(length), 0);
+
+const consolidateMaterials = (materials: MaterialItem[]) => {
+  const merged = new Map<string, MaterialItem>();
+  materials.forEach((item) => {
+    const key = [item.name, item.category, item.unit, item.stockRecommendation, item.color ?? ''].join('||');
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, { ...item });
+      return;
+    }
+    existing.quantity = Number((existing.quantity + item.quantity).toFixed(2));
+    if (item.notes) existing.notes = existing.notes ? `${existing.notes} · ${item.notes}` : item.notes;
+  });
+  return [...merged.values()];
+};
+
 function sectionDoorWidth(section: SectionConfig) {
   return section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
 }
@@ -291,7 +309,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       { label: 'Stairs', value: deck.stairCount ? `${deck.stairRisers} risers · ${deck.stairTreadsPerRun} treads · ${deck.stairStringers} stringers` : 'No stairs' },
       { label: 'Railing mix', value: `Level ${railingBreakdown.levelMix.six}x6' + ${railingBreakdown.levelMix.eight}x8' · Angled ${railingBreakdown.stairMix.six}x6' + ${railingBreakdown.stairMix.eight}x8'` },
     ],
-    materials: materials.filter((item) => item.quantity > 0),
+    materials: consolidateMaterials(materials).filter((item) => item.quantity > 0),
     orderNotes: [
       deck.attachment === 'brick' ? 'Brick attachment is treated as freestanding, so the house side still needs beam and post support, including beam segments at any inside corner/jut-out.' : 'Siding attachment keeps ledger logic active unless the deck is marked freestanding.',
       deck.stairPlacement.edgeIndex !== null ? `Stairs sit on edge ${deck.stairPlacement.edgeIndex + 1}. Preview now shows tread count, stringer layout, and stair-side railing when more than 3 risers are required.` : 'No stair edge is assigned yet in the drawing tool.',
@@ -337,6 +355,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   let selfTappingScrews = 0;
   let flushMountScrews = 0;
   let receiverFastenerTubesLf = 0;
+  let renaissanceReceiverLf = 0;
   const receiverCuts24: number[] = [];
   const oneByTwoCuts24: number[] = [];
   const twoByTwoCuts24: number[] = [];
@@ -359,7 +378,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     const topReceiverCut = section.width;
     const bottomReceiverCut = Math.max(0, section.width - doorWidth);
     if (!renaissance) receiverCuts24.push(topReceiverCut, bottomReceiverCut, section.height, section.height);
-    receiverFastenerTubesLf += receiverPerimeter;
+    if (renaissance) renaissanceReceiverLf += receiverPerimeter;
     const floorMountLf = Math.max(0, bottomReceiverCut);
     const wallMountLf = section.height * 2;
     const addFasteners = (mount: string, lf: number, spacing = 2) => {
@@ -395,8 +414,9 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       for (let i = 0; i < uprightCount; i += 1) twoByTwoCuts24.push(section.height);
       if (chairRailOnlyLength > 0) twoByTwoCuts24.push(chairRailOnlyLength);
       if (picketRailLength > 0) twoByTwoCuts24.push(picketRailLength);
-      capriClips += uprightCount + (chairRailCount > 0 || section.pickets ? chairRailCount + 1 : 0) + (section.doorType !== 'none' ? 3 : 0) + (section.kickPanel === 'insulated' ? 2 : 0);
-      tekScrewCount += capriClips * 4;
+      const clips = uprightCount + (chairRailCount > 0 || section.pickets ? chairRailCount + 1 : 0) + (section.doorType !== 'none' ? 3 : 0) + (section.kickPanel === 'insulated' ? 2 : 0);
+      capriClips += clips;
+      tekScrewCount += clips * 4;
     }
 
     if (section.pickets) {
@@ -456,44 +476,47 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   const gableCutsFromStyle = (gable: { width: number; height: number; style: string; uprights?: number }) => {
     const half = gable.width / 2;
     const rafter = Math.sqrt(half ** 2 + gable.height ** 2);
-    const perimeterCuts = [gable.width, rafter, rafter];
-    const innerDoubleCuts: number[] = [];
+    const receiverPerimeterCuts = [half, rafter, half, rafter];
+    const screenFrameCuts = [...receiverPerimeterCuts];
     const braceDiag = Math.sqrt((half * 0.42) ** 2 + (gable.height * 0.45) ** 2);
     switch (gable.style) {
       case 'king-post':
-        innerDoubleCuts.push(gable.height, gable.height);
+        screenFrameCuts.push(gable.height, gable.height);
         break;
       case 'tied-king-post':
-        innerDoubleCuts.push(gable.height, gable.height, braceDiag, braceDiag, braceDiag, braceDiag);
+        screenFrameCuts.push(braceDiag, braceDiag, braceDiag, braceDiag, gable.height * 0.55, gable.height * 0.55);
         break;
       case 'braced-king-post':
-        innerDoubleCuts.push(gable.height, gable.height, braceDiag, braceDiag, braceDiag, braceDiag);
+        screenFrameCuts.push(braceDiag, braceDiag, braceDiag, braceDiag, braceDiag, braceDiag, gable.height * 0.55, gable.height * 0.55);
         break;
-      case 'queen-king-post': {
-        const queenHeight = gable.height * 0.58;
-        innerDoubleCuts.push(gable.height, gable.height, queenHeight, queenHeight, queenHeight, queenHeight);
+      case 'queen-king-post':
+        screenFrameCuts.push(gable.height, gable.height, half * 0.2, half * 0.2, half * 0.2, half * 0.2);
         break;
-      }
       case 'none':
       default:
         break;
     }
     const uprightCuts: number[] = [];
+    const uprightScreenFrameCuts: number[] = [];
     const uprightCount = Math.max(0, Math.floor(gable.uprights ?? 0));
     for (let i = 1; i <= uprightCount; i += 1) {
       const x = (gable.width * i) / (uprightCount + 1);
       const localHeight = x <= half ? (gable.height * x) / half : (gable.height * (gable.width - x)) / half;
-      if (localHeight > 0.05) uprightCuts.push(localHeight);
+      if (localHeight > 0.05) {
+        uprightCuts.push(localHeight);
+        uprightScreenFrameCuts.push(localHeight, localHeight);
+      }
     }
-    return { perimeterCuts, innerDoubleCuts, uprightCuts };
+    screenFrameCuts.push(...uprightScreenFrameCuts);
+    return { receiverPerimeterCuts, screenFrameCuts, uprightCuts };
   };
 
   gableSections.forEach((gable) => {
     if (gable.width <= 0 || gable.height <= 0) return;
-    const { perimeterCuts, innerDoubleCuts, uprightCuts } = gableCutsFromStyle(gable);
+    const { receiverPerimeterCuts, screenFrameCuts, uprightCuts } = gableCutsFromStyle(gable);
     const half = gable.width / 2;
     const rafter = Math.sqrt(half ** 2 + gable.height ** 2);
-    const connectionCount = perimeterCuts.length + innerDoubleCuts.length + uprightCuts.length;
+    const connectionCount = receiverPerimeterCuts.length + (screenFrameCuts.length - receiverPerimeterCuts.length) / 2 + uprightCuts.length;
     const addFasteners = (mount: string, lf: number, spacing = 2) => {
       const qty = Math.max(0, Math.ceil(lf / spacing));
       if (mount === 'concrete') concreteScrews += qty;
@@ -502,22 +525,23 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     };
     addFasteners(gable.mountingSurface, gable.width);
     addFasteners(gable.sideMount, rafter * 2);
-    receiverFastenerTubesLf += perimeterCuts.reduce((sum, len) => sum + len, 0);
+    const gableReceiverLf = receiverPerimeterCuts.reduce((sum, len) => sum + len, 0);
+    if (renaissance) renaissanceReceiverLf += gableReceiverLf;
     if (renaissance) {
-      gableOneByTwoCuts.push(...perimeterCuts, ...innerDoubleCuts);
-      oneByTwoCustom.push(...perimeterCuts, ...innerDoubleCuts);
+      gableOneByTwoCuts.push(...screenFrameCuts);
       gableUprightCuts.push(...uprightCuts);
       bracketCount += connectionCount;
       flushMountScrews += connectionCount * 4;
     } else {
-      gableReceiverCuts.push(...perimeterCuts, ...innerDoubleCuts);
-      gableOneByTwoCuts.push(...perimeterCuts, ...innerDoubleCuts);
+      gableReceiverCuts.push(...receiverPerimeterCuts);
+      gableOneByTwoCuts.push(...screenFrameCuts);
       gableUprightCuts.push(...uprightCuts);
       capriClips += connectionCount;
       tekScrewCount += connectionCount * 4;
     }
   });
 
+  receiverFastenerTubesLf += renaissance ? renaissanceReceiverLf : totalCutLength([...receiverCuts24, ...gableReceiverCuts]);
   const sealantTubes = Math.max(1, Math.ceil(receiverFastenerTubesLf / 24));
 
   if (renaissance) {
@@ -532,14 +556,13 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       toMaterial('Insulated panel sheets', 'Panel', Math.ceil(panelSqFt / 40), 'sheets', '4x10 sheets', panelColor, `${panelSqFt.toFixed(1)} sq ft total`),
       toMaterial(screenType === 'suntex-80' ? 'Suntex 80 screen rolls' : '17/20 tuff screen rolls', 'Screen', screenRolls, 'rolls', '10 ft x 100 ft', undefined, `${screenSf.toFixed(1)} sq ft net screen`),
       toMaterial(spline, 'Screen', screenRolls, 'rolls', '1 per screen roll', undefined, undefined),
-      toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 lf of receiver', undefined, undefined),
+      toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 lf of receiver', undefined, `${receiverFastenerTubesLf.toFixed(1)} lf receiver perimeter`),
       toMaterial('Single doors', 'Doors', singleDoors, 'ea', 'Custom door width', undefined, undefined),
       toMaterial('French doors', 'Doors', frenchDoors, 'sets', 'Custom door width', undefined, undefined),
       toMaterial('Inswing kits', 'Doors', inswingKits, 'ea', 'Hydraulic jack kit', undefined, undefined),
       toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined, undefined),
       toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Floor / masonry mounts', undefined, undefined),
       toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', undefined, undefined),
-      toMaterial('Tek screws', 'Hardware', selfTappingScrews, 'ea', '3/4 in tek screws for metal mounts', undefined, undefined),
     );
   } else {
     add24FtStockFromCuts(materials, 'Receiver', 'Frame', [...receiverCuts24, ...insulatedReceiverCuts24], 'includes extra receiver for insulated kick panel');
@@ -556,14 +579,13 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       toMaterial('Insulated panel sheets', 'Panel', Math.ceil(panelSqFt / 40), 'sheets', '4x10 sheets', panelColor, `${panelSqFt.toFixed(1)} sq ft total`),
       toMaterial(screenType === 'suntex-80' ? 'Suntex 80 screen rolls' : '17/20 tuff screen rolls', 'Screen', screenRolls, 'rolls', '10 ft x 100 ft', undefined, `${screenSf.toFixed(1)} sq ft net screen`),
       toMaterial(spline, 'Screen', screenRolls, 'rolls', '1 per screen roll', undefined, undefined),
-      toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 ft receiver', undefined, undefined),
+      toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 ft receiver', undefined, `${receiverFastenerTubesLf.toFixed(1)} lf receiver perimeter`),
       toMaterial('Single doors', 'Doors', singleDoors, 'ea', 'Custom door width', undefined, undefined),
       toMaterial('French doors', 'Doors', frenchDoors, 'sets', 'Custom door width', undefined, undefined),
       toMaterial('Inswing kits', 'Doors', inswingKits, 'ea', 'Hydraulic jack kit', undefined, undefined),
       toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined, undefined),
       toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Floor / masonry mounts', undefined, undefined),
       toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', undefined, undefined),
-      toMaterial('Tek screws', 'Hardware', selfTappingScrews, 'ea', '3/4 in tek screws for metal mounts', undefined, undefined),
     );
   }
 
@@ -595,7 +617,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       { label: 'Mounting mix', value: `${sections.filter((s) => s.floorMount === 'concrete').length} concrete floor · ${sections.filter((s) => s.wallMount === 'concrete').length} masonry walls` },
       ...(gableSections.length ? [{ label: 'Gables', value: `${gableSections.length} section(s)` }] : []),
     ],
-    materials: materials.filter((item) => item.quantity > 0),
+    materials: consolidateMaterials(materials).filter((item) => item.quantity > 0),
     orderNotes: [
       renaissance ? 'Renaissance output is cut-list driven: 1x2 7/8 and 2x2 7/8 members are grouped by exact required length.' : 'Standard screen output groups framing into 24 ft stock so it matches field ordering.',
       'Door openings subtract out receiver, chair rail, pickets, kick panel, and other infill the full width of the door, then add jamb/header framing back in.',
