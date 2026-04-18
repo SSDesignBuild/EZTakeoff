@@ -4,6 +4,7 @@ export interface MaterialItem {
   quantity: number;
   unit: string;
   stockRecommendation: string;
+  color?: string;
   notes?: string;
 }
 

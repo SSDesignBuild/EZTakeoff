@@ -990,13 +990,6 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
   const totalW = Math.max(sectionMaxWidth, gableWidths, 260);
   const gableHeight = gableSections.length ? Math.max(...gableSections.map((gable) => gable.height * scale)) : 0;
   const gableGap = gableSections.length ? 130 : 0;
-  const legendRows = renaissance ? 2 : 2;
-  const legendHeight = 124 + legendRows * 24;
-  const totalH = sectionStackHeight + (gableSections.length ? gableHeight + gableGap : 0);
-  const viewW = totalW + 140;
-  const viewH = totalH + 240 + legendHeight;
-  const gableStartX = x0 + (totalW - gableWidths) / 2;
-  let runningGX = gableStartX;
   const screenLegendItems = renaissance
     ? [
         { label: '1x2 7/8', className: 'reno-1x2-line' },
@@ -1015,6 +1008,31 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
         { label: '2x2 v-groove', className: 'vgroove2-line' },
         { label: 'wood gable structure', className: 'svg-outline' },
       ];
+  const legendColumnCount = renaissance ? 2 : 3;
+  const legendRows = Math.max(1, Math.ceil(screenLegendItems.length / legendColumnCount));
+  const legendPaddingX = 18;
+  const legendPaddingY = 16;
+  const legendRowGap = 22;
+  const legendColGap = 22;
+  const legendColumnWidths = Array.from({ length: legendColumnCount }, (_, col) => {
+    const widths = screenLegendItems
+      .filter((_, idx) => idx % legendColumnCount === col)
+      .map((item) => 42 + item.label.length * 7.2);
+    return widths.length ? Math.max(...widths) : 0;
+  });
+  const legendColumnOffsets = legendColumnWidths.reduce<number[]>((offsets, _width, index) => {
+    if (index === 0) return [0];
+    return [...offsets, offsets[index - 1] + legendColumnWidths[index - 1] + legendColGap];
+  }, []);
+  const legendContentWidth = legendColumnWidths.reduce((sum, width) => sum + width, 0) + Math.max(0, legendColumnWidths.length - 1) * legendColGap;
+  const legendContentHeight = legendRows * legendRowGap;
+  const legendHeight = legendContentHeight + legendPaddingY * 2 + 18;
+  const totalH = sectionStackHeight + (gableSections.length ? gableHeight + gableGap : 0);
+  const viewW = totalW + 140;
+  const viewH = totalH + 240 + legendHeight;
+  const gableStartX = x0 + (totalW - gableWidths) / 2;
+  let runningGX = gableStartX;
+  const legendBoxWidth = legendContentWidth + legendPaddingX * 2;
   return (
     <div className="visual-card">
       <div className="visual-header">
@@ -1144,13 +1162,13 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
             </g>
           );
         })})()}
-        <g transform={`translate(${x0}, ${viewH - 86})`} data-export-legend="true">
-          <rect x={-18} y={-30} width={Math.max(760, totalW + 36)} height={legendHeight - 18} rx="12" className="legend-box" />
+        <g transform={`translate(${viewW / 2}, ${viewH - legendHeight + legendPaddingY + 26})`} data-export-legend="true">
+          <rect x={-legendBoxWidth / 2} y={-legendPaddingY - 18} width={legendBoxWidth} height={legendHeight - 18} rx="12" className="legend-box" />
           {screenLegendItems.map((item, idx) => {
-            const row = Math.floor(idx / 4);
-            const col = idx % 4;
-            const baseX = col * 188;
-            const baseY = row * 22;
+            const row = Math.floor(idx / legendColumnCount);
+            const col = idx % legendColumnCount;
+            const baseX = -legendContentWidth / 2 + legendColumnOffsets[col];
+            const baseY = row * legendRowGap;
             return <g key={`${item.label}-${idx}`} transform={`translate(${baseX}, ${baseY})`}><line x1={0} y1={0} x2={22} y2={0} className={item.className} /><text x={30} y={4} className="svg-note">{item.label}</text></g>;
           })}
         </g>

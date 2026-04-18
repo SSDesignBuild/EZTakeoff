@@ -18,7 +18,7 @@ const infoFields = [
   { key: 'deliverDate', label: 'Deliver date', type: 'date' as const },
 ];
 
-const customDefaults = { category: 'Custom items', name: '', quantity: '1', unit: 'ea', stockRecommendation: '', notes: '' };
+const customDefaults = { category: 'Custom items', name: '', quantity: '1', unit: 'ea', stockRecommendation: '', color: '', notes: '' };
 
 function parseJsonArray<T>(raw: string | number | boolean | undefined, fallback: T[]): T[] {
   if (typeof raw !== 'string' || raw.trim() === '') return fallback;
@@ -77,7 +77,7 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     ctx.font = '12px Arial';
   });
 
-  const cols = [margin, 520, 620, 730, 1050, 1360];
+  const cols = [margin, 460, 560, 660, 980, 1200, 1440];
   let y = 116;
   Object.entries(grouped).forEach(([category, rows]) => {
     ctx.fillStyle = '#111111';
@@ -91,7 +91,7 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     ctx.fillRect(margin, y, pageWidth - margin * 2, 28);
     ctx.fillStyle = '#111111';
     ctx.font = '600 12px Arial';
-    ['Material', 'Qty', 'Unit', 'Stock recommendation', 'Notes'].forEach((label, idx) => ctx.fillText(label, cols[idx] + 8, y + 18));
+    ['Material', 'Qty', 'Unit', 'Stock recommendation', 'Color', 'Notes'].forEach((label, idx) => ctx.fillText(label, cols[idx] + 8, y + 18));
     y += 28;
     ctx.font = '12px Arial';
     rows.forEach((row, idx) => {
@@ -101,7 +101,7 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
       ctx.strokeStyle = '#d1d5db';
       ctx.strokeRect(margin, rowY, pageWidth - margin * 2, rowHeight);
       ctx.fillStyle = '#111111';
-      const rowValues = [row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.notes ?? '—'];
+      const rowValues = [row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.color ?? '—', row.notes ?? '—'];
       rowValues.forEach((value, colIdx) => {
         const x = cols[colIdx] + 8;
         const maxWidth = (cols[colIdx + 1] ?? (pageWidth - margin)) - cols[colIdx] - 16;
@@ -163,6 +163,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
       quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : 1,
       unit: customDraft.unit.trim() || 'ea',
       stockRecommendation: customDraft.stockRecommendation.trim() || 'Custom order item',
+      color: customDraft.color.trim() || undefined,
       notes: customDraft.notes.trim() || undefined,
     };
     persistCustomItems([...customItems, nextItem]);
@@ -251,7 +252,8 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
           <label className="form-field compact-form-field"><span>Quantity</span><input type="number" min="0" step="1" value={customDraft.quantity} onChange={(e) => setCustomDraft((cur) => ({ ...cur, quantity: e.target.value }))} /></label>
           <label className="form-field compact-form-field"><span>Unit</span><input value={customDraft.unit} onChange={(e) => setCustomDraft((cur) => ({ ...cur, unit: e.target.value }))} placeholder="ea" /></label>
           <label className="form-field compact-form-field"><span>Stock recommendation</span><input value={customDraft.stockRecommendation} onChange={(e) => setCustomDraft((cur) => ({ ...cur, stockRecommendation: e.target.value }))} placeholder="Special order / stock size" /></label>
-          <label className="form-field compact-form-field" style={{ gridColumn: 'span 2' }}><span>Notes</span><input value={customDraft.notes} onChange={(e) => setCustomDraft((cur) => ({ ...cur, notes: e.target.value }))} placeholder="Vendor, color, or reminder" /></label>
+          <label className="form-field compact-form-field"><span>Color</span><input value={customDraft.color} onChange={(e) => setCustomDraft((cur) => ({ ...cur, color: e.target.value }))} placeholder="White / Bronze / etc." /></label>
+          <label className="form-field compact-form-field" style={{ gridColumn: 'span 2' }}><span>Notes</span><input value={customDraft.notes} onChange={(e) => setCustomDraft((cur) => ({ ...cur, notes: e.target.value }))} placeholder="Vendor or reminder" /></label>
           <div style={{ display: 'flex', alignItems: 'end', gap: '0.75rem' }}>
             <button type="button" className="secondary-btn" onClick={addCustomItem}>Add custom item</button>
             {hiddenItemCount > 0 && <button type="button" className="ghost-btn" onClick={restoreAllHidden}>Restore deleted items ({hiddenItemCount})</button>}
@@ -274,6 +276,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
                     <th>Qty</th>
                     <th>Unit</th>
                     <th>Stock recommendation</th>
+                    <th>Color</th>
                     <th>Notes</th>
                     <th data-export-ignore="true">Action</th>
                   </tr>
@@ -285,6 +288,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
                       <td>{editingKey === item.rowKey ? <input type="number" min="0" step="0.01" value={editingQuantity} onChange={(event) => setEditingQuantity(event.target.value)} style={{ width: '82px' }} /> : item.quantity}</td>
                       <td>{item.unit}</td>
                       <td>{item.stockRecommendation}</td>
+                      <td>{item.color ?? '—'}</td>
                       <td>{item.notes ?? '—'}</td>
                       <td data-export-ignore="true">
                         {editingKey === item.rowKey ? (

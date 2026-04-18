@@ -5,12 +5,13 @@ import { buildPatioPanelLayout } from './patioLayout';
 
 export type EstimateInputs = Record<string, string | number | boolean>;
 
-const toMaterial = (name: string, category: string, quantity: number, unit: string, stockRecommendation: string, notes?: string): MaterialItem => ({
+const toMaterial = (name: string, category: string, quantity: number, unit: string, stockRecommendation: string, color?: string, notes?: string): MaterialItem => ({
   name,
   category,
   quantity: Number(quantity.toFixed(2)),
   unit,
   stockRecommendation,
+  color,
   notes,
 });
 
@@ -23,7 +24,7 @@ const feetAndInches = (feet: number) => {
 
 const addBoardGroups = (materials: MaterialItem[], category: string, prefix: string, groups: { length: number; count: number }[], notes: string) => {
   groups.forEach((group) => {
-    if (group.count > 0) materials.push(toMaterial(`${prefix} ${group.length}'`, category, group.count, 'boards', `${group.length} ft stock`, notes));
+    if (group.count > 0) materials.push(toMaterial(`${prefix} ${group.length}'`, category, group.count, 'boards', `${group.length} ft stock`, undefined, notes));
   });
 };
 
@@ -60,6 +61,7 @@ const add24FtStockFromCuts = (materials: MaterialItem[], name: string, category:
       bins.length,
       'sticks',
       '24 ft stock',
+      undefined,
       `${total.toFixed(1)} lf total · ${waste.toFixed(1)} lf estimated offcut${notes ? ` · ${notes}` : ''}`,
     ),
   );
@@ -72,7 +74,7 @@ const addCustomCutGroups = (materials: MaterialItem[], name: string, category: s
     map.set(rounded, (map.get(rounded) ?? 0) + 1);
   });
   [...map.entries()].sort((a, b) => a[0] - b[0]).forEach(([length, count]) => {
-    materials.push(toMaterial(`${name} ${feetAndInches(length)}`, category, count, 'ea', 'Custom cut', note));
+    materials.push(toMaterial(`${name} ${feetAndInches(length)}`, category, count, 'ea', 'Custom cut', undefined, note));
   });
 };
 
@@ -282,7 +284,6 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     if (railingBreakdown.stairMix.eight) materials.push(toMaterial('8 ft angled railing infill sections', 'Railing', railingBreakdown.stairMix.eight, 'sections', '8 ft sections', 'Stair-side or angled runs'));
     if (railingBreakdown.stairMix.six) materials.push(toMaterial('6 ft angled railing infill sections', 'Railing', railingBreakdown.stairMix.six, 'sections', '6 ft sections', 'Stair-side or angled runs'));
   }
-
   return {
     summary: [
       { label: 'Deck area', value: `${deck.area.toFixed(1)} sq ft` },
@@ -521,62 +522,71 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
 
   if (renaissance) {
 
-    addCustomCutGroups(materials, '1x2 7/8', 'Frame', oneByTwoCustom, `${framingColor} · perimeter pieces`);
-    addCustomCutGroups(materials, '2x2 7/8 no-channel', 'Frame', twoByTwoCustomNoGroove, `${framingColor} · uprights, chair rail only, and door framing`);
-    addCustomCutGroups(materials, '2x2 7/8 with channel', 'Frame', twoByTwoCustomGroove, `${framingColor} · pickets and insulated kick panel`);
+    addCustomCutGroups(materials, '1x2 7/8', 'Frame', oneByTwoCustom, 'perimeter pieces');
+    addCustomCutGroups(materials, '2x2 7/8 no-channel', 'Frame', twoByTwoCustomNoGroove, 'uprights, chair rail only, and door framing');
+    addCustomCutGroups(materials, '2x2 7/8 with channel', 'Frame', twoByTwoCustomGroove, 'pickets and insulated kick panel');
     materials.push(
-      toMaterial('Decorative brackets with caps', 'Hardware', bracketCount, 'ea', 'Bracket system', undefined),
-      toMaterial('Flush mount screws', 'Hardware', flushMountScrews, 'ea', '4 per bracket', undefined),
-      toMaterial('Pickets 36 in', 'Railing', picketCount, 'ea', 'Precut 36 in', undefined),
-      toMaterial('Insulated panel sheets', 'Panel', Math.ceil(panelSqFt / 40), 'sheets', `4x10 sheets · ${panelColor}`, `${panelSqFt.toFixed(1)} sq ft total`),
-      toMaterial(screenType === 'suntex-80' ? 'Suntex 80 screen rolls' : '17/20 tuff screen rolls', 'Screen', screenRolls, 'rolls', '10 ft x 100 ft', `${screenSf.toFixed(1)} sq ft net screen`),
-      toMaterial(spline, 'Screen', screenRolls, 'rolls', '1 per screen roll', undefined),
-      toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 lf of receiver', undefined),
-      toMaterial('Single doors', 'Doors', singleDoors, 'ea', 'Custom door width', undefined),
-      toMaterial('French doors', 'Doors', frenchDoors, 'sets', 'Custom door width', undefined),
-      toMaterial('Inswing kits', 'Doors', inswingKits, 'ea', 'Hydraulic jack kit', undefined),
-      toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined),
-      toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Floor / masonry mounts', undefined),
-      toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', undefined),
-      toMaterial('3/4 in self-tapping screws', 'Hardware', selfTappingScrews, 'ea', 'Metal mounts', undefined),
+      toMaterial('Decorative brackets with caps', 'Hardware', bracketCount, 'ea', 'Bracket system', undefined, undefined),
+      toMaterial('Flush mount screws', 'Hardware', flushMountScrews, 'ea', '4 per bracket', undefined, undefined),
+      toMaterial('Pickets 36 in', 'Railing', picketCount, 'ea', 'Precut 36 in', undefined, undefined),
+      toMaterial('Insulated panel sheets', 'Panel', Math.ceil(panelSqFt / 40), 'sheets', '4x10 sheets', panelColor, `${panelSqFt.toFixed(1)} sq ft total`),
+      toMaterial(screenType === 'suntex-80' ? 'Suntex 80 screen rolls' : '17/20 tuff screen rolls', 'Screen', screenRolls, 'rolls', '10 ft x 100 ft', undefined, `${screenSf.toFixed(1)} sq ft net screen`),
+      toMaterial(spline, 'Screen', screenRolls, 'rolls', '1 per screen roll', undefined, undefined),
+      toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 lf of receiver', undefined, undefined),
+      toMaterial('Single doors', 'Doors', singleDoors, 'ea', 'Custom door width', undefined, undefined),
+      toMaterial('French doors', 'Doors', frenchDoors, 'sets', 'Custom door width', undefined, undefined),
+      toMaterial('Inswing kits', 'Doors', inswingKits, 'ea', 'Hydraulic jack kit', undefined, undefined),
+      toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined, undefined),
+      toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Floor / masonry mounts', undefined, undefined),
+      toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', undefined, undefined),
+      toMaterial('Tek screws', 'Hardware', selfTappingScrews, 'ea', '3/4 in tek screws for metal mounts', undefined, undefined),
     );
   } else {
-    add24FtStockFromCuts(materials, 'Receiver', 'Frame', [...receiverCuts24, ...insulatedReceiverCuts24], `${framingColor} · includes extra receiver for insulated kick panel`);
-    add24FtStockFromCuts(materials, '1x2', 'Frame', oneByTwoCuts24, `${framingColor} · perimeter inside receiver`);
-    add24FtStockFromCuts(materials, '2x2', 'Frame', twoByTwoCuts24, `${framingColor} · uprights, chair rail, kick-panel top, and door framing`);
+    add24FtStockFromCuts(materials, 'Receiver', 'Frame', [...receiverCuts24, ...insulatedReceiverCuts24], 'includes extra receiver for insulated kick panel');
+    add24FtStockFromCuts(materials, '1x2', 'Frame', oneByTwoCuts24, 'perimeter inside receiver');
+    add24FtStockFromCuts(materials, '2x2', 'Frame', twoByTwoCuts24, 'uprights, chair rail, kick-panel top, and door framing');
     add24FtStockFromCuts(materials, 'U-channel', 'Railing', uChannelCuts24, 'Top and bottom of picket runs');
     add24FtStockFromCuts(materials, '1x2 V-groove', 'Kick panel', vGroove1x2Cuts24, 'Trim coil kick panel only');
     add24FtStockFromCuts(materials, '2x2 V-groove', 'Kick panel', vGroove2x2Cuts24, 'Trim coil kick panel only');
     materials.push(
-      toMaterial('Capri clips', 'Hardware', capriClips, 'ea', '50 per box', undefined),
-      toMaterial('Tek screws', 'Hardware', tekScrewCount, 'ea', 'Approx. every 2 ft + clip connections', undefined),
-      toMaterial('Pickets 36 in cut pieces', 'Railing', picketCount, 'ea', 'Field cut', undefined),
-      toMaterial('24 ft picket stock', 'Railing', packStockCuts(Array.from({ length: picketCount }, () => 3)).length, 'sticks', '24 ft stock', `${picketStockLf.toFixed(1)} lf total picket stock`),
-      toMaterial('Insulated panel sheets', 'Panel', Math.ceil(panelSqFt / 40), 'sheets', `4x10 sheets · ${panelColor}`, `${panelSqFt.toFixed(1)} sq ft total`),
-      toMaterial(screenType === 'suntex-80' ? 'Suntex 80 screen rolls' : '17/20 tuff screen rolls', 'Screen', screenRolls, 'rolls', '10 ft x 100 ft', `${screenSf.toFixed(1)} sq ft net screen`),
-      toMaterial(spline, 'Screen', screenRolls, 'rolls', '1 per screen roll', undefined),
-      toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 ft receiver', undefined),
-      toMaterial('Single doors', 'Doors', singleDoors, 'ea', 'Custom door width', undefined),
-      toMaterial('French doors', 'Doors', frenchDoors, 'sets', 'Custom door width', undefined),
-      toMaterial('Inswing kits', 'Doors', inswingKits, 'ea', 'Hydraulic jack kit', undefined),
-      toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined),
-      toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Floor / masonry mounts', undefined),
-      toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', undefined),
-      toMaterial('3/4 in self-tapping screws', 'Hardware', selfTappingScrews, 'ea', 'Metal mounts', undefined),
+      toMaterial('Capri clips', 'Hardware', capriClips, 'ea', '50 per box', undefined, undefined),
+      toMaterial('Tek screws', 'Hardware', tekScrewCount + selfTappingScrews, 'ea', 'Approx. every 2 ft + clip connections + metal mounts', undefined, undefined),
+      toMaterial('Pickets 36 in cut pieces', 'Railing', picketCount, 'ea', 'Field cut', undefined, undefined),
+      toMaterial('24 ft picket stock', 'Railing', packStockCuts(Array.from({ length: picketCount }, () => 3)).length, 'sticks', '24 ft stock', undefined, `${picketStockLf.toFixed(1)} lf total picket stock`),
+      toMaterial('Insulated panel sheets', 'Panel', Math.ceil(panelSqFt / 40), 'sheets', '4x10 sheets', panelColor, `${panelSqFt.toFixed(1)} sq ft total`),
+      toMaterial(screenType === 'suntex-80' ? 'Suntex 80 screen rolls' : '17/20 tuff screen rolls', 'Screen', screenRolls, 'rolls', '10 ft x 100 ft', undefined, `${screenSf.toFixed(1)} sq ft net screen`),
+      toMaterial(spline, 'Screen', screenRolls, 'rolls', '1 per screen roll', undefined, undefined),
+      toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 ft receiver', undefined, undefined),
+      toMaterial('Single doors', 'Doors', singleDoors, 'ea', 'Custom door width', undefined, undefined),
+      toMaterial('French doors', 'Doors', frenchDoors, 'sets', 'Custom door width', undefined, undefined),
+      toMaterial('Inswing kits', 'Doors', inswingKits, 'ea', 'Hydraulic jack kit', undefined, undefined),
+      toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined, undefined),
+      toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Floor / masonry mounts', undefined, undefined),
+      toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', undefined, undefined),
+      toMaterial('Tek screws', 'Hardware', selfTappingScrews, 'ea', '3/4 in tek screws for metal mounts', undefined, undefined),
     );
   }
 
+  const assignColor = (item: MaterialItem, names: string[], color: string) => {
+    if (names.some((name) => item.name.toLowerCase().includes(name))) item.color = color;
+  };
+
   if (gableSections.length) {
     if (renaissance) {
-      addCustomCutGroups(materials, 'Gable 1x2 7/8', 'Gable', gableOneByTwoCuts, `${framingColor} · gable screen framing around wood members`);
-      addCustomCutGroups(materials, 'Gable 2x2 7/8', 'Gable', gableUprightCuts, `${framingColor} · gable uprights`);
+      addCustomCutGroups(materials, 'Gable 1x2 7/8', 'Gable', gableOneByTwoCuts, 'gable screen framing around wood members');
+      addCustomCutGroups(materials, 'Gable 2x2 7/8', 'Gable', gableUprightCuts, 'gable uprights');
     } else {
-      add24FtStockFromCuts(materials, 'Gable receiver', 'Gable', gableReceiverCuts, `${framingColor} · gable screen framing receiver`);
-      add24FtStockFromCuts(materials, 'Gable 1x2', 'Gable', gableOneByTwoCuts, `${framingColor} · gable screen framing 1x2`);
-      add24FtStockFromCuts(materials, 'Gable 2x2 uprights', 'Gable', gableUprightCuts, `${framingColor} · gable uprights`);
+      add24FtStockFromCuts(materials, 'Gable receiver', 'Gable', gableReceiverCuts, 'gable screen framing receiver');
+      add24FtStockFromCuts(materials, 'Gable 1x2', 'Gable', gableOneByTwoCuts, 'gable screen framing 1x2');
+      add24FtStockFromCuts(materials, 'Gable 2x2 uprights', 'Gable', gableUprightCuts, 'gable uprights');
     }
   }
 
+
+  materials.forEach((item) => {
+    assignColor(item, ['receiver', '1x2', '2x2', 'gable receiver', 'gable 1x2', 'gable 2x2'], framingColor);
+    assignColor(item, ['insulated panel sheets'], panelColor);
+  });
   return {
     summary: [
       { label: 'Sections', value: `${sections.length}` },
@@ -699,19 +709,26 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   const add24 = (name: string, category: string, lengths: number[], notes?: string) => {
     add24FtStockFromCuts(materials, name, category, lengths, notes);
   };
-  add24(extrusionName('Base channel with weep', 'Cabana base / base channel'), 'Sunroom frame', cutGroups.base, `${framingColor} · perimeter base`);
-  add24(extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', cutGroups.receiver, `${windowColor} · window receiving channel`);
-  add24(extrusionName('Top cap, flat', 'Top cap'), 'Sunroom frame', cutGroups.topCap, `${framingColor} · perimeter cap`);
-  add24(extrusionName('H-beam', 'H-beam'), 'Sunroom frame', cutGroups.hBeam, `${framingColor} · uprights`);
-  add24(extrusionName('DRC', 'DRC'), 'Sunroom frame', cutGroups.drc, `${windowColor} · window / upright finish channel`);
-  if (cutGroups.chase.length) add24(extrusionName('Channel with chase & snap', 'Channel with chase'), 'Sunroom frame', cutGroups.chase, `${framingColor} · electric chase enabled in selected sections`);
-  if (buildMode === 'new-structure') materials.push(toMaterial(extrusionName('Corner post', 'Corner post'), 'Sunroom frame', 2, 'ea', isThreeIn ? '8 ft or 25 ft stock' : '8 ft or 24 ft stock', 'Only for build-from-scratch corners'));
-  if (cutGroups.wallPanelArea > 0) materials.push(toMaterial('Wall panel stock', 'Sunroom panels', Math.ceil(cutGroups.wallPanelArea / 40), 'panels', isThreeIn ? `4x10 panel stock · ${panelColor}` : `Cut from 24 ft stock · ${panelColor}`, `${cutGroups.wallPanelArea.toFixed(1)} sq ft panel fill`));
-  if (doorSingles) materials.push(toMaterial("Single swinging doors 3 ft x 6 ft 8 in", 'Doors', doorSingles, 'ea', 'Standard unit', undefined));
-  if (doorSliders) materials.push(toMaterial("Sliding doors 6 ft x 6 ft 8 in", 'Doors', doorSliders, 'ea', 'Standard unit', undefined));
-  if (weatherSealLf > 0) materials.push(toMaterial('Rounded weather seal bulb vinyl', 'Hardware', Math.max(1, Math.ceil(weatherSealLf / 500)), 'rolls', '500 ft rolls', `${weatherSealLf.toFixed(1)} lf glazing seal`));
-  materials.push(toMaterial('Structural adhesive sealant', 'Hardware', Math.max(2, Math.ceil(sealantLf / 10)), 'tubes', 'Approx. 10 lf per tube', `${sealantLf.toFixed(1)} lf around channels, windows, seams`));
-  materials.push(toMaterial('1/4 in lag bolts with neoprene washers', 'Hardware', Math.max(1, Math.ceil(lagBoltLf * 2)), 'ea', 'Perimeter roof / attachment', `${lagBoltLf.toFixed(1)} lf around attachment perimeter`));
+  add24(extrusionName('Base channel with weep', 'Cabana base / base channel'), 'Sunroom frame', cutGroups.base, 'perimeter base');
+  add24(extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', cutGroups.receiver, 'window receiving channel');
+  add24(extrusionName('Top cap, flat', 'Top cap'), 'Sunroom frame', cutGroups.topCap, 'perimeter cap');
+  add24(extrusionName('H-beam', 'H-beam'), 'Sunroom frame', cutGroups.hBeam, 'uprights');
+  add24(extrusionName('DRC', 'DRC'), 'Sunroom frame', cutGroups.drc, 'window / upright finish channel');
+  if (cutGroups.chase.length) add24(extrusionName('Channel with chase & snap', 'Channel with chase'), 'Sunroom frame', cutGroups.chase, 'electric chase enabled in selected sections');
+  if (buildMode === 'new-structure') materials.push(toMaterial(extrusionName('Corner post', 'Corner post'), 'Sunroom frame', 2, 'ea', isThreeIn ? '8 ft or 25 ft stock' : '8 ft or 24 ft stock', framingColor, 'Only for build-from-scratch corners'));
+  if (cutGroups.wallPanelArea > 0) materials.push(toMaterial('Wall panel stock', 'Sunroom panels', Math.ceil(cutGroups.wallPanelArea / 40), 'panels', isThreeIn ? '4x10 panel stock' : 'Cut from 24 ft stock', panelColor, `${cutGroups.wallPanelArea.toFixed(1)} sq ft panel fill`));
+  if (doorSingles) materials.push(toMaterial("Single swinging doors 3 ft x 6 ft 8 in", 'Doors', doorSingles, 'ea', 'Standard unit', undefined, undefined));
+  if (doorSliders) materials.push(toMaterial("Sliding doors 6 ft x 6 ft 8 in", 'Doors', doorSliders, 'ea', 'Standard unit', undefined, undefined));
+  if (weatherSealLf > 0) materials.push(toMaterial('Rounded weather seal bulb vinyl', 'Hardware', Math.max(1, Math.ceil(weatherSealLf / 500)), 'rolls', '500 ft rolls', undefined, `${weatherSealLf.toFixed(1)} lf glazing seal`));
+  materials.push(toMaterial('Structural adhesive sealant', 'Hardware', Math.max(2, Math.ceil(sealantLf / 10)), 'tubes', 'Approx. 10 lf per tube', undefined, `${sealantLf.toFixed(1)} lf around channels, windows, seams`));
+  materials.push(toMaterial('1/4 in lag bolts with neoprene washers', 'Hardware', Math.max(1, Math.ceil(lagBoltLf * 2)), 'ea', 'Perimeter roof / attachment', undefined, `${lagBoltLf.toFixed(1)} lf around attachment perimeter`));
+
+  materials.forEach((item) => {
+    const lower = item.name.toLowerCase();
+    if (lower.includes('receiving channel') || lower.includes('drc')) item.color = windowColor;
+    else if (lower.includes('wall panel stock')) item.color = panelColor;
+    else if (lower.includes('base channel') || lower.includes('top cap') || lower.includes('h-beam') || lower.includes('corner post') || lower.includes('channel with chase')) item.color = framingColor;
+  });
 
   return {
     summary: [
