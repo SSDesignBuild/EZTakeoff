@@ -1093,7 +1093,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
                   </g>
                 );
               })}
-              {woodSegments.map((seg, idx) => <line key={`wood-${idx}`} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} className="gable-wood-line" />)}
+              {woodSegments.filter((seg) => seg.kind !== 'upright').map((seg, idx) => <line key={`wood-${idx}`} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} className="gable-wood-line" />)}
               <rect x={baseLeft - 10} y={apexY - 34} width={Math.min(gW + 20, 260)} height={26} rx="6" className="legend-box" />
               <text x={baseLeft} y={apexY - 18} className="svg-note">{`${gable.label} · ${feetAndInches(gable.width)} × ${feetAndInches(gable.height)}`}</text>
               <text x={baseLeft} y={baseY + 28} className="svg-note">{`${cuts.length} gable cuts`}</text>
