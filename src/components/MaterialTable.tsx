@@ -41,17 +41,35 @@ function fitText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number)
 }
 
 function renderMaterialCanvas(title: string, values: Record<string, string | number | boolean>, grouped: Record<string, DisplayMaterialItem[]>) {
-  const pageWidth = 1600;
-  const margin = 32;
+  const margin = 28;
   const rowHeight = 28;
-  let pageHeight = 130;
+  const gutter = 14;
+  const minWidths = [160, 48, 52, 136, 72, 120];
+  const maxWidths = [240, 64, 72, 200, 120, 200];
+  const headers = ['Material', 'Qty', 'Unit', 'Stock recommendation', 'Color', 'Notes'];
+  const canvas = document.createElement('canvas');
+  const probe = canvas.getContext('2d');
+  if (!probe) throw new Error('Canvas unavailable');
+  probe.font = '12px Arial';
+  const colWidths = headers.map((header, idx) => {
+    let width = probe.measureText(header).width + 16;
+    Object.values(grouped).forEach((rows) => {
+      rows.forEach((row) => {
+        const value = [row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.color ?? '—', row.notes ?? '—'][idx];
+        width = Math.max(width, probe.measureText(String(value)).width + 16);
+      });
+    });
+    return Math.min(maxWidths[idx], Math.max(minWidths[idx], Math.ceil(width)));
+  });
+  const tableWidth = colWidths.reduce((sum, width) => sum + width, 0) + gutter * (colWidths.length - 1);
+  const pageWidth = Math.max(900, tableWidth + margin * 2);
+  let pageHeight = 138;
   Object.values(grouped).forEach((rows) => {
     pageHeight += 44 + 28 + rows.length * rowHeight + 18;
   });
   pageHeight += 32;
-  const canvas = document.createElement('canvas');
   canvas.width = pageWidth;
-  canvas.height = Math.max(900, pageHeight);
+  canvas.height = Math.max(700, pageHeight);
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas unavailable');
   ctx.fillStyle = '#ffffff';
@@ -66,18 +84,20 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     ['Deliver', String(values.deliverYesNo ?? 'No')],
     ['Deliver date', String(values.deliverDate ?? '') || '—'],
   ];
+  const infoColWidth = (pageWidth - margin * 2) / Math.max(1, info.length);
   ctx.font = '12px Arial';
   info.forEach(([label, value], idx) => {
-    const x = margin + idx * 380;
+    const x = margin + idx * infoColWidth;
     ctx.fillStyle = '#6b7280';
     ctx.fillText(label, x, 68);
     ctx.fillStyle = '#111111';
     ctx.font = '600 14px Arial';
-    ctx.fillText(value, x, 88);
+    ctx.fillText(fitText(ctx, value, infoColWidth - 16), x, 88);
     ctx.font = '12px Arial';
   });
 
-  const cols = [margin, 460, 560, 660, 980, 1200, 1440];
+  const cols = [margin];
+  for (let i = 0; i < colWidths.length - 1; i += 1) cols.push(cols[i] + colWidths[i] + gutter);
   let y = 116;
   Object.entries(grouped).forEach(([category, rows]) => {
     ctx.fillStyle = '#111111';
@@ -88,24 +108,24 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     ctx.fillText(`${rows.length} line items`, margin + 220, y);
     y += 16;
     ctx.fillStyle = '#f3f4f6';
-    ctx.fillRect(margin, y, pageWidth - margin * 2, 28);
+    ctx.fillRect(margin, y, tableWidth, 28);
     ctx.fillStyle = '#111111';
     ctx.font = '600 12px Arial';
-    ['Material', 'Qty', 'Unit', 'Stock recommendation', 'Color', 'Notes'].forEach((label, idx) => ctx.fillText(label, cols[idx] + 8, y + 18));
+    headers.forEach((label, idx) => ctx.fillText(label, cols[idx] + 8, y + 18));
     y += 28;
     ctx.font = '12px Arial';
     rows.forEach((row, idx) => {
       const rowY = y + idx * rowHeight;
       ctx.fillStyle = idx % 2 ? '#fafafa' : '#ffffff';
-      ctx.fillRect(margin, rowY, pageWidth - margin * 2, rowHeight);
+      ctx.fillRect(margin, rowY, tableWidth, rowHeight);
       ctx.strokeStyle = '#d1d5db';
-      ctx.strokeRect(margin, rowY, pageWidth - margin * 2, rowHeight);
+      ctx.strokeRect(margin, rowY, tableWidth, rowHeight);
       ctx.fillStyle = '#111111';
       const rowValues = [row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.color ?? '—', row.notes ?? '—'];
       rowValues.forEach((value, colIdx) => {
         const x = cols[colIdx] + 8;
-        const maxWidth = (cols[colIdx + 1] ?? (pageWidth - margin)) - cols[colIdx] - 16;
-        ctx.fillText(fitText(ctx, value, maxWidth), x, rowY + 18);
+        const maxWidth = colWidths[colIdx] - 16;
+        ctx.fillText(fitText(ctx, String(value), maxWidth), x, rowY + 18);
       });
     });
     y += rows.length * rowHeight + 20;

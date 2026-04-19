@@ -333,6 +333,30 @@ function sectionDoorJambHeight(section: { height: number; chairRail: boolean; pi
   return kickHeight + clearHeight / (railCount + 1);
 }
 
+function masonryReceiverScrews(lf: number) {
+  return Math.max(0, Math.ceil(lf / 2.5));
+}
+
+function metalReceiverScrews(lf: number) {
+  return Math.max(0, Math.ceil(lf / 2.5));
+}
+
+function clipCountForSection(section: SectionConfig, doorJambHeight: number) {
+  const railCount = sectionChairRailCount(section);
+  const doorWidth = sectionDoorWidth(section);
+  const wallWidthExcludingDoor = Math.max(0, section.width - doorWidth);
+  const hasDoor = section.doorType !== 'none' && doorWidth > 0.01;
+  const horizontal2x2Runs = railCount + (section.pickets ? 1 : 0) + (section.kickPanel === 'insulated' ? 1 : 0);
+  const interiorUprightCount = Math.max(0, section.uprights);
+  const sideFrameIntersections = horizontal2x2Runs * 2;
+  const interiorUprightIntersections = interiorUprightCount * (2 + horizontal2x2Runs);
+  const doorJambIntersections = hasDoor ? 4 : 0;
+  const doorMidRailIntersections = hasDoor && doorJambHeight < section.height - 0.05 ? 2 : 0;
+  const doorLeafDividerIntersections = section.doorType === 'french' ? 1 : 0;
+  const centeredWideDoorExtra = hasDoor && wallWidthExcludingDoor > 0.01 ? 0 : 0;
+  return sideFrameIntersections + interiorUprightIntersections + doorJambIntersections + doorMidRailIntersections + doorLeafDividerIntersections + centeredWideDoorExtra;
+}
+
 function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): EstimateResult {
   const sections = parseSections(inputs.sections, 3);
   const screenType = String(inputs.screenType ?? 'suntex-80');
@@ -374,28 +398,32 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
   sections.forEach((section) => {
     const doorWidth = sectionDoorWidth(section);
     const wallWidthExcludingDoor = Math.max(0, section.width - doorWidth);
-    const receiverPerimeter = section.width * 2 + section.height * 2 - doorWidth;
+    const doorJambHeight = sectionDoorJambHeight(section);
+    const hasDoor = section.doorType !== 'none' && doorWidth > 0.01;
     const topReceiverCut = section.width;
     const bottomReceiverCut = Math.max(0, section.width - doorWidth);
-    if (!renaissance) receiverCuts24.push(topReceiverCut, bottomReceiverCut, section.height, section.height);
+    const sideReceiverCuts = [section.height, section.height];
+    const doorReceiverCuts = hasDoor ? [doorJambHeight, doorJambHeight, doorWidth] : [];
+    const receiverCuts = [topReceiverCut, bottomReceiverCut, ...sideReceiverCuts, ...doorReceiverCuts];
+    const receiverPerimeter = receiverCuts.reduce((sum, len) => sum + len, 0);
+    if (!renaissance) receiverCuts24.push(...receiverCuts);
     if (renaissance) renaissanceReceiverLf += receiverPerimeter;
-    const floorMountLf = Math.max(0, bottomReceiverCut);
-    const wallMountLf = section.height * 2;
-    const addFasteners = (mount: string, lf: number, spacing = 2) => {
-      const qty = Math.max(0, Math.ceil(lf / spacing));
-      if (mount === 'concrete') concreteScrews += qty;
-      else if (mount === 'metal') selfTappingScrews += Math.max(1, Math.ceil(lf / 2.5));
-      else woodScrews += qty;
-    };
-    addFasteners(section.floorMount, floorMountLf);
-    addFasteners(section.wallMount, wallMountLf);
+
+    const floorMountedReceiverLf = bottomReceiverCut;
+    const wallMountedReceiverLf = sideReceiverCuts.reduce((sum, len) => sum + len, 0) + (hasDoor ? doorReceiverCuts.reduce((sum, len) => sum + len, 0) : 0);
+    if (section.floorMount === 'concrete') concreteScrews += masonryReceiverScrews(floorMountedReceiverLf);
+    else if (section.floorMount === 'metal') selfTappingScrews += metalReceiverScrews(floorMountedReceiverLf);
+    else woodScrews += Math.max(0, Math.ceil(floorMountedReceiverLf / 2.5));
+    if (section.wallMount === 'concrete') concreteScrews += masonryReceiverScrews(wallMountedReceiverLf);
+    else if (section.wallMount === 'metal') selfTappingScrews += metalReceiverScrews(wallMountedReceiverLf);
+    else woodScrews += Math.max(0, Math.ceil(wallMountedReceiverLf / 2.5));
 
     const perimeter1x2Lf = renaissance ? receiverPerimeter : receiverPerimeter - (section.kickPanel === 'insulated' ? wallWidthExcludingDoor : 0);
-    if (renaissance) oneByTwoCustom.push(section.width, section.width, section.height, section.height);
-    else {
-      oneByTwoCuts24.push(section.width, section.height, section.height);
-      if (section.kickPanel !== 'insulated') oneByTwoCuts24.push(Math.max(0, section.width - doorWidth));
-    }
+    const oneByTwoCuts = renaissance
+      ? [section.width, section.width, section.height, section.height, ...(hasDoor ? [doorJambHeight, doorJambHeight, doorWidth] : [])]
+      : [section.width, section.height, section.height, ...(section.kickPanel !== 'insulated' ? [Math.max(0, section.width - doorWidth)] : []), ...(hasDoor ? [doorJambHeight, doorJambHeight, doorWidth] : [])];
+    if (renaissance) oneByTwoCustom.push(...oneByTwoCuts);
+    else oneByTwoCuts24.push(...oneByTwoCuts);
     tekScrewCount += Math.ceil(perimeter1x2Lf / 2);
 
     const chairRailCount = sectionChairRailCount(section);
@@ -403,7 +431,6 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     const picketRailLength = section.pickets ? wallWidthExcludingDoor : 0;
     const uprightCount = Math.max(0, section.uprights);
     const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
-    const doorJambHeight = sectionDoorJambHeight(section);
 
     if (renaissance) {
       for (let i = 0; i < uprightCount; i += 1) twoByTwoCustomNoGroove.push(section.height);
@@ -414,7 +441,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       for (let i = 0; i < uprightCount; i += 1) twoByTwoCuts24.push(section.height);
       if (chairRailOnlyLength > 0) twoByTwoCuts24.push(chairRailOnlyLength);
       if (picketRailLength > 0) twoByTwoCuts24.push(picketRailLength);
-      const clips = uprightCount + (chairRailCount > 0 || section.pickets ? chairRailCount + 1 : 0) + (section.doorType !== 'none' ? 3 : 0) + (section.kickPanel === 'insulated' ? 2 : 0);
+      const clips = clipCountForSection(section, doorJambHeight);
       capriClips += clips;
       tekScrewCount += clips * 4;
     }
@@ -461,7 +488,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     }
 
     if (renaissance) {
-      const clips = Math.max(0, uprightCount) + (chairRailCount > 0 || section.pickets ? chairRailCount + 1 : 0) + (section.kickPanel === 'insulated' ? 2 : 0) + (section.doorType !== 'none' ? 3 : 0);
+      const clips = clipCountForSection(section, doorJambHeight);
       bracketCount += clips;
       flushMountScrews += clips * 4;
     }
@@ -517,11 +544,10 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     const half = gable.width / 2;
     const rafter = Math.sqrt(half ** 2 + gable.height ** 2);
     const connectionCount = receiverPerimeterCuts.length + (screenFrameCuts.length - receiverPerimeterCuts.length) / 2 + uprightCuts.length;
-    const addFasteners = (mount: string, lf: number, spacing = 2) => {
-      const qty = Math.max(0, Math.ceil(lf / spacing));
-      if (mount === 'concrete') concreteScrews += qty;
-      else if (mount === 'metal') selfTappingScrews += Math.max(1, Math.ceil(lf / 2.5));
-      else woodScrews += qty;
+    const addFasteners = (mount: string, lf: number) => {
+      if (mount === 'concrete') concreteScrews += masonryReceiverScrews(lf);
+      else if (mount === 'metal') selfTappingScrews += metalReceiverScrews(lf);
+      else woodScrews += Math.max(0, Math.ceil(lf / 2.5));
     };
     addFasteners(gable.mountingSurface, gable.width);
     addFasteners(gable.sideMount, rafter * 2);
@@ -561,7 +587,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       toMaterial('French doors', 'Doors', frenchDoors, 'sets', 'Custom door width', undefined, undefined),
       toMaterial('Inswing kits', 'Doors', inswingKits, 'ea', 'Hydraulic jack kit', undefined, undefined),
       toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined, undefined),
-      toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Floor / masonry mounts', undefined, undefined),
+      toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Approx. 1 every 2.5 ft of receiver on masonry', undefined, undefined),
       toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', undefined, undefined),
     );
   } else {
@@ -573,7 +599,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     add24FtStockFromCuts(materials, '2x2 V-groove', 'Kick panel', vGroove2x2Cuts24, 'Trim coil kick panel only');
     materials.push(
       toMaterial('Capri clips', 'Hardware', capriClips, 'ea', '50 per box', undefined, undefined),
-      toMaterial('Tek screws', 'Hardware', tekScrewCount + selfTappingScrews, 'ea', 'Approx. every 2 ft + clip connections + metal mounts', undefined, undefined),
+      toMaterial('Tek screws', 'Hardware', tekScrewCount + selfTappingScrews, 'ea', 'Approx. every 2 ft + Capri clips + metal-mount screws', undefined, undefined),
       toMaterial('Pickets 36 in cut pieces', 'Railing', picketCount, 'ea', 'Field cut', undefined, undefined),
       toMaterial('24 ft picket stock', 'Railing', packStockCuts(Array.from({ length: picketCount }, () => 3)).length, 'sticks', '24 ft stock', undefined, `${picketStockLf.toFixed(1)} lf total picket stock`),
       toMaterial('Insulated panel sheets', 'Panel', Math.ceil(panelSqFt / 40), 'sheets', '4x10 sheets', panelColor, `${panelSqFt.toFixed(1)} sq ft total`),
@@ -584,7 +610,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       toMaterial('French doors', 'Doors', frenchDoors, 'sets', 'Custom door width', undefined, undefined),
       toMaterial('Inswing kits', 'Doors', inswingKits, 'ea', 'Hydraulic jack kit', undefined, undefined),
       toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined, undefined),
-      toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Floor / masonry mounts', undefined, undefined),
+      toMaterial('Concrete screws', 'Hardware', concreteScrews, 'ea', 'Approx. 1 every 2.5 ft of receiver on masonry', undefined, undefined),
       toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', undefined, undefined),
     );
   }
@@ -620,7 +646,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     materials: consolidateMaterials(materials).filter((item) => item.quantity > 0),
     orderNotes: [
       renaissance ? 'Renaissance output is cut-list driven: 1x2 7/8 and 2x2 7/8 members are grouped by exact required length.' : 'Standard screen output groups framing into 24 ft stock so it matches field ordering.',
-      'Door openings subtract out receiver, chair rail, pickets, kick panel, and other infill the full width of the door, then add jamb/header framing back in.',
+      'Door openings subtract infill across the opening, then add receiver, 1x2, and jamb/header framing back in around the door opening.',
       'New sections inherit the first section so repeated bays are faster to build out, but every section stays editable.',
     ],
   };
