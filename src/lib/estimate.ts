@@ -672,6 +672,7 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   let lagBoltLf = 0;
   let weatherSealLf = 0;
 
+  const isWindowZone = (kind: string) => kind === 'horizontal-sliders' || kind === 'picture-window' || kind === 'window';
   const addWindowBay = (count: number, totalWidth: number, bayHeight: number, includeBottomReceiver = false) => {
     if (count <= 0 || totalWidth <= 0 || bayHeight <= 0) return;
     const bayWidth = totalWidth / Math.max(1, count);
@@ -681,6 +682,32 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
       cutGroups.drc.push(bayHeight, bayHeight);
       weatherSealLf += bayWidth * (includeBottomReceiver ? 2 : 1) + bayHeight * 2;
     }
+  };
+  const addHorizontalDivider = (width: number, lowerKind: string, upperKind: string) => {
+    if (width <= 0) return;
+    const lowerWindow = isWindowZone(lowerKind);
+    const upperWindow = isWindowZone(upperKind);
+    const lowerPanel = lowerKind === 'panel' || lowerKind === 'insulated';
+    const upperPanel = upperKind === 'panel' || upperKind === 'insulated';
+
+    if (lowerWindow && upperWindow) {
+      cutGroups.hBeam.push(width);
+      cutGroups.drc.push(width, width);
+      return;
+    }
+    if ((lowerWindow && upperPanel) || (upperWindow && lowerPanel)) {
+      cutGroups.hBeam.push(width);
+      cutGroups.receiver.push(width);
+      weatherSealLf += width;
+      return;
+    }
+    if (lowerWindow || upperWindow) {
+      cutGroups.receiver.push(width);
+      cutGroups.drc.push(width, width);
+      weatherSealLf += width;
+      return;
+    }
+    cutGroups.hBeam.push(width);
   };
 
   sections.forEach((section) => {
@@ -727,20 +754,20 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     }
 
     if (section.kickSection === 'window') {
-      cutGroups.receiver.push(section.width);
-      cutGroups.drc.push(section.width, section.width);
+      addHorizontalDivider(section.width, section.kickSection, section.mainSection);
       addWindowBay(bayCount, usableWidth, kickHeight, true);
-    } else if ((section.kickSection === 'panel' || section.kickSection === 'insulated')) {
+    } else if (section.kickSection === 'panel' || section.kickSection === 'insulated') {
       cutGroups.wallPanelArea += usableWidth * kickHeight;
+      if (isWindowZone(section.mainSection)) addHorizontalDivider(section.width, section.kickSection, section.mainSection);
     }
 
     if (transomNeeded) {
-      cutGroups.receiver.push(section.width);
       if (section.transomType === 'picture-window') {
-        cutGroups.drc.push(section.width, section.width);
+        addHorizontalDivider(section.width, section.mainSection, section.transomType);
         addWindowBay(bayCount, usableWidth, transomFillHeight);
       } else {
         cutGroups.wallPanelArea += usableWidth * transomFillHeight;
+        if (isWindowZone(section.mainSection)) addHorizontalDivider(section.width, section.mainSection, section.transomType);
       }
     }
 
@@ -760,7 +787,7 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   add24(extrusionName('Base channel with weep', 'Cabana base / base channel'), 'Sunroom frame', cutGroups.base, 'perimeter base');
   add24(extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', cutGroups.receiver, 'window receiving channel');
   add24(extrusionName('Top cap, flat', 'Top cap'), 'Sunroom frame', cutGroups.topCap, 'perimeter cap');
-  add24(extrusionName('H-beam', 'H-beam'), 'Sunroom frame', cutGroups.hBeam, 'uprights');
+  add24(extrusionName('H-beam', 'H-beam'), 'Sunroom frame', cutGroups.hBeam, 'uprights and horizontal dividers');
   add24(extrusionName('DRC', 'DRC'), 'Sunroom frame', cutGroups.drc, 'window / upright finish channel');
   if (cutGroups.chase.length) add24(extrusionName('Channel with chase & snap', 'Channel with chase'), 'Sunroom frame', cutGroups.chase, 'electric chase enabled in selected sections');
   if (buildMode === 'new-structure') materials.push(toMaterial(extrusionName('Corner post', 'Corner post'), 'Sunroom frame', 2, 'ea', isThreeIn ? '8 ft or 25 ft stock' : '8 ft or 24 ft stock', framingColor, 'Only for build-from-scratch corners'));
@@ -789,7 +816,7 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     orderNotes: [
       buildMode === 'existing-structure' ? 'Existing-structure mode avoids unnecessary corner-post assumptions.' : 'Build-from-scratch mode adds corner-post assumptions.',
       'Sunroom framing is grouped from 24 ft stock lengths, so leftover stock can be reused on equal-or-shorter cuts before waste occurs.',
-      'Window zones use receiver + DRC logic. H-beams are finished with DRC on both sides unless one side is panel. Panel zones use wall panel stock where the section fill is panel / insulated, including kick and transom areas.',
+      'Window-to-window horizontal breaks use H-beam with DRC on both sides. Window-to-panel breaks use H-beam with receiver only on the window side.',
     ],
   };
 }

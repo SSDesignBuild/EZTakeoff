@@ -1287,6 +1287,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
   let runningX = x0;
   const windowFill = 'rgba(77,131,209,0.18)';
   const panelFill = 'rgba(255,255,255,0.72)';
+  const isWindowZone = (kind: string) => kind === 'horizontal-sliders' || kind === 'picture-window' || kind === 'window';
   return (
     <div className="visual-card">
       <div className="visual-header">
@@ -1343,19 +1344,60 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
               {mainBottom > mainTop && <rect x={left + 18} y={mainTop + 6} width={Math.max(0, w - 36)} height={Math.max(0, mainBottom - mainTop - 12)} fill={mainFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />}
               {section.kickSection !== 'none' && <rect x={left + 18} y={kickTop + 6} width={Math.max(0, w - 36)} height={Math.max(0, bottom - kickTop - 12)} fill={kickFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />}
               {section.kickSection !== 'none' && !showKickUprights && <line x1={left + frameInset} y1={kickTop} x2={left + w - frameInset} y2={kickTop} className="sunroom-hbeam-support-line" />}
-              {section.kickSection !== 'none' && <line x1={left + frameInset} y1={kickTop} x2={left + w - frameInset} y2={kickTop} className={section.kickSection === 'window' ? 'sunroom-receiver-line' : 'sunroom-hbeam-line'} />}
-              {section.kickSection === 'window' && <>
-                <line x1={left + frameInset} y1={kickTop - 6} x2={left + w - frameInset} y2={kickTop - 6} className="sunroom-drc-line" />
-                <line x1={left + frameInset} y1={kickTop + 6} x2={left + w - frameInset} y2={kickTop + 6} className="sunroom-drc-line" />
-                <line x1={left + frameInset} y1={bottom - frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="sunroom-receiver-line" />
-              </>}
+              {section.kickSection !== 'none' && (() => {
+                const kickWindow = isWindowZone(section.kickSection);
+                const mainWindow = isWindowZone(section.mainSection);
+                const y = kickTop;
+                if (kickWindow && mainWindow) {
+                  return <>
+                    <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />
+                    <line x1={left + frameInset} y1={y - 6} x2={left + w - frameInset} y2={y - 6} className="sunroom-drc-line" />
+                    <line x1={left + frameInset} y1={y + 6} x2={left + w - frameInset} y2={y + 6} className="sunroom-drc-line" />
+                    <line x1={left + frameInset} y1={bottom - frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="sunroom-receiver-line" />
+                  </>;
+                }
+                if (kickWindow && !mainWindow) {
+                  return <>
+                    <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />
+                    <line x1={left + frameInset} y1={y + 6} x2={left + w - frameInset} y2={y + 6} className="sunroom-receiver-line" />
+                    <line x1={left + frameInset} y1={bottom - frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="sunroom-receiver-line" />
+                  </>;
+                }
+                if (!kickWindow && mainWindow) {
+                  return <>
+                    <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />
+                    <line x1={left + frameInset} y1={y - 6} x2={left + w - frameInset} y2={y - 6} className="sunroom-receiver-line" />
+                  </>;
+                }
+                return <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />;
+              })()}
               {transomNeeded && <polygon points={transomPoly} fill={transomFillColor} stroke="rgba(0,0,0,0.12)" />}
               {transomNeeded && !showTransomUprights && <line x1={left + frameInset} y1={mainTop} x2={left + w - frameInset} y2={mainTop} className="sunroom-hbeam-support-line" />}
-              {transomNeeded && <line x1={left + frameInset} y1={mainTop} x2={left + w - frameInset} y2={mainTop} className="sunroom-receiver-line" />}
-              {transomNeeded && (section.transomType === 'picture-window') && <>
-                <line x1={left + frameInset} y1={mainTop - 6} x2={left + w - frameInset} y2={mainTop - 6} className="sunroom-drc-line" />
-                <line x1={left + frameInset} y1={mainTop + 6} x2={left + w - frameInset} y2={mainTop + 6} className="sunroom-drc-line" />
-              </>}
+              {transomNeeded && (() => {
+                const mainWindow = isWindowZone(section.mainSection);
+                const transomWindow = isWindowZone(section.transomType);
+                const y = mainTop;
+                if (mainWindow && transomWindow) {
+                  return <>
+                    <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />
+                    <line x1={left + frameInset} y1={y - 6} x2={left + w - frameInset} y2={y - 6} className="sunroom-drc-line" />
+                    <line x1={left + frameInset} y1={y + 6} x2={left + w - frameInset} y2={y + 6} className="sunroom-drc-line" />
+                  </>;
+                }
+                if (mainWindow && !transomWindow) {
+                  return <>
+                    <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />
+                    <line x1={left + frameInset} y1={y + 6} x2={left + w - frameInset} y2={y + 6} className="sunroom-receiver-line" />
+                  </>;
+                }
+                if (!mainWindow && transomWindow) {
+                  return <>
+                    <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />
+                    <line x1={left + frameInset} y1={y - 6} x2={left + w - frameInset} y2={y - 6} className="sunroom-receiver-line" />
+                  </>;
+                }
+                return <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />;
+              })()}
               {section.doorType !== 'none' && <rect x={doorLeft} y={bottom - (6 + 8/12) * scale} width={doorWidth} height={(6 + 8/12) * scale} className="door-fill" rx="4" />}
               <text x={left + 6} y={bottom + 16} className="svg-note">{`${bayCount} bay${bayCount === 1 ? '' : 's'}`}</text>
             </g>
