@@ -58,10 +58,14 @@ button, input, select { font: inherit; }
 }
 
 .topbar {
+  padding: 1rem 1.5rem 0;
+}
+
+.tabs-sticky-wrap {
   position: sticky;
   top: 0;
   z-index: 20;
-  padding: 1rem 1.5rem 0;
+  padding: 0 1.5rem;
   backdrop-filter: blur(18px);
 }
 
@@ -115,6 +119,7 @@ button, input, select { font: inherit; }
   border-radius: 22px;
   padding: 0.5rem;
   box-shadow: var(--shadow);
+  margin-top: 0.2rem;
 }
 .nav-title { margin: 0 0 0.4rem; color: var(--muted); font-size: 0.85rem; font-weight: 600; }
 .nav-link {

@@ -28,7 +28,9 @@ export default function App() {
           </div>
           <ThemeToggle theme={theme} onToggle={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} />
         </div>
+      </header>
 
+      <div className="tabs-sticky-wrap">
         <nav className="nav-group nav-tabs">
           {SERVICES.map((service) => (
             <NavLink
@@ -40,7 +42,7 @@ export default function App() {
             </NavLink>
           ))}
         </nav>
-      </header>
+      </div>
 
       <main className="main-panel">
         <Routes>
