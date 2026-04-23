@@ -342,10 +342,9 @@ function sectionChairRailHeights(section: Pick<SectionConfig, 'chairRail' | 'cha
 }
 
 function sectionDoorJambHeight(section: Pick<SectionConfig, 'height' | 'doorType' | 'doorHeight' | 'chairRail' | 'chairRailCount' | 'chairRailHeight' | 'kickPanel' | 'kickPanelHeight'>) {
-  const nominalDoorHeight = sectionDoorHeight(section as SectionConfig);
   const firstRail = sectionChairRailHeights(section as SectionConfig)[0];
-  if (section.height > 12 && firstRail && firstRail > nominalDoorHeight + 0.05) return firstRail;
-  return nominalDoorHeight;
+  if (section.height > 12 && firstRail) return firstRail;
+  return section.height;
 }
 
 function receiverSizeLabel(value: string) {
@@ -629,7 +628,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       toMaterial('Wood screws', 'Hardware', woodScrews, 'ea', 'Wood mounts', framingColor, undefined),
     );
   } else {
-    add24FtStockFromCuts(materials, `Receiver`, 'Frame', [...receiverCuts24, ...insulatedReceiverCuts24], `includes extra receiver for insulated kick panel · ${receiverSize}`);
+    add24FtStockFromCuts(materials, `${receiverSize} receiver`, 'Frame', [...receiverCuts24, ...insulatedReceiverCuts24], `includes extra receiver for insulated kick panel`);
     add24FtStockFromCuts(materials, '1x2', 'Frame', oneByTwoCuts24, 'perimeter inside receiver');
     add24FtStockFromCuts(materials, '2x2', 'Frame', twoByTwoCuts24, 'uprights, chair rail, kick-panel top, and door framing');
     add24FtStockFromCuts(materials, 'U-channel', 'Railing', uChannelCuts24, 'Top and bottom of picket runs');
@@ -666,7 +665,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       addCustomCutGroups(materials, 'Gable 1x2 7/8', 'Gable', gableOneByTwoCuts, 'gable screen framing around wood members');
       addCustomCutGroups(materials, 'Gable 2x2 7/8', 'Gable', gableUprightCuts, 'gable uprights');
     } else {
-      add24FtStockFromCuts(materials, 'Gable receiver', 'Gable', gableReceiverCuts, `gable screen framing receiver · ${receiverSize}`);
+      add24FtStockFromCuts(materials, `${receiverSize} gable receiver`, 'Gable', gableReceiverCuts, 'gable screen framing receiver');
       add24FtStockFromCuts(materials, 'Gable 1x2', 'Gable', gableOneByTwoCuts, 'gable screen framing 1x2');
       add24FtStockFromCuts(materials, 'Gable 2x2 uprights', 'Gable', gableUprightCuts, 'gable uprights');
     }
@@ -879,8 +878,7 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const foamDensity = Number(inputs.foamDensity ?? 1);
   const framingColor = String(inputs.framingColor ?? 'white');
   const panelColor = String(inputs.panelColor ?? 'white');
-  const fanBeamEnabled = String(inputs.fanBeam ?? 'none') !== 'none';
-  const fanBeamCount = fanBeamEnabled ? Math.max(1, Number(inputs.fanBeamCount ?? 1)) : 0;
+  const fanBeamCount = Math.max(0, Number(inputs.fanBeamCount ?? 0));
   const screenUnderneath = Boolean(inputs.screenUnderneath ?? false);
   const beamStyle = screenUnderneath ? '3x3' : 'atlas';
   const projectionOverhang = Math.max(0, Math.min(2, Number(inputs.projectionOverhang ?? 2)));

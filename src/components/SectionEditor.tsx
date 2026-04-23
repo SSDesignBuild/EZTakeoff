@@ -1,6 +1,16 @@
 import { createGableSection, createSection, parseGableSections, parseSections } from '../lib/sectioning';
 import { GableSectionConfig, SectionConfig } from '../lib/types';
 
+
+function splitFeetInches(value: number) {
+  const totalInches = Math.max(0, Math.round(Number(value || 0) * 12));
+  return { feet: Math.floor(totalInches / 12), inches: totalInches % 12 };
+}
+
+function combineFeetInches(feet: number, inches: number) {
+  return Math.max(0, feet + (inches / 12));
+}
+
 interface SectionEditorProps {
   renaissance?: boolean;
   values: Record<string, string | number | boolean>;
@@ -59,8 +69,8 @@ export function SectionEditor({ renaissance = false, values, onValuesChange }: S
                 <label className="form-field"><span>Door type</span><select value={section.doorType} onChange={(event) => updateSection(section.id, { doorType: event.target.value as SectionConfig['doorType'] })}><option value="none">No door</option><option value="single">Single door</option><option value="french">French doors</option></select></label>
                 <label className="form-field"><span>Door placement</span><select value={section.doorPlacement} onChange={(event) => updateSection(section.id, { doorPlacement: event.target.value as SectionConfig['doorPlacement'] })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option><option value="custom">Custom by inch</option></select></label>
                 <label className="form-field"><span>Door offset from left (in)</span><input type="number" step="1" min="0" value={section.doorOffsetInches} onChange={(event) => updateSection(section.id, { doorOffsetInches: Number(event.target.value) })} /></label>
-                <label className="form-field"><span>Door width (ft)</span><input type="number" step="0.1" min="0" value={section.doorWidth} onChange={(event) => updateSection(section.id, { doorWidth: Number(event.target.value) })} /></label>
-                <label className="form-field"><span>Door height (ft)</span><input type="number" step="0.1" min="0" value={section.doorHeight} onChange={(event) => updateSection(section.id, { doorHeight: Number(event.target.value) })} /></label>
+                <div className="form-field nested-field"><span>Door width</span><div className="inline-field-pair"><label><small>Feet</small><input type="number" min="0" step="1" value={splitFeetInches(section.doorWidth).feet} onChange={(event) => updateSection(section.id, { doorWidth: combineFeetInches(Number(event.target.value) || 0, splitFeetInches(section.doorWidth).inches) })} /></label><label><small>Inches</small><input type="number" min="0" max="11" step="1" value={splitFeetInches(section.doorWidth).inches} onChange={(event) => updateSection(section.id, { doorWidth: combineFeetInches(splitFeetInches(section.doorWidth).feet, Math.max(0, Math.min(11, Number(event.target.value) || 0))) })} /></label></div></div>
+                <div className="form-field nested-field"><span>Door height</span><div className="inline-field-pair"><label><small>Feet</small><input type="number" min="0" step="1" value={splitFeetInches(section.doorHeight).feet} onChange={(event) => updateSection(section.id, { doorHeight: combineFeetInches(Number(event.target.value) || 0, splitFeetInches(section.doorHeight).inches) })} /></label><label><small>Inches</small><input type="number" min="0" max="11" step="1" value={splitFeetInches(section.doorHeight).inches} onChange={(event) => updateSection(section.id, { doorHeight: combineFeetInches(splitFeetInches(section.doorHeight).feet, Math.max(0, Math.min(11, Number(event.target.value) || 0))) })} /></label></div></div>
                 <label className="form-field"><span>Door swing</span><select value={section.doorSwing} onChange={(event) => updateSection(section.id, { doorSwing: event.target.value as SectionConfig['doorSwing'] })}><option value="outswing">Outswing</option><option value="inswing">Inswing</option></select></label>
                 <label className="form-field"><span>Dog door</span><select value={section.dogDoor} onChange={(event) => updateSection(section.id, { dogDoor: event.target.value as SectionConfig['dogDoor'] })}><option value="none">None</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></label>
                 <label className="form-field"><span>Floor mount</span><select value={section.floorMount} onChange={(event) => updateSection(section.id, { floorMount: event.target.value as SectionConfig['floorMount'] })}><option value="concrete">Concrete</option><option value="wood">Wood</option><option value="metal">Metal</option></select></label>

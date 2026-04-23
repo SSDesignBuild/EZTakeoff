@@ -84,9 +84,8 @@ function sectionDoorHeight(section: SectionConfig) {
 }
 
 function sectionDoorJambHeight(section: SectionConfig) {
-  const nominalDoorHeight = sectionDoorHeight(section);
   const firstRail = sectionChairRailHeights(section)[0];
-  return section.height > 12 && firstRail && firstRail > nominalDoorHeight + 0.05 ? firstRail : nominalDoorHeight;
+  return section.height > 12 && firstRail ? firstRail : section.height;
 }
 
 function sectionUprightPositions(section: SectionConfig) {
@@ -1197,8 +1196,7 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
   const projection = Number(values.projection ?? 10);
   const structureType = String(values.structureType ?? 'attached');
   const panelWidth = Number(values.panelWidth ?? 4);
-  const fanBeamEnabled = String(values.fanBeam ?? 'none') !== 'none';
-  const fanBeamCount = fanBeamEnabled ? Math.max(1, Number(values.fanBeamCount ?? 1)) : 0;
+  const fanBeamCount = Math.max(0, Number(values.fanBeamCount ?? 0));
   const activeFanBeamIndex = Math.max(0, Number(values.activeFanBeamIndex ?? 0));
   const screenUnderneath = Boolean(values.screenUnderneath ?? false);
   const projectionOverhang = Math.max(0, Math.min(2, Number(values.projectionOverhang ?? 2)));

@@ -16,33 +16,31 @@ export default function App() {
   }, [theme]);
 
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brand-card brand-panel">
+    <div className="shell shell-top-tabs">
+      <header className="topbar">
+        <div className="brand-card brand-panel topbar-brand">
           <div className="brand-logo-wrap">
             <img src="/ss-logo.png" alt="S&S Design Build" className="brand-logo" />
           </div>
-          <div>
+          <div className="topbar-copy">
             <p className="eyebrow">Estimator Studio</p>
             <h1>S&amp;S Design Build</h1>
           </div>
           <ThemeToggle theme={theme} onToggle={() => setTheme((current) => current === 'light' ? 'dark' : 'light')} />
         </div>
 
-        <nav className="nav-group">
-          <p className="nav-title">Services</p>
+        <nav className="nav-group nav-tabs">
           {SERVICES.map((service) => (
             <NavLink
               key={service.slug}
               to={`/service/${service.slug}`}
-              className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
+              className={({ isActive }) => (isActive ? 'nav-link active nav-tab' : 'nav-link nav-tab')}
             >
               {service.label}
             </NavLink>
           ))}
         </nav>
-
-      </aside>
+      </header>
 
       <main className="main-panel">
         <Routes>
