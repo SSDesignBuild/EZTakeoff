@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { exportSvgAsPdf, exportSvgSectionsAsPdf } from '../lib/export';
 import { buildDeckModel } from '../lib/deckModel';
-import { buildPatioPanelLayout } from '../lib/patioLayout';
+import { buildPatioPanelLayout, serializeFanSelections, shiftFanSelection } from '../lib/patioLayout';
 import { parseGableSections, parseSections, parseSunroomSections } from '../lib/sectioning';
 import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, SectionConfig } from '../lib/types';
 
@@ -1197,13 +1197,12 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
   const projection = Number(values.projection ?? 10);
   const structureType = String(values.structureType ?? 'attached');
   const panelWidth = Number(values.panelWidth ?? 4);
-  const fanBeam = String(values.fanBeam ?? 'none');
-  const fanBeamCount = Math.max(1, Number(values.fanBeamCount ?? 1));
-  const fanBeamPlacementMode = String(values.fanBeamPlacementMode ?? 'spread');
-  const fanShift = Number(values.fanBeamShift ?? 0);
+  const fanBeamEnabled = String(values.fanBeam ?? 'none') !== 'none';
+  const fanBeamCount = fanBeamEnabled ? Math.max(1, Number(values.fanBeamCount ?? 1)) : 0;
+  const activeFanBeamIndex = Math.max(0, Number(values.activeFanBeamIndex ?? 0));
   const screenUnderneath = Boolean(values.screenUnderneath ?? false);
   const projectionOverhang = Math.max(0, Math.min(2, Number(values.projectionOverhang ?? 2)));
-  const layout = useMemo(() => buildPatioPanelLayout(width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode, fanShift), [width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode, fanShift]);
+  const layout = useMemo(() => buildPatioPanelLayout(width, panelWidth, fanBeamCount, String(values.fanBeamSelections ?? '')), [width, panelWidth, fanBeamCount, values.fanBeamSelections]);
   const panelThickness = Number(values.panelThickness ?? 3);
   const upgraded3 = String(values.metalGauge ?? '.26') === '.32' && Number(values.foamDensity ?? 1) === 2;
   const extraBeams = Math.max(0, Number(values.extraBeamCount ?? 0));
@@ -1224,23 +1223,26 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
   const postXs = Array.from({ length: frontPostCount }, (_, index) => beamLeft + ((beamRight - beamLeft) * index) / Math.max(frontPostCount - 1, 1));
   const supportYs = Array.from({ length: supportBeamCount }, (_, index) => y0 + roofD - (projectionOverhang * scale) - ((((index + 1) * (roofD - projectionOverhang * scale)) / (supportBeamCount + 1))));
   let cursor = x0;
-
   const supportPostCount = Math.max(2, Number(values.supportBeamPostCount ?? 0) > 0 ? Number(values.supportBeamPostCount) : frontPostCount);
-
-  const shiftFan = (dir: -1 | 1) => {
-    if (!onValuesChange) return;
-    const count = Math.max(layout.fanOptions.length, 1);
-    onValuesChange((current) => ({ ...current, fanBeamShift: (Number(current.fanBeamShift ?? 0) + dir + count) % count }));
-  };
   const svgRef = useRef<SVGSVGElement | null>(null);
+
+  const applySelections = (nextSelections: typeof layout.selectedFanOptions, nextActive = activeFanBeamIndex) => {
+    if (!onValuesChange) return;
+    onValuesChange((current) => ({ ...current, fanBeamSelections: serializeFanSelections(nextSelections), activeFanBeamIndex: nextActive }));
+  };
+  const shiftActiveFan = (dir: -1 | 1) => {
+    if (!layout.selectedFanOptions.length) return;
+    const nextSelections = shiftFanSelection(layout.fanOptions, layout.selectedFanOptions, Math.min(activeFanBeamIndex, layout.selectedFanOptions.length - 1), dir);
+    applySelections(nextSelections);
+  };
 
   return <div className="visual-card">
     <div className="visual-header">
       <div>
         <h3>Layout preview</h3>
-        <span>Scaled roof plan with beam line, support beams, post layout, gutter, fascia, and strategic fan-beam placement.</span>
+        <span>Scaled roof plan with beam line, support beams, post layout, gutter, fascia, and fan-beam placement by panel.</span>
       </div>
-      <div className="preview-toolbar">{fanBeam !== 'none' && onValuesChange && <><button type="button" className="ghost-btn small-btn" onClick={() => shiftFan(-1)}>← Fan beam</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftFan(1)}>Fan beam →</button></>}<button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, 'Patio cover plan', 'sns-patio-cover-plan.pdf'); }}>Export PDF</button></div>
+      <div className="preview-toolbar">{fanBeamCount > 0 && onValuesChange && <><button type="button" className="ghost-btn small-btn" onClick={() => onValuesChange((current) => ({ ...current, activeFanBeamIndex: Math.max(0, Math.min((Number(current.activeFanBeamIndex ?? 0) - 1 + layout.selectedFanOptions.length) % Math.max(layout.selectedFanOptions.length, 1), layout.selectedFanOptions.length - 1)) }))}>Prev beam</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftActiveFan(-1)}>← Slot</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftActiveFan(1)}>Slot →</button><button type="button" className="ghost-btn small-btn" onClick={() => onValuesChange((current) => ({ ...current, activeFanBeamIndex: layout.selectedFanOptions.length ? (Number(current.activeFanBeamIndex ?? 0) + 1) % layout.selectedFanOptions.length : 0 }))}>Next beam</button></>}<button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, 'Patio cover plan', 'sns-patio-cover-plan.pdf'); }}>Export PDF</button></div>
     </div>
     <svg ref={svgRef} viewBox={`0 0 ${roofW + 130} ${roofD + 180}`} className="layout-svg patio-sheet-svg">
       {Array.from({ length: Math.ceil(width) + 2 }, (_, index) => <line key={`px-${index}`} x1={x0 + index * scale} y1={y0 - 20} x2={x0 + index * scale} y2={y0 + roofD + 40} className="svg-grid" />)}
@@ -1253,10 +1255,12 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
         const cls = piece.kind === 'fan-beam' ? 'fan-beam-panel' : piece.kind === 'cut' ? 'cut-panel' : 'roof-panel';
         const note = piece.kind === 'fan-beam' ? piece.note ?? 'fan beam' : piece.kind === 'cut' ? `${piece.widthFt} ft cut` : `${piece.panelWidth} ft panel`;
         const fanLineX = piece.kind === 'fan-beam' ? piece.fanPlacement === 'female-offset' ? x + scale : piece.fanPlacement === 'male-offset' ? x + pieceW - scale : x + pieceW / 2 : null;
-        return <g key={`panel-${index}`}>
+        const selected = layout.selectedFanOptions.findIndex((slot) => slot.pieceIndex === index) === Math.min(activeFanBeamIndex, Math.max(layout.selectedFanOptions.length - 1, 0));
+        return <g key={`panel-${index}`} onClick={() => piece.kind === 'fan-beam' && onValuesChange && onValuesChange((current) => ({ ...current, activeFanBeamIndex: layout.selectedFanOptions.findIndex((slot) => slot.pieceIndex === index) }))}>
           <rect x={x} y={y0} width={pieceW} height={roofD} className={cls} />
           <line x1={x} y1={y0} x2={x} y2={y0 + roofD} className="roof-bay" />
-          {fanLineX !== null && <line x1={fanLineX} y1={y0 + 8} x2={fanLineX} y2={y0 + roofD - 8} className="fan-axis-line" />}
+          {fanLineX !== null && <line x1={fanLineX} y1={y0 + 8} x2={fanLineX} y2={y0 + roofD - 8} className={selected ? 'fan-axis-line active' : 'fan-axis-line'} />}
+          {selected && fanLineX !== null && <circle cx={fanLineX} cy={y0 + 18} r="6" className="fan-beam-handle" />}
           <text x={x + 6} y={y0 + 16} className="svg-note">{note}</text>
         </g>;
       })}

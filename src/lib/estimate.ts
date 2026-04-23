@@ -877,9 +877,10 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const panelThickness = Number(inputs.panelThickness ?? 3);
   const metalGauge = String(inputs.metalGauge ?? '.26');
   const foamDensity = Number(inputs.foamDensity ?? 1);
-  const fanBeam = String(inputs.fanBeam ?? 'none');
-  const fanBeamCount = Math.max(1, Number(inputs.fanBeamCount ?? 1));
-  const fanBeamPlacementMode = String(inputs.fanBeamPlacementMode ?? 'spread');
+  const framingColor = String(inputs.framingColor ?? 'white');
+  const panelColor = String(inputs.panelColor ?? 'white');
+  const fanBeamEnabled = String(inputs.fanBeam ?? 'none') !== 'none';
+  const fanBeamCount = fanBeamEnabled ? Math.max(1, Number(inputs.fanBeamCount ?? 1)) : 0;
   const screenUnderneath = Boolean(inputs.screenUnderneath ?? false);
   const beamStyle = screenUnderneath ? '3x3' : 'atlas';
   const projectionOverhang = Math.max(0, Math.min(2, Number(inputs.projectionOverhang ?? 2)));
@@ -894,7 +895,7 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const extraBeams = Math.max(0, Number(inputs.extraBeamCount ?? 0));
   const supportBeamCount = (standard3In && effectiveProjection > 13 ? Math.ceil(effectiveProjection / 13) - 1 : 0) + extraBeams;
 
-  const panelLayout = buildPatioPanelLayout(width, fanBeam, panelWidth, fanBeamCount, fanBeamPlacementMode);
+  const panelLayout = buildPatioPanelLayout(width, panelWidth, fanBeamCount, String(inputs.fanBeamSelections ?? ''));
   const panelCount = panelLayout.pieces.length;
   const panelLength = Math.ceil(projection);
   const regular4Count = panelLayout.pieces.filter((piece) => piece.kind === 'regular' && piece.panelWidth === 4).length;
@@ -930,29 +931,31 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const fasciaPieces = Math.ceil(fasciaLf / 24);
   const beamStockPieces = Math.ceil((width * totalBeamLines) / 24);
   const postCutLength = Math.ceil(lowSideHeight + 1);
-  const postStockPieces = Math.ceil(((frontPostCount + totalSupportPosts) * postCutLength) / 24);
+  const totalPostCount = frontPostCount + totalSupportPosts;
+  const postStockPieces = packStockCuts(Array.from({ length: totalPostCount }, () => postCutLength), 24).length;
 
   const materials: MaterialItem[] = [
-    toMaterial('4 ft regular roof panels', 'Roof system', regular4Count, 'panels', `${panelLength} ft factory-cut panel`, `${panelThickness} in panel · ${metalGauge} skin · ${foamDensity} lb foam`),
-    toMaterial('2 ft regular roof panels', 'Roof system', regular2Count, 'panels', `${panelLength} ft factory-cut panel`, 'Standard full-width 2 ft panels'),
-    toMaterial('Closure roof panels', 'Roof system', cutPanels.length, 'panels', `${panelLength} ft factory-cut panel`, cutPanels.map((piece, index) => `${index === 0 ? 'L' : index === cutPanels.length - 1 ? 'R' : 'Closure'} ${piece.widthFt} ft`).join(' · ') || 'Rip-cut from 2 ft stock'),
-    toMaterial('Front gutter', 'Trim', gutterPieces, 'sticks', '24 ft sections', 'Front lower side only'),
-    toMaterial('Drip-edge fascia', 'Trim', fasciaPieces, 'sticks', '24 ft sections', `${fasciaLf.toFixed(1)} lf including 5 in gutter cap return on both sides`),
-    toMaterial('C-channel', 'Trim', cChannelPieces, 'sticks', '24 ft sections', 'Attached conditions only'),
-    toMaterial('Downspout kits', 'Trim', 2, 'kits', '2 per cover', 'Standard on every patio cover'),
-    toMaterial(beamStyle === '3x3' ? '3x3 beam stock' : 'Atlas beam stock', 'Structure', beamStockPieces, 'sticks', '24 ft sections', screenUnderneath ? 'Screened-under cover uses 3x3 beam and post system' : 'Open cover uses Atlas beam sitting on top of posts'),
-    toMaterial('3x3 post stock', 'Structure', postStockPieces, 'sticks', '24 ft stock', `${frontPostCount + totalSupportPosts} total posts cut to about ${postCutLength} ft each`),
-    toMaterial('Hidden brackets', 'Hardware', hiddenBracketCount, 'ea', `${hiddenBracketPerPost} per post`, beamStyle === '3x3' ? 'Two hidden brackets per post for screened-under framing' : 'One hidden bracket per post when using Atlas beam'),
-    toMaterial('Washer screws', 'Hardware', washerScrews, 'ea', '5 per panel per beam line', `${panelCount} panels across ${totalBeamLines} beam line(s)`),
-    toMaterial('Tek screws', 'Hardware', tekScrews, 'ea', 'Approx. every 6 in', 'For C-channel, gutter, and fascia'),
-    toMaterial('Solar Seal sealant', 'Hardware', sealantTubes, 'tubes', 'Approx. 10 lf per tube', `Snap-lock seams + full perimeter + behind C-channel = ${sealantLf.toFixed(1)} lf`),
+    toMaterial('4 ft regular roof panels', 'Roof system', regular4Count, 'panels', `${panelLength} ft factory-cut panel`, panelColor, `${panelThickness} in panel · ${metalGauge} skin · ${foamDensity} lb foam`),
+    toMaterial('2 ft regular roof panels', 'Roof system', regular2Count, 'panels', `${panelLength} ft factory-cut panel`, panelColor, 'Standard full-width 2 ft panels'),
+    toMaterial('Closure roof panels', 'Roof system', cutPanels.length, 'panels', `${panelLength} ft factory-cut panel`, panelColor, cutPanels.map((piece, index) => `${index === 0 ? 'L' : index === cutPanels.length - 1 ? 'R' : 'Closure'} ${piece.widthFt} ft`).join(' · ') || 'Rip-cut from 2 ft stock'),
+    toMaterial('Front gutter', 'Trim', gutterPieces, 'sticks', '24 ft sections', framingColor, 'Front lower side only'),
+    toMaterial('Drip-edge fascia', 'Trim', fasciaPieces, 'sticks', '24 ft sections', framingColor, `${fasciaLf.toFixed(1)} lf including 5 in gutter cap return on both sides`),
+    toMaterial('C-channel', 'Trim', cChannelPieces, 'sticks', '24 ft sections', framingColor, 'Attached conditions only'),
+    toMaterial('Downspout kits', 'Trim', 2, 'kits', '2 per cover', framingColor, 'Standard on every patio cover'),
+    toMaterial(beamStyle === '3x3' ? '3x3 beam stock' : 'Atlas beam stock', 'Structure', beamStockPieces, 'sticks', '24 ft sections', framingColor, screenUnderneath ? 'Screened-under cover uses 3x3 beam and post system' : 'Open cover uses Atlas beam sitting on top of posts'),
+    toMaterial('3x3 post stock', 'Structure', postStockPieces, 'sticks', '24 ft stock', framingColor, `${totalPostCount} total posts cut to about ${postCutLength} ft each`),
+    toMaterial('Hidden brackets', 'Hardware', hiddenBracketCount, 'ea', 'Per post', framingColor, beamStyle === '3x3' ? 'Two hidden brackets per post for screened-under framing' : 'One hidden bracket per post when using Atlas beam'),
+    toMaterial('Washer screws', 'Hardware', washerScrews, 'ea', '5 per panel per beam line', framingColor, `${panelCount} panels across ${totalBeamLines} beam line(s)`),
+    toMaterial('Tek screws', 'Hardware', tekScrews, 'ea', 'Approx. every 6 in', framingColor, 'For C-channel, gutter, fascia, and hardware'),
+    toMaterial('Solar Seal sealant', 'Hardware', sealantTubes, 'tubes', 'Approx. 10 lf per tube', panelColor, `Snap-lock seams + full perimeter + behind C-channel = ${sealantLf.toFixed(1)} lf`),
   ].filter((item) => item.quantity > 0);
 
-  if (fanPanels.length > 0) {
-    materials.push(toMaterial('Fan-beam roof panel', 'Roof system', fanPanels.length, 'ea', fanBeam === 'centered' ? 'Centered fan-beam panel' : fanBeam === 'female-offset' ? '1 ft from female side' : '1 ft from male side', fanPanels.map((piece) => piece.panelWidth === 4 ? '4 ft fan-beam panel' : '2 ft fan-beam panel').join(' · ')));
-  }
+  fanPanels.forEach((piece) => {
+    const placement = piece.fanPlacement === 'female-offset' ? 'female side' : piece.fanPlacement === 'male-offset' ? 'male side' : 'centered';
+    materials.push(toMaterial('Fan-beam roof panel', 'Roof system', 1, 'ea', `${piece.panelWidth} ft fan beam panel`, panelColor, `${piece.panelWidth} ft fan beam panel ${placement}`));
+  });
   if (supportBeamCount > 0) {
-    materials.push(toMaterial(beamStyle === '3x3' ? 'Intermediate 3x3 support beam' : 'Intermediate support beam', 'Structure', supportBeamCount, 'lines', `${width.toFixed(1)} ft each`, 'Added because projection exceeds 13 ft without the full upgrade package'));
+    materials.push(toMaterial(beamStyle === '3x3' ? 'Intermediate 3x3 support beam' : 'Intermediate support beam', 'Structure', supportBeamCount, 'lines', `${width.toFixed(1)} ft each`, framingColor, 'Added because projection exceeds 13 ft without the full upgrade package'));
   }
 
   return {

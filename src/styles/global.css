@@ -557,6 +557,10 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .patio-sheet-svg .fascia-line { stroke: #bb6b1d; stroke-width: 3; }
 .patio-sheet-svg .fan-axis-line { stroke: #8f2bd6; stroke-width: 2.5; stroke-dasharray: 6 4; }
 
+.fan-axis-line.active { stroke-width: 3.4; }
+.fan-beam-handle { fill: #f59e0b; stroke: #ffffff; stroke-width: 2; }
+.patio-sheet-svg .fan-beam-handle { fill: #8f2bd6; stroke: #ffffff; stroke-width: 2; }
+
 
 .project-config-card {
   display: grid;
