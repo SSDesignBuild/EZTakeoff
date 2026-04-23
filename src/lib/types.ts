@@ -45,8 +45,10 @@ export interface SectionConfig {
   width: number;
   height: number;
   uprights: number;
+  uprightOffsets: number[];
   chairRail: boolean;
   chairRailCount: number;
+  chairRailHeight: number;
   pickets: boolean;
   kickPanel: 'none' | 'trim-coil' | 'insulated';
   kickPanelHeight: number;
@@ -54,6 +56,7 @@ export interface SectionConfig {
   doorPlacement: 'left' | 'center' | 'right' | 'custom';
   doorOffsetInches: number;
   doorWidth: number;
+  doorHeight: number;
   doorSwing: 'inswing' | 'outswing';
   dogDoor: 'none' | 'small' | 'medium' | 'large';
   floorMount: 'concrete' | 'wood' | 'metal';

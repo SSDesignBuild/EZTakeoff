@@ -64,7 +64,7 @@ function sectionDoorLeft(section: SectionConfig) {
 
 
 function sectionChairRailCount(section: SectionConfig) {
-  if (!section.chairRail || section.pickets) return 0;
+  if (!section.chairRail) return 0;
   return Math.max(1, Math.round(section.chairRailCount || 1));
 }
 
@@ -72,13 +72,27 @@ function sectionChairRailHeights(section: SectionConfig) {
   const count = sectionChairRailCount(section);
   if (count <= 0) return [] as number[];
   const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
-  const clearHeight = Math.max(0, section.height - kickHeight);
-  return Array.from({ length: count }, (_, index) => kickHeight + (clearHeight * (index + 1)) / (count + 1));
+  const first = Math.max(kickHeight + 0.25, Math.min(section.height - 0.25, Number(section.chairRailHeight || 3)));
+  if (count === 1) return [first];
+  const remaining = Math.max(0, section.height - first);
+  return Array.from({ length: count }, (_, index) => index === 0 ? first : first + (remaining * index) / (count - 1)).filter((value, index, arr) => value > kickHeight + 0.05 && value < section.height - 0.05 && (index === 0 || value - arr[index - 1] > 0.05));
+}
+
+function sectionDoorHeight(section: SectionConfig) {
+  if (section.doorType === 'none') return 0;
+  return Math.max(0, Math.min(section.height, Number(section.doorHeight || (6 + 8 / 12))));
 }
 
 function sectionDoorJambHeight(section: SectionConfig) {
-  const chairRailHeights = sectionChairRailHeights(section);
-  return section.height > 12 && chairRailHeights.length ? chairRailHeights[0] : section.height;
+  const nominalDoorHeight = sectionDoorHeight(section);
+  const firstRail = sectionChairRailHeights(section)[0];
+  return section.height > 12 && firstRail && firstRail > nominalDoorHeight + 0.05 ? firstRail : nominalDoorHeight;
+}
+
+function sectionUprightPositions(section: SectionConfig) {
+  const count = Math.max(0, Math.floor(section.uprights || 0));
+  const raw = Array.isArray(section.uprightOffsets) ? section.uprightOffsets : [];
+  return Array.from({ length: count }, (_, index) => raw[index] !== undefined ? Number(raw[index]) : ((index + 1) * section.width) / (count + 1)).map((x) => Math.max(0, Math.min(section.width, x)));
 }
 
 function polygonOrientation(points: DeckPoint[]) {
@@ -1117,7 +1131,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const spans = sectionSpansExcludingDoor(section);
           const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
           const kickTop = bottom - kickHeight * scale;
-          const picketTop = bottom - 3 * scale;
+          const picketTop = bottom - (sectionChairRailHeights(section)[0] || 3) * scale;
           const chairRailYs = sectionChairRailHeights(section).map((height) => bottom - height * scale);
           const perimeterClass = renaissance ? 'reno-1x2-line' : section.kickPanel === 'trim-coil' ? 'vgroove1-line' : 'onebytwo-line';
           const uprightClass = renaissance ? ((section.pickets || section.kickPanel === 'insulated') ? 'reno-2x2-groove-line' : 'reno-2x2-line') : (section.kickPanel === 'trim-coil' ? 'vgroove2-line' : 'twobytwo-line');
@@ -1126,11 +1140,11 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const receiverInset = 4;
           const oneByInset = 12;
           const frameInset = 20;
-          const doorHeight = Math.min(section.height, 6 + 8 / 12) * scale;
+          const doorHeight = sectionDoorHeight(section) * scale;
           const doorTop = bottom - frameInset - doorHeight;
           const doorJambTop = bottom - sectionDoorJambHeight(section) * scale;
           const picketBottom = section.kickPanel === 'none' ? bottom - 16 : kickTop + 10;
-          const uprightXs = Array.from({ length: section.uprights }, (_, index) => ((index + 1) * section.width) / (section.uprights + 1)).filter((x) => spans.some((span) => x > span.start && x < span.end));
+          const uprightXs = sectionUprightPositions(section).filter((x) => spans.some((span) => x > span.start && x < span.end));
           return (
             <g key={section.id} data-export-section="true">
               <rect x={left} y={top} width={sectionW} height={sectionH} className="screen-box" rx="8" />
@@ -1158,7 +1172,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
               {section.pickets && spans.map((span, idx) => <g key={`p-${idx}`}><line x1={left + span.start * scale + frameInset} y1={picketTop} x2={left + span.end * scale - frameInset} y2={picketTop} className={renaissance ? 'reno-picket-line' : 'picket-rail-line'} />{Array.from({ length: Math.max(0, Math.ceil(((span.end - span.start) * 12) / 4)) }, (_, picketIndex) => { const px = left + span.start * scale + frameInset + (((span.end - span.start) * scale - frameInset * 2) * (picketIndex + 0.5)) / Math.max(Math.ceil(((span.end - span.start) * 12) / 4), 1); return <line key={picketIndex} x1={px} y1={picketTop + 4} x2={px} y2={picketBottom} className="picket-line" />; })}</g>)}
               {chairRailYs.flatMap((chairY, railIdx) => spans.map((span, idx) => <line key={`chair-${railIdx}-${idx}`} x1={left + span.start * scale + frameInset} y1={chairY} x2={left + span.end * scale - frameInset} y2={chairY} className={chairRailClass} />))}
               {uprightXs.map((x, idx) => <line key={`upr-${idx}`} x1={left + x * scale} y1={top + frameInset} x2={left + x * scale} y2={bottom - frameInset} className={uprightClass} />)}
-              {section.doorType !== 'none' && <><rect x={doorLeft + frameInset - 8} y={doorTop} width={Math.max(0, doorRight - doorLeft - frameInset * 2 + 16)} height={Math.max(0, bottom - doorTop - 18)} className="door-fill" rx="8" /><line x1={doorLeft + frameInset} y1={doorJambTop} x2={doorLeft + frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorRight - frameInset} y1={doorJambTop} x2={doorRight - frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorLeft + frameInset} y1={doorTop} x2={doorRight - frameInset} y2={doorTop} className={doorFrameClass} /></>}
+              {section.doorType !== 'none' && <><rect x={doorLeft + frameInset - 8} y={doorTop} width={Math.max(0, doorRight - doorLeft - frameInset * 2 + 16)} height={Math.max(0, bottom - doorTop - 18)} className="door-fill" rx="8" /><line x1={doorLeft + frameInset} y1={doorJambTop} x2={doorLeft + frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorRight - frameInset} y1={doorJambTop} x2={doorRight - frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorLeft + frameInset} y1={doorTop} x2={doorRight - frameInset} y2={doorTop} className={doorFrameClass} />{section.doorType === 'french' && <line x1={(doorLeft + doorRight) / 2} y1={doorTop + 6} x2={(doorLeft + doorRight) / 2} y2={bottom - frameInset - 4} className={doorFrameClass} />}</>}
             </g>
           );
         })})()}
