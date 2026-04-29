@@ -1,30 +1,18 @@
-import { useMemo, useRef, useState } from 'react';
+import { MouseEvent, useMemo, useRef, useState } from 'react';
 import { DeckPoint } from '../lib/types';
-
-type ObstructionType = 'bump-out' | 'cutout' | 'roof-area' | 'wall-offset' | 'chimney' | 'note';
-interface ObstructionRect {
-  id: string;
-  type: ObstructionType;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  label: string;
-}
 
 interface WoodenStructureEditorProps {
   values: Record<string, string | number | boolean>;
   onValuesChange: (updater: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => void;
 }
 
+type HouseSides = Record<string, boolean>;
+
 const VIEW_SIZE = 780;
-const PAD = 42;
-const GRID_MAJOR = 1;
-const GRID_MINOR = 1 / 2;
+const PAD = 46;
 const SNAP = 1 / 12;
 
 const snap = (value: number) => Math.round(value / SNAP) * SNAP;
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const fmt = (value: number) => Number.isFinite(value) ? Number(value.toFixed(2)) : 0;
 
 function rectFromDims(width: number, depth: number): DeckPoint[] {
@@ -40,20 +28,20 @@ function parseShape(raw: string | number | boolean | undefined, width: number, d
   if (typeof raw === 'string' && raw.trim()) {
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length >= 3) return parsed as DeckPoint[];
+      if (Array.isArray(parsed) && parsed.length >= 2) return parsed as DeckPoint[];
     } catch {}
   }
   return rectFromDims(width, depth);
 }
 
-function parseRects(raw: string | number | boolean | undefined): ObstructionRect[] {
+function parseHouseSides(raw: string | number | boolean | undefined): HouseSides {
   if (typeof raw === 'string' && raw.trim()) {
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed as ObstructionRect[];
+      if (parsed && typeof parsed === 'object') return parsed as HouseSides;
     } catch {}
   }
-  return [];
+  return { '0': true };
 }
 
 function feetAndInches(value: number) {
@@ -63,14 +51,29 @@ function feetAndInches(value: number) {
   return inches ? `${feet}' ${inches}\"` : `${feet}'`;
 }
 
-function polygonBounds(points: DeckPoint[]) {
+function dist(a: DeckPoint, b: DeckPoint) {
+  return Math.hypot(b.x - a.x, b.y - a.y);
+}
+
+function angleSnapPoint(origin: DeckPoint, raw: DeckPoint): DeckPoint {
+  const dx = raw.x - origin.x;
+  const dy = raw.y - origin.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 0.01) return origin;
+  const angle = Math.atan2(dy, dx);
+  const step = Math.PI / 4;
+  const snappedAngle = Math.round(angle / step) * step;
+  return { x: snap(origin.x + Math.cos(snappedAngle) * length), y: snap(origin.y + Math.sin(snappedAngle) * length) };
+}
+
+function boundsFor(points: DeckPoint[], width: number, depth: number) {
   const xs = points.map((point) => point.x);
   const ys = points.map((point) => point.y);
   return {
-    minX: Math.min(...xs),
-    maxX: Math.max(...xs),
-    minY: Math.min(...ys),
-    maxY: Math.max(...ys),
+    minX: Math.min(0, ...xs),
+    maxX: Math.max(width, ...xs),
+    minY: Math.min(0, ...ys),
+    maxY: Math.max(depth, ...ys),
   };
 }
 
@@ -78,162 +81,179 @@ export function WoodenStructureEditor({ values, onValuesChange }: WoodenStructur
   const width = Math.max(1, Number(values.width ?? 16));
   const depth = Math.max(1, Number(values.projection ?? 12));
   const shape = useMemo(() => parseShape(values.woodenShape, width, depth), [values.woodenShape, width, depth]);
-  const obstructions = useMemo(() => parseRects(values.woodenObstructions), [values.woodenObstructions]);
+  const houseSides = useMemo(() => parseHouseSides(values.woodenHouseSides), [values.woodenHouseSides]);
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
-  const [selectedRect, setSelectedRect] = useState<string | null>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [cursorPoint, setCursorPoint] = useState<DeckPoint | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const bounds = polygonBounds(shape);
-  const spanX = Math.max(width, bounds.maxX - bounds.minX, ...obstructions.map((item) => item.x + item.width)) + 2;
-  const spanY = Math.max(depth, bounds.maxY - bounds.minY, ...obstructions.map((item) => item.y + item.height)) + 2;
-  const scale = Math.min((VIEW_SIZE - PAD * 2) / Math.max(1, spanX), (VIEW_SIZE - PAD * 2) / Math.max(1, spanY));
-  const toSvg = (point: DeckPoint) => ({ x: PAD + point.x * scale, y: PAD + point.y * scale });
-  const selectedObstacle = obstructions.find((item) => item.id === selectedRect) ?? null;
+  const bounds = boundsFor(shape, width, depth);
+  const spanX = Math.max(1, bounds.maxX - bounds.minX) + 2;
+  const spanY = Math.max(1, bounds.maxY - bounds.minY) + 2;
+  const scale = Math.min((VIEW_SIZE - PAD * 2) / spanX, (VIEW_SIZE - PAD * 2) / spanY);
+  const offsetX = PAD - bounds.minX * scale + scale;
+  const offsetY = PAD - bounds.minY * scale + scale;
+  const toSvg = (point: DeckPoint) => ({ x: offsetX + point.x * scale, y: offsetY + point.y * scale });
+  const fromEvent = (event: MouseEvent<SVGSVGElement>): DeckPoint => {
+    const svg = svgRef.current;
+    if (!svg) return { x: 0, y: 0 };
+    const pt = svg.createSVGPoint();
+    pt.x = event.clientX;
+    pt.y = event.clientY;
+    const svgPt = pt.matrixTransform(svg.getScreenCTM()?.inverse());
+    return { x: snap((svgPt.x - offsetX) / scale), y: snap((svgPt.y - offsetY) / scale) };
+  };
 
-  const updateValues = (nextShape: DeckPoint[], nextObstructions = obstructions) => {
+  const save = (nextShape: DeckPoint[], nextSides: HouseSides = houseSides) => {
+    const cleanedSides = Object.fromEntries(Object.entries(nextSides).filter(([key]) => Number(key) < nextShape.length));
     onValuesChange((current) => ({
       ...current,
       woodenShape: JSON.stringify(nextShape.map((point) => ({ x: fmt(point.x), y: fmt(point.y) }))),
-      woodenObstructions: JSON.stringify(nextObstructions.map((item) => ({ ...item, x: fmt(item.x), y: fmt(item.y), width: fmt(item.width), height: fmt(item.height) }))),
+      woodenHouseSides: JSON.stringify(cleanedSides),
+      woodenObstructions: JSON.stringify([]),
     }));
   };
 
+  const startPointLayout = () => {
+    setDrawing(true);
+    setSelectedPoint(null);
+    setCursorPoint(null);
+    save([], {});
+  };
+
+  const resetFootprint = () => {
+    setDrawing(false);
+    setSelectedPoint(null);
+    setCursorPoint(null);
+    save(rectFromDims(width, depth), { '0': true });
+  };
+
+  const closeShape = () => {
+    if (shape.length >= 3) {
+      setDrawing(false);
+      setCursorPoint(null);
+    }
+  };
+
   const updatePoint = (index: number, axis: 'x' | 'y', nextValue: number) => {
-    const next = shape.map((point, pointIndex) => pointIndex === index ? { ...point, [axis]: snap(Math.max(0, nextValue)) } : point);
-    updateValues(next);
+    const next = shape.map((point, pointIndex) => pointIndex === index ? { ...point, [axis]: snap(nextValue) } : point);
+    save(next);
+  };
+
+  const removePoint = () => {
+    if (selectedPoint === null || shape.length <= 2) return;
+    const next = shape.filter((_, index) => index !== selectedPoint);
+    setSelectedPoint(null);
+    save(next);
   };
 
   const addMidPoint = (edgeIndex: number) => {
+    if (shape.length < 2) return;
     const start = shape[edgeIndex];
     const end = shape[(edgeIndex + 1) % shape.length];
     const nextPoint = { x: snap((start.x + end.x) / 2), y: snap((start.y + end.y) / 2) };
     const next = [...shape.slice(0, edgeIndex + 1), nextPoint, ...shape.slice(edgeIndex + 1)];
+    const nextSides: HouseSides = {};
+    Object.entries(houseSides).forEach(([key, value]) => {
+      const idx = Number(key);
+      nextSides[String(idx > edgeIndex ? idx + 1 : idx)] = value;
+    });
     setSelectedPoint(edgeIndex + 1);
-    updateValues(next);
+    save(next, nextSides);
   };
 
-  const removePoint = () => {
-    if (selectedPoint === null || shape.length <= 4) return;
-    const next = shape.filter((_, index) => index !== selectedPoint);
-    setSelectedPoint(null);
-    updateValues(next);
+  const toggleHouseSide = (edgeIndex: number) => {
+    save(shape, { ...houseSides, [String(edgeIndex)]: !houseSides[String(edgeIndex)] });
   };
 
-  const resetFootprint = () => {
-    setSelectedPoint(null);
-    setSelectedRect(null);
-    updateValues(rectFromDims(width, depth), []);
+  const onCanvasMove = (event: MouseEvent<SVGSVGElement>) => {
+    if (!drawing) return;
+    const raw = fromEvent(event);
+    const last = shape[shape.length - 1];
+    setCursorPoint(last ? angleSnapPoint(last, raw) : raw);
   };
 
-  const addObstruction = (type: ObstructionType) => {
-    const nextRect: ObstructionRect = {
-      id: `${type}-${Date.now()}`,
-      type,
-      x: Math.max(0.5, width / 3),
-      y: Math.max(0.5, depth / 3),
-      width: type === 'chimney' ? 2 : 4,
-      height: type === 'chimney' ? 2 : 3,
-      label: type === 'chimney' ? 'Chimney' : type === 'roof-area' ? 'Existing roof area' : type === 'wall-offset' ? 'Wall offset' : type === 'bump-out' ? 'Bump-out' : type === 'cutout' ? 'Jog / cutout' : 'Engineer note',
-    };
-    const next = [...obstructions, nextRect];
-    setSelectedRect(nextRect.id);
-    updateValues(shape, next);
+  const onCanvasClick = (event: MouseEvent<SVGSVGElement>) => {
+    if (!drawing) return;
+    const raw = fromEvent(event);
+    const last = shape[shape.length - 1];
+    const nextPoint = last ? angleSnapPoint(last, raw) : raw;
+    if (shape.length >= 3 && dist(nextPoint, shape[0]) <= 0.5) {
+      closeShape();
+      return;
+    }
+    save([...shape, nextPoint]);
+    setSelectedPoint(shape.length);
   };
 
-  const updateObstruction = (id: string, patch: Partial<ObstructionRect>) => {
-    const next = obstructions.map((item) => item.id === id ? { ...item, ...patch } : item);
-    updateValues(shape, next);
-  };
-
-  const removeObstruction = () => {
-    if (!selectedRect) return;
-    const next = obstructions.filter((item) => item.id !== selectedRect);
-    setSelectedRect(null);
-    updateValues(shape, next);
-  };
+  const previewLine = drawing && cursorPoint && shape.length ? { start: toSvg(shape[shape.length - 1]), end: toSvg(cursorPoint), length: dist(shape[shape.length - 1], cursorPoint) } : null;
+  const canClose = shape.length >= 3;
+  const activeLength = previewLine?.length ?? 0;
 
   return (
     <article className="content-card full-width-card">
       <div className="section-heading">
         <p className="eyebrow">Drawing board</p>
-        <h3>Wooden structure footprint + obstruction markup</h3>
+        <h3>Point-to-point roof footprint</h3>
+        <p className="small-muted">Click points in order. Cursor preview snaps to inches and locks to 90° / 45° from the last point. Click an edge after closing to mark it as house wall / attachment side.</p>
       </div>
       <div className="wooden-editor-shell">
         <div className="wooden-editor-toolbar" data-export-ignore="true">
-          <button type="button" className="secondary-btn" onClick={resetFootprint}>Reset to rectangle</button>
-          <button type="button" className="ghost-btn" onClick={() => addObstruction('bump-out')}>Add bump-out</button>
-          <button type="button" className="ghost-btn" onClick={() => addObstruction('cutout')}>Add jog / cutout</button>
-          <button type="button" className="ghost-btn" onClick={() => addObstruction('roof-area')}>Add existing roof area</button>
-          <button type="button" className="ghost-btn" onClick={() => addObstruction('wall-offset')}>Add wall offset</button>
-          <button type="button" className="ghost-btn" onClick={() => addObstruction('chimney')}>Add chimney</button>
-          <button type="button" className="ghost-btn" onClick={() => addObstruction('note')}>Add note box</button>
+          <button type="button" className="secondary-btn" onClick={startPointLayout}>Draw point-to-point</button>
+          <button type="button" className="ghost-btn" onClick={closeShape} disabled={!canClose}>Close shape</button>
+          <button type="button" className="ghost-btn" onClick={resetFootprint}>Reset rectangle</button>
+          <span className="tag">Snap: 1 in · angle: 45°/90°</span>
+          {drawing && <span className="tag">Current run: {feetAndInches(activeLength)}</span>}
         </div>
         <div className="wooden-editor-grid">
           <div className="wooden-editor-canvas">
-            <svg ref={svgRef} viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} className="layout-svg wooden-editor-svg">
+            <svg ref={svgRef} viewBox={`0 0 ${VIEW_SIZE} ${VIEW_SIZE}`} className="layout-svg wooden-editor-svg" onMouseMove={onCanvasMove} onClick={onCanvasClick}>
               <rect x="0" y="0" width={VIEW_SIZE} height={VIEW_SIZE} fill="var(--canvas)" rx="18" />
-              {Array.from({ length: Math.ceil(spanX / GRID_MINOR) + 1 }, (_, index) => {
-                const xFt = index * GRID_MINOR;
-                const x = PAD + xFt * scale;
-                const major = Math.abs((xFt / GRID_MAJOR) - Math.round(xFt / GRID_MAJOR)) < 0.001;
+              {Array.from({ length: Math.ceil(spanX * 2) + 1 }, (_, index) => {
+                const ft = bounds.minX - 1 + index / 2;
+                const x = offsetX + ft * scale;
+                const major = Math.abs(ft - Math.round(ft)) < 0.001;
                 return <line key={`gx-${index}`} x1={x} y1={PAD} x2={x} y2={VIEW_SIZE - PAD} className={major ? 'wood-grid-major' : 'wood-grid-minor'} />;
               })}
-              {Array.from({ length: Math.ceil(spanY / GRID_MINOR) + 1 }, (_, index) => {
-                const yFt = index * GRID_MINOR;
-                const y = PAD + yFt * scale;
-                const major = Math.abs((yFt / GRID_MAJOR) - Math.round(yFt / GRID_MAJOR)) < 0.001;
+              {Array.from({ length: Math.ceil(spanY * 2) + 1 }, (_, index) => {
+                const ft = bounds.minY - 1 + index / 2;
+                const y = offsetY + ft * scale;
+                const major = Math.abs(ft - Math.round(ft)) < 0.001;
                 return <line key={`gy-${index}`} x1={PAD} y1={y} x2={VIEW_SIZE - PAD} y2={y} className={major ? 'wood-grid-major' : 'wood-grid-minor'} />;
               })}
-              {obstructions.map((item) => {
-                const x = PAD + item.x * scale;
-                const y = PAD + item.y * scale;
-                const w = item.width * scale;
-                const h = item.height * scale;
-                return (
-                  <g key={item.id} onClick={() => setSelectedRect(item.id)}>
-                    <rect x={x} y={y} width={w} height={h} className={`wood-obstruction wood-obstruction-${item.type}${selectedRect === item.id ? ' active' : ''}`} rx="8" />
-                    <text x={x + 8} y={y + 18} className="svg-note">{item.label}</text>
-                  </g>
-                );
-              })}
-              <polygon points={shape.map((point) => {
-                const svgPoint = toSvg(point);
-                return `${svgPoint.x},${svgPoint.y}`;
-              }).join(' ')} className="wood-footprint" />
-              {shape.map((point, index) => {
-                const svgPoint = toSvg(point);
-                return (
-                  <g key={`pt-${index}`} onClick={() => setSelectedPoint(index)}>
-                    <circle cx={svgPoint.x} cy={svgPoint.y} r="8" className={`wood-point${selectedPoint === index ? ' active' : ''}`} />
-                    <text x={svgPoint.x + 10} y={svgPoint.y - 10} className="svg-note">P{index + 1}</text>
-                  </g>
-                );
-              })}
-              {shape.map((point, index) => {
+              {shape.length >= 3 && <polygon points={shape.map((point) => { const p = toSvg(point); return `${p.x},${p.y}`; }).join(' ')} className="wood-footprint" />}
+              {shape.length >= 2 && shape.map((point, index) => {
+                if (index === shape.length - 1 && drawing) return null;
                 const next = shape[(index + 1) % shape.length];
+                if (!next) return null;
                 const start = toSvg(point);
                 const end = toSvg(next);
                 const midX = (start.x + end.x) / 2;
                 const midY = (start.y + end.y) / 2;
-                const len = Math.hypot(next.x - point.x, next.y - point.y);
+                const house = !!houseSides[String(index)];
                 return (
                   <g key={`edge-${index}`}>
-                    <text x={midX + 6} y={midY - 6} className="svg-note">{feetAndInches(len)}</text>
-                    <circle cx={midX} cy={midY} r="7" className="wood-midpoint" onClick={() => addMidPoint(index)} />
+                    <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} className={house ? 'wood-house-side' : 'wood-edge-line'} onClick={(event) => { event.stopPropagation(); toggleHouseSide(index); }} />
+                    <text x={midX + 7} y={midY - 7} className="svg-note">{house ? 'HOUSE WALL' : feetAndInches(dist(point, next))}</text>
+                    {!drawing && <circle cx={midX} cy={midY} r="7" className="wood-midpoint" onClick={(event) => { event.stopPropagation(); addMidPoint(index); }} />}
                   </g>
                 );
+              })}
+              {previewLine && <g><line x1={previewLine.start.x} y1={previewLine.start.y} x2={previewLine.end.x} y2={previewLine.end.y} className="wood-preview-line" /><text x={(previewLine.start.x + previewLine.end.x) / 2 + 8} y={(previewLine.start.y + previewLine.end.y) / 2 - 8} className="svg-note">{feetAndInches(previewLine.length)}</text></g>}
+              {shape.map((point, index) => {
+                const p = toSvg(point);
+                return <g key={`pt-${index}`} onClick={(event) => { event.stopPropagation(); setSelectedPoint(index); }}><circle cx={p.x} cy={p.y} r="8" className={`wood-point${selectedPoint === index ? ' active' : ''}`} /><text x={p.x + 10} y={p.y - 10} className="svg-note">P{index + 1}</text></g>;
               })}
             </svg>
           </div>
           <div className="wooden-editor-side" data-export-ignore="true">
             <div className="content-card subtle-card">
-              <p className="eyebrow">Footprint points</p>
-              <p className="small-muted">Start with the width/depth rectangle, then drag coordinates or add midpoint handles to shape around jogs, bump-outs, and offsets.</p>
+              <p className="eyebrow">Point editor</p>
               <div className="stack-list wooden-points-list">
                 {shape.map((point, index) => (
                   <div key={`point-row-${index}`} className={`wood-point-row${selectedPoint === index ? ' active' : ''}`}>
-                    <button type="button" className="ghost-btn" onClick={() => setSelectedPoint(index)}>P{index + 1}</button>
-                    <label className="form-field compact-form-field"><span>X (ft)</span><input type="number" step="0.0833" value={fmt(point.x)} onChange={(event) => updatePoint(index, 'x', Number(event.target.value))} /></label>
-                    <label className="form-field compact-form-field"><span>Y (ft)</span><input type="number" step="0.0833" value={fmt(point.y)} onChange={(event) => updatePoint(index, 'y', Number(event.target.value))} /></label>
+                    <button type="button" className="ghost-btn small-btn" onClick={() => setSelectedPoint(index)}>P{index + 1}</button>
+                    <label className="form-field compact-form-field"><span>X</span><input type="number" step="0.083333" value={fmt(point.x)} onChange={(event) => updatePoint(index, 'x', Number(event.target.value))} /></label>
+                    <label className="form-field compact-form-field"><span>Y</span><input type="number" step="0.083333" value={fmt(point.y)} onChange={(event) => updatePoint(index, 'y', Number(event.target.value))} /></label>
                   </div>
                 ))}
               </div>
@@ -242,19 +262,9 @@ export function WoodenStructureEditor({ values, onValuesChange }: WoodenStructur
               </div>
             </div>
             <div className="content-card subtle-card">
-              <p className="eyebrow">Selected note / obstruction</p>
-              {selectedObstacle ? (
-                <div className="stack-list">
-                  <label className="form-field compact-form-field"><span>Label</span><input value={selectedObstacle.label} onChange={(event) => updateObstruction(selectedObstacle.id, { label: event.target.value })} /></label>
-                  <div className="compact-grid-2">
-                    <label className="form-field compact-form-field"><span>X (ft)</span><input type="number" step="0.25" value={fmt(selectedObstacle.x)} onChange={(event) => updateObstruction(selectedObstacle.id, { x: clamp(Number(event.target.value), 0, 200) })} /></label>
-                    <label className="form-field compact-form-field"><span>Y (ft)</span><input type="number" step="0.25" value={fmt(selectedObstacle.y)} onChange={(event) => updateObstruction(selectedObstacle.id, { y: clamp(Number(event.target.value), 0, 200) })} /></label>
-                    <label className="form-field compact-form-field"><span>Width (ft)</span><input type="number" step="0.25" value={fmt(selectedObstacle.width)} onChange={(event) => updateObstruction(selectedObstacle.id, { width: clamp(Number(event.target.value), 0.5, 200) })} /></label>
-                    <label className="form-field compact-form-field"><span>Height (ft)</span><input type="number" step="0.25" value={fmt(selectedObstacle.height)} onChange={(event) => updateObstruction(selectedObstacle.id, { height: clamp(Number(event.target.value), 0.5, 200) })} /></label>
-                  </div>
-                  <button type="button" className="ghost-btn small-btn" onClick={removeObstruction}>Remove selected note / obstruction</button>
-                </div>
-              ) : <p className="small-muted">Select a markup box to edit its size, location, and note.</p>}
+              <p className="eyebrow">House wall sides</p>
+              <p className="small-muted">Click an edge in the drawing to toggle it as house wall. Red heavy edges become ledger/attachment/reference sides in the engineer layout.</p>
+              <p className="small-muted">House wall edges selected: {Object.values(houseSides).filter(Boolean).length || 0}</p>
             </div>
           </div>
         </div>

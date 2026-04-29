@@ -1447,7 +1447,6 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
   const eaveOverhang = Math.max(0, Number(values.eaveOverhang ?? 1));
   const gableOverhang = Math.max(0, Number(values.gableOverhang ?? 1));
   const supportLayout = String(values.supportLayout ?? 'auto-front-beam');
-  const attachmentSide = String(values.attachmentSide ?? 'top');
   const postCount = supportLayout === 'bearing-walls' ? 0 : Math.max(2, Number(values.postCount ?? 3) || Math.max(2, Math.ceil(width / 8) + 1));
   const existingNotes = String(values.existingConditionNotes ?? '').trim();
   const obstructionNotes = String(values.obstructionNotes ?? '').trim();
@@ -1470,6 +1469,15 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
     }
     return [] as { id?: string; type?: string; x: number; y: number; width: number; height: number; label?: string }[];
   }, [values.woodenObstructions]);
+  const houseSides = useMemo(() => {
+    if (typeof values.woodenHouseSides === 'string' && values.woodenHouseSides.trim()) {
+      try {
+        const parsed = JSON.parse(values.woodenHouseSides);
+        if (parsed && typeof parsed === 'object') return parsed as Record<string, boolean>;
+      } catch {}
+    }
+    return { '0': true } as Record<string, boolean>;
+  }, [values.woodenHouseSides]);
   const xs = shape.map((point) => point.x);
   const ys = shape.map((point) => point.y);
   const minX = Math.min(...xs);
@@ -1487,25 +1495,45 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
   const x0 = planZone.x + (planZone.w - planW) / 2;
   const y0 = planZone.y + (planZone.h - planD) / 2;
   const polygonPoints = shape.map((point) => `${x0 + (point.x - minX) * scale},${y0 + (point.y - minY) * scale}`).join(' ');
-  const lowSide = attachmentSide === 'top' ? 'bottom' : attachmentSide === 'bottom' ? 'top' : attachmentSide === 'left' ? 'right' : 'left';
+  const woodEdges = shape.map((point, index) => {
+    const next = shape[(index + 1) % shape.length];
+    const a = { x: x0 + (point.x - minX) * scale, y: y0 + (point.y - minY) * scale };
+    const b = { x: x0 + (next.x - minX) * scale, y: y0 + (next.y - minY) * scale };
+    const dx = next.x - point.x;
+    const dy = next.y - point.y;
+    return { index, point, next, a, b, dx, dy, length: Math.hypot(dx, dy), house: !!houseSides[String(index)] };
+  });
+  const houseEdges = woodEdges.filter((edge) => edge.house);
+  const mainHouseEdge = houseEdges[0] || woodEdges.find((edge) => edge.index === 0) || woodEdges[0];
+  const attachmentAxis: 'horizontal' | 'vertical' = Math.abs(mainHouseEdge.dy) <= Math.abs(mainHouseEdge.dx) ? 'horizontal' : 'vertical';
+  const mainSideName = attachmentAxis === 'horizontal'
+    ? ((mainHouseEdge.point.y + mainHouseEdge.next.y) / 2 <= minY + bboxDepth / 2 ? 'top' : 'bottom')
+    : ((mainHouseEdge.point.x + mainHouseEdge.next.x) / 2 <= minX + bboxWidth / 2 ? 'left' : 'right');
+  const lowSide = mainSideName === 'top' ? 'bottom' : mainSideName === 'bottom' ? 'top' : mainSideName === 'left' ? 'right' : 'left';
   const memberSpacingPx = (spacingIn / 12) * scale;
   const memberPositions: number[] = [];
-  const alongLength = (roofType === 'gable' && (attachmentSide === 'top' || attachmentSide === 'bottom')) || (roofType === 'flat' && (attachmentSide === 'left' || attachmentSide === 'right')) ? planD : planW;
+  const alongLength = (roofType === 'gable')
+    ? (attachmentAxis === 'horizontal' ? planD : planW)
+    : (attachmentAxis === 'horizontal' ? planW : planD);
   for (let value = 0; value <= alongLength + 2; value += memberSpacingPx) memberPositions.push(value);
   if (memberPositions[memberPositions.length - 1] < alongLength - 2) memberPositions.push(alongLength);
   const printPlan = () => exportSvgAsPdf(svgRef.current, 'Wooden structure framing layout', 'sns-wooden-structure-layout.pdf');
-  const clipId = `wood-clip-${attachmentSide}-${roofType}`;
-  const attachLabel = structureType === 'attached' ? `Existing structure / attachment side (${attachmentSide})` : 'High / reference side for layout';
-  const obstructionList = obstructions.length ? obstructions.map((item) => item.label || item.type || 'Marked area').join(' · ') : 'None marked in footprint editor';
+  const clipId = `wood-clip-${mainSideName}-${roofType}`;
+  const attachLabel = structureType === 'attached' ? 'Existing structure / selected house wall' : 'Reference / selected house wall side';
+  const obstructionList = houseEdges.length ? `${houseEdges.length} house wall side(s) selected on footprint` : 'No house wall side selected — verify attachment side.';
+  const primaryRafterSpan = roofType === 'gable' ? (attachmentAxis === 'horizontal' ? bboxWidth / 2 : bboxDepth / 2) : (attachmentAxis === 'horizontal' ? bboxDepth : bboxWidth);
+  const conservativeMaxSpan = spacingIn >= 24 ? 11 : spacingIn >= 16 ? 13.5 : 15.5;
+  const extraSupportLines = Math.max(0, Math.ceil(primaryRafterSpan / conservativeMaxSpan) - 1);
+  const spanWarning = primaryRafterSpan > conservativeMaxSpan;
 
   const ridge = (() => {
     if (roofType !== 'gable') return null;
-    if (attachmentSide === 'top' || attachmentSide === 'bottom') {
+    if (attachmentAxis === 'horizontal') {
       const x = x0 + planW / 2;
-      return { x1: x, y1: y0, x2: x, y2: y0 + planD, textX: x + 12, textY: y0 + 22, label: 'Ridge line · verify ridge board vs structural ridge beam' };
+      return { x1: x, y1: y0, x2: x, y2: y0 + planD, textX: x + 12, textY: y0 + 22, label: 'Ridge line · perpendicular to selected house wall' };
     }
     const y = y0 + planD / 2;
-    return { x1: x0, y1: y, x2: x0 + planW, y2: y, textX: x0 + 12, textY: y - 10, label: 'Ridge line · verify ridge board vs structural ridge beam' };
+    return { x1: x0, y1: y, x2: x0 + planW, y2: y, textX: x0 + 12, textY: y - 10, label: 'Ridge line · perpendicular to selected house wall' };
   })();
 
   const supportLine = (() => {
@@ -1547,15 +1575,12 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
           <polygon points={polygonPoints} className="deck-polygon muted-fill" />
           <polygon points={polygonPoints} className="wood-outline" />
 
-          {structureType === 'attached' && (
-            <>
-              {attachmentSide === 'top' && <line x1={x0} y1={y0} x2={x0 + planW} y2={y0} className="ledger-line" />}
-              {attachmentSide === 'bottom' && <line x1={x0} y1={y0 + planD} x2={x0 + planW} y2={y0 + planD} className="ledger-line" />}
-              {attachmentSide === 'left' && <line x1={x0} y1={y0} x2={x0} y2={y0 + planD} className="ledger-line" />}
-              {attachmentSide === 'right' && <line x1={x0 + planW} y1={y0} x2={x0 + planW} y2={y0 + planD} className="ledger-line" />}
-              <text x={attachmentSide === 'left' ? x0 - 130 : x0 + 6} y={attachmentSide === 'bottom' ? y0 + planD + 18 : y0 - 8} className="svg-note">{attachLabel}</text>
-            </>
-          )}
+          {structureType === 'attached' && houseEdges.map((edge) => (
+            <g key={`house-edge-${edge.index}`}>
+              <line x1={edge.a.x} y1={edge.a.y} x2={edge.b.x} y2={edge.b.y} className="ledger-line" />
+              <text x={(edge.a.x + edge.b.x) / 2 + 8} y={(edge.a.y + edge.b.y) / 2 - 8} className="svg-note">{attachLabel}</text>
+            </g>
+          ))}
 
           {roofType === 'gable' && ridge && (
             <>
@@ -1563,7 +1588,7 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
               <text x={ridge.textX} y={ridge.textY} className="svg-note">{ridge.label}</text>
               <g clipPath={`url(#${clipId})`}>
                 {memberPositions.map((offset, index) => {
-                  if (attachmentSide === 'top' || attachmentSide === 'bottom') {
+                  if (attachmentAxis === 'horizontal') {
                     const y = y0 + offset;
                     return <line key={`member-${index}`} x1={x0} y1={y} x2={x0 + planW} y2={y} className="joist-line" />;
                   }
@@ -1579,7 +1604,7 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
             <>
               <g clipPath={`url(#${clipId})`}>
                 {memberPositions.map((offset, index) => {
-                  if (attachmentSide === 'top' || attachmentSide === 'bottom') {
+                  if (attachmentAxis === 'horizontal') {
                     const x = x0 + offset;
                     return <line key={`joist-${index}`} x1={x} y1={y0} x2={x} y2={y0 + planD} className="joist-line" />;
                   }
@@ -1587,10 +1612,10 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
                   return <line key={`joist-${index}`} x1={x0} y1={y} x2={x0 + planW} y2={y} className="joist-line" />;
                 })}
               </g>
-              {attachmentSide === 'top' && <line x1={x0 + planW / 2} y1={y0 + 18} x2={x0 + planW / 2} y2={y0 + planD - 18} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
-              {attachmentSide === 'bottom' && <line x1={x0 + planW / 2} y1={y0 + planD - 18} x2={x0 + planW / 2} y2={y0 + 18} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
-              {attachmentSide === 'left' && <line x1={x0 + 18} y1={y0 + planD / 2} x2={x0 + planW - 18} y2={y0 + planD / 2} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
-              {attachmentSide === 'right' && <line x1={x0 + planW - 18} y1={y0 + planD / 2} x2={x0 + 18} y2={y0 + planD / 2} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
+              {mainSideName === 'top' && <line x1={x0 + planW / 2} y1={y0 + 18} x2={x0 + planW / 2} y2={y0 + planD - 18} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
+              {mainSideName === 'bottom' && <line x1={x0 + planW / 2} y1={y0 + planD - 18} x2={x0 + planW / 2} y2={y0 + 18} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
+              {mainSideName === 'left' && <line x1={x0 + 18} y1={y0 + planD / 2} x2={x0 + planW - 18} y2={y0 + planD / 2} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
+              {mainSideName === 'right' && <line x1={x0 + planW - 18} y1={y0 + planD / 2} x2={x0 + 18} y2={y0 + planD / 2} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
               <text x={x0 + 12} y={y0 + planD + 34} className="svg-note">Slope / drainage direction shown from high side toward low side</text>
             </>
           )}
@@ -1601,6 +1626,16 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
               <text x={supportLine.labelX} y={supportLine.labelY} className="svg-note">{supportLine.label}</text>
             </>
           )}
+
+          {spanWarning && Array.from({ length: extraSupportLines }, (_, idx) => {
+            const t = (idx + 1) / (extraSupportLines + 1);
+            if (attachmentAxis === 'horizontal') {
+              const x = x0 + t * planW;
+              return <g key={`extra-support-${idx}`}><line x1={x} y1={y0} x2={x} y2={y0 + planD} className="beam-line warning-beam" /><text x={x + 8} y={y0 + 42} className="svg-note">Added support line for span review</text></g>;
+            }
+            const y = y0 + t * planD;
+            return <g key={`extra-support-${idx}`}><line x1={x0} y1={y} x2={x0 + planW} y2={y} className="beam-line warning-beam" /><text x={x0 + 18} y={y - 8} className="svg-note">Added support line for span review</text></g>;
+          })}
 
           {supportLayout !== 'bearing-walls' && postCount > 0 && Array.from({ length: postCount }, (_, idx) => {
             const t = postCount === 1 ? 0.5 : idx / Math.max(1, postCount - 1);
@@ -1630,16 +1665,17 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
           <g transform="translate(60, 590)">
             <text x={0} y={0} className="sheet-subtitle" style={{ fontSize: 15 }}>Project assumptions</text>
             <text x={0} y={28} className="svg-note">{`• ${structureType === 'attached' ? 'Attached' : 'Freestanding'} ${roofType} roof concept using 2024 IRC baseline framing assumptions at ${pitch}:12.`}</text>
-            <text x={0} y={52} className="svg-note">{`• Attachment/high side assumed on the ${attachmentSide}; overhangs ${feetAndInches(gableOverhang)} side / ${feetAndInches(eaveOverhang)} eave.`}</text>
-            <text x={0} y={76} className="svg-note">{`• Layout footprint: ${feetAndInches(bboxWidth)} × ${feetAndInches(bboxDepth)} with ${obstructions.length} marked irregular area(s).`}</text>
+            <text x={0} y={52} className="svg-note">{`• Selected house/reference side: ${mainSideName}; overhangs ${feetAndInches(gableOverhang)} side / ${feetAndInches(eaveOverhang)} eave.`}</text>
+            <text x={0} y={76} className="svg-note">{`• Layout footprint: ${feetAndInches(bboxWidth)} × ${feetAndInches(bboxDepth)} with ${houseEdges.length} selected house wall side(s).`}</text>
             <text x={0} y={112} className="sheet-subtitle" style={{ fontSize: 15 }}>Engineer review notes</text>
-            <text x={0} y={140} className="svg-note">{`• Review items: spans/member sizing, headers at offsets, uplift, lateral bracing, connectors, footings, flashing, and substrate attachment.`}</text>
-            <text x={0} y={164} className="svg-note">{`• Marked jogs / bump-outs / chimneys / roof areas: ${obstructionList}.`}</text>
-            <text x={0} y={188} className="svg-note">{`• Existing wall / roofline notes: ${existingNotes || 'Not entered — verify ledger/tie-in framing, substrate, and bearing conditions.'}`}</text>
-            <text x={0} y={212} className="svg-note">{`• Additional obstruction notes: ${obstructionNotes || 'Not entered — verify all field conflicts before final stamp package.'}`}</text>
-            <text x={0} y={248} className="sheet-subtitle" style={{ fontSize: 15 }}>Missing information needed for final engineer-ready completion</text>
-            <text x={0} y={276} className="svg-note">{`• ${supportLayout === 'known-posts' ? 'Dimensioned post/support locations still needed.' : 'Support layout shown conceptually; confirm exact footing/post locations.'}`}</text>
-            <text x={0} y={300} className="svg-note">{`• ${jobNotes || 'Add any project-specific engineering notes, loading criteria, or jurisdiction exceptions before submittal.'}`}</text>
+            <text x={0} y={140} className="svg-note">{`• Review items: spans/member sizing, added support lines if needed, headers at offsets, uplift, lateral bracing, connectors, footings, flashing, and substrate attachment.`}</text>
+            <text x={0} y={164} className="svg-note">{`• Footprint / attachment: ${obstructionList}.`}</text>
+            <text x={0} y={188} className="svg-note">{`• Span check: ${spanWarning ? 'Concept exceeds conservative prescriptive rafter span placeholder; support line(s) added and engineer must size members.' : 'No automatic span support trigger based on current simplified check.'}`}</text>
+            <text x={0} y={212} className="svg-note">{`• Existing wall / roofline / chimney notes: ${existingNotes || 'Not entered — verify ledger/tie-in framing, substrate, and bearing conditions.'}`}</text>
+            <text x={0} y={236} className="svg-note">{`• Additional obstruction notes: ${obstructionNotes || 'Not entered — verify all field conflicts before final stamp package.'}`}</text>
+            <text x={0} y={272} className="sheet-subtitle" style={{ fontSize: 15 }}>Missing information needed for final engineer-ready completion</text>
+            <text x={0} y={324} className="svg-note">{`• ${supportLayout === 'known-posts' ? 'Dimensioned post/support locations still needed.' : 'Support layout shown conceptually; confirm exact footing/post locations.'}`}</text>
+            <text x={0} y={324} className="svg-note">{`• ${jobNotes || 'Add any project-specific engineering notes, loading criteria, or jurisdiction exceptions before submittal.'}`}</text>
           </g>
         </svg>
       </div>

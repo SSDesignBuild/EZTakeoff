@@ -419,6 +419,7 @@ gableSections: sharedGableDefaults,
       memberSizingMode: 'engineer-review',
       woodenShape: JSON.stringify([{ x: 0, y: 0 }, { x: 16, y: 0 }, { x: 16, y: 12 }, { x: 0, y: 12 }]),
       woodenObstructions: JSON.stringify([]),
+      woodenHouseSides: JSON.stringify({ '0': true }),
       jobNotes: '',
     },
     fields: [
