@@ -7,6 +7,7 @@ import { MetricCard } from '../components/MetricCard';
 import { DeckDesigner } from '../components/DeckDesigner';
 import { SectionEditor } from '../components/SectionEditor';
 import { SunroomSectionEditor } from '../components/SunroomSectionEditor';
+import { WoodenStructureEditor } from '../components/WoodenStructureEditor';
 import { getServiceBySlug } from '../data/services';
 import { useLocalProjectState } from '../hooks/useLocalProjectState';
 import { calculateEstimate } from '../lib/estimate';
@@ -24,6 +25,7 @@ export function ServiceWorkspacePage() {
         <SectionEditor renaissance={service.slug === 'renaissance-screen-rooms'} values={values} onValuesChange={setValues} />
       )}
       {service.slug === 'sunrooms' && <SunroomSectionEditor values={values} onValuesChange={setValues} />}
+      {service.slug === 'wooden-structures' && <WoodenStructureEditor values={values} onValuesChange={setValues} />}
 
       <section className="workspace-grid compact-workspace-grid single-column-workspace">
         <article className="content-card project-config-card full-width-card">

@@ -23,11 +23,9 @@ function base64ToBytes(base64: string) {
 type PdfImage = { bytes: Uint8Array; width: number; height: number };
 
 function makePdfFromJpegs(images: PdfImage[], title: string) {
-  const pageWidth = 612;
-  const pageHeight = 792;
-  const margin = 18;
-  const usableWidth = pageWidth - margin * 2;
-  const usableHeight = pageHeight - margin * 2;
+  const portrait = { width: 612, height: 792 };
+  const landscape = { width: 792, height: 612 };
+  const margin = 14;
   const objects: Uint8Array[] = [];
   const offsets: number[] = [0];
   const header = stringBytes('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n');
@@ -54,21 +52,24 @@ function makePdfFromJpegs(images: PdfImage[], title: string) {
     pageKids.push(`${pageObjNum} 0 R`);
 
     const imageAspect = image.width / Math.max(1, image.height);
+    const page = imageAspect > 1 ? landscape : portrait;
+    const usableWidth = page.width - margin * 2;
+    const usableHeight = page.height - margin * 2;
     let drawWidth = usableWidth;
     let drawHeight = drawWidth / imageAspect;
     if (drawHeight > usableHeight) {
       drawHeight = usableHeight;
       drawWidth = drawHeight * imageAspect;
     }
-    const x = (pageWidth - drawWidth) / 2;
-    const y = (pageHeight - drawHeight) / 2;
+    const x = (page.width - drawWidth) / 2;
+    const y = (page.height - drawHeight) / 2;
     const content = `q\n${drawWidth.toFixed(2)} 0 0 ${drawHeight.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm\n/Im0 Do\nQ\n`;
 
-    addObject(stringBytes(`${pageObjNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /XObject << /Im0 ${imageObjNum} 0 R >> /ProcSet [/PDF /ImageC] >> /Contents ${contentObjNum} 0 R >>\nendobj\n`));
+    addObject(stringBytes(`${pageObjNum} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.width} ${page.height}] /Resources << /XObject << /Im0 ${imageObjNum} 0 R >> /ProcSet [/PDF /ImageC] >> /Contents ${contentObjNum} 0 R >>\nendobj\n`));
     addObject(concatBytes([
       stringBytes(`${imageObjNum} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.bytes.length} >>\nstream\n`),
       image.bytes,
-      stringBytes('\nendstream\nendobj\n'),
+      stringBytes(`\nendstream\nendobj\n`),
     ]));
     addObject(stringBytes(`${contentObjNum} 0 obj\n<< /Length ${content.length} >>\nstream\n${content}endstream\nendobj\n`));
   });

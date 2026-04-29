@@ -1447,30 +1447,74 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
   const eaveOverhang = Math.max(0, Number(values.eaveOverhang ?? 1));
   const gableOverhang = Math.max(0, Number(values.gableOverhang ?? 1));
   const supportLayout = String(values.supportLayout ?? 'auto-front-beam');
+  const attachmentSide = String(values.attachmentSide ?? 'top');
   const postCount = supportLayout === 'bearing-walls' ? 0 : Math.max(2, Number(values.postCount ?? 3) || Math.max(2, Math.ceil(width / 8) + 1));
   const existingNotes = String(values.existingConditionNotes ?? '').trim();
   const obstructionNotes = String(values.obstructionNotes ?? '').trim();
-  const viewW = 980;
-  const viewH = 660;
-  const margin = 84;
-  const drawableW = viewW - margin * 2;
-  const drawableH = 370;
-  const scale = Math.min(drawableW / Math.max(1, width + gableOverhang * 2), drawableH / Math.max(1, projection + eaveOverhang));
-  const planW = width * scale;
-  const planD = projection * scale;
-  const x0 = (viewW - planW) / 2;
-  const y0 = 118;
-  const ridgeY = y0 + planD / 2;
-  const lowY = y0 + planD;
-  const rafterCount = Math.ceil(width / (spacingIn / 12)) + 1;
-  const postXs = Array.from({ length: postCount }, (_, idx) => x0 + (postCount === 1 ? planW / 2 : (idx * planW) / Math.max(1, postCount - 1)));
-  const memberXs = Array.from({ length: rafterCount }, (_, idx) => x0 + Math.min(planW, (idx * spacingIn / 12) * scale));
-  if (memberXs[memberXs.length - 1] < x0 + planW - 2) memberXs.push(x0 + planW);
+  const jobNotes = String(values.jobNotes ?? '').trim();
+  const shape = useMemo(() => {
+    if (typeof values.woodenShape === 'string' && values.woodenShape.trim()) {
+      try {
+        const parsed = JSON.parse(values.woodenShape);
+        if (Array.isArray(parsed) && parsed.length >= 3) return parsed as DeckPoint[];
+      } catch {}
+    }
+    return [{ x: 0, y: 0 }, { x: width, y: 0 }, { x: width, y: projection }, { x: 0, y: projection }];
+  }, [projection, values.woodenShape, width]);
+  const obstructions = useMemo(() => {
+    if (typeof values.woodenObstructions === 'string' && values.woodenObstructions.trim()) {
+      try {
+        const parsed = JSON.parse(values.woodenObstructions);
+        if (Array.isArray(parsed)) return parsed as { id?: string; type?: string; x: number; y: number; width: number; height: number; label?: string }[];
+      } catch {}
+    }
+    return [] as { id?: string; type?: string; x: number; y: number; width: number; height: number; label?: string }[];
+  }, [values.woodenObstructions]);
+  const xs = shape.map((point) => point.x);
+  const ys = shape.map((point) => point.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const bboxWidth = Math.max(1, maxX - minX);
+  const bboxDepth = Math.max(1, maxY - minY);
+  const viewW = 1180;
+  const viewH = 840;
+  const planZone = { x: 90, y: 118, w: 1000, h: 430 };
+  const scale = Math.min(planZone.w / Math.max(1, bboxWidth + gableOverhang * 2), planZone.h / Math.max(1, bboxDepth + eaveOverhang * 2));
+  const planW = bboxWidth * scale;
+  const planD = bboxDepth * scale;
+  const x0 = planZone.x + (planZone.w - planW) / 2;
+  const y0 = planZone.y + (planZone.h - planD) / 2;
+  const polygonPoints = shape.map((point) => `${x0 + (point.x - minX) * scale},${y0 + (point.y - minY) * scale}`).join(' ');
+  const lowSide = attachmentSide === 'top' ? 'bottom' : attachmentSide === 'bottom' ? 'top' : attachmentSide === 'left' ? 'right' : 'left';
+  const memberSpacingPx = (spacingIn / 12) * scale;
+  const memberPositions: number[] = [];
+  const alongLength = (roofType === 'gable' && (attachmentSide === 'top' || attachmentSide === 'bottom')) || (roofType === 'flat' && (attachmentSide === 'left' || attachmentSide === 'right')) ? planD : planW;
+  for (let value = 0; value <= alongLength + 2; value += memberSpacingPx) memberPositions.push(value);
+  if (memberPositions[memberPositions.length - 1] < alongLength - 2) memberPositions.push(alongLength);
   const printPlan = () => exportSvgAsPdf(svgRef.current, 'Wooden structure framing layout', 'sns-wooden-structure-layout.pdf');
+  const clipId = `wood-clip-${attachmentSide}-${roofType}`;
+  const attachLabel = structureType === 'attached' ? `Existing structure / attachment side (${attachmentSide})` : 'High / reference side for layout';
+  const obstructionList = obstructions.length ? obstructions.map((item) => item.label || item.type || 'Marked area').join(' · ') : 'None marked in footprint editor';
 
-  const sectionNote = roofType === 'gable'
-    ? `Gable concept: ridge centered, rafters bear to side/support lines, pitch ${pitch}:12. Final ridge type and rafter sizing by engineer.`
-    : `Flat roof concept: joists run from high side to low/front beam, slope direction ${pitch}:12. Drainage and joist sizing by engineer.`;
+  const ridge = (() => {
+    if (roofType !== 'gable') return null;
+    if (attachmentSide === 'top' || attachmentSide === 'bottom') {
+      const x = x0 + planW / 2;
+      return { x1: x, y1: y0, x2: x, y2: y0 + planD, textX: x + 12, textY: y0 + 22, label: 'Ridge line · verify ridge board vs structural ridge beam' };
+    }
+    const y = y0 + planD / 2;
+    return { x1: x0, y1: y, x2: x0 + planW, y2: y, textX: x0 + 12, textY: y - 10, label: 'Ridge line · verify ridge board vs structural ridge beam' };
+  })();
+
+  const supportLine = (() => {
+    if (supportLayout === 'bearing-walls') return null;
+    if (lowSide === 'bottom') return { x1: x0, y1: y0 + planD, x2: x0 + planW, y2: y0 + planD, labelX: x0 + 8, labelY: y0 + planD + 22, label: 'Primary support beam / bearing line' };
+    if (lowSide === 'top') return { x1: x0, y1: y0, x2: x0 + planW, y2: y0, labelX: x0 + 8, labelY: y0 - 12, label: 'Primary support beam / bearing line' };
+    if (lowSide === 'left') return { x1: x0, y1: y0, x2: x0, y2: y0 + planD, labelX: x0 - 140, labelY: y0 + planD / 2, label: 'Primary support beam / bearing line' };
+    return { x1: x0 + planW, y1: y0, x2: x0 + planW, y2: y0 + planD, labelX: x0 + planW + 14, labelY: y0 + planD / 2, label: 'Primary support beam / bearing line' };
+  })();
 
   return (
     <div className="visual-card cad-card">
@@ -1486,64 +1530,116 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
       </div>
       <div className="zoom-shell deck-sheet-shell">
         <svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg deck-sheet-svg">
+          <defs>
+            <clipPath id={clipId}><polygon points={polygonPoints} /></clipPath>
+            <marker id="wood-arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M0,0 L12,6 L0,12 z" fill="#2563eb" /></marker>
+          </defs>
           <rect x="18" y="18" width={viewW - 36} height={viewH - 36} className="sheet-border" />
           <rect x="34" y="34" width={viewW - 68} height={viewH - 68} className="sheet-border inner" />
           <text x={58} y={66} className="sheet-title">WOODEN STRUCTURE FRAMING PLAN</text>
           <text x={58} y={90} className="sheet-subtitle">S&amp;S WORKSPACE · CONCEPT FOR STRUCTURAL ENGINEER REVIEW · NOT FOR CONSTRUCTION UNTIL STAMPED</text>
 
-          <rect x={x0} y={y0} width={planW} height={planD} className="deck-polygon muted-fill" rx="6" />
           <line x1={x0} y1={y0 - 18} x2={x0 + planW} y2={y0 - 18} className="dimension-line" />
-          <text x={x0 + planW / 2 - 34} y={y0 - 28} className="svg-note">{`WIDTH ${feetAndInches(width)}`}</text>
+          <text x={x0 + planW / 2 - 34} y={y0 - 28} className="svg-note">{`WIDTH ${feetAndInches(bboxWidth)}`}</text>
           <line x1={x0 + planW + 22} y1={y0} x2={x0 + planW + 22} y2={y0 + planD} className="dimension-line" />
-          <text x={x0 + planW + 34} y={y0 + planD / 2} className="svg-note">{`PROJECTION ${feetAndInches(projection)}`}</text>
+          <text x={x0 + planW + 34} y={y0 + planD / 2} className="svg-note">{`PROJECTION ${feetAndInches(bboxDepth)}`}</text>
 
-          {structureType === 'attached' && <>
-            <line x1={x0} y1={y0} x2={x0 + planW} y2={y0} className="ledger-line" />
-            <text x={x0 + 6} y={y0 - 8} className="svg-note">Existing structure / attachment side</text>
-          </>}
+          <polygon points={polygonPoints} className="deck-polygon muted-fill" />
+          <polygon points={polygonPoints} className="wood-outline" />
 
-          {roofType === 'gable' ? <>
-            <line x1={x0} y1={ridgeY} x2={x0 + planW} y2={ridgeY} className="beam-line" />
-            <text x={x0 + 8} y={ridgeY - 8} className="svg-note">Ridge line · engineer verify ridge board vs structural ridge beam</text>
-            {memberXs.map((x, idx) => <g key={`rafter-${idx}`}>
-              <line x1={x} y1={ridgeY} x2={x} y2={y0} className="joist-line" />
-              <line x1={x} y1={ridgeY} x2={x} y2={lowY} className="joist-line" />
-            </g>)}
-            <text x={x0 + planW - 174} y={ridgeY + 22} className="svg-note">Rafters each side</text>
-          </> : <>
-            {memberXs.map((x, idx) => <line key={`joist-${idx}`} x1={x} y1={y0} x2={x} y2={lowY} className="joist-line" />)}
-            <line x1={x0 + planW / 2} y1={y0 + 24} x2={x0 + planW / 2} y2={lowY - 24} className="slope-arrow" markerEnd="url(#arrow)" />
-            <text x={x0 + planW / 2 + 12} y={y0 + planD / 2} className="svg-note">Slope / drainage direction</text>
-          </>}
+          {structureType === 'attached' && (
+            <>
+              {attachmentSide === 'top' && <line x1={x0} y1={y0} x2={x0 + planW} y2={y0} className="ledger-line" />}
+              {attachmentSide === 'bottom' && <line x1={x0} y1={y0 + planD} x2={x0 + planW} y2={y0 + planD} className="ledger-line" />}
+              {attachmentSide === 'left' && <line x1={x0} y1={y0} x2={x0} y2={y0 + planD} className="ledger-line" />}
+              {attachmentSide === 'right' && <line x1={x0 + planW} y1={y0} x2={x0 + planW} y2={y0 + planD} className="ledger-line" />}
+              <text x={attachmentSide === 'left' ? x0 - 130 : x0 + 6} y={attachmentSide === 'bottom' ? y0 + planD + 18 : y0 - 8} className="svg-note">{attachLabel}</text>
+            </>
+          )}
 
-          {supportLayout !== 'bearing-walls' && <>
-            <line x1={x0} y1={lowY} x2={x0 + planW} y2={lowY} className="beam-line" />
-            <text x={x0 + 6} y={lowY + 22} className="svg-note">Front support beam / bearing line</text>
-            {postXs.map((x, idx) => <g key={`wood-post-${idx}`}>
-              <rect x={x - 10} y={lowY - 10} width={20} height={20} className="post-node" />
-              <text x={x - 12} y={lowY + 36} className="svg-note">P{idx + 1}</text>
-            </g>)}
-          </>}
+          {roofType === 'gable' && ridge && (
+            <>
+              <line x1={ridge.x1} y1={ridge.y1} x2={ridge.x2} y2={ridge.y2} className="beam-line" />
+              <text x={ridge.textX} y={ridge.textY} className="svg-note">{ridge.label}</text>
+              <g clipPath={`url(#${clipId})`}>
+                {memberPositions.map((offset, index) => {
+                  if (attachmentSide === 'top' || attachmentSide === 'bottom') {
+                    const y = y0 + offset;
+                    return <line key={`member-${index}`} x1={x0} y1={y} x2={x0 + planW} y2={y} className="joist-line" />;
+                  }
+                  const x = x0 + offset;
+                  return <line key={`member-${index}`} x1={x} y1={y0} x2={x} y2={y0 + planD} className="joist-line" />;
+                })}
+              </g>
+              <text x={x0 + planW - 220} y={y0 + planD + 34} className="svg-note">Rafters run perpendicular to ridge</text>
+            </>
+          )}
 
-          {obstructionNotes && <g>
-            <rect x={x0 + planW - 160} y={y0 + 26} width={138} height={62} fill="rgba(255,255,255,0.72)" stroke="#ef4444" strokeDasharray="5 4" rx="6" />
-            <text x={x0 + planW - 150} y={y0 + 50} className="svg-note">Obstruction / offset</text>
-            <text x={x0 + planW - 150} y={y0 + 70} className="svg-note">See notes</text>
-          </g>}
+          {roofType === 'flat' && (
+            <>
+              <g clipPath={`url(#${clipId})`}>
+                {memberPositions.map((offset, index) => {
+                  if (attachmentSide === 'top' || attachmentSide === 'bottom') {
+                    const x = x0 + offset;
+                    return <line key={`joist-${index}`} x1={x} y1={y0} x2={x} y2={y0 + planD} className="joist-line" />;
+                  }
+                  const y = y0 + offset;
+                  return <line key={`joist-${index}`} x1={x0} y1={y} x2={x0 + planW} y2={y} className="joist-line" />;
+                })}
+              </g>
+              {attachmentSide === 'top' && <line x1={x0 + planW / 2} y1={y0 + 18} x2={x0 + planW / 2} y2={y0 + planD - 18} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
+              {attachmentSide === 'bottom' && <line x1={x0 + planW / 2} y1={y0 + planD - 18} x2={x0 + planW / 2} y2={y0 + 18} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
+              {attachmentSide === 'left' && <line x1={x0 + 18} y1={y0 + planD / 2} x2={x0 + planW - 18} y2={y0 + planD / 2} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
+              {attachmentSide === 'right' && <line x1={x0 + planW - 18} y1={y0 + planD / 2} x2={x0 + 18} y2={y0 + planD / 2} className="slope-arrow" markerEnd="url(#wood-arrow)" />}
+              <text x={x0 + 12} y={y0 + planD + 34} className="svg-note">Slope / drainage direction shown from high side toward low side</text>
+            </>
+          )}
 
-          <defs>
-            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
-            </marker>
-          </defs>
+          {supportLine && (
+            <>
+              <line x1={supportLine.x1} y1={supportLine.y1} x2={supportLine.x2} y2={supportLine.y2} className="beam-line" />
+              <text x={supportLine.labelX} y={supportLine.labelY} className="svg-note">{supportLine.label}</text>
+            </>
+          )}
 
-          <g transform={`translate(${58}, ${500})`}>
-            <text x={0} y={0} className="sheet-title">Package notes</text>
-            <text x={0} y={28} className="svg-note">{sectionNote}</text>
-            <text x={0} y={52} className="svg-note">Load path concept: roof members → ridge/ledger/beam → posts or bearing walls → footing/foundation.</text>
-            <text x={0} y={76} className="svg-note">Engineer review: spans, member sizing, uplift, lateral bracing, connections, footings, flashing, and existing conditions.</text>
-            <text x={0} y={100} className="svg-note">{existingNotes ? `Existing condition notes: ${existingNotes.slice(0, 120)}` : 'Existing condition notes: field verify existing framing, sheathing, flashing, and attachment substrate.'}</text>
-            <text x={0} y={124} className="svg-note">{obstructionNotes ? `Jogs / bump-outs / roofline notes: ${obstructionNotes.slice(0, 120)}` : 'Jogs / bump-outs / chimneys / offsets: none entered; verify before final engineer package.'}</text>
+          {supportLayout !== 'bearing-walls' && postCount > 0 && Array.from({ length: postCount }, (_, idx) => {
+            const t = postCount === 1 ? 0.5 : idx / Math.max(1, postCount - 1);
+            const x = lowSide === 'left' ? x0 : lowSide === 'right' ? x0 + planW : x0 + t * planW;
+            const y = lowSide === 'top' ? y0 : lowSide === 'bottom' ? y0 + planD : y0 + t * planD;
+            return (
+              <g key={`wood-post-${idx}`}>
+                <rect x={x - 10} y={y - 10} width={20} height={20} className="post-node" />
+                <text x={x - 6} y={y + 30} className="svg-note">P{idx + 1}</text>
+              </g>
+            );
+          })}
+
+          {obstructions.map((item, index) => {
+            const x = x0 + (item.x - minX) * scale;
+            const y = y0 + (item.y - minY) * scale;
+            const w = item.width * scale;
+            const h = item.height * scale;
+            return (
+              <g key={item.id || index}>
+                <rect x={x} y={y} width={w} height={h} className={`wood-obstruction wood-obstruction-${item.type || 'note'}`} rx="10" />
+                <text x={x + 8} y={y + 18} className="svg-note">{item.label || item.type || 'Marked area'}</text>
+              </g>
+            );
+          })}
+
+          <g transform="translate(60, 590)">
+            <text x={0} y={0} className="sheet-subtitle" style={{ fontSize: 15 }}>Project assumptions</text>
+            <text x={0} y={28} className="svg-note">{`• ${structureType === 'attached' ? 'Attached' : 'Freestanding'} ${roofType} roof concept using 2024 IRC baseline framing assumptions at ${pitch}:12.`}</text>
+            <text x={0} y={52} className="svg-note">{`• Attachment/high side assumed on the ${attachmentSide}; overhangs ${feetAndInches(gableOverhang)} side / ${feetAndInches(eaveOverhang)} eave.`}</text>
+            <text x={0} y={76} className="svg-note">{`• Layout footprint: ${feetAndInches(bboxWidth)} × ${feetAndInches(bboxDepth)} with ${obstructions.length} marked irregular area(s).`}</text>
+            <text x={0} y={112} className="sheet-subtitle" style={{ fontSize: 15 }}>Engineer review notes</text>
+            <text x={0} y={140} className="svg-note">{`• Review items: spans/member sizing, headers at offsets, uplift, lateral bracing, connectors, footings, flashing, and substrate attachment.`}</text>
+            <text x={0} y={164} className="svg-note">{`• Marked jogs / bump-outs / chimneys / roof areas: ${obstructionList}.`}</text>
+            <text x={0} y={188} className="svg-note">{`• Existing wall / roofline notes: ${existingNotes || 'Not entered — verify ledger/tie-in framing, substrate, and bearing conditions.'}`}</text>
+            <text x={0} y={212} className="svg-note">{`• Additional obstruction notes: ${obstructionNotes || 'Not entered — verify all field conflicts before final stamp package.'}`}</text>
+            <text x={0} y={248} className="sheet-subtitle" style={{ fontSize: 15 }}>Missing information needed for final engineer-ready completion</text>
+            <text x={0} y={276} className="svg-note">{`• ${supportLayout === 'known-posts' ? 'Dimensioned post/support locations still needed.' : 'Support layout shown conceptually; confirm exact footing/post locations.'}`}</text>
+            <text x={0} y={300} className="svg-note">{`• ${jobNotes || 'Add any project-specific engineering notes, loading criteria, or jurisdiction exceptions before submittal.'}`}</text>
           </g>
         </svg>
       </div>
