@@ -44,6 +44,17 @@ export function ServiceWorkspacePage() {
             {estimate.summary.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} />)}
           </div>
           <MaterialTable items={estimate.materials} values={values} onValuesChange={setValues} />
+          {estimate.orderNotes.length > 0 && (
+            <article className="content-card order-notes-card">
+              <div className="section-heading">
+                <p className="eyebrow">Scope output</p>
+                <h3>Assumptions & engineer notes</h3>
+              </div>
+              <ul className="order-notes-list">
+                {estimate.orderNotes.map((note, index) => <li key={`${index}-${note}`}>{note}</li>)}
+              </ul>
+            </article>
+          )}
         </div>
       </section>
     </div>

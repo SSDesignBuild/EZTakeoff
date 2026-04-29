@@ -224,6 +224,8 @@ export function calculateEstimate(serviceSlug: string, inputs: EstimateInputs): 
       return estimateScreenRoom(inputs, true);
     case 'sunrooms':
       return estimateSunroom(inputs);
+    case 'wooden-structures':
+      return estimateWoodenStructure(inputs);
     default:
       return { summary: [], materials: [], orderNotes: [] };
   }
@@ -865,6 +867,76 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   };
 }
 
+
+
+function estimateWoodenStructure(inputs: EstimateInputs): EstimateResult {
+  const width = Math.max(1, Number(inputs.width ?? 16));
+  const projection = Math.max(1, Number(inputs.projection ?? 12));
+  const structureType = String(inputs.structureType ?? 'attached');
+  const roofType = String(inputs.roofType ?? 'gable');
+  const pitch = Math.max(0.25, Number(inputs.roofPitch ?? 4));
+  const spacingIn = Math.max(12, Number(inputs.joistSpacing ?? 16));
+  const spacingFt = spacingIn / 12;
+  const eaveOverhang = Math.max(0, Number(inputs.eaveOverhang ?? 1));
+  const gableOverhang = Math.max(0, Number(inputs.gableOverhang ?? 1));
+  const supportLayout = String(inputs.supportLayout ?? 'auto-front-beam');
+  const attachedCondition = String(inputs.attachedCondition ?? 'ledger-to-existing-wall');
+  const overallHeight = Math.max(1, Number(inputs.overallHeight ?? 9));
+  const planWidth = width + gableOverhang * 2;
+  const planDepth = projection + eaveOverhang;
+  const rafterRun = roofType === 'gable' ? projection / 2 : projection;
+  const roofRise = (pitch / 12) * rafterRun;
+  const slopedMemberLength = Math.sqrt(rafterRun * rafterRun + roofRise * roofRise) + eaveOverhang;
+  const memberCount = Math.ceil(width / spacingFt) + 1;
+  const postCount = supportLayout === 'bearing-walls' ? 0 : Math.max(2, Number(inputs.postCount ?? 3) || Math.max(2, Math.ceil(width / 8) + 1));
+  const beamLines = supportLayout === 'bearing-walls' ? 0 : 1;
+  const materials: MaterialItem[] = [];
+
+  if (roofType === 'gable') {
+    materials.push(toMaterial('Common rafters', 'Wood framing', memberCount * 2, 'ea', `${feetAndInches(slopedMemberLength)} conceptual cuts`, undefined, `${spacingIn} in O.C.; final size and birdsmouth details by engineer`));
+    materials.push(toMaterial('Ridge board / ridge beam', 'Wood framing', Math.ceil(width / 16), 'sticks', '16 ft stock assumption', undefined, `Ridge centered over ${feetAndInches(width)} width; engineer to verify ridge board vs structural ridge beam`));
+    materials.push(toMaterial('Gable end outlookers / rake framing', 'Wood framing', Math.max(4, Math.ceil(projection / 2) * 2), 'ea', 'Field cut', undefined, `${feetAndInches(gableOverhang)} side overhang assumption`));
+  } else {
+    materials.push(toMaterial('Flat roof joists', 'Wood framing', memberCount, 'ea', `${feetAndInches(projection + eaveOverhang)} conceptual cuts`, undefined, `${spacingIn} in O.C.; slope direction shown on plan; final size by engineer/span table`));
+    materials.push(toMaterial('Slope sleepers / tapered drainage build-up', 'Wood framing', Math.max(1, Math.ceil(width / 8)), 'runs', 'Field verify', undefined, `Drainage slope concept based on ${pitch}:12 input`));
+  }
+
+  if (structureType === 'attached') {
+    materials.push(toMaterial(attachedCondition === 'tie-into-roof' ? 'Existing roof tie-in / header line' : 'Ledger / attachment line', 'Load path', 1, 'line', feetAndInches(width), undefined, attachedCondition === 'tie-into-roof' ? 'Tie-in flashing, load path, and existing roof framing must be reviewed by engineer' : 'Ledger attachment, fastener schedule, flashing, and lateral restraint by engineer'));
+  }
+  if (beamLines > 0) {
+    materials.push(toMaterial('Front support beam line', 'Load path', beamLines, 'line', feetAndInches(width), undefined, supportLayout === 'known-posts' ? 'Post locations shown as field-known; engineer to verify spans' : 'Auto front beam line shown at low/bearing side'));
+    materials.push(toMaterial('Posts', 'Load path', postCount, 'ea', `${feetAndInches(overallHeight)} max height input`, undefined, 'Post size, base, uplift, lateral bracing, and footing by engineer'));
+    materials.push(toMaterial('Post bases / anchors', 'Connections', postCount, 'ea', 'Engineer-selected hardware', undefined, 'Footing and anchor type depend on site conditions'));
+    materials.push(toMaterial('Beam-to-post connectors', 'Connections', postCount, 'ea', 'Engineer-selected hardware', undefined, 'Uplift and lateral connection to be specified'));
+  }
+  materials.push(toMaterial('Rafter / joist hangers or hurricane ties', 'Connections', memberCount * (structureType === 'attached' ? 1 : 2), 'ea', 'Engineer-selected hardware', undefined, 'Connector schedule must follow engineered uplift/load path'));
+  materials.push(toMaterial('Roof sheathing area', 'Roof system', Math.ceil((planWidth * planDepth) / 32), 'sheets', '4x8 sheets', undefined, `${(planWidth * planDepth).toFixed(1)} sf plan area before waste`));
+  materials.push(toMaterial('Engineer review item', 'Engineering notes', 1, 'package', 'Required before permit/stamp', undefined, 'Verify spans, member sizes, uplift, lateral bracing, footings, attachments, and any irregular existing conditions'));
+
+  const missing: string[] = [];
+  if (!String(inputs.existingConditionNotes ?? '').trim() && structureType === 'attached') missing.push('existing wall/roof framing condition');
+  if (!String(inputs.obstructionNotes ?? '').trim()) missing.push('jogs/bump-outs/chimneys/offset confirmation');
+  if (supportLayout === 'known-posts') missing.push('dimensioned post locations');
+
+  return {
+    summary: [
+      { label: 'Roof mode', value: roofType === 'gable' ? 'Gable framing' : 'Flat roof framing' },
+      { label: 'Footprint', value: `${feetAndInches(width)} × ${feetAndInches(projection)}` },
+      { label: 'Pitch / slope', value: `${pitch}:12` },
+      { label: 'Framing spacing', value: `${spacingIn} in O.C.` },
+      { label: 'IRC baseline', value: '2024 IRC concept' },
+    ],
+    materials: materials.filter((item) => item.quantity > 0),
+    orderNotes: [
+      'Project assumptions: concept uses the 2024 IRC as a baseline for prescriptive framing guidance unless local jurisdiction requirements supersede it.',
+      `Input summary: ${structureType} ${roofType} roof, ${feetAndInches(width)} wide by ${feetAndInches(projection)} projection, ${pitch}:12 pitch/slope, ${spacingIn} in O.C. framing.`,
+      roofType === 'gable' ? 'Framing layout concept: ridge is centered, rafters bear to side/support lines, and gable end framing follows the selected overhang.' : 'Framing layout concept: joists run from the high/attached side toward the low/front beam with slope direction clearly marked for drainage.',
+      'Engineer review notes: member sizes, connections, fasteners, footings, lateral bracing, uplift resistance, roof diaphragm, and existing structure attachment must be verified and stamped by the engineer.',
+      `Missing information needed for final engineer-ready completion: ${missing.length ? missing.join(', ') : 'none noted from current inputs; field verification still required'}.`,
+    ],
+  };
+}
 
 function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const width = Number(inputs.width ?? 21);

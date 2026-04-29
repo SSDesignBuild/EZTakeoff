@@ -1430,3 +1430,9 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
     padding: 1rem;
   }
 }
+
+/* Wooden Structures concept layout */
+.ledger-line { stroke: #ef4444; stroke-width: 4; stroke-linecap: round; }
+.slope-arrow { stroke: #2563eb; stroke-width: 3; stroke-linecap: round; }
+.order-notes-list { margin: 0; padding-left: 1.2rem; color: var(--text); display: grid; gap: 0.55rem; }
+.order-notes-list li { line-height: 1.45; }

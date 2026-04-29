@@ -1435,4 +1435,120 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
   );
 }
 
-export function LayoutPreview({ serviceSlug, values, onValuesChange }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; if (serviceSlug === 'renaissance-screen-rooms') return <ScreenPreview values={values} renaissance />; return <SunroomPreview values={values} />; }
+
+function WoodenStructurePreview({ values }: { values: Record<string, string | number | boolean> }) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const width = Math.max(1, Number(values.width ?? 16));
+  const projection = Math.max(1, Number(values.projection ?? 12));
+  const roofType = String(values.roofType ?? 'gable');
+  const structureType = String(values.structureType ?? 'attached');
+  const pitch = Math.max(0.25, Number(values.roofPitch ?? 4));
+  const spacingIn = Math.max(12, Number(values.joistSpacing ?? 16));
+  const eaveOverhang = Math.max(0, Number(values.eaveOverhang ?? 1));
+  const gableOverhang = Math.max(0, Number(values.gableOverhang ?? 1));
+  const supportLayout = String(values.supportLayout ?? 'auto-front-beam');
+  const postCount = supportLayout === 'bearing-walls' ? 0 : Math.max(2, Number(values.postCount ?? 3) || Math.max(2, Math.ceil(width / 8) + 1));
+  const existingNotes = String(values.existingConditionNotes ?? '').trim();
+  const obstructionNotes = String(values.obstructionNotes ?? '').trim();
+  const viewW = 980;
+  const viewH = 660;
+  const margin = 84;
+  const drawableW = viewW - margin * 2;
+  const drawableH = 370;
+  const scale = Math.min(drawableW / Math.max(1, width + gableOverhang * 2), drawableH / Math.max(1, projection + eaveOverhang));
+  const planW = width * scale;
+  const planD = projection * scale;
+  const x0 = (viewW - planW) / 2;
+  const y0 = 118;
+  const ridgeY = y0 + planD / 2;
+  const lowY = y0 + planD;
+  const rafterCount = Math.ceil(width / (spacingIn / 12)) + 1;
+  const postXs = Array.from({ length: postCount }, (_, idx) => x0 + (postCount === 1 ? planW / 2 : (idx * planW) / Math.max(1, postCount - 1)));
+  const memberXs = Array.from({ length: rafterCount }, (_, idx) => x0 + Math.min(planW, (idx * spacingIn / 12) * scale));
+  if (memberXs[memberXs.length - 1] < x0 + planW - 2) memberXs.push(x0 + planW);
+  const printPlan = () => exportSvgAsPdf(svgRef.current, 'Wooden structure framing layout', 'sns-wooden-structure-layout.pdf');
+
+  const sectionNote = roofType === 'gable'
+    ? `Gable concept: ridge centered, rafters bear to side/support lines, pitch ${pitch}:12. Final ridge type and rafter sizing by engineer.`
+    : `Flat roof concept: joists run from high side to low/front beam, slope direction ${pitch}:12. Drainage and joist sizing by engineer.`;
+
+  return (
+    <div className="visual-card cad-card">
+      <div className="visual-header compact-preview-header cad-preview-header">
+        <div>
+          <p className="eyebrow">Engineer review package</p>
+          <h3>Wooden structure framing layout</h3>
+        </div>
+        <div className="preview-toolbar">
+          <span className="tag">2024 IRC baseline</span>
+          <button type="button" className="ghost-btn small-btn" onClick={printPlan}>Export PDF</button>
+        </div>
+      </div>
+      <div className="zoom-shell deck-sheet-shell">
+        <svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg deck-sheet-svg">
+          <rect x="18" y="18" width={viewW - 36} height={viewH - 36} className="sheet-border" />
+          <rect x="34" y="34" width={viewW - 68} height={viewH - 68} className="sheet-border inner" />
+          <text x={58} y={66} className="sheet-title">WOODEN STRUCTURE FRAMING PLAN</text>
+          <text x={58} y={90} className="sheet-subtitle">S&amp;S WORKSPACE · CONCEPT FOR STRUCTURAL ENGINEER REVIEW · NOT FOR CONSTRUCTION UNTIL STAMPED</text>
+
+          <rect x={x0} y={y0} width={planW} height={planD} className="deck-polygon muted-fill" rx="6" />
+          <line x1={x0} y1={y0 - 18} x2={x0 + planW} y2={y0 - 18} className="dimension-line" />
+          <text x={x0 + planW / 2 - 34} y={y0 - 28} className="svg-note">{`WIDTH ${feetAndInches(width)}`}</text>
+          <line x1={x0 + planW + 22} y1={y0} x2={x0 + planW + 22} y2={y0 + planD} className="dimension-line" />
+          <text x={x0 + planW + 34} y={y0 + planD / 2} className="svg-note">{`PROJECTION ${feetAndInches(projection)}`}</text>
+
+          {structureType === 'attached' && <>
+            <line x1={x0} y1={y0} x2={x0 + planW} y2={y0} className="ledger-line" />
+            <text x={x0 + 6} y={y0 - 8} className="svg-note">Existing structure / attachment side</text>
+          </>}
+
+          {roofType === 'gable' ? <>
+            <line x1={x0} y1={ridgeY} x2={x0 + planW} y2={ridgeY} className="beam-line" />
+            <text x={x0 + 8} y={ridgeY - 8} className="svg-note">Ridge line · engineer verify ridge board vs structural ridge beam</text>
+            {memberXs.map((x, idx) => <g key={`rafter-${idx}`}>
+              <line x1={x} y1={ridgeY} x2={x} y2={y0} className="joist-line" />
+              <line x1={x} y1={ridgeY} x2={x} y2={lowY} className="joist-line" />
+            </g>)}
+            <text x={x0 + planW - 174} y={ridgeY + 22} className="svg-note">Rafters each side</text>
+          </> : <>
+            {memberXs.map((x, idx) => <line key={`joist-${idx}`} x1={x} y1={y0} x2={x} y2={lowY} className="joist-line" />)}
+            <line x1={x0 + planW / 2} y1={y0 + 24} x2={x0 + planW / 2} y2={lowY - 24} className="slope-arrow" markerEnd="url(#arrow)" />
+            <text x={x0 + planW / 2 + 12} y={y0 + planD / 2} className="svg-note">Slope / drainage direction</text>
+          </>}
+
+          {supportLayout !== 'bearing-walls' && <>
+            <line x1={x0} y1={lowY} x2={x0 + planW} y2={lowY} className="beam-line" />
+            <text x={x0 + 6} y={lowY + 22} className="svg-note">Front support beam / bearing line</text>
+            {postXs.map((x, idx) => <g key={`wood-post-${idx}`}>
+              <rect x={x - 10} y={lowY - 10} width={20} height={20} className="post-node" />
+              <text x={x - 12} y={lowY + 36} className="svg-note">P{idx + 1}</text>
+            </g>)}
+          </>}
+
+          {obstructionNotes && <g>
+            <rect x={x0 + planW - 160} y={y0 + 26} width={138} height={62} fill="rgba(255,255,255,0.72)" stroke="#ef4444" strokeDasharray="5 4" rx="6" />
+            <text x={x0 + planW - 150} y={y0 + 50} className="svg-note">Obstruction / offset</text>
+            <text x={x0 + planW - 150} y={y0 + 70} className="svg-note">See notes</text>
+          </g>}
+
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+            </marker>
+          </defs>
+
+          <g transform={`translate(${58}, ${500})`}>
+            <text x={0} y={0} className="sheet-title">Package notes</text>
+            <text x={0} y={28} className="svg-note">{sectionNote}</text>
+            <text x={0} y={52} className="svg-note">Load path concept: roof members → ridge/ledger/beam → posts or bearing walls → footing/foundation.</text>
+            <text x={0} y={76} className="svg-note">Engineer review: spans, member sizing, uplift, lateral bracing, connections, footings, flashing, and existing conditions.</text>
+            <text x={0} y={100} className="svg-note">{existingNotes ? `Existing condition notes: ${existingNotes.slice(0, 120)}` : 'Existing condition notes: field verify existing framing, sheathing, flashing, and attachment substrate.'}</text>
+            <text x={0} y={124} className="svg-note">{obstructionNotes ? `Jogs / bump-outs / roofline notes: ${obstructionNotes.slice(0, 120)}` : 'Jogs / bump-outs / chimneys / offsets: none entered; verify before final engineer package.'}</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+export function LayoutPreview({ serviceSlug, values, onValuesChange }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; if (serviceSlug === 'renaissance-screen-rooms') return <ScreenPreview values={values} renaissance />; if (serviceSlug === 'wooden-structures') return <WoodenStructurePreview values={values} />; return <SunroomPreview values={values} />; }
