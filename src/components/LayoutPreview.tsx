@@ -219,14 +219,16 @@ function railSegmentsForDeck(deck: ReturnType<typeof buildDeckModel>) {
       result.push({ start: pointAlong(edge, Math.max(coverage.start, stairEnd)), end: pointAlong(edge, coverage.end), length: coverage.end - Math.max(coverage.start, stairEnd), kind: 'deck', railKind: coverage.kind, edgeIndex: edge.index, coverageStart: Math.max(coverage.start, stairEnd), coverageEnd: coverage.end });
     }
   });
-  if (deck.stairRisers > 3 && deck.stairPlacement.start && deck.stairPlacement.end) {
+  if (deck.stairRisers > 3 && deck.stairPlacement.start && deck.stairPlacement.end && deck.stairRailSideCount > 0) {
     const segment = deck.edgeSegments[deck.stairPlacement.edgeIndex ?? 0];
     const normal = outwardNormal(segment, deck.points);
     const run = deck.stairRunFt;
-    result.push(
-      { start: deck.stairPlacement.start, end: { x: deck.stairPlacement.start.x + normal.x * run, y: deck.stairPlacement.start.y + normal.y * run }, length: run, kind: 'stair-side', railKind: 'angled', edgeIndex: segment.index },
-      { start: deck.stairPlacement.end, end: { x: deck.stairPlacement.end.x + normal.x * run, y: deck.stairPlacement.end.y + normal.y * run }, length: run, kind: 'stair-side', railKind: 'angled', edgeIndex: segment.index },
-    );
+    if (deck.stairRailingLeft) {
+      result.push({ start: deck.stairPlacement.start, end: { x: deck.stairPlacement.start.x + normal.x * run, y: deck.stairPlacement.start.y + normal.y * run }, length: run, kind: 'stair-side', railKind: 'angled', edgeIndex: segment.index });
+    }
+    if (deck.stairRailingRight) {
+      result.push({ start: deck.stairPlacement.end, end: { x: deck.stairPlacement.end.x + normal.x * run, y: deck.stairPlacement.end.y + normal.y * run }, length: run, kind: 'stair-side', railKind: 'angled', edgeIndex: segment.index });
+    }
   }
   return result.filter((item) => item.length > 0.05);
 }

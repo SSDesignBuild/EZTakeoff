@@ -138,8 +138,8 @@ function interiorPostCount(length: number, maxSpan = 8) {
 
 function classifyRailing(deck: ReturnType<typeof buildDeckModel>) {
   const topRuns = deriveTopRailRuns(deck);
-  const stairRuns = deck.stairRisers > 3 && deck.stairCount > 0
-    ? Array.from({ length: deck.stairCount * 2 }, () => ({ length: deck.stairRunFt, kind: 'stair' as const }))
+  const stairRuns = deck.stairRisers > 3 && deck.stairCount > 0 && deck.stairRailSideCount > 0
+    ? Array.from({ length: deck.stairCount * deck.stairRailSideCount }, () => ({ length: deck.stairRunFt, kind: 'stair' as const }))
     : [];
   const levelMix = topRuns.reduce((sum, run) => { const opt = optimizeRail(run.length); return { six: sum.six + opt.six, eight: sum.eight + opt.eight }; }, { six: 0, eight: 0 });
   const stairMix = stairRuns.reduce((sum, run) => { const opt = optimizeRail(run.length); return { six: sum.six + opt.six, eight: sum.eight + opt.eight }; }, { six: 0, eight: 0 });
@@ -178,7 +178,7 @@ function classifyRailing(deck: ReturnType<typeof buildDeckModel>) {
   });
   inlineLevelPosts += topRuns.reduce((sum, run) => sum + interiorPostCount(run.length), 0);
   const stairsLevelToAngledCornerPosts = stairKeys.size;
-  const stairsEndPosts = stairRuns.length ? deck.stairCount * 2 : 0;
+  const stairsEndPosts = stairRuns.length ? deck.stairCount * deck.stairRailSideCount : 0;
   const stairsInlinePosts = stairRuns.reduce((sum, run) => sum + interiorPostCount(run.length), 0);
   return {
     levelMix,
@@ -234,10 +234,23 @@ export function calculateEstimate(serviceSlug: string, inputs: EstimateInputs): 
 function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const deck = buildDeckModel(inputs);
   const railingType = String(inputs.railingType ?? 'aluminum');
+  const deckingType = String(inputs.deckingType ?? 'composite');
+  const deckingMaterial = String(inputs.deckingMaterial ?? (deckingType === 'pressure-treated' ? 'Pressure treated 5/4x6' : 'Composite / PVC decking'));
+  const pictureFrameCount = Math.max(0, Math.round(Number(inputs.pictureFrameCount ?? 1)));
+  const breakerBoardCount = Math.max(0, Math.round(Number(inputs.breakerBoardCount ?? 0)));
+  const pictureFrameMaterial = String(inputs.pictureFrameMaterial ?? 'match') === 'match' ? deckingMaterial : String(inputs.pictureFrameMaterial);
+  const breakerBoardMaterial = String(inputs.breakerBoardMaterial ?? 'match') === 'match' ? deckingMaterial : String(inputs.breakerBoardMaterial);
   const materials: MaterialItem[] = [];
-  addBoardGroups(materials, 'Decking', 'Field deck board', deck.boardGroups, deck.boardRun === 'width' ? 'Boards run parallel to the house, so stock length tracks deck width.' : 'Boards run perpendicular to the house, so stock length tracks projection.');
-  addBoardGroups(materials, 'Decking', 'Border / picture-frame board', deck.borderGroups, 'Border boards grouped from exposed perimeter segments only.');
-  addBoardGroups(materials, 'Stairs', 'Stair tread board', deck.stairTreadGroups, 'Two tread boards per tread.');
+  addBoardGroups(materials, 'Decking', `${deckingMaterial} field board`, deck.boardGroups, deck.boardRun === 'width' ? 'Boards run parallel to the house, so stock length tracks deck width.' : 'Boards run perpendicular to the house, so stock length tracks projection.');
+  if (pictureFrameCount > 0) {
+    const borderLengths = deck.exposedSegments.flatMap((segment) => Array.from({ length: pictureFrameCount }, () => segment.length));
+    add24FtStockFromCuts(materials, `${pictureFrameMaterial} picture-frame boards`, 'Decking', borderLengths, `${pictureFrameCount} border course(s) on exposed deck perimeter only.`);
+  }
+  if (breakerBoardCount > 0) {
+    const breakerLength = deck.boardRun === 'width' ? deck.depth : deck.width;
+    add24FtStockFromCuts(materials, `${breakerBoardMaterial} breaker boards`, 'Decking', Array.from({ length: breakerBoardCount }, () => breakerLength), `${breakerBoardCount} breaker board row(s) splitting field decking.`);
+  }
+  addBoardGroups(materials, 'Stairs', `${deckingMaterial} stair tread board`, deck.stairTreadGroups, 'Two tread boards per tread.');
   addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.');
   addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.');
   addBoardGroups(materials, 'Framing', 'Double band / rim board', deck.doubleBandGroups, 'Double band applied to full perimeter and staggered in layout preview.');
@@ -251,8 +264,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     if (leftRight <= 0) return [];
     return [leftRight / 2, leftRight / 2].filter((value) => value > 0.05);
   });
-  if (deck.stairRisers > 3 && deck.stairCount > 0) {
-    for (let run = 0; run < deck.stairCount * 2; run += 1) adjustedRailSegments.push(deck.stairRunFt);
+  if (deck.stairRisers > 3 && deck.stairCount > 0 && deck.stairRailSideCount > 0) {
+    for (let run = 0; run < deck.stairCount * deck.stairRailSideCount; run += 1) adjustedRailSegments.push(deck.stairRunFt);
   }
   const railingBreakdown = classifyRailing(deck);
 
@@ -263,7 +276,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     toMaterial(`6x6 wood posts ${deck.postLength}'`, 'Structure', deck.postCount, 'ea', `${deck.postLength} ft stock`, deck.lockedPosts.length ? `${deck.lockedPosts.length} post position(s) manually locked` : 'Auto-spaced beam support posts'),
     toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', '3 bags per post footing'),
     toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined),
-    toMaterial('Concrete anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined),
+    toMaterial('Concrete submersible J Anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined),
     toMaterial('Joist hangers', 'Hardware', deck.joistHangers, 'ea', 'Match joist size', undefined),
     toMaterial('Rafter ties', 'Hardware', deck.rafterTies, 'ea', '1 per joist to beam condition', undefined),
     toMaterial('Carriage bolt sets', 'Hardware', deck.postCount * 2 + ((railingType === 'wood' || railingType === 'vinyl-composite') ? railingPosts * 2 : 0), 'sets', 'Bolt + washer + nut', undefined),
@@ -272,9 +285,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     toMaterial('SDS structural screws', 'Hardware', deck.sdsCorners, 'ea', '4 per corner', 'All band-board corners'),
     toMaterial('Joist tape', 'Hardware', deck.joistTapeLf, 'lf', 'Match roll coverage', undefined),
     toMaterial(deck.fastenerType === 'top screws' ? '3 in deck screws' : '2-3/8 in CAMO screws', 'Hardware', deck.deckFastenerBoxes, 'boxes', deck.fastenerType === 'top screws' ? '365 per box' : '1750 per box', undefined),
+    toMaterial('Exterior wood screws 3-1/2 in', 'Hardware', Math.max(1, Math.ceil(deck.area / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For decking, breaker boards, and picture-frame areas that are face screwed'),
     toMaterial('3 in nails', 'Hardware', deck.joistHangers * 10 + deck.postBases * 10 + deck.lateralLoadBrackets * 10, 'nails', '10 per connector', 'Joist hangers, post brackets, and lateral load brackets'),
     toMaterial('1-1/2 in nails', 'Hardware', deck.rafterTies * 10, 'nails', '10 per rafter tie', 'For rafter ties'),
-    toMaterial('Fascia', 'Trim', deck.fasciaPieces, 'boards', '12 ft fascia boards', `${deck.fasciaLf.toFixed(1)} lf including stair sides and risers`),
+    ...(deck.fasciaPieces > 0 ? [toMaterial('Fascia', 'Trim', deck.fasciaPieces, 'boards', '12 ft fascia boards', undefined, `${deck.fasciaLf.toFixed(1)} lf on exposed deck perimeter plus stair risers/stringer sides only`)] : []),
   );
   if (deck.stairStringers > 0) {
     materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringers, 'boards', `${deck.stairStringerLength} ft stock`, `Stringers cut on site at 12 in. O.C. · ${deck.stairRisers} risers / ${deck.stairTreadsPerRun} treads per run`));
@@ -314,7 +328,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     materials: consolidateMaterials(materials).filter((item) => item.quantity > 0),
     orderNotes: [
       deck.attachment === 'brick' ? 'Brick attachment is treated as freestanding, so the house side still needs beam and post support, including beam segments at any inside corner/jut-out.' : 'Siding attachment keeps ledger logic active unless the deck is marked freestanding.',
-      deck.stairPlacement.edgeIndex !== null ? `Stairs sit on edge ${deck.stairPlacement.edgeIndex + 1}. Preview now shows tread count, stringer layout, and stair-side railing when more than 3 risers are required.` : 'No stair edge is assigned yet in the drawing tool.',
+      deck.stairPlacement.edgeIndex !== null ? `Stairs sit on edge ${deck.stairPlacement.edgeIndex + 1}. Preview now shows tread count, stringer layout, and ${deck.stairRailSideCount === 0 ? 'no stair-side railing' : `${deck.stairRailSideCount} stair-side railing run(s)`} when more than 3 risers are required.` : 'No stair edge is assigned yet in the drawing tool.',
       'Railing optimizer solves each straight run separately, subtracts stair openings from the deck edge, and adds stair-side railing runs when the stair count requires guard rail.',
       deck.lockedPosts.length > 0 ? 'Locked posts stay in the take-off even after beam edits so you can preserve preferred field locations.' : 'Use post lock mode when you want to hold a post location while still letting the app auto-space the rest.',
     ],

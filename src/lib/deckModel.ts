@@ -8,9 +8,16 @@ export interface DeckInputs {
   stairCount?: string | number | boolean;
   stairWidth?: string | number | boolean;
   stairRise?: string | number | boolean;
+  stairRailingLeft?: string | number | boolean;
+  stairRailingRight?: string | number | boolean;
   perimeterRailingFt?: string | number | boolean;
   railingType?: string | number | boolean;
   deckingType?: string | number | boolean;
+  deckingMaterial?: string | number | boolean;
+  breakerBoardCount?: string | number | boolean;
+  breakerBoardMaterial?: string | number | boolean;
+  pictureFrameCount?: string | number | boolean;
+  pictureFrameMaterial?: string | number | boolean;
   borderSameBoard?: string | number | boolean;
   customBeamYs?: string | number | boolean;
   stairEdgeIndex?: string | number | boolean;
@@ -105,6 +112,9 @@ export interface DeckModel {
   stairTreadGroups: BoardGroup[];
   stairStringers: number;
   stairStringerLength: number;
+  stairRailingLeft: boolean;
+  stairRailingRight: boolean;
+  stairRailSideCount: number;
   railingRun: number;
   railingSections6: number;
   railingSections8: number;
@@ -427,7 +437,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const blockingCount = joistCount * 2;
   const blockingBoardCount = Math.ceil((blockingCount * 1.5) / 8);
   const joistTapeLf = round2(joistLengthsRaw.reduce((sum, length) => sum + length, 0) + doubleBandLf / 2);
-  const joistHangers = isFreestanding ? joistCount * 2 : joistCount;
+  const joistHangers = joistCount * 2;
   const rafterTies = joistCount * Math.max(1, beamLines.length);
   const postLength = chooseStockLength(Number(inputs.deckHeight ?? 8) + 2, [8, 10, 12, 16]);
   const concreteBags = postCount * 3;
@@ -445,10 +455,14 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const stairStringersPerRun = stairCount > 0 ? Math.max(2, Math.ceil(stairWidth / 1) + 1) : 0;
   const stairStringers = stairStringersPerRun * stairCount;
   const stairStringerLength = chooseStockLength(Math.max(12, Math.sqrt(stairRiseFt ** 2 + stairRunFt ** 2)), [12, 16, 20]);
-  const stairSideFascia = stairCount * stairRunFt * 2;
-  const riserFascia = stairCount * stairRisers * stairWidth;
-  const fasciaLf = round2(exposedPerimeter + stairSideFascia + riserFascia);
-  const fasciaPieces = Math.ceil(fasciaLf / 12);
+  const stairRailingLeft = inputs.stairRailingLeft !== false && String(inputs.stairRailingLeft ?? 'true') !== 'false';
+  const stairRailingRight = inputs.stairRailingRight !== false && String(inputs.stairRailingRight ?? 'true') !== 'false';
+  const stairRailSideCount = stairCount > 0 ? Number(stairRailingLeft) + Number(stairRailingRight) : 0;
+  const useFascia = String(inputs.deckingType ?? 'composite') !== 'pressure-treated';
+  const stairSideFascia = useFascia ? stairCount * stairRunFt * 2 : 0;
+  const riserFascia = useFascia ? stairCount * stairRisers * stairWidth : 0;
+  const fasciaLf = useFascia ? round2(exposedPerimeter + stairSideFascia + riserFascia) : 0;
+  const fasciaPieces = useFascia ? Math.ceil(fasciaLf / 12) : 0;
 
   const stairEdgeIndexValue = Number(inputs.stairEdgeIndex ?? -1);
   const stairEdge = stairCount > 0 && stairEdgeIndexValue >= 0 && stairEdgeIndexValue < segments.length ? segments[stairEdgeIndexValue] : null;
@@ -459,7 +473,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
 
   const topRailSegments = deriveTopRailSegments(railCoverage, stairPlacement);
   const topRailRun = round2(topRailSegments.reduce((sum, item) => sum + (item.end - item.start), 0));
-  const stairRailRun = stairRisers > 3 ? round2(stairRunFt * 2) : 0;
+  const stairRailRun = stairRisers > 3 ? round2(stairRunFt * stairRailSideCount) : 0;
   const railingRun = round2(Number(inputs.perimeterRailingFt ?? 0) || (topRailRun + stairRailRun));
   let railingSections6 = 0;
   let railingSections8 = 0;
@@ -491,11 +505,11 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
       }
       return best;
     })();
-    railingSections6 += stairBest.six * 2;
-    railingSections8 += stairBest.eight * 2;
+    railingSections6 += stairBest.six * stairRailSideCount;
+    railingSections8 += stairBest.eight * stairRailSideCount;
   }
   const railingType = String(inputs.railingType ?? 'aluminum');
-  const railingPosts = railingType === 'aluminum' ? 0 : Math.max(0, topRailSegments.reduce((sum, item) => sum + Math.max(0, Math.ceil((item.end - item.start) / 8) - 1), 0) + topRailSegments.length * 2 + (stairRisers > 3 ? Math.max(4, Math.ceil(stairRunFt / 8) * 2 + 2) : 0));
+  const railingPosts = railingType === 'aluminum' ? 0 : Math.max(0, topRailSegments.reduce((sum, item) => sum + Math.max(0, Math.ceil((item.end - item.start) / 8) - 1), 0) + topRailSegments.length * 2 + (stairRisers > 3 && stairRailSideCount > 0 ? Math.max(stairRailSideCount * 2, Math.ceil(stairRunFt / 8) * stairRailSideCount + stairRailSideCount) : 0));
   const carriageBolts = postCount * 2 + (railingPosts > 0 ? railingPosts * 2 : 0);
   const lateralLoadBrackets = isFreestanding ? 0 : Math.max(2, Math.ceil(houseContactLength / 2));
   const sdsCorners = Math.max(4, segments.length) * 4;
@@ -503,5 +517,5 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const deckFastenerBoxes = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? Math.ceil(deckFastenerCount / 365) : Math.ceil(deckFastenerCount / 1750);
   const fastenerType = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'top screws' : 'hidden camo screws';
 
-  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingBoardCount, joistTapeLf, joistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerLength, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), stairPlacement };
+  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingBoardCount, joistTapeLf, joistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), stairPlacement };
 }

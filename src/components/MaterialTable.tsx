@@ -40,12 +40,26 @@ function fitText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number)
   return out;
 }
 
+function wrapText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number) {
+  const words = String(value || '').split(/\s+/).filter(Boolean);
+  if (!words.length) return ['—'];
+  const lines: string[] = [];
+  let current = words[0];
+  for (let i = 1; i < words.length; i += 1) {
+    const attempt = `${current} ${words[i]}`;
+    if (ctx.measureText(attempt).width <= maxWidth) current = attempt;
+    else { lines.push(current); current = words[i]; }
+  }
+  lines.push(current);
+  return lines;
+}
+
 function renderMaterialCanvas(title: string, values: Record<string, string | number | boolean>, grouped: Record<string, DisplayMaterialItem[]>) {
   const margin = 28;
-  const rowHeight = 28;
-  const gutter = 14;
-  const minWidths = [120, 42, 44, 96, 64, 84];
-  const maxWidths = [220, 56, 60, 170, 110, 170];
+  const rowBaseHeight = 28;
+  const gutter = 10;
+  const minWidths = [150, 44, 44, 104, 76, 180];
+  const maxWidths = [210, 58, 58, 150, 110, 320];
   const headers = ['Material', 'Qty', 'Unit', 'Stock recommendation', 'Color', 'Notes'];
   const canvas = document.createElement('canvas');
   const probe = canvas.getContext('2d');
@@ -56,18 +70,24 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     Object.values(grouped).forEach((rows) => {
       rows.forEach((row) => {
         const value = [row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.color ?? '—', row.notes ?? '—'][idx];
-        width = Math.max(width, probe.measureText(String(value)).width + 16);
+        const measured = idx === 5 ? Math.min(maxWidths[idx], Math.max(minWidths[idx], probe.measureText(String(value)).width * 0.6 + 24)) : probe.measureText(String(value)).width + 16;
+        width = Math.max(width, measured);
       });
     });
     return Math.min(maxWidths[idx], Math.max(minWidths[idx], Math.ceil(width)));
   });
   const tableWidth = colWidths.reduce((sum, width) => sum + width, 0) + gutter * (colWidths.length - 1);
-  const pageWidth = Math.max(900, tableWidth + margin * 2);
+  const pageWidth = Math.max(940, tableWidth + margin * 2);
+  const rowHeightsByCategory = Object.fromEntries(Object.entries(grouped).map(([category, rows]) => [category, rows.map((row) => {
+    const noteLines = wrapText(probe, row.notes ?? '—', colWidths[5] - 16).length;
+    return Math.max(rowBaseHeight, 18 + noteLines * 14);
+  })]));
   let pageHeight = 138;
-  Object.values(grouped).forEach((rows) => {
-    pageHeight += 44 + 28 + rows.length * rowHeight + 18;
+  Object.entries(grouped).forEach(([category]) => {
+    const heights = rowHeightsByCategory[category] as number[];
+    pageHeight += 44 + 28 + heights.reduce((sum, height) => sum + height, 0) + 18;
   });
-  pageHeight += String(values.jobNotes ?? '').trim() ? 72 : 32;
+  pageHeight += String(values.jobNotes ?? '').trim() ? 92 : 32;
   canvas.width = pageWidth;
   canvas.height = Math.max(700, pageHeight);
   const ctx = canvas.getContext('2d');
@@ -85,8 +105,8 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     ['Deliver date', String(values.deliverDate ?? '') || '—'],
   ];
   const infoWidths = info.map(([label, value], idx) => {
-    const max = idx === 1 ? pageWidth * 0.5 : 140;
-    return Math.min(max, Math.max(90, probe.measureText(String(value)).width + 18, probe.measureText(label).width + 12));
+    const max = idx === 1 ? pageWidth * 0.62 : idx >= 2 ? 110 : 150;
+    return Math.min(max, Math.max(idx === 1 ? 180 : 90, probe.measureText(String(value)).width + 18, probe.measureText(label).width + 12));
   });
   const infoTotal = infoWidths.reduce((a,b) => a+b,0);
   const stretch = Math.max(0, pageWidth - margin * 2 - infoTotal);
@@ -122,20 +142,24 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     y += 28;
     ctx.font = '12px Arial';
     rows.forEach((row, idx) => {
-      const rowY = y + idx * rowHeight;
+      const rowHeight = (rowHeightsByCategory[category] as number[])[idx];
+      const rowY = y;
       ctx.fillStyle = idx % 2 ? '#fafafa' : '#ffffff';
       ctx.fillRect(margin, rowY, tableWidth, rowHeight);
       ctx.strokeStyle = '#d1d5db';
       ctx.strokeRect(margin, rowY, tableWidth, rowHeight);
       ctx.fillStyle = '#111111';
-      const rowValues = [row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.color ?? '—', row.notes ?? '—'];
+      const rowValues = [row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.color ?? '—'];
       rowValues.forEach((value, colIdx) => {
         const x = cols[colIdx] + 8;
         const maxWidth = colWidths[colIdx] - 16;
         ctx.fillText(fitText(ctx, String(value), maxWidth), x, rowY + 18);
       });
+      const noteLines = wrapText(ctx, row.notes ?? '—', colWidths[5] - 16);
+      noteLines.forEach((line, lineIdx) => ctx.fillText(line, cols[5] + 8, rowY + 18 + lineIdx * 14));
+      y += rowHeight;
     });
-    y += rows.length * rowHeight + 20;
+    y += 20;
   });
   const jobNotes = String(values.jobNotes ?? '').trim();
   if (jobNotes) {
@@ -146,7 +170,7 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     y += 18;
     ctx.font = '12px Arial';
     ctx.fillStyle = '#374151';
-    ctx.fillText(fitText(ctx, jobNotes, pageWidth - margin * 2), margin, y);
+    wrapText(ctx, jobNotes, pageWidth - margin * 2).forEach((line, idx) => ctx.fillText(line, margin, y + idx * 14));
   }
   return canvas;
 }
@@ -155,8 +179,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
   const tableRef = useRef<HTMLDivElement | null>(null);
   const [customDraft, setCustomDraft] = useState(customDefaults);
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editingQuantity, setEditingQuantity] = useState<string>('');
-  const [editingNotes, setEditingNotes] = useState<string>('');
+  const [editingDraft, setEditingDraft] = useState({ name: '', quantity: '', unit: '', stockRecommendation: '', color: '', notes: '' });
 
   const customItems = useMemo(() => parseJsonArray<CustomMaterialItem>(values.customMaterialItems, []), [values.customMaterialItems]);
   const deletedKeys = useMemo(() => new Set(parseJsonArray<string>(values.deletedMaterialKeys, [])), [values.deletedMaterialKeys]);
@@ -165,6 +188,21 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
     if (typeof raw !== 'string' || raw.trim() === '') return {} as Record<string, string>;
     try { const parsed = JSON.parse(raw); return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {}; } catch { return {} as Record<string, string>; }
   }, [values.materialNoteOverrides]);
+
+  const parseOverrideMap = (raw: string | number | boolean | undefined) => {
+    if (typeof raw !== 'string' || raw.trim() === '') return {} as Record<string, string>;
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {};
+    } catch {
+      return {} as Record<string, string>;
+    }
+  };
+
+  const nameOverrides = useMemo(() => parseOverrideMap(values.materialNameOverrides), [values.materialNameOverrides]);
+  const unitOverrides = useMemo(() => parseOverrideMap(values.materialUnitOverrides), [values.materialUnitOverrides]);
+  const stockOverrides = useMemo(() => parseOverrideMap(values.materialStockOverrides), [values.materialStockOverrides]);
+  const colorOverrides = useMemo(() => parseOverrideMap(values.materialColorOverrides), [values.materialColorOverrides]);
 
   const quantityOverrides = useMemo(() => {
     const raw = values.materialQuantityOverrides;
@@ -181,9 +219,17 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
     const estimateItems = items.map((item, index) => ({ ...item, rowKey: `estimate:${item.category}::${item.name}::${index}`, source: 'estimate' as const }));
     const appendedCustom = customItems.map((item) => ({ ...item, rowKey: `custom:${item.id}`, source: 'custom' as const }));
     return [...estimateItems, ...appendedCustom]
-      .map((item) => ({ ...item, quantity: quantityOverrides[item.rowKey] ?? item.quantity, notes: noteOverrides[item.rowKey] ?? item.notes }))
+      .map((item) => ({
+        ...item,
+        name: nameOverrides[item.rowKey] ?? item.name,
+        quantity: quantityOverrides[item.rowKey] ?? item.quantity,
+        unit: unitOverrides[item.rowKey] ?? item.unit,
+        stockRecommendation: stockOverrides[item.rowKey] ?? item.stockRecommendation,
+        color: colorOverrides[item.rowKey] ?? item.color,
+        notes: noteOverrides[item.rowKey] ?? item.notes,
+      }))
       .filter((item) => !deletedKeys.has(item.rowKey));
-  }, [items, customItems, deletedKeys, quantityOverrides, noteOverrides]);
+  }, [items, customItems, deletedKeys, nameOverrides, quantityOverrides, unitOverrides, stockOverrides, colorOverrides, noteOverrides]);
 
   const grouped = useMemo(() => displayItems.reduce<Record<string, DisplayMaterialItem[]>>((acc, item) => {
     acc[item.category] = acc[item.category] ?? [];
@@ -198,6 +244,10 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
   const persistDeletedKeys = (nextKeys: Set<string>) => onValuesChange((current) => ({ ...current, deletedMaterialKeys: JSON.stringify(Array.from(nextKeys)) }));
   const persistQuantityOverrides = (nextOverrides: Record<string, number>) => onValuesChange((current) => ({ ...current, materialQuantityOverrides: JSON.stringify(nextOverrides) }));
   const persistNoteOverrides = (nextOverrides: Record<string, string>) => onValuesChange((current) => ({ ...current, materialNoteOverrides: JSON.stringify(nextOverrides) }));
+  const persistNameOverrides = (nextOverrides: Record<string, string>) => onValuesChange((current) => ({ ...current, materialNameOverrides: JSON.stringify(nextOverrides) }));
+  const persistUnitOverrides = (nextOverrides: Record<string, string>) => onValuesChange((current) => ({ ...current, materialUnitOverrides: JSON.stringify(nextOverrides) }));
+  const persistStockOverrides = (nextOverrides: Record<string, string>) => onValuesChange((current) => ({ ...current, materialStockOverrides: JSON.stringify(nextOverrides) }));
+  const persistColorOverrides = (nextOverrides: Record<string, string>) => onValuesChange((current) => ({ ...current, materialColorOverrides: JSON.stringify(nextOverrides) }));
 
   const addCustomItem = () => {
     if (!customDraft.name.trim()) return;
@@ -227,15 +277,42 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
   };
 
   const restoreAllHidden = () => persistDeletedKeys(new Set());
-  const startEdit = (item: DisplayMaterialItem) => { setEditingKey(item.rowKey); setEditingQuantity(String(quantityOverrides[item.rowKey] ?? item.quantity)); setEditingNotes(String(noteOverrides[item.rowKey] ?? item.notes ?? '')); };
-  const saveQuantity = (item: DisplayMaterialItem) => {
-    const qty = Number(editingQuantity);
-    const normalized = Number.isFinite(qty) && qty >= 0 ? qty : item.quantity;
-    if (item.source === 'custom') persistCustomItems(customItems.map((entry) => entry.id === item.rowKey.replace('custom:', '') ? { ...entry, quantity: normalized, notes: editingNotes.trim() || undefined } : entry));
-    else { persistQuantityOverrides({ ...quantityOverrides, [item.rowKey]: normalized }); persistNoteOverrides({ ...noteOverrides, [item.rowKey]: editingNotes.trim() }); }
-    setEditingKey(null); setEditingQuantity(''); setEditingNotes('');
+  const startEdit = (item: DisplayMaterialItem) => {
+    setEditingKey(item.rowKey);
+    setEditingDraft({
+      name: String(item.name ?? ''),
+      quantity: String(item.quantity ?? ''),
+      unit: String(item.unit ?? ''),
+      stockRecommendation: String(item.stockRecommendation ?? ''),
+      color: String(item.color ?? ''),
+      notes: String(item.notes ?? ''),
+    });
   };
-  const cancelEdit = () => { setEditingKey(null); setEditingQuantity(''); setEditingNotes(''); };
+  const saveEdit = (item: DisplayMaterialItem) => {
+    const qty = Number(editingDraft.quantity);
+    const normalized = Number.isFinite(qty) && qty >= 0 ? qty : item.quantity;
+    if (item.source === 'custom') {
+      persistCustomItems(customItems.map((entry) => entry.id === item.rowKey.replace('custom:', '') ? {
+        ...entry,
+        name: editingDraft.name.trim() || entry.name,
+        quantity: normalized,
+        unit: editingDraft.unit.trim() || entry.unit,
+        stockRecommendation: editingDraft.stockRecommendation.trim() || entry.stockRecommendation,
+        color: editingDraft.color.trim() || undefined,
+        notes: editingDraft.notes.trim() || undefined,
+      } : entry));
+    } else {
+      persistNameOverrides({ ...nameOverrides, [item.rowKey]: editingDraft.name.trim() || item.name });
+      persistQuantityOverrides({ ...quantityOverrides, [item.rowKey]: normalized });
+      persistUnitOverrides({ ...unitOverrides, [item.rowKey]: editingDraft.unit.trim() || item.unit });
+      persistStockOverrides({ ...stockOverrides, [item.rowKey]: editingDraft.stockRecommendation.trim() || item.stockRecommendation });
+      persistColorOverrides({ ...colorOverrides, [item.rowKey]: editingDraft.color.trim() });
+      persistNoteOverrides({ ...noteOverrides, [item.rowKey]: editingDraft.notes.trim() });
+    }
+    setEditingKey(null);
+    setEditingDraft({ name: '', quantity: '', unit: '', stockRecommendation: '', color: '', notes: '' });
+  };
+  const cancelEdit = () => { setEditingKey(null); setEditingDraft({ name: '', quantity: '', unit: '', stockRecommendation: '', color: '', notes: '' }); };
 
   const exportPdf = async () => {
     const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
@@ -330,21 +407,21 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
                 <tbody>
                   {categoryItems.map((item) => (
                     <tr key={item.rowKey}>
-                      <td>{item.name}</td>
-                      <td>{editingKey === item.rowKey ? <input type="number" min="0" step="0.01" value={editingQuantity} onChange={(event) => setEditingQuantity(event.target.value)} style={{ width: '82px' }} /> : item.quantity}</td>
-                      <td>{item.unit}</td>
-                      <td>{item.stockRecommendation}</td>
-                      <td>{item.color ?? '—'}</td>
-                      <td>{editingKey === item.rowKey ? <input type="text" value={editingNotes} onChange={(event) => setEditingNotes(event.target.value)} style={{ width: '100%' }} /> : item.notes ?? '—'}</td>
+                      <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.name} onChange={(event) => setEditingDraft((current) => ({ ...current, name: event.target.value }))} style={{ width: '100%' }} /> : item.name}</td>
+                      <td>{editingKey === item.rowKey ? <input type="number" min="0" step="0.01" value={editingDraft.quantity} onChange={(event) => setEditingDraft((current) => ({ ...current, quantity: event.target.value }))} style={{ width: '82px' }} /> : item.quantity}</td>
+                      <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.unit} onChange={(event) => setEditingDraft((current) => ({ ...current, unit: event.target.value }))} style={{ width: '72px' }} /> : item.unit}</td>
+                      <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.stockRecommendation} onChange={(event) => setEditingDraft((current) => ({ ...current, stockRecommendation: event.target.value }))} style={{ width: '100%' }} /> : item.stockRecommendation}</td>
+                      <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.color} onChange={(event) => setEditingDraft((current) => ({ ...current, color: event.target.value }))} style={{ width: '100%' }} /> : item.color ?? '—'}</td>
+                      <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.notes} onChange={(event) => setEditingDraft((current) => ({ ...current, notes: event.target.value }))} style={{ width: '100%' }} /> : item.notes ?? '—'}</td>
                       <td data-export-ignore="true">
                         {editingKey === item.rowKey ? (
                           <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                            <button type="button" className="ghost-btn small-btn" onClick={() => saveQuantity(item)}>Save</button>
+                            <button type="button" className="ghost-btn small-btn" onClick={() => saveEdit(item)}>Save</button>
                             <button type="button" className="ghost-btn small-btn" onClick={cancelEdit}>Cancel</button>
                           </div>
                         ) : (
                           <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                            <button type="button" className="ghost-btn small-btn" onClick={() => startEdit(item)}>Edit qty</button>
+                            <button type="button" className="ghost-btn small-btn" onClick={() => startEdit(item)}>Edit</button>
                             <button type="button" className="ghost-btn small-btn" onClick={() => deleteRow(item)}>Delete</button>
                           </div>
                         )}
