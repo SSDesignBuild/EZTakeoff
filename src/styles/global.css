@@ -1490,3 +1490,9 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 }
 .blocking-line{stroke:#64748b;stroke-width:4;stroke-linecap:round;}
 .deck-sheet-svg .blocking-line{stroke:#64748b;stroke-width:3;stroke-linecap:round;}
+.deck-sheet-svg .picture-frame-line{stroke:#dc2626;stroke-width:5;stroke-linecap:square;fill:none;}
+.deck-sheet-svg .picture-frame-line.course-2{stroke:#ef4444;stroke-width:4;}
+.deck-sheet-svg .picture-frame-line.course-3{stroke:#f87171;stroke-width:3.5;}
+.deck-sheet-svg .breaker-board-line{stroke:#1d4ed8;stroke-width:9;stroke-linecap:square;fill:none;opacity:.92;}
+.deck-sheet-svg .required-blocking{stroke:#0f172a;stroke-width:3.25;stroke-dasharray:0;}
+.deck-sheet-svg .railing-post-node,.deck-sheet-svg .stair-post-node{transform-box:fill-box;transform-origin:center;}

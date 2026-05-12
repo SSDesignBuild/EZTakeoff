@@ -16,8 +16,12 @@ export interface DeckInputs {
   deckingMaterial?: string | number | boolean;
   breakerBoardCount?: string | number | boolean;
   breakerBoardMaterial?: string | number | boolean;
+  breakerBoardMaterial2?: string | number | boolean;
+  breakerBoardMaterial3?: string | number | boolean;
   pictureFrameCount?: string | number | boolean;
   pictureFrameMaterial?: string | number | boolean;
+  pictureFrameMaterial2?: string | number | boolean;
+  pictureFrameMaterial3?: string | number | boolean;
   borderSameBoard?: string | number | boolean;
   customBeamYs?: string | number | boolean;
   stairEdgeIndex?: string | number | boolean;
@@ -90,6 +94,10 @@ export interface DeckModel {
   blockingRows: number;
   blockingCount: number;
   blockingBoardCount: number;
+  pictureFrameCount: number;
+  breakerBoardCount: number;
+  breakerBoardPositions: number[];
+  requiredFieldBoardBreaks: number[];
   joistTapeLf: number;
   joistHangers: number;
   rafterTies: number;
@@ -301,6 +309,26 @@ function mergeGroups(...groups: BoardGroup[][]) {
   return Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([length, count]) => ({ length, count }));
 }
 
+
+function applyWasteBuffer(groups: BoardGroup[], factor = 1.05) {
+  return groups.map((group) => ({ ...group, count: Math.ceil(group.count * factor) }));
+}
+
+function boardStockSegments(totalLength: number, availableBreaks: number[] = []) {
+  const sortedBreaks = availableBreaks.filter((value) => value > 0.05 && value < totalLength - 0.05).sort((a, b) => a - b);
+  const marks = [0, ...sortedBreaks, totalLength];
+  const segments: number[] = [];
+  for (let i = 1; i < marks.length; i += 1) {
+    let span = marks[i] - marks[i - 1];
+    while (span > 20.01) {
+      segments.push(20);
+      span -= 20;
+    }
+    if (span > 0.05) segments.push(span);
+  }
+  return segments;
+}
+
 function uniqueSorted(values: number[]) {
   return Array.from(new Set(values.map((value) => round2(value)))).sort((a, b) => a - b);
 }
@@ -334,13 +362,21 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const exposedSegments = segments.filter((segment) => railCoverage.some((item) => item.edgeIndex === segment.index));
   const exposedPerimeter = round2(railCoverage.reduce((sum, item) => sum + (item.end - item.start), 0));
 
+  const pictureFrameCount = Math.max(0, Math.round(Number(inputs.pictureFrameCount ?? 1)));
+  const breakerBoardCount = Math.max(0, Math.round(Number(inputs.breakerBoardCount ?? 0)));
+  const fieldRunLength = boardRun === 'width' ? width : depth;
+  const requiredFieldBoardBreaks = fieldRunLength > 20.01 && breakerBoardCount === 0 ? [fieldRunLength / 2] : [];
+  const breakerBoardPositions = Array.from({ length: breakerBoardCount }, (_, i) => {
+    const ratio = (i + 1) / (breakerBoardCount + 1);
+    return round2((boardRun === 'width' ? minX : minY) + fieldRunLength * ratio);
+  });
   const boardLengths: number[] = [];
   if (boardRun === 'width') {
-    for (let y = minY + EFFECTIVE_COVERAGE / 2; y < maxY; y += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'horizontal', y).forEach((pair) => boardLengths.push(pair.length));
+    for (let y = minY + EFFECTIVE_COVERAGE / 2; y < maxY; y += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'horizontal', y).forEach((pair) => boardStockSegments(pair.length, breakerBoardPositions.map((x) => x - pair.start)).forEach((len) => boardLengths.push(len)));
   } else {
-    for (let x = minX + EFFECTIVE_COVERAGE / 2; x < maxX; x += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'vertical', x).forEach((pair) => boardLengths.push(pair.length));
+    for (let x = minX + EFFECTIVE_COVERAGE / 2; x < maxX; x += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'vertical', x).forEach((pair) => boardStockSegments(pair.length, breakerBoardPositions.map((y) => y - pair.start)).forEach((len) => boardLengths.push(len)));
   }
-  const boardGroups = accumulateGroups(boardLengths);
+  const boardGroups = applyWasteBuffer(accumulateGroups(boardLengths));
   const borderGroups = inputs.borderSameBoard ? accumulateGroups(exposedSegments.map((segment) => segment.length)) : [];
 
   const rawCustomBeams = parseNumberArray(inputs.customBeamYs).map((value) => clamp(value, 0, depth)).filter((value) => isFreestanding ? value >= 0 && value <= depth : value > 0.2 && value < depth - 0.2);
@@ -433,8 +469,10 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
 
   const bandSegments = accumulateGroups([...segments.map((segment) => segment.length), ...segments.map((segment) => segment.length)]);
   const doubleBandLf = round2(polygonPerimeter(points) * 2);
-  const blockingRows = 2;
-  const blockingCount = joistCount * 2;
+  const blockingRows = 2 + Math.max(0, pictureFrameCount) + Math.max(0, breakerBoardCount);
+  const pictureFrameBlocking = pictureFrameCount > 0 ? Math.ceil(exposedPerimeter) * pictureFrameCount : 0;
+  const breakerBlocking = breakerBoardCount > 0 ? Math.ceil((boardRun === 'width' ? depth : width)) * breakerBoardCount : 0;
+  const blockingCount = (joistCount * 2) + pictureFrameBlocking + breakerBlocking;
   const blockingBoardCount = Math.ceil((blockingCount * 1.5) / 8);
   const joistTapeLf = round2(joistLengthsRaw.reduce((sum, length) => sum + length, 0) + doubleBandLf / 2);
   const joistHangers = joistCount * 2;
@@ -517,5 +555,5 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const deckFastenerBoxes = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? Math.ceil(deckFastenerCount / 365) : Math.ceil(deckFastenerCount / 1750);
   const fastenerType = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'top screws' : 'hidden camo screws';
 
-  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingBoardCount, joistTapeLf, joistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), stairPlacement };
+  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingBoardCount, pictureFrameCount, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), stairPlacement };
 }

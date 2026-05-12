@@ -28,6 +28,25 @@ const addBoardGroups = (materials: MaterialItem[], category: string, prefix: str
   });
 };
 
+const addDeckBoardCuts = (materials: MaterialItem[], name: string, category: string, lengths: number[], notes?: string) => {
+  const stock = [8, 12, 16, 20];
+  const grouped = new Map<number, number>();
+  lengths.filter((length) => length > 0.05).forEach((length) => {
+    let remaining = length;
+    while (remaining > 20.01) {
+      grouped.set(20, (grouped.get(20) ?? 0) + 1);
+      remaining -= 20;
+    }
+    if (remaining > 0.05) {
+      const chosen = stock.find((item) => item >= remaining - 1e-6) ?? 20;
+      grouped.set(chosen, (grouped.get(chosen) ?? 0) + 1);
+    }
+  });
+  [...grouped.entries()].sort((a, b) => a[0] - b[0]).forEach(([length, count]) => {
+    materials.push(toMaterial(`${name} ${length}'`, category, Math.ceil(count * 1.05), 'boards', `${length} ft deck-board stock`, undefined, `${notes ?? ''}${notes ? ' · ' : ''}Includes 5% waste/damage buffer.`));
+  });
+};
+
 const normalizeCutLength = (length: number) => Math.round(length * 12) / 12;
 
 const packStockCuts = (lengths: number[], stockLength = 24) => {
@@ -250,20 +269,21 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     for (let i = 0; i < pictureFrameCount; i += 1) {
       const style = pictureFrameMaterials[i] || deckingMaterial;
       const borderLengths = deck.exposedSegments.map((segment) => segment.length);
-      add24FtStockFromCuts(materials, `${style} picture-frame board ${i + 1}`, 'Decking', borderLengths, `Picture-frame course ${i + 1} on exposed deck perimeter only.`);
+      addDeckBoardCuts(materials, `${style} picture-frame board ${i + 1}`, 'Decking', borderLengths, `Picture-frame course ${i + 1} on exposed deck perimeter only.`);
     }
   }
   if (breakerBoardCount > 0) {
     const breakerLength = deck.boardRun === 'width' ? deck.depth : deck.width;
     for (let i = 0; i < breakerBoardCount; i += 1) {
       const style = breakerBoardMaterials[i] || deckingMaterial;
-      add24FtStockFromCuts(materials, `${style} breaker board ${i + 1}`, 'Decking', [breakerLength], `Breaker board row ${i + 1} splitting field decking.`);
+      addDeckBoardCuts(materials, `${style} breaker board ${i + 1}`, 'Decking', [breakerLength], `Breaker board row ${i + 1} splitting field decking.`);
     }
   }
   addBoardGroups(materials, 'Stairs', `${deckingMaterial} stair tread board`, deck.stairTreadGroups, 'Two tread boards per tread.');
   addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.');
   addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.');
   addBoardGroups(materials, 'Framing', 'Double band / rim board', deck.doubleBandGroups, 'Double band applied to full perimeter and staggered in layout preview.');
+  if (deck.pictureFrameCount || deck.breakerBoardCount) materials.push(toMaterial('Additional 2x blocking for deck-board inlays', 'Framing', deck.blockingBoardCount, '8 ft boards', 'Blocking at picture-frame and breaker-board support lines', undefined, `${deck.blockingCount} blocking cuts total including border, breaker, and standard rows.`));
 
   const baseRailSegments = deck.exposedSegments.map((segment) => segment.length);
   const stairOpeningWidth = deck.stairPlacement.edgeIndex !== null ? Math.min(deck.stairPlacement.width, deck.exposedSegments.find((segment) => segment.index === deck.stairPlacement.edgeIndex)?.length ?? 0) : 0;
@@ -361,6 +381,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       deck.attachment === 'brick' ? 'Brick attachment is treated as freestanding, so the house side still needs beam and post support, including beam segments at any inside corner/jut-out.' : 'Siding attachment keeps ledger logic active unless the deck is marked freestanding.',
       deck.stairPlacement.edgeIndex !== null ? `Stairs sit on edge ${deck.stairPlacement.edgeIndex + 1}. Preview now shows tread count, stringer layout, and ${deck.stairRailSideCount === 0 ? 'no stair-side railing' : `${deck.stairRailSideCount} stair-side railing run(s)`} when more than 3 risers are required.` : 'No stair edge is assigned yet in the drawing tool.',
       'Railing optimizer solves each straight run separately, subtracts stair openings from the deck edge, and adds stair-side railing runs when the stair count requires guard rail.',
+      deck.requiredFieldBoardBreaks.length > 0 ? 'Field board run exceeds 20 ft. Add a breaker board to avoid staggered decking; the app no longer shows staggered board seams.' : 'Field decking uses available 8, 12, 16, and 20 ft board lengths with breaker boards where selected.',
       deck.lockedPosts.length > 0 ? 'Locked posts stay in the take-off even after beam edits so you can preserve preferred field locations.' : 'Use post lock mode when you want to hold a post location while still letting the app auto-space the rest.',
     ],
   };

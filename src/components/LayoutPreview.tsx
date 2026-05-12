@@ -387,6 +387,9 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const joistRuns = deck.joistDirection === 'vertical'
     ? Array.from({ length: Math.max(0, Math.floor(deck.width) - 1) }, (_, i) => deck.minX + 1 + i)
     : Array.from({ length: Math.max(0, Math.floor(deck.depth) - 1) }, (_, i) => deck.minY + 1 + i);
+  const pictureFrameCount = Math.max(0, Math.round(Number(values.pictureFrameCount ?? deck.pictureFrameCount ?? 0)));
+  const breakerBoardCount = Math.max(0, Math.round(Number(values.breakerBoardCount ?? deck.breakerBoardCount ?? 0)));
+  const breakerPositions = deck.breakerBoardPositions;
   const railingSegments = railSegmentsForDeck(deck);
   const editableCoverage = useMemo(() => parseRailCoverageValue(values.railCoverage), [values.railCoverage]);
   const railingInsetFt = 0.42;
@@ -571,26 +574,44 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             {showBoards && boardRuns.map((value, idx) => deck.boardRun === 'width'
               ? scanlineIntersections(deck.points, 'horizontal', value).map((pair, pairIdx) => {
                   const y = toSvg(pair.start, value).y;
-                  return staggeredSegments(pair.end - pair.start, 20, (idx % 4) * 4).map((seg, segIdx) => {
-                    const x1 = toSvg(pair.start + seg.start, value).x;
-                    const x2 = toSvg(pair.start + seg.end, value).x;
-                    return <g key={`board-h-${idx}-${pairIdx}-${segIdx}`} onClick={() => setInspect({ title: `Deck board`, detail: `${feetAndInches(seg.end - seg.start)} piece in a ${feetAndInches(pair.end - pair.start)} run.` })}>
-                      <rect x={Math.min(x1, x2)} y={y - Math.max(4, scale * 0.22)} width={Math.abs(x2 - x1)} height={Math.max(8, scale * 0.44)} className="deck-board-strip" />
-                      {seg.end < (pair.end - pair.start) - 0.05 && <line x1={x2} y1={y - 8} x2={x2} y2={y + 8} className="seam-tick" />}
-                    </g>;
-                  });
+                  const x1 = toSvg(pair.start, value).x;
+                  const x2 = toSvg(pair.end, value).x;
+                  return <g key={`board-h-${idx}-${pairIdx}`} onClick={() => setInspect({ title: `Deck board`, detail: `${feetAndInches(pair.end - pair.start)} continuous run. Use breaker boards when the run is over 20 ft.` })}>
+                    <rect x={Math.min(x1, x2)} y={y - Math.max(4, scale * 0.22)} width={Math.abs(x2 - x1)} height={Math.max(8, scale * 0.44)} className="deck-board-strip" />
+                  </g>;
                 })
               : scanlineIntersections(deck.points, 'vertical', value).map((pair, pairIdx) => {
                   const x = toSvg(value, pair.start).x;
-                  return staggeredSegments(pair.end - pair.start, 20, (idx % 4) * 4).map((seg, segIdx) => {
-                    const y1 = toSvg(value, pair.start + seg.start).y;
-                    const y2 = toSvg(value, pair.start + seg.end).y;
-                    return <g key={`board-v-${idx}-${pairIdx}-${segIdx}`} onClick={() => setInspect({ title: `Deck board`, detail: `${feetAndInches(seg.end - seg.start)} piece in a ${feetAndInches(pair.end - pair.start)} run.` })}>
-                      <rect x={x - Math.max(4, scale * 0.22)} y={Math.min(y1, y2)} width={Math.max(8, scale * 0.44)} height={Math.abs(y2 - y1)} className="deck-board-strip" />
-                      {seg.end < (pair.end - pair.start) - 0.05 && <line x1={x - 8} y1={y2} x2={x + 8} y2={y2} className="seam-tick" />}
-                    </g>;
-                  });
+                  const y1 = toSvg(value, pair.start).y;
+                  const y2 = toSvg(value, pair.end).y;
+                  return <g key={`board-v-${idx}-${pairIdx}`} onClick={() => setInspect({ title: `Deck board`, detail: `${feetAndInches(pair.end - pair.start)} continuous run. Use breaker boards when the run is over 20 ft.` })}>
+                    <rect x={x - Math.max(4, scale * 0.22)} y={Math.min(y1, y2)} width={Math.max(8, scale * 0.44)} height={Math.abs(y2 - y1)} className="deck-board-strip" />
+                  </g>;
                 }))}
+
+            {showBoards && pictureFrameCount > 0 && deck.exposedSegments.map((segment) => {
+              const inward = inwardNormal(segment, deck.points);
+              return Array.from({ length: pictureFrameCount }, (_, course) => {
+                const offset = 0.38 + course * 0.48;
+                const a = toSvg(segment.start.x + inward.x * offset, segment.start.y + inward.y * offset);
+                const b = toSvg(segment.end.x + inward.x * offset, segment.end.y + inward.y * offset);
+                return <line key={`pf-${segment.index}-${course}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`picture-frame-line course-${course + 1}`} />;
+              });
+            })}
+
+            {showBoards && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => {
+              return deck.boardRun === 'width'
+                ? scanlineIntersections(deck.points, 'vertical', pos).map((pair, pairIdx) => {
+                    const a = toSvg(pos, pair.start);
+                    const b = toSvg(pos, pair.end);
+                    return <line key={`breaker-v-${idx}-${pairIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="breaker-board-line" />;
+                  })
+                : scanlineIntersections(deck.points, 'horizontal', pos).map((pair, pairIdx) => {
+                    const a = toSvg(pair.start, pos);
+                    const b = toSvg(pair.end, pos);
+                    return <line key={`breaker-h-${idx}-${pairIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="breaker-board-line" />;
+                  });
+            })}
 
             {showFraming && deck.beamLines.map((beam, beamIdx) => (
               <g key={`beam-${beamIdx}`}>
@@ -681,7 +702,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   return <rect key={`joist-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - 3} width={Math.max(0, Math.abs(x2 - x1))} height={6} className="joist-rect" onClick={() => setInspect({ title: `Joist ${idx + 1}`, detail: `${deck.joistSize} joist at 12 in O.C.` })} />;
                 }))}
 
-            {showFraming && Boolean(values.borderSameBoard) && deck.exposedSegments
+            {showFraming && pictureFrameCount > 0 && deck.exposedSegments
               .filter((segment) => segment.orientation === 'vertical' || Math.abs(segment.start.y - deck.maxY) > 0.05)
               .map((segment, segIdx) => {
                 const inset = inwardNormal(segment, deck.points);
@@ -694,6 +715,22 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   return <line key={idx} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line" />;
                 })}</g>;
               })}
+
+            {showFraming && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => (
+              deck.boardRun === 'width'
+                ? scanlineIntersections(deck.points, 'vertical', pos).flatMap((pair, pairIdx) => Array.from({ length: Math.max(1, Math.floor(pair.end - pair.start)) }, (_, blockIdx) => {
+                    const y = Math.min(pair.end - 0.15, pair.start + blockIdx + 0.5);
+                    const a = toSvg(pos - 0.5, y);
+                    const b = toSvg(pos + 0.5, y);
+                    return <line key={`breaker-block-v-${idx}-${pairIdx}-${blockIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line required-blocking" />;
+                  }))
+                : scanlineIntersections(deck.points, 'horizontal', pos).flatMap((pair, pairIdx) => Array.from({ length: Math.max(1, Math.floor(pair.end - pair.start)) }, (_, blockIdx) => {
+                    const x = Math.min(pair.end - 0.15, pair.start + blockIdx + 0.5);
+                    const a = toSvg(x, pos - 0.5);
+                    const b = toSvg(x, pos + 0.5);
+                    return <line key={`breaker-block-h-${idx}-${pairIdx}-${blockIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line required-blocking" />;
+                  }))
+            ))}
 
             {onValuesChange && showRailing && deck.edgeSegments.map((segment) => {
               const inward = inwardNormal(segment, deck.points);
