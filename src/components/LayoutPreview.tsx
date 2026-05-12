@@ -615,9 +615,9 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   const cx = toSvg(postX, beam.y).x;
                   const cy = toSvg(postX, beam.y).y;
                   return <g key={`post-${beamIdx}-${postIdx}`} onClick={() => setInspect({ title: `Post ${postIdx + 1}`, detail: `Notched ${feetAndInches(deck.postLength)} post supporting doubled beam.` })}>
-                    <rect x={cx - 16} y={cy + 4} width={32} height={32} className="post-node" />
-                    <rect x={cx - 16} y={cy - 2} width={16} height={9} className="post-notch-seat" />
-                    <line x1={cx} y1={cy - 12} x2={cx} y2={cy + 31} className="post-centerline" />
+                    <rect x={cx - 15} y={cy - 15} width={30} height={30} className="post-node" />
+                    <rect x={cx - 15} y={cy - 7} width={30} height={14} className="post-notch-seat" />
+                    <line x1={cx} y1={cy - 23} x2={cx} y2={cy + 23} className="post-centerline" />
                   </g>;
                 })}
               </g>
@@ -685,23 +685,13 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               .filter((segment) => segment.orientation === 'vertical' || Math.abs(segment.start.y - deck.maxY) > 0.05)
               .map((segment, segIdx) => {
                 const inset = inwardNormal(segment, deck.points);
-                const tangent = directionBetween(segment.start, segment.end);
                 const span = segment.length;
-                const blocks = symmetricPostOffsets(span, 2).map((distance) => pointAlong(segment, distance));
-                return <g key={`blocking-${segIdx}`}>{blocks.map((pt, idx) => {
-                  const center = toSvg(pt.x + inset.x * 0.58, pt.y + inset.y * 0.58);
-                  const blockW = 14;
-                  const blockL = 22;
-                  return <rect
-                    key={idx}
-                    x={center.x - blockL / 2}
-                    y={center.y - blockW / 2}
-                    width={blockL}
-                    height={blockW}
-                    rx={1.5}
-                    transform={`rotate(${Math.atan2(tangent.y, tangent.x) * 180 / Math.PI} ${center.x} ${center.y})`}
-                    className="blocking-node"
-                  />;
+                const blockDistances = Array.from({ length: Math.max(1, Math.floor(span)) }, (_, i) => Math.min(span - 0.15, i + 0.5)).filter((d) => d > 0.15 && d < span - 0.15);
+                return <g key={`blocking-${segIdx}`}>{blockDistances.map((distance, idx) => {
+                  const pt = pointAlong(segment, distance);
+                  const a = toSvg(pt.x + inset.x * 0.15, pt.y + inset.y * 0.15);
+                  const b = toSvg(pt.x + inset.x * 1.05, pt.y + inset.y * 1.05);
+                  return <line key={idx} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line" />;
                 })}</g>;
               })}
 

@@ -1488,3 +1488,5 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
   stroke: #f59e0b !important;
   stroke-dasharray: 12 7;
 }
+.blocking-line{stroke:#64748b;stroke-width:4;stroke-linecap:round;}
+.deck-sheet-svg .blocking-line{stroke:#64748b;stroke-width:3;stroke-linecap:round;}
