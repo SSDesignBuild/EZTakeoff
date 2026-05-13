@@ -162,31 +162,21 @@ function findVertexIndex(points: DeckPoint[], target: DeckPoint) {
   return points.findIndex((point) => Math.abs(point.x - target.x) < 0.01 && Math.abs(point.y - target.y) < 0.01);
 }
 
-function pointInsidePolygon(points: DeckPoint[], point: DeckPoint) {
-  let inside = false;
-  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-    const pi = points[i];
-    const pj = points[j];
-    const crosses = ((pi.y > point.y) !== (pj.y > point.y)) && (point.x < ((pj.x - pi.x) * (point.y - pi.y)) / ((pj.y - pi.y) || 1e-9) + pi.x);
-    if (crosses) inside = !inside;
-  }
-  return inside;
-}
-
-function vertexIsOutsideCorner(points: DeckPoint[], vertex: DeckPoint) {
+function vertexCornerKind(points: DeckPoint[], vertex: DeckPoint): 'outside' | 'inside' | 'straight' {
   const idx = findVertexIndex(points, vertex);
-  if (idx < 0) return true;
+  if (idx < 0) return 'outside';
   const prev = points[(idx - 1 + points.length) % points.length];
   const next = points[(idx + 1) % points.length];
-  const vPrev = { x: prev.x - vertex.x, y: prev.y - vertex.y };
-  const vNext = { x: next.x - vertex.x, y: next.y - vertex.y };
-  const lenPrev = Math.hypot(vPrev.x, vPrev.y) || 1;
-  const lenNext = Math.hypot(vNext.x, vNext.y) || 1;
-  const test = {
-    x: vertex.x + (vPrev.x / lenPrev + vNext.x / lenNext) * 0.05,
-    y: vertex.y + (vPrev.y / lenPrev + vNext.y / lenNext) * 0.05,
-  };
-  return pointInsidePolygon(points, test);
+  const vIn = { x: vertex.x - prev.x, y: vertex.y - prev.y };
+  const vOut = { x: next.x - vertex.x, y: next.y - vertex.y };
+  const lenIn = Math.hypot(vIn.x, vIn.y);
+  const lenOut = Math.hypot(vOut.x, vOut.y);
+  if (lenIn < 0.01 || lenOut < 0.01) return 'straight';
+  const cross = vIn.x * vOut.y - vIn.y * vOut.x;
+  if (Math.abs(cross) < 0.01) return 'straight';
+  const orientation = polygonOrientation(points);
+  const convex = orientation === 'counterclockwise' ? cross > 0 : cross < 0;
+  return convex ? 'outside' : 'inside';
 }
 
 function pictureFrameCoursePolygon(
@@ -205,16 +195,17 @@ function pictureFrameCoursePolygon(
   const outer = course * boardWidthPx;
   const inner = (course + 1) * boardWidthPx;
   const maxTrim = Math.max(0, dir.length / 2 - 1);
-  const startOutside = vertexIsOutsideCorner(points, segment.start);
-  const endOutside = vertexIsOutsideCorner(points, segment.end);
-  const trimFor = (offset: number, outsideCorner: boolean) => {
+  const startCorner = vertexCornerKind(points, segment.start);
+  const endCorner = vertexCornerKind(points, segment.end);
+  const trimFor = (offset: number, corner: 'outside' | 'inside' | 'straight') => {
+    if (corner === 'straight') return 0;
     const trim = Math.min(maxTrim, offset);
-    return outsideCorner ? trim : -trim;
+    return corner === 'outside' ? trim : -trim;
   };
-  const p1 = offsetSvgPoint(a, dir, normal, trimFor(outer, startOutside), outer);
-  const p2 = offsetSvgPoint(b, dir, normal, -trimFor(outer, endOutside), outer);
-  const p3 = offsetSvgPoint(b, dir, normal, -trimFor(inner, endOutside), inner);
-  const p4 = offsetSvgPoint(a, dir, normal, trimFor(inner, startOutside), inner);
+  const p1 = offsetSvgPoint(a, dir, normal, trimFor(outer, startCorner), outer);
+  const p2 = offsetSvgPoint(b, dir, normal, -trimFor(outer, endCorner), outer);
+  const p3 = offsetSvgPoint(b, dir, normal, -trimFor(inner, endCorner), inner);
+  const p4 = offsetSvgPoint(a, dir, normal, trimFor(inner, startCorner), inner);
   return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
 }
 
@@ -986,7 +977,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               const offset = 26;
               return renderDim(a, b, feetAndInches(segment.length), outward.x * offset, outward.y * offset, `seg-h-${segment.index}`);
             })}
-            {deck.edgeSegments.filter((segment) => segment.orientation === 'vertical' && Math.abs(segment.start.x - deck.minX) > 0.05).map((segment) => {
+            {deck.edgeSegments.filter((segment) => segment.orientation === 'vertical').map((segment) => {
               const a = toSvg(segment.start.x, segment.start.y);
               const b = toSvg(segment.end.x, segment.end.y);
               const outward = outwardNormal(segment, deck.points);

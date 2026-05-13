@@ -5,15 +5,25 @@ import { buildPatioPanelLayout } from './patioLayout';
 
 export type EstimateInputs = Record<string, string | number | boolean>;
 
-const toMaterial = (name: string, category: string, quantity: number, unit: string, stockRecommendation: string, color?: string, notes?: string): MaterialItem => ({
-  name,
-  category,
-  quantity: Number(quantity.toFixed(2)),
-  unit,
-  stockRecommendation,
-  color,
-  notes,
-});
+const toMaterial = (name: string, category: string, quantity: number, unit: string, stockRecommendation: string, color?: string, notes?: string): MaterialItem => {
+  let normalizedColor = color;
+  let normalizedNotes = notes;
+  // Older rows sometimes passed notes in the color position. Keep real color/style
+  // values in the Color column and move descriptions back into Notes.
+  if (normalizedNotes === undefined && typeof normalizedColor === 'string' && /\b(per|run|runs|post|posts|blocking|required|attached|corner|rail|stairs|approx|match|top-level|bottom|end|inline|intermediate|attachment|locations|nail|stringers|total|spindle|baluster|fasten)\b/i.test(normalizedColor)) {
+    normalizedNotes = normalizedColor;
+    normalizedColor = undefined;
+  }
+  return {
+    name,
+    category,
+    quantity: Number(quantity.toFixed(2)),
+    unit,
+    stockRecommendation,
+    color: normalizedColor,
+    notes: normalizedNotes,
+  };
+};
 
 const feetAndInches = (feet: number) => {
   const totalInches = Math.round(feet * 12);
@@ -22,17 +32,26 @@ const feetAndInches = (feet: number) => {
   return inches ? `${ft}' ${inches}"` : `${ft}'`;
 };
 
-const addBoardGroups = (materials: MaterialItem[], category: string, prefix: string, groups: { length: number; count: number }[], notes: string, includeWasteBuffer = false) => {
+const addBoardGroups = (materials: MaterialItem[], category: string, materialName: string, groups: { length: number; count: number }[], notes: string, includeWasteBuffer = false, color?: string) => {
   groups.forEach((group) => {
     if (group.count > 0) {
       const quantity = includeWasteBuffer ? Math.ceil(group.count * 1.05) : group.count;
       const bufferNote = includeWasteBuffer ? `${notes} · Includes 5% waste/damage buffer.` : notes;
-      materials.push(toMaterial(`${prefix} ${group.length}'`, category, quantity, 'boards', `${group.length} ft stock`, undefined, bufferNote));
+      materials.push(toMaterial(materialName, category, quantity, 'boards', `${group.length} ft stock`, color, bufferNote));
     }
   });
 };
 
-const addDeckBoardCuts = (materials: MaterialItem[], name: string, category: string, lengths: number[], notes?: string) => {
+const splitDeckStyle = (style: string) => {
+  const cleaned = String(style || '').trim();
+  if (!cleaned || cleaned.toLowerCase() === 'match') return { material: 'Deck board', color: undefined as string | undefined };
+  if (cleaned.toLowerCase().includes('pressure treated')) return { material: cleaned, color: 'Pressure treated' };
+  const parts = cleaned.split(' - ');
+  if (parts.length >= 2) return { material: `${parts.slice(0, -1).join(' - ')} deck board`, color: parts[parts.length - 1] };
+  return { material: `${cleaned} deck board`, color: cleaned };
+};
+
+const addDeckBoardCuts = (materials: MaterialItem[], style: string, label: string, category: string, lengths: number[], notes?: string) => {
   const stock = [8, 12, 16, 20];
   const grouped = new Map<number, number>();
   lengths.filter((length) => length > 0.05).forEach((length) => {
@@ -47,7 +66,8 @@ const addDeckBoardCuts = (materials: MaterialItem[], name: string, category: str
     }
   });
   [...grouped.entries()].sort((a, b) => a[0] - b[0]).forEach(([length, count]) => {
-    materials.push(toMaterial(`${name} ${length}'`, category, Math.ceil(count * 1.05), 'boards', `${length} ft deck-board stock`, undefined, `${notes ?? ''}${notes ? ' · ' : ''}Includes 5% waste/damage buffer.`));
+    const styleInfo = splitDeckStyle(style);
+    materials.push(toMaterial(label || styleInfo.material, category, Math.ceil(count * 1.05), 'boards', `${length} ft deck-board stock`, styleInfo.color, `${notes ?? ''}${notes ? ' · ' : ''}Board style: ${style}. Includes 5% waste/damage buffer.`));
   });
 };
 
@@ -268,25 +288,28 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const drinkRail = inputs.drinkRail === true || String(inputs.drinkRail ?? 'false') === 'true';
   const drinkRailMaterial = resolveBoardStyle(inputs.drinkRailMaterial);
   const materials: MaterialItem[] = [];
-  addBoardGroups(materials, 'Decking', `${deckingMaterial} field board`, deck.boardGroups, deck.boardRun === 'width' ? 'Boards run parallel to the house, so stock length tracks deck width.' : 'Boards run perpendicular to the house, so stock length tracks projection.', true);
+  const deckingStyleInfo = splitDeckStyle(deckingMaterial);
+  const fasciaMaterial = resolveBoardStyle(inputs.fasciaMaterial);
+  const fasciaStyleInfo = splitDeckStyle(fasciaMaterial);
+  addBoardGroups(materials, 'Decking', deckingStyleInfo.material, deck.boardGroups, deck.boardRun === 'width' ? `Field decking. Board style: ${deckingMaterial}. Boards run parallel to the house, so stock length tracks deck width.` : `Field decking. Board style: ${deckingMaterial}. Boards run perpendicular to the house, so stock length tracks projection.`, true, deckingStyleInfo.color);
   if (pictureFrameCount > 0) {
     for (let i = 0; i < pictureFrameCount; i += 1) {
       const style = pictureFrameMaterials[i] || deckingMaterial;
       const borderLengths = deck.exposedSegments.map((segment) => segment.length);
-      addDeckBoardCuts(materials, `${style} picture-frame board ${i + 1}`, 'Decking', borderLengths, `Picture-frame course ${i + 1} on exposed deck perimeter only.`);
+      addDeckBoardCuts(materials, style, `Picture-frame deck board ${i + 1}`, 'Decking', borderLengths, `Picture-frame course ${i + 1} on exposed deck perimeter only.`);
     }
   }
   if (breakerBoardCount > 0) {
     const breakerLength = deck.boardRun === 'width' ? deck.depth : deck.width;
     for (let i = 0; i < breakerBoardCount; i += 1) {
       const style = breakerBoardMaterials[i] || deckingMaterial;
-      addDeckBoardCuts(materials, `${style} breaker board ${i + 1}`, 'Decking', [breakerLength], `Breaker board row ${i + 1} splitting field decking.`);
+      addDeckBoardCuts(materials, style, `Breaker deck board ${i + 1}`, 'Decking', [breakerLength], `Breaker board row ${i + 1} splitting field decking.`);
     }
   }
-  addBoardGroups(materials, 'Stairs', `${deckingMaterial} stair tread board`, deck.stairTreadGroups, 'Two tread boards per tread.', true);
-  addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.', true);
-  addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', true);
-  addBoardGroups(materials, 'Framing', 'Double band / rim board', deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', true);
+  addBoardGroups(materials, 'Stairs', 'Stair tread deck board', deck.stairTreadGroups, `Two tread boards per tread. Board style: ${deckingMaterial}.`, true, deckingStyleInfo.color);
+  addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.', true, 'Pressure treated');
+  addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', true, 'Pressure treated');
+  addBoardGroups(materials, 'Framing', 'Double band / rim board', deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', true, 'Pressure treated');
 
   const baseRailSegments = deck.exposedSegments.map((segment) => segment.length);
   const stairOpeningWidth = deck.stairPlacement.edgeIndex !== null ? Math.min(deck.stairPlacement.width, deck.exposedSegments.find((segment) => segment.index === deck.stairPlacement.edgeIndex)?.length ?? 0) : 0;
@@ -305,23 +328,23 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const railingPosts = railingBreakdown.endLevelPosts + railingBreakdown.inlineLevelPosts + railingBreakdown.cornerLevelPosts + railingBreakdown.stairsLevelToAngledCornerPosts + railingBreakdown.stairsInlinePosts + railingBreakdown.stairsEndPosts;
 
   materials.push(
-    toMaterial('Blocking', 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', undefined, `${deck.blockingLf.toFixed(1)} lf total across standard rows plus picture-frame / breaker support blocking · quantity includes 5% waste/damage buffer · layout shows support blocking at 1 ft O.C. only where boards run parallel with joists and need support`),
-    toMaterial(`6x6 wood posts ${deck.postLength}'`, 'Structure', deck.postCount, 'ea', `${deck.postLength} ft stock`, deck.lockedPosts.length ? `${deck.lockedPosts.length} post position(s) manually locked` : 'Auto-spaced beam support posts'),
-    toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', '3 bags per post footing'),
-    toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined),
-    toMaterial('Concrete submersible J Anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined),
-    toMaterial('Joist hangers', 'Hardware', deck.joistHangers, 'ea', 'Match joist size', undefined),
-    toMaterial('Rafter ties', 'Hardware', deck.rafterTies, 'ea', '1 per joist to beam condition', undefined),
+    toMaterial('Support blocking', 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', 'Pressure treated', `${deck.blockingLf.toFixed(1)} lf total for picture-frame / breaker support blocking only · quantity includes 5% waste/damage buffer · blocking is counted at 1 ft O.C. only where boards run parallel with joists and need support`),
+    toMaterial('6x6 wood posts', 'Structure', deck.postCount, 'ea', `${deck.postLength} ft stock`, 'Pressure treated', deck.lockedPosts.length ? `${deck.lockedPosts.length} post position(s) manually locked` : 'Auto-spaced beam support posts'),
+    toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', undefined, '3 bags per post footing'),
+    toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined, 'Post base bracket at each footing'),
+    toMaterial('Concrete submersible J Anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined, 'Concrete anchor for post base bracket'),
+    toMaterial('Joist hangers', 'Hardware', deck.joistHangers, 'ea', 'Match joist size', undefined, 'One hanger at each end of every joist'),
+    toMaterial('Rafter ties', 'Hardware', deck.rafterTies, 'ea', '1 per joist to beam condition', undefined, 'One tie where each joist bears on each beam'),
     toMaterial('Carriage bolt sets', 'Hardware', deck.postCount * 2 + ((railingType === 'wood' || railingType === 'vinyl-composite') ? railingPosts * 2 : 0), 'sets', 'Bolt + washer + nut', undefined),
     toMaterial('Ledger lateral load brackets', 'Hardware', deck.lateralLoadBrackets, 'ea', 'Every 2 ft on ledger', undefined),
     ...(deck.attachment === 'siding' ? [toMaterial('1/2 in x 6 in lag screws', 'Hardware', Math.max(1, Math.ceil(deck.houseContactLength)), 'ea', 'W pattern every 12 in', 'Ledger to house attachment')] : []),
     toMaterial('SDS structural screws', 'Hardware', deck.sdsCorners, 'ea', '4 per corner', 'All band-board corners'),
-    toMaterial('Joist tape', 'Hardware', deck.joistTapeLf, 'lf', 'Match roll coverage', undefined),
+    toMaterial('Joist tape', 'Hardware', deck.joistTapeLf, 'lf', 'Match roll coverage', undefined, 'Tape joists and band-board top edges'),
     toMaterial(deck.fastenerType === 'top screws' ? '3 in deck screws' : '2-3/8 in CAMO screws', 'Hardware', deck.deckFastenerBoxes, 'boxes', deck.fastenerType === 'top screws' ? '365 per box' : '1750 per box', undefined),
     toMaterial('Exterior wood screws 3-1/2 in', 'Hardware', Math.max(1, Math.ceil(deck.area / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For decking, breaker boards, and picture-frame areas that are face screwed'),
     toMaterial('3 in nails', 'Hardware', deck.joistHangers * 10 + deck.postBases * 10 + deck.lateralLoadBrackets * 10, 'nails', '10 per connector', undefined, 'Joist hangers, post brackets, and lateral load brackets'),
     toMaterial('1-1/2 in nails', 'Hardware', deck.rafterTies * 10, 'nails', '10 per rafter tie', undefined, 'For rafter ties'),
-    ...(deck.fasciaPieces > 0 ? [toMaterial('Fascia', 'Trim', deck.fasciaPieces, 'boards', '12 ft fascia boards', undefined, `${deck.fasciaLf.toFixed(1)} lf on exposed deck perimeter plus stair risers/stringer sides only`)] : []),
+    ...(deck.fasciaPieces > 0 ? [toMaterial('Fascia board', 'Trim', deck.fasciaPieces, 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${deck.fasciaLf.toFixed(1)} lf on exposed deck perimeter plus stair risers/stringer sides only. Fascia style: ${fasciaMaterial}.`)] : []),
   );
   if (deck.stairStringers > 0) {
     materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringers, 'boards', `${deck.stairStringerLength} ft stock`, undefined, `Stringers cut on site at 12 in. O.C. · ${deck.stairRisers} risers / ${deck.stairTreadsPerRun} treads per run`));

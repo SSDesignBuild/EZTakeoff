@@ -129,6 +129,7 @@ export const SERVICES: ServiceDefinition[] = [
       spindleType: 'black-round',
       drinkRail: false,
       drinkRailMaterial: 'match',
+      fasciaMaterial: 'match',
       perimeterRailingFt: 24,
       stairEdgeIndex: 2,
       stairOffset: 0,
@@ -235,6 +236,7 @@ export const SERVICES: ServiceDefinition[] = [
       },
       { key: 'drinkRail', label: 'Add drink rail', type: 'boolean' },
       { key: 'drinkRailMaterial', label: 'Drink rail board style', type: 'select', options: DECK_BOARD_STYLE_WITH_MATCH_OPTIONS },
+      { key: 'fasciaMaterial', label: 'Fascia board style', type: 'select', options: DECK_BOARD_STYLE_WITH_MATCH_OPTIONS },
     ],
     formulaNotes: [
       'Joists are calculated at 12 in. on center and sized from your span table: 2x8 to 12 ft, 2x10 to 14 ft, 2x12 to 16 ft.',

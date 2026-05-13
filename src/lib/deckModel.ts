@@ -345,7 +345,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const width = round2(maxX - minX);
   const depth = round2(maxY - minY);
   const attachment = String(inputs.attachment ?? 'siding') as DeckModel['attachment'];
-  const isFreestanding = attachment !== 'siding';
+  const isFreestanding = attachment === 'freestanding';
   const boardRun = String(inputs.boardRun ?? 'width') === 'projection' ? 'projection' : 'width';
   const joistDirection = boardRun === 'width' ? 'vertical' : 'horizontal';
   const deckingDirection = boardRun === 'width' ? 'horizontal' : 'vertical';
@@ -367,10 +367,9 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const breakerBoardCount = Math.max(0, Math.round(Number(inputs.breakerBoardCount ?? 0)));
   const fieldRunLength = boardRun === 'width' ? width : depth;
   const requiredFieldBoardBreaks = fieldRunLength > 20.01 && breakerBoardCount === 0 ? [fieldRunLength / 2] : [];
-  const breakerBoardPositions = Array.from({ length: breakerBoardCount }, (_, i) => {
-    const ratio = (i + 1) / (breakerBoardCount + 1);
-    return round2((boardRun === 'width' ? minX : minY) + fieldRunLength * ratio);
-  });
+  // A single/double/triple breaker board is one split location with 1, 2, or 3 adjacent deck boards.
+  // Do not create multiple split locations when the user chooses double or triple.
+  const breakerBoardPositions = breakerBoardCount > 0 ? [round2((boardRun === 'width' ? minX : minY) + fieldRunLength / 2)] : [];
   const boardLengths: number[] = [];
   if (boardRun === 'width') {
     for (let y = minY + EFFECTIVE_COVERAGE / 2; y < maxY; y += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'horizontal', y).forEach((pair) => boardStockSegments(pair.length, breakerBoardPositions.map((x) => x - pair.start)).forEach((len) => boardLengths.push(len)));
@@ -470,15 +469,14 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
 
   const bandSegments = accumulateGroups([...segments.map((segment) => segment.length), ...segments.map((segment) => segment.length)]);
   const doubleBandLf = round2(polygonPerimeter(points) * 2);
-  const blockingRows = 2 + Math.max(0, pictureFrameCount) + Math.max(0, breakerBoardCount);
+  const blockingRows = Math.max(0, pictureFrameCount) + Math.max(0, breakerBoardCount);
   const pictureFrameSupportSegments = exposedSegments.filter((segment) => (joistDirection === 'vertical' ? segment.orientation === 'vertical' : segment.orientation === 'horizontal')); // picture-frame boards running parallel with joists need 1 ft O.C. support blocking
-  const pictureFrameBlockingLf = round2(pictureFrameSupportSegments.reduce((sum, segment) => sum + segment.length, 0) * Math.max(0, pictureFrameCount));
+  const pictureFrameBlockingLf = round2(pictureFrameSupportSegments.reduce((sum, segment) => sum + Math.max(0, Math.floor(segment.length)) * JOIST_SPACING, 0) * Math.max(0, pictureFrameCount));
   const breakerBlockingLf = round2(breakerBoardPositions.reduce((sum, pos) => sum + (boardRun === 'width'
-    ? scanlineIntersections(points, 'vertical', pos).reduce((acc, pair) => acc + (pair.end - pair.start), 0)
-    : scanlineIntersections(points, 'horizontal', pos).reduce((acc, pair) => acc + (pair.end - pair.start), 0)), 0));
-  const standardBlockingCount = joistCount * 2;
-  const blockingLf = round2((standardBlockingCount * JOIST_SPACING) + pictureFrameBlockingLf + breakerBlockingLf);
-  const blockingCount = Math.max(standardBlockingCount, Math.round(blockingLf / JOIST_SPACING));
+    ? scanlineIntersections(points, 'vertical', pos).reduce((acc, pair) => acc + Math.max(0, Math.floor(pair.end - pair.start)) * JOIST_SPACING, 0)
+    : scanlineIntersections(points, 'horizontal', pos).reduce((acc, pair) => acc + Math.max(0, Math.floor(pair.end - pair.start)) * JOIST_SPACING, 0)), 0) * Math.max(0, breakerBoardCount));
+  const blockingLf = round2(pictureFrameBlockingLf + breakerBlockingLf);
+  const blockingCount = Math.max(0, Math.round(blockingLf / JOIST_SPACING));
   const blockingBoardCount = Math.max(0, Math.ceil((blockingLf / 12) * 1.05));
   const joistTapeLf = round2(joistLengthsRaw.reduce((sum, length) => sum + length, 0) + doubleBandLf / 2);
   const joistHangers = joistCount * 2;
