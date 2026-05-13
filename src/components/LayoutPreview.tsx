@@ -234,17 +234,14 @@ function interlockedBandCoursePolygon(
   const outer = course * boardWidthPx;
   const inner = (course + 1) * boardWidthPx;
 
-  // Double band boards are not mitered. They should lap/interlock at corners
-  // like herringbone blocking, but they should never extend past the deck
-  // outline. The previous version alternated positive and negative endpoint
-  // adjustments, which made one board protrude beyond the other at corners.
-  // This version only trims inward from the segment endpoints, so the courses
-  // remain snug to the outside line and lap cleanly without overhangs.
+  // Double band boards use a consistent butt-lap pattern at every corner.
+  // Each course trims only one end of each segment by one board width, and the
+  // second course trims the opposite end. That keeps every corner snug, avoids
+  // the small protruding tails that looked unprofessional, and preserves the
+  // herringbone/interlocked visual without mitering the band boards.
   const lap = Math.min(Math.max(0, boardWidthPx), Math.max(0, dir.length / 2 - 1));
-  const parity = segment.index % 2;
-  const courseParity = course % 2;
-  const startTrim = parity === courseParity ? 0 : lap;
-  const endTrim = parity === courseParity ? lap : 0;
+  const startTrim = course % 2 === 0 ? lap : 0;
+  const endTrim = course % 2 === 0 ? 0 : lap;
 
   const p1 = offsetSvgPoint(a, dir, normal, startTrim, outer);
   const p2 = offsetSvgPoint(b, dir, normal, -endTrim, outer);
