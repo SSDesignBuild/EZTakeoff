@@ -146,36 +146,80 @@ function pointAlong(segment: DeckEdgeSegment, distance: number) {
 
 
 
-function cornerBandCaps(points: DeckPoint[], toSvg: (x: number, y: number) => { x: number; y: number }, band: number) {
-  const caps: { index: number; primary: string; secondary: string; seam1: [number, number, number, number]; seam2: [number, number, number, number] }[] = [];
-  for (let index = 0; index < points.length; index += 1) {
-    const prev: DeckEdgeSegment = { start: points[(index - 1 + points.length) % points.length], end: points[index], length: Math.hypot(points[index].x - points[(index - 1 + points.length) % points.length].x, points[index].y - points[(index - 1 + points.length) % points.length].y), orientation: 'angled', index: (index - 1 + points.length) % points.length };
-    const next: DeckEdgeSegment = { start: points[index], end: points[(index + 1) % points.length], length: Math.hypot(points[(index + 1) % points.length].x - points[index].x, points[(index + 1) % points.length].y - points[index].y), orientation: 'angled', index };
-    if (prev.length < 0.05 || next.length < 0.05) continue;
-    const prevDir = { x: (prev.start.x - prev.end.x) / prev.length, y: (prev.start.y - prev.end.y) / prev.length };
-    const nextDir = { x: (next.end.x - next.start.x) / next.length, y: (next.end.y - next.start.y) / next.length };
-    const dot = prevDir.x * nextDir.x + prevDir.y * nextDir.y;
-    if (Math.abs(dot) > 0.15) continue;
-    const prevInward = inwardNormal(prev, points);
-    const nextInward = inwardNormal(next, points);
-    const corner = toSvg(points[index].x, points[index].y);
-    const base1 = corner;
-    const p1 = { x: base1.x + prevInward.x * band, y: base1.y + prevInward.y * band };
-    const p2 = { x: p1.x + nextInward.x * band, y: p1.y + nextInward.y * band };
-    const p3 = { x: base1.x + nextInward.x * band, y: base1.y + nextInward.y * band };
-    const base2 = { x: corner.x + (prevInward.x + nextInward.x) * band, y: corner.y + (prevInward.y + nextInward.y) * band };
-    const q1 = { x: base2.x + prevInward.x * band, y: base2.y + prevInward.y * band };
-    const q2 = { x: q1.x + nextInward.x * band, y: q1.y + nextInward.y * band };
-    const q3 = { x: base2.x + nextInward.x * band, y: base2.y + nextInward.y * band };
-    caps.push({
-      index,
-      primary: `${base1.x},${base1.y} ${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`,
-      secondary: `${base2.x},${base2.y} ${q1.x},${q1.y} ${q2.x},${q2.y} ${q3.x},${q3.y}`,
-      seam1: [base1.x, base1.y, p2.x, p2.y],
-      seam2: [base2.x, base2.y, q2.x, q2.y],
-    });
-  }
-  return caps;
+
+function svgUnitVector(a: { x: number; y: number }, b: { x: number; y: number }) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const length = Math.hypot(dx, dy) || 1;
+  return { x: dx / length, y: dy / length, length };
+}
+
+function offsetSvgPoint(point: { x: number; y: number }, dir: { x: number; y: number }, normal: { x: number; y: number }, trim: number, offset: number) {
+  return { x: point.x + dir.x * trim + normal.x * offset, y: point.y + dir.y * trim + normal.y * offset };
+}
+
+function miteredCoursePolygon(
+  segment: DeckEdgeSegment,
+  points: DeckPoint[],
+  toSvg: (x: number, y: number) => { x: number; y: number },
+  course: number,
+  boardWidthPx: number,
+) {
+  const a = toSvg(segment.start.x, segment.start.y);
+  const b = toSvg(segment.end.x, segment.end.y);
+  const dir = svgUnitVector(a, b);
+  const inward = inwardNormal(segment, points);
+  const normalA = toSvg(segment.start.x + inward.x, segment.start.y + inward.y);
+  const normal = svgUnitVector(a, normalA);
+  const outer = course * boardWidthPx;
+  const inner = (course + 1) * boardWidthPx;
+  const maxTrim = Math.max(0, dir.length / 2 - 1);
+  const outerTrim = Math.min(maxTrim, course * boardWidthPx);
+  const innerTrim = Math.min(maxTrim, (course + 1) * boardWidthPx);
+  const p1 = offsetSvgPoint(a, dir, normal, outerTrim, outer);
+  const p2 = offsetSvgPoint(b, dir, normal, -outerTrim, outer);
+  const p3 = offsetSvgPoint(b, dir, normal, -innerTrim, inner);
+  const p4 = offsetSvgPoint(a, dir, normal, innerTrim, inner);
+  return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
+}
+
+function bandSeamLine(
+  segment: DeckEdgeSegment,
+  points: DeckPoint[],
+  toSvg: (x: number, y: number) => { x: number; y: number },
+  course: number,
+  boardWidthPx: number,
+  distanceFt: number,
+) {
+  const center = pointAlong(segment, distanceFt);
+  const base = toSvg(center.x, center.y);
+  const inward = inwardNormal(segment, points);
+  const normalA = toSvg(center.x + inward.x, center.y + inward.y);
+  const normal = svgUnitVector(base, normalA);
+  const a = { x: base.x + normal.x * course * boardWidthPx, y: base.y + normal.y * course * boardWidthPx };
+  const b = { x: base.x + normal.x * (course + 1) * boardWidthPx, y: base.y + normal.y * (course + 1) * boardWidthPx };
+  return { a, b };
+}
+
+function boardStripPolygon(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  widthPx: number,
+  miterPx = 0,
+) {
+  const dir = svgUnitVector(a, b);
+  const normal = { x: -dir.y, y: dir.x };
+  const half = widthPx / 2;
+  const trim = Math.min(Math.max(0, miterPx), Math.max(0, dir.length / 2 - 1));
+  const p1 = { x: a.x + dir.x * trim + normal.x * half, y: a.y + dir.y * trim + normal.y * half };
+  const p2 = { x: b.x - dir.x * trim + normal.x * half, y: b.y - dir.y * trim + normal.y * half };
+  const p3 = { x: b.x + dir.x * trim - normal.x * half, y: b.y + dir.y * trim - normal.y * half };
+  const p4 = { x: a.x - dir.x * trim - normal.x * half, y: a.y - dir.y * trim - normal.y * half };
+  return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
+}
+
+function breakerCourseOffsets(count: number, widthFt: number) {
+  return Array.from({ length: count }, (_, i) => (i - (count - 1) / 2) * widthFt);
 }
 
 function symmetricPostOffsets(length: number, maxSection = 8) {
@@ -391,7 +435,6 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const planY = sheetMarginTop;
   const toSvg = (x: number, y: number) => ({ x: planX + (x - layoutMinX) * scale, y: planY + (y - layoutMinY) * scale });
   const pointString = deck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ');
-  const bandCornerCapsData = useMemo(() => cornerBandCaps(deck.points, toSvg, 9), [deck.points, planX, planY, scale, layoutMinX, layoutMinY]);
   const beamPlies = (segmentLength: number, offset: number) => {
     const pieces: { start: number; end: number; infill: boolean; label?: string }[] = [];
     if (segmentLength <= 20.01) return [{ start: 0, end: segmentLength, infill: false }];
@@ -439,10 +482,10 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
     const x2 = b.x + offsetX;
     const y2 = b.y + offsetY;
     return <g key={key}>
-      <line x1={a.x} y1={a.y} x2={x1} y2={y1} className="dimension-line" />
-      <line x1={b.x} y1={b.y} x2={x2} y2={y2} className="dimension-line" />
-      <line x1={x1} y1={y1} x2={x2} y2={y2} className="dimension-line" />
-      <text x={(x1+x2)/2 + (Math.abs(offsetX) > Math.abs(offsetY) ? 0 : -14)} y={(y1+y2)/2 + (Math.abs(offsetY) > Math.abs(offsetX) ? 0 : -10)} className="dimension-text">{text}</text>
+      <line x1={a.x} y1={a.y} x2={x1} y2={y1} className="dimension-line" stroke="#4b5563" strokeWidth="1.2" strokeDasharray="7 5" />
+      <line x1={b.x} y1={b.y} x2={x2} y2={y2} className="dimension-line" stroke="#4b5563" strokeWidth="1.2" strokeDasharray="7 5" />
+      <line x1={x1} y1={y1} x2={x2} y2={y2} className="dimension-line" stroke="#4b5563" strokeWidth="1.2" strokeDasharray="7 5" />
+      <text x={(x1+x2)/2 + (Math.abs(offsetX) > Math.abs(offsetY) ? 0 : -14)} y={(y1+y2)/2 + (Math.abs(offsetY) > Math.abs(offsetX) ? 0 : -10)} className="dimension-text" fill="#111827" stroke="#ffffff" strokeWidth="3" paintOrder="stroke">{text}</text>
     </g>;
   };
 
@@ -623,28 +666,31 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   </g>;
                 }))}
 
-            {showBoards && pictureFrameCount > 0 && deck.exposedSegments.map((segment) => {
-              const inward = inwardNormal(segment, deck.points);
-              return Array.from({ length: pictureFrameCount }, (_, course) => {
-                const offset = 0.38 + course * 0.48;
-                const a = toSvg(segment.start.x + inward.x * offset, segment.start.y + inward.y * offset);
-                const b = toSvg(segment.end.x + inward.x * offset, segment.end.y + inward.y * offset);
-                return <line key={`pf-${segment.index}-${course}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`picture-frame-line course-${course + 1}`} />;
-              });
-            })}
+            {showBoards && pictureFrameCount > 0 && deck.exposedSegments.flatMap((segment) => (
+              Array.from({ length: pictureFrameCount }, (_, course) => (
+                <polygon
+                  key={`pf-${segment.index}-${course}`}
+                  points={miteredCoursePolygon(segment, deck.points, toSvg, course, Math.max(10, scale * 0.44))}
+                  className={`picture-frame-board course-${course + 1}`}
+                  onClick={() => setInspect({ title: `Picture frame board ${course + 1}`, detail: `Mitered picture-frame course around exposed deck perimeter.` })}
+                />
+              ))
+            ))}
 
             {showBoards && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => {
+              const boardWidthFt = 0.47;
+              const boardWidthPx = Math.max(10, scale * boardWidthFt);
               return deck.boardRun === 'width'
-                ? scanlineIntersections(deck.points, 'vertical', pos).map((pair, pairIdx) => {
-                    const a = toSvg(pos, pair.start);
-                    const b = toSvg(pos, pair.end);
-                    return <line key={`breaker-v-${idx}-${pairIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="breaker-board-line" />;
-                  })
-                : scanlineIntersections(deck.points, 'horizontal', pos).map((pair, pairIdx) => {
-                    const a = toSvg(pair.start, pos);
-                    const b = toSvg(pair.end, pos);
-                    return <line key={`breaker-h-${idx}-${pairIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="breaker-board-line" />;
-                  });
+                ? breakerCourseOffsets(breakerBoardCount, boardWidthFt).flatMap((offset, course) => scanlineIntersections(deck.points, 'vertical', pos + offset).map((pair, pairIdx) => {
+                    const a = toSvg(pos + offset, pair.start);
+                    const b = toSvg(pos + offset, pair.end);
+                    return <polygon key={`breaker-v-${idx}-${course}-${pairIdx}`} points={boardStripPolygon(a, b, boardWidthPx, Math.max(6, boardWidthPx * 0.45))} className={`breaker-board-strip course-${course + 1}`} />;
+                  }))
+                : breakerCourseOffsets(breakerBoardCount, boardWidthFt).flatMap((offset, course) => scanlineIntersections(deck.points, 'horizontal', pos + offset).map((pair, pairIdx) => {
+                    const a = toSvg(pair.start, pos + offset);
+                    const b = toSvg(pair.end, pos + offset);
+                    return <polygon key={`breaker-h-${idx}-${course}-${pairIdx}`} points={boardStripPolygon(a, b, boardWidthPx, Math.max(6, boardWidthPx * 0.45))} className={`breaker-board-strip course-${course + 1}`} />;
+                  }));
             })}
 
             {showFraming && deck.beamLines.map((beam, beamIdx) => (
@@ -680,46 +726,21 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
 
             {showFraming && deck.edgeSegments.map((segment) => {
               const band = 9;
-              const normal = inwardNormal(segment, deck.points);
-              const normalPx = { x: normal.x * band, y: normal.y * band };
-              const isHorizontal = segment.orientation === 'horizontal';
-              const primaryTrim = isHorizontal ? 0 : 0.18;
-              const secondaryTrim = isHorizontal ? 0.18 : 0;
-              const pStart = pointAlong(segment, primaryTrim);
-              const pEnd = pointAlong(segment, segment.length - primaryTrim);
-              const sStart = pointAlong(segment, secondaryTrim);
-              const sEnd = pointAlong(segment, segment.length - secondaryTrim);
-              const rectProps = (x1:number,y1:number,x2:number,y2:number, offset:number)=>({
-                x: Math.min(x1,x2) - (isHorizontal ? 0 : band/2) + normalPx.x * offset,
-                y: Math.min(y1,y2) - (isHorizontal ? band/2 : 0) + normalPx.y * offset,
-                width: Math.max(isHorizontal ? Math.abs(x2-x1) : band, band),
-                height: Math.max(isHorizontal ? band : Math.abs(y2-y1), band)
-              });
-              const primaryLength = Math.max(0, segment.length - primaryTrim * 2);
-              const secondaryLength = Math.max(0, segment.length - secondaryTrim * 2);
-              const primarySegs = staggeredSegments(primaryLength, 20, 0);
-              const secondarySegs = staggeredSegments(secondaryLength, 20, 10);
+              const primarySegs = staggeredSegments(segment.length, 20, 0);
+              const secondarySegs = staggeredSegments(segment.length, 20, 10);
               return <g key={`band-${segment.index}`}>
-                {primarySegs.map((seg, idx) => {
-                  const st = pointAlong({ ...segment, length: primaryLength, start:pStart, end:pEnd }, seg.start);
-                  const en = pointAlong({ ...segment, length: primaryLength, start:pStart, end:pEnd }, seg.end);
-                  const aa = toSvg(st.x, st.y);
-                  const bb = toSvg(en.x, en.y);
-                  const props = rectProps(aa.x, aa.y, bb.x, bb.y, 0);
-                  return <g key={`bp-${idx}`}><rect {...props} className="double-band-rect" />{seg.end < primaryLength - 0.05 && <line x1={bb.x + normalPx.x * 0.15 - 5} y1={bb.y + normalPx.y * 0.15 - 5} x2={bb.x + normalPx.x * 0.15 + 5} y2={bb.y + normalPx.y * 0.15 + 5} className="seam-tick" />}</g>;
+                <polygon points={miteredCoursePolygon(segment, deck.points, toSvg, 0, band)} className="double-band-rect mitered" />
+                <polygon points={miteredCoursePolygon(segment, deck.points, toSvg, 1, band)} className="double-band-rect secondary mitered" />
+                {primarySegs.filter((seg) => seg.end < segment.length - 0.05).map((seg, idx) => {
+                  const seam = bandSeamLine(segment, deck.points, toSvg, 0, band, seg.end);
+                  return <line key={`bp-seam-${idx}`} x1={seam.a.x} y1={seam.a.y} x2={seam.b.x} y2={seam.b.y} className="seam-tick professional-seam" />;
                 })}
-                {secondarySegs.map((seg, idx) => {
-                  const st = pointAlong({ ...segment, length: secondaryLength, start:sStart, end:sEnd }, seg.start);
-                  const en = pointAlong({ ...segment, length: secondaryLength, start:sStart, end:sEnd }, seg.end);
-                  const aa = toSvg(st.x, st.y);
-                  const bb = toSvg(en.x, en.y);
-                  const props = rectProps(aa.x, aa.y, bb.x, bb.y, 1.02);
-                  return <g key={`bs-${idx}`}><rect {...props} className="double-band-rect secondary" />{seg.end < secondaryLength - 0.05 && <line x1={bb.x + normalPx.x * 1.02 - 5} y1={bb.y + normalPx.y * 1.02 + 5} x2={bb.x + normalPx.x * 1.02 + 5} y2={bb.y + normalPx.y * 1.02 - 5} className="seam-tick" />}</g>;
+                {secondarySegs.filter((seg) => seg.end < segment.length - 0.05).map((seg, idx) => {
+                  const seam = bandSeamLine(segment, deck.points, toSvg, 1, band, seg.end);
+                  return <line key={`bs-seam-${idx}`} x1={seam.a.x} y1={seam.a.y} x2={seam.b.x} y2={seam.b.y} className="seam-tick professional-seam secondary" />;
                 })}
               </g>;
             })}
-
-            {showFraming && bandCornerCapsData.map((cap) => <g key={`band-corner-${cap.index}`}><polygon points={cap.primary} className="band-corner-cap" /><line x1={cap.seam1[0]} y1={cap.seam1[1]} x2={cap.seam1[2]} y2={cap.seam1[3]} className="band-corner-seam" /><polygon points={cap.secondary} className="band-corner-cap secondary" /><line x1={cap.seam2[0]} y1={cap.seam2[1]} x2={cap.seam2[2]} y2={cap.seam2[3]} className="band-corner-seam secondary" /></g>)}
 
 
             {showFraming && joistRuns.map((value, idx) => deck.joistDirection === 'vertical'
