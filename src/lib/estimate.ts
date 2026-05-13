@@ -283,7 +283,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.');
   addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.');
   addBoardGroups(materials, 'Framing', 'Double band / rim board', deck.doubleBandGroups, 'Double band applied to full perimeter and staggered in layout preview.');
-  if (deck.pictureFrameCount || deck.breakerBoardCount) materials.push(toMaterial('Additional 2x blocking for deck-board inlays', 'Framing', deck.blockingBoardCount, '8 ft boards', 'Blocking at picture-frame and breaker-board support lines', undefined, `${deck.blockingCount} blocking cuts total including border, breaker, and standard rows.`));
+  if (deck.pictureFrameCount || deck.breakerBoardCount) materials.push(toMaterial('Additional 2x blocking for deck-board inlays', 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', undefined, `${deck.blockingCount} blocking cuts total including border, breaker, and standard rows · ${deck.blockingLf.toFixed(1)} lf total assuming blocks match joist spacing.`));
 
   const baseRailSegments = deck.exposedSegments.map((segment) => segment.length);
   const stairOpeningWidth = deck.stairPlacement.edgeIndex !== null ? Math.min(deck.stairPlacement.width, deck.exposedSegments.find((segment) => segment.index === deck.stairPlacement.edgeIndex)?.length ?? 0) : 0;
@@ -302,7 +302,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const railingPosts = railingBreakdown.endLevelPosts + railingBreakdown.inlineLevelPosts + railingBreakdown.cornerLevelPosts + railingBreakdown.stairsLevelToAngledCornerPosts + railingBreakdown.stairsInlinePosts + railingBreakdown.stairsEndPosts;
 
   materials.push(
-    toMaterial('Blocking', 'Framing', deck.blockingBoardCount, 'boards', '8 ft stock', undefined, `${deck.blockingCount} blocks across ${deck.blockingRows} rows · shown as blocking lines at 1 ft O.C. in layout`),
+    toMaterial('Blocking', 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', undefined, `${deck.blockingCount} blocks across ${deck.blockingRows} rows · ${deck.blockingLf.toFixed(1)} lf total assuming each block matches joist spacing (${feetAndInches(deck.joistSpacingFt)}) · shown as blocking lines at 1 ft O.C. in layout`),
     toMaterial(`6x6 wood posts ${deck.postLength}'`, 'Structure', deck.postCount, 'ea', `${deck.postLength} ft stock`, deck.lockedPosts.length ? `${deck.lockedPosts.length} post position(s) manually locked` : 'Auto-spaced beam support posts'),
     toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', '3 bags per post footing'),
     toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined),
