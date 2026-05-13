@@ -471,7 +471,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const bandSegments = accumulateGroups([...segments.map((segment) => segment.length), ...segments.map((segment) => segment.length)]);
   const doubleBandLf = round2(polygonPerimeter(points) * 2);
   const blockingRows = 2 + Math.max(0, pictureFrameCount) + Math.max(0, breakerBoardCount);
-  const pictureFrameSupportSegments = exposedSegments.filter((segment) => (joistDirection === 'vertical' ? segment.orientation === 'horizontal' : segment.orientation === 'vertical'));
+  const pictureFrameSupportSegments = exposedSegments.filter((segment) => (joistDirection === 'vertical' ? segment.orientation === 'vertical' : segment.orientation === 'horizontal')); // picture-frame boards running parallel with joists need 1 ft O.C. support blocking
   const pictureFrameBlockingLf = round2(pictureFrameSupportSegments.reduce((sum, segment) => sum + segment.length, 0) * Math.max(0, pictureFrameCount));
   const breakerBlockingLf = round2(breakerBoardPositions.reduce((sum, pos) => sum + (boardRun === 'width'
     ? scanlineIntersections(points, 'vertical', pos).reduce((acc, pair) => acc + (pair.end - pair.start), 0)
@@ -479,7 +479,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const standardBlockingCount = joistCount * 2;
   const blockingLf = round2((standardBlockingCount * JOIST_SPACING) + pictureFrameBlockingLf + breakerBlockingLf);
   const blockingCount = Math.max(standardBlockingCount, Math.round(blockingLf / JOIST_SPACING));
-  const blockingBoardCount = Math.max(0, Math.ceil(blockingLf / 12));
+  const blockingBoardCount = Math.max(0, Math.ceil((blockingLf / 12) * 1.05));
   const joistTapeLf = round2(joistLengthsRaw.reduce((sum, length) => sum + length, 0) + doubleBandLf / 2);
   const joistHangers = joistCount * 2;
   const rafterTies = joistCount * Math.max(1, beamLines.length);

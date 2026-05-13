@@ -158,7 +158,38 @@ function offsetSvgPoint(point: { x: number; y: number }, dir: { x: number; y: nu
   return { x: point.x + dir.x * trim + normal.x * offset, y: point.y + dir.y * trim + normal.y * offset };
 }
 
-function miteredCoursePolygon(
+function findVertexIndex(points: DeckPoint[], target: DeckPoint) {
+  return points.findIndex((point) => Math.abs(point.x - target.x) < 0.01 && Math.abs(point.y - target.y) < 0.01);
+}
+
+function pointInsidePolygon(points: DeckPoint[], point: DeckPoint) {
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const pi = points[i];
+    const pj = points[j];
+    const crosses = ((pi.y > point.y) !== (pj.y > point.y)) && (point.x < ((pj.x - pi.x) * (point.y - pi.y)) / ((pj.y - pi.y) || 1e-9) + pi.x);
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function vertexIsOutsideCorner(points: DeckPoint[], vertex: DeckPoint) {
+  const idx = findVertexIndex(points, vertex);
+  if (idx < 0) return true;
+  const prev = points[(idx - 1 + points.length) % points.length];
+  const next = points[(idx + 1) % points.length];
+  const vPrev = { x: prev.x - vertex.x, y: prev.y - vertex.y };
+  const vNext = { x: next.x - vertex.x, y: next.y - vertex.y };
+  const lenPrev = Math.hypot(vPrev.x, vPrev.y) || 1;
+  const lenNext = Math.hypot(vNext.x, vNext.y) || 1;
+  const test = {
+    x: vertex.x + (vPrev.x / lenPrev + vNext.x / lenNext) * 0.05,
+    y: vertex.y + (vPrev.y / lenPrev + vNext.y / lenNext) * 0.05,
+  };
+  return pointInsidePolygon(points, test);
+}
+
+function pictureFrameCoursePolygon(
   segment: DeckEdgeSegment,
   points: DeckPoint[],
   toSvg: (x: number, y: number) => { x: number; y: number },
@@ -174,12 +205,44 @@ function miteredCoursePolygon(
   const outer = course * boardWidthPx;
   const inner = (course + 1) * boardWidthPx;
   const maxTrim = Math.max(0, dir.length / 2 - 1);
-  const outerTrim = Math.min(maxTrim, course * boardWidthPx);
-  const innerTrim = Math.min(maxTrim, (course + 1) * boardWidthPx);
-  const p1 = offsetSvgPoint(a, dir, normal, outerTrim, outer);
-  const p2 = offsetSvgPoint(b, dir, normal, -outerTrim, outer);
-  const p3 = offsetSvgPoint(b, dir, normal, -innerTrim, inner);
-  const p4 = offsetSvgPoint(a, dir, normal, innerTrim, inner);
+  const startOutside = vertexIsOutsideCorner(points, segment.start);
+  const endOutside = vertexIsOutsideCorner(points, segment.end);
+  const trimFor = (offset: number, outsideCorner: boolean) => {
+    const trim = Math.min(maxTrim, offset);
+    return outsideCorner ? trim : -trim;
+  };
+  const p1 = offsetSvgPoint(a, dir, normal, trimFor(outer, startOutside), outer);
+  const p2 = offsetSvgPoint(b, dir, normal, -trimFor(outer, endOutside), outer);
+  const p3 = offsetSvgPoint(b, dir, normal, -trimFor(inner, endOutside), inner);
+  const p4 = offsetSvgPoint(a, dir, normal, trimFor(inner, startOutside), inner);
+  return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
+}
+
+function interlockedBandCoursePolygon(
+  segment: DeckEdgeSegment,
+  points: DeckPoint[],
+  toSvg: (x: number, y: number) => { x: number; y: number },
+  course: number,
+  boardWidthPx: number,
+) {
+  const a = toSvg(segment.start.x, segment.start.y);
+  const b = toSvg(segment.end.x, segment.end.y);
+  const dir = svgUnitVector(a, b);
+  const inward = inwardNormal(segment, points);
+  const normalA = toSvg(segment.start.x + inward.x, segment.start.y + inward.y);
+  const normal = svgUnitVector(a, normalA);
+  const outer = course * boardWidthPx;
+  const inner = (course + 1) * boardWidthPx;
+  const maxAdjust = Math.max(0, dir.length / 2 - 1);
+  const lap = Math.min(maxAdjust, boardWidthPx);
+  const edgeParity = segment.index % 2;
+  const courseParity = course % 2;
+  const startAdjust = (edgeParity === courseParity ? -lap : lap);
+  const endAdjust = (edgeParity === courseParity ? lap : -lap);
+  const p1 = offsetSvgPoint(a, dir, normal, startAdjust, outer);
+  const p2 = offsetSvgPoint(b, dir, normal, -endAdjust, outer);
+  const p3 = offsetSvgPoint(b, dir, normal, -endAdjust, inner);
+  const p4 = offsetSvgPoint(a, dir, normal, startAdjust, inner);
   return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
 }
 
@@ -670,9 +733,9 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               Array.from({ length: pictureFrameCount }, (_, course) => (
                 <polygon
                   key={`pf-${segment.index}-${course}`}
-                  points={miteredCoursePolygon(segment, deck.points, toSvg, course, Math.max(10, scale * 0.44))}
+                  points={pictureFrameCoursePolygon(segment, deck.points, toSvg, course, Math.max(10, scale * 0.44))}
                   className={`picture-frame-board course-${course + 1}`}
-                  onClick={() => setInspect({ title: `Picture frame board ${course + 1}`, detail: `Mitered picture-frame course around exposed deck perimeter.` })}
+                  onClick={() => setInspect({ title: `Picture frame board ${course + 1}`, detail: `Picture-frame course with outside and inside corner miters around exposed deck perimeter.` })}
                 />
               ))
             ))}
@@ -729,8 +792,8 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               const primarySegs = staggeredSegments(segment.length, 20, 0);
               const secondarySegs = staggeredSegments(segment.length, 20, 10);
               return <g key={`band-${segment.index}`}>
-                <polygon points={miteredCoursePolygon(segment, deck.points, toSvg, 0, band)} className="double-band-rect mitered" />
-                <polygon points={miteredCoursePolygon(segment, deck.points, toSvg, 1, band)} className="double-band-rect secondary mitered" />
+                <polygon points={interlockedBandCoursePolygon(segment, deck.points, toSvg, 0, band)} className="double-band-rect interlocked" />
+                <polygon points={interlockedBandCoursePolygon(segment, deck.points, toSvg, 1, band)} className="double-band-rect secondary interlocked" />
                 {primarySegs.filter((seg) => seg.end < segment.length - 0.05).map((seg, idx) => {
                   const seam = bandSeamLine(segment, deck.points, toSvg, 0, band, seg.end);
                   return <line key={`bp-seam-${idx}`} x1={seam.a.x} y1={seam.a.y} x2={seam.b.x} y2={seam.b.y} className="seam-tick professional-seam" />;
@@ -760,7 +823,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                 }))}
 
             {showFraming && pictureFrameCount > 0 && deck.exposedSegments
-              .filter((segment) => deck.joistDirection === 'vertical' ? segment.orientation === 'horizontal' : segment.orientation === 'vertical')
+              .filter((segment) => deck.joistDirection === 'vertical' ? segment.orientation === 'vertical' : segment.orientation === 'horizontal')
               .map((segment, segIdx) => {
                 const inset = inwardNormal(segment, deck.points);
                 const span = segment.length;

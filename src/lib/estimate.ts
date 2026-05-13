@@ -22,9 +22,13 @@ const feetAndInches = (feet: number) => {
   return inches ? `${ft}' ${inches}"` : `${ft}'`;
 };
 
-const addBoardGroups = (materials: MaterialItem[], category: string, prefix: string, groups: { length: number; count: number }[], notes: string) => {
+const addBoardGroups = (materials: MaterialItem[], category: string, prefix: string, groups: { length: number; count: number }[], notes: string, includeWasteBuffer = false) => {
   groups.forEach((group) => {
-    if (group.count > 0) materials.push(toMaterial(`${prefix} ${group.length}'`, category, group.count, 'boards', `${group.length} ft stock`, undefined, notes));
+    if (group.count > 0) {
+      const quantity = includeWasteBuffer ? Math.ceil(group.count * 1.05) : group.count;
+      const bufferNote = includeWasteBuffer ? `${notes} · Includes 5% waste/damage buffer.` : notes;
+      materials.push(toMaterial(`${prefix} ${group.length}'`, category, quantity, 'boards', `${group.length} ft stock`, undefined, bufferNote));
+    }
   });
 };
 
@@ -264,7 +268,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const drinkRail = inputs.drinkRail === true || String(inputs.drinkRail ?? 'false') === 'true';
   const drinkRailMaterial = resolveBoardStyle(inputs.drinkRailMaterial);
   const materials: MaterialItem[] = [];
-  addBoardGroups(materials, 'Decking', `${deckingMaterial} field board`, deck.boardGroups, deck.boardRun === 'width' ? 'Boards run parallel to the house, so stock length tracks deck width.' : 'Boards run perpendicular to the house, so stock length tracks projection.');
+  addBoardGroups(materials, 'Decking', `${deckingMaterial} field board`, deck.boardGroups, deck.boardRun === 'width' ? 'Boards run parallel to the house, so stock length tracks deck width.' : 'Boards run perpendicular to the house, so stock length tracks projection.', true);
   if (pictureFrameCount > 0) {
     for (let i = 0; i < pictureFrameCount; i += 1) {
       const style = pictureFrameMaterials[i] || deckingMaterial;
@@ -279,10 +283,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       addDeckBoardCuts(materials, `${style} breaker board ${i + 1}`, 'Decking', [breakerLength], `Breaker board row ${i + 1} splitting field decking.`);
     }
   }
-  addBoardGroups(materials, 'Stairs', `${deckingMaterial} stair tread board`, deck.stairTreadGroups, 'Two tread boards per tread.');
-  addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.');
-  addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.');
-  addBoardGroups(materials, 'Framing', 'Double band / rim board', deck.doubleBandGroups, 'Double band applied to full perimeter and staggered in layout preview.');
+  addBoardGroups(materials, 'Stairs', `${deckingMaterial} stair tread board`, deck.stairTreadGroups, 'Two tread boards per tread.', true);
+  addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.', true);
+  addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', true);
+  addBoardGroups(materials, 'Framing', 'Double band / rim board', deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', true);
 
   const baseRailSegments = deck.exposedSegments.map((segment) => segment.length);
   const stairOpeningWidth = deck.stairPlacement.edgeIndex !== null ? Math.min(deck.stairPlacement.width, deck.exposedSegments.find((segment) => segment.index === deck.stairPlacement.edgeIndex)?.length ?? 0) : 0;
@@ -301,7 +305,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const railingPosts = railingBreakdown.endLevelPosts + railingBreakdown.inlineLevelPosts + railingBreakdown.cornerLevelPosts + railingBreakdown.stairsLevelToAngledCornerPosts + railingBreakdown.stairsInlinePosts + railingBreakdown.stairsEndPosts;
 
   materials.push(
-    toMaterial('Blocking', 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', undefined, `${deck.blockingLf.toFixed(1)} lf total across standard rows plus picture-frame / breaker support blocking · layout shows support blocking at 1 ft O.C. where needed`),
+    toMaterial('Blocking', 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', undefined, `${deck.blockingLf.toFixed(1)} lf total across standard rows plus picture-frame / breaker support blocking · quantity includes 5% waste/damage buffer · layout shows support blocking at 1 ft O.C. only where boards run parallel with joists and need support`),
     toMaterial(`6x6 wood posts ${deck.postLength}'`, 'Structure', deck.postCount, 'ea', `${deck.postLength} ft stock`, deck.lockedPosts.length ? `${deck.lockedPosts.length} post position(s) manually locked` : 'Auto-spaced beam support posts'),
     toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', '3 bags per post footing'),
     toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined),
