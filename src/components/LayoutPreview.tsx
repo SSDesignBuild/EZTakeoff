@@ -739,16 +739,20 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                 }))}
 
             {showFraming && pictureFrameCount > 0 && deck.exposedSegments
-              .filter((segment) => segment.orientation === 'vertical' || Math.abs(segment.start.y - deck.maxY) > 0.05)
+              .filter((segment) => deck.joistDirection === 'vertical' ? segment.orientation === 'horizontal' : segment.orientation === 'vertical')
               .map((segment, segIdx) => {
                 const inset = inwardNormal(segment, deck.points);
                 const span = segment.length;
                 const blockDistances = Array.from({ length: Math.max(1, Math.floor(span)) }, (_, i) => Math.min(span - 0.15, i + 0.5)).filter((d) => d > 0.15 && d < span - 0.15);
-                return <g key={`blocking-${segIdx}`}>{blockDistances.map((distance, idx) => {
-                  const pt = pointAlong(segment, distance);
-                  const a = toSvg(pt.x + inset.x * 0.15, pt.y + inset.y * 0.15);
-                  const b = toSvg(pt.x + inset.x * 1.05, pt.y + inset.y * 1.05);
-                  return <line key={idx} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line" />;
+                return <g key={`blocking-${segIdx}`}>{Array.from({ length: pictureFrameCount }, (_, course) => {
+                  const inner = 0.15 + course * 0.48;
+                  const outer = 1.05 + course * 0.48;
+                  return blockDistances.map((distance, idx) => {
+                    const pt = pointAlong(segment, distance);
+                    const a = toSvg(pt.x + inset.x * inner, pt.y + inset.y * inner);
+                    const b = toSvg(pt.x + inset.x * outer, pt.y + inset.y * outer);
+                    return <line key={`${course}-${idx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line" />;
+                  });
                 })}</g>;
               })}
 

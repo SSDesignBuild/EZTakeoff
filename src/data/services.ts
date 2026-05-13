@@ -143,6 +143,8 @@ export const SERVICES: ServiceDefinition[] = [
     },
     fields: [
       { key: 'deckHeight', label: 'Deck height (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'quickWidth', label: 'Quick width (ft)', type: 'number', min: 1, step: 1 },
+      { key: 'quickProjection', label: 'Quick projection (ft)', type: 'number', min: 1, step: 1 },
       {
         key: 'attachment',
         label: 'Attachment condition',
@@ -172,6 +174,16 @@ export const SERVICES: ServiceDefinition[] = [
         ],
       },
       { key: 'deckingMaterial', label: 'Decking board style', type: 'select', options: DECK_BOARD_STYLE_OPTIONS },
+      { key: 'beamCantilever', label: 'Beam cantilever to post (ft)', type: 'select', options: [
+        { label: '0 ft', value: '0' },
+        { label: '1 ft', value: '1' },
+        { label: '2 ft', value: '2' },
+      ] },
+      { key: 'stairCount', label: 'Stair runs', type: 'number', min: 0, step: 1 },
+      { key: 'stairWidth', label: 'Stair width (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'stairRise', label: 'Total stair rise (ft)', type: 'number', min: 0, step: 0.1, helper: 'Leave 0 to use deck height.' },
+      { key: 'stairRailingLeft', label: 'Railing on left side of stairs', type: 'boolean' },
+      { key: 'stairRailingRight', label: 'Railing on right side of stairs', type: 'boolean' },
       {
         key: 'breakerBoardCount',
         label: 'Breaker boards',
@@ -223,18 +235,6 @@ export const SERVICES: ServiceDefinition[] = [
       },
       { key: 'drinkRail', label: 'Add drink rail', type: 'boolean' },
       { key: 'drinkRailMaterial', label: 'Drink rail board style', type: 'select', options: DECK_BOARD_STYLE_WITH_MATCH_OPTIONS },
-      { key: 'stairCount', label: 'Stair runs', type: 'number', min: 0, step: 1 },
-      { key: 'stairWidth', label: 'Stair width (ft)', type: 'number', min: 0, step: 0.1 },
-      { key: 'stairRise', label: 'Total stair rise (ft)', type: 'number', min: 0, step: 0.1, helper: 'Leave 0 to use deck height.' },
-      { key: 'stairRailingLeft', label: 'Railing on left side of stairs', type: 'boolean' },
-      { key: 'stairRailingRight', label: 'Railing on right side of stairs', type: 'boolean' },
-      { key: 'quickWidth', label: 'Quick width (ft)', type: 'number', min: 1, step: 1 },
-      { key: 'quickProjection', label: 'Quick projection (ft)', type: 'number', min: 1, step: 1 },
-      { key: 'beamCantilever', label: 'Beam cantilever to post (ft)', type: 'select', options: [
-        { label: '0 ft', value: '0' },
-        { label: '1 ft', value: '1' },
-        { label: '2 ft', value: '2' },
-      ] },
     ],
     formulaNotes: [
       'Joists are calculated at 12 in. on center and sized from your span table: 2x8 to 12 ft, 2x10 to 14 ft, 2x12 to 16 ft.',

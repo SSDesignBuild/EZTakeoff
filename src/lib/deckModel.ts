@@ -360,8 +360,8 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     const parsed = parseRailCoverage(inputs.railCoverage, segments);
     return parsed.length ? parsed : buildDefaultRailCoverage(segments, defaultRailIndices);
   })();
-  const exposedSegments = segments.filter((segment) => railCoverage.some((item) => item.edgeIndex === segment.index));
-  const exposedPerimeter = round2(railCoverage.reduce((sum, item) => sum + (item.end - item.start), 0));
+  const exposedSegments = segments.filter((segment) => defaultExposedSegments.some((item) => item.index === segment.index));
+  const exposedPerimeter = round2(exposedSegments.reduce((sum, segment) => sum + segment.length, 0));
 
   const pictureFrameCount = Math.max(0, Math.round(Number(inputs.pictureFrameCount ?? 1)));
   const breakerBoardCount = Math.max(0, Math.round(Number(inputs.breakerBoardCount ?? 0)));
@@ -471,10 +471,14 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const bandSegments = accumulateGroups([...segments.map((segment) => segment.length), ...segments.map((segment) => segment.length)]);
   const doubleBandLf = round2(polygonPerimeter(points) * 2);
   const blockingRows = 2 + Math.max(0, pictureFrameCount) + Math.max(0, breakerBoardCount);
-  const pictureFrameBlocking = pictureFrameCount > 0 ? Math.ceil(exposedPerimeter) * pictureFrameCount : 0;
-  const breakerBlocking = breakerBoardCount > 0 ? Math.ceil((boardRun === 'width' ? depth : width)) * breakerBoardCount : 0;
-  const blockingCount = (joistCount * 2) + pictureFrameBlocking + breakerBlocking;
-  const blockingLf = round2(blockingCount * JOIST_SPACING);
+  const pictureFrameSupportSegments = exposedSegments.filter((segment) => (joistDirection === 'vertical' ? segment.orientation === 'horizontal' : segment.orientation === 'vertical'));
+  const pictureFrameBlockingLf = round2(pictureFrameSupportSegments.reduce((sum, segment) => sum + segment.length, 0) * Math.max(0, pictureFrameCount));
+  const breakerBlockingLf = round2(breakerBoardPositions.reduce((sum, pos) => sum + (boardRun === 'width'
+    ? scanlineIntersections(points, 'vertical', pos).reduce((acc, pair) => acc + (pair.end - pair.start), 0)
+    : scanlineIntersections(points, 'horizontal', pos).reduce((acc, pair) => acc + (pair.end - pair.start), 0)), 0));
+  const standardBlockingCount = joistCount * 2;
+  const blockingLf = round2((standardBlockingCount * JOIST_SPACING) + pictureFrameBlockingLf + breakerBlockingLf);
+  const blockingCount = Math.max(standardBlockingCount, Math.round(blockingLf / JOIST_SPACING));
   const blockingBoardCount = Math.max(0, Math.ceil(blockingLf / 12));
   const joistTapeLf = round2(joistLengthsRaw.reduce((sum, length) => sum + length, 0) + doubleBandLf / 2);
   const joistHangers = joistCount * 2;
