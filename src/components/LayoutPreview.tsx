@@ -233,16 +233,23 @@ function interlockedBandCoursePolygon(
   const normal = svgUnitVector(a, normalA);
   const outer = course * boardWidthPx;
   const inner = (course + 1) * boardWidthPx;
-  const maxAdjust = Math.max(0, dir.length / 2 - 1);
-  const lap = Math.min(maxAdjust, boardWidthPx);
-  const edgeParity = segment.index % 2;
+
+  // Double band boards are not mitered. They should lap/interlock at corners
+  // like herringbone blocking, but they should never extend past the deck
+  // outline. The previous version alternated positive and negative endpoint
+  // adjustments, which made one board protrude beyond the other at corners.
+  // This version only trims inward from the segment endpoints, so the courses
+  // remain snug to the outside line and lap cleanly without overhangs.
+  const lap = Math.min(Math.max(0, boardWidthPx), Math.max(0, dir.length / 2 - 1));
+  const parity = segment.index % 2;
   const courseParity = course % 2;
-  const startAdjust = (edgeParity === courseParity ? -lap : lap);
-  const endAdjust = (edgeParity === courseParity ? lap : -lap);
-  const p1 = offsetSvgPoint(a, dir, normal, startAdjust, outer);
-  const p2 = offsetSvgPoint(b, dir, normal, -endAdjust, outer);
-  const p3 = offsetSvgPoint(b, dir, normal, -endAdjust, inner);
-  const p4 = offsetSvgPoint(a, dir, normal, startAdjust, inner);
+  const startTrim = parity === courseParity ? 0 : lap;
+  const endTrim = parity === courseParity ? lap : 0;
+
+  const p1 = offsetSvgPoint(a, dir, normal, startTrim, outer);
+  const p2 = offsetSvgPoint(b, dir, normal, -endTrim, outer);
+  const p3 = offsetSvgPoint(b, dir, normal, -endTrim, inner);
+  const p4 = offsetSvgPoint(a, dir, normal, startTrim, inner);
   return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
 }
 
