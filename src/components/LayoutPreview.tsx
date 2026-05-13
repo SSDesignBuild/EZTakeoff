@@ -145,6 +145,39 @@ function pointAlong(segment: DeckEdgeSegment, distance: number) {
 }
 
 
+
+function cornerBandCaps(points: DeckPoint[], toSvg: (x: number, y: number) => { x: number; y: number }, band: number) {
+  const caps: { index: number; primary: string; secondary: string; seam1: [number, number, number, number]; seam2: [number, number, number, number] }[] = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const prev: DeckEdgeSegment = { start: points[(index - 1 + points.length) % points.length], end: points[index], length: Math.hypot(points[index].x - points[(index - 1 + points.length) % points.length].x, points[index].y - points[(index - 1 + points.length) % points.length].y), orientation: 'angled', index: (index - 1 + points.length) % points.length };
+    const next: DeckEdgeSegment = { start: points[index], end: points[(index + 1) % points.length], length: Math.hypot(points[(index + 1) % points.length].x - points[index].x, points[(index + 1) % points.length].y - points[index].y), orientation: 'angled', index };
+    if (prev.length < 0.05 || next.length < 0.05) continue;
+    const prevDir = { x: (prev.start.x - prev.end.x) / prev.length, y: (prev.start.y - prev.end.y) / prev.length };
+    const nextDir = { x: (next.end.x - next.start.x) / next.length, y: (next.end.y - next.start.y) / next.length };
+    const dot = prevDir.x * nextDir.x + prevDir.y * nextDir.y;
+    if (Math.abs(dot) > 0.15) continue;
+    const prevInward = inwardNormal(prev, points);
+    const nextInward = inwardNormal(next, points);
+    const corner = toSvg(points[index].x, points[index].y);
+    const base1 = corner;
+    const p1 = { x: base1.x + prevInward.x * band, y: base1.y + prevInward.y * band };
+    const p2 = { x: p1.x + nextInward.x * band, y: p1.y + nextInward.y * band };
+    const p3 = { x: base1.x + nextInward.x * band, y: base1.y + nextInward.y * band };
+    const base2 = { x: corner.x + (prevInward.x + nextInward.x) * band, y: corner.y + (prevInward.y + nextInward.y) * band };
+    const q1 = { x: base2.x + prevInward.x * band, y: base2.y + prevInward.y * band };
+    const q2 = { x: q1.x + nextInward.x * band, y: q1.y + nextInward.y * band };
+    const q3 = { x: base2.x + nextInward.x * band, y: base2.y + nextInward.y * band };
+    caps.push({
+      index,
+      primary: `${base1.x},${base1.y} ${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y}`,
+      secondary: `${base2.x},${base2.y} ${q1.x},${q1.y} ${q2.x},${q2.y} ${q3.x},${q3.y}`,
+      seam1: [base1.x, base1.y, p2.x, p2.y],
+      seam2: [base2.x, base2.y, q2.x, q2.y],
+    });
+  }
+  return caps;
+}
+
 function symmetricPostOffsets(length: number, maxSection = 8) {
   const sectionCount = Math.max(1, Math.ceil(length / maxSection));
   return Array.from({ length: Math.max(0, sectionCount - 1) }, (_, index) => ((index + 1) * length) / sectionCount);
@@ -358,6 +391,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const planY = sheetMarginTop;
   const toSvg = (x: number, y: number) => ({ x: planX + (x - layoutMinX) * scale, y: planY + (y - layoutMinY) * scale });
   const pointString = deck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ');
+  const bandCornerCapsData = useMemo(() => cornerBandCaps(deck.points, toSvg, 9), [deck.points, planX, planY, scale, layoutMinX, layoutMinY]);
   const beamPlies = (segmentLength: number, offset: number) => {
     const pieces: { start: number; end: number; infill: boolean; label?: string }[] = [];
     if (segmentLength <= 20.01) return [{ start: 0, end: segmentLength, infill: false }];
@@ -684,6 +718,8 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                 })}
               </g>;
             })}
+
+            {showFraming && bandCornerCapsData.map((cap) => <g key={`band-corner-${cap.index}`}><polygon points={cap.primary} className="band-corner-cap" /><line x1={cap.seam1[0]} y1={cap.seam1[1]} x2={cap.seam1[2]} y2={cap.seam1[3]} className="band-corner-seam" /><polygon points={cap.secondary} className="band-corner-cap secondary" /><line x1={cap.seam2[0]} y1={cap.seam2[1]} x2={cap.seam2[2]} y2={cap.seam2[3]} className="band-corner-seam secondary" /></g>)}
 
 
             {showFraming && joistRuns.map((value, idx) => deck.joistDirection === 'vertical'
