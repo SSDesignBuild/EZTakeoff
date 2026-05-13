@@ -225,14 +225,14 @@ function interlockedBandCoursePolygon(
   const outer = course * boardWidthPx;
   const inner = (course + 1) * boardWidthPx;
 
-  // Double band boards use a consistent butt-lap pattern at every corner.
-  // Each course trims only one end of each segment by one board width, and the
-  // second course trims the opposite end. That keeps every corner snug, avoids
-  // the small protruding tails that looked unprofessional, and preserves the
-  // herringbone/interlocked visual without mitering the band boards.
+  // Double band boards are drawn as two clean board courses.
+  // The outside course stays continuous on the outside perimeter. The inside
+  // course is trimmed back one board width at both ends so it butts into the
+  // outside course at corners instead of crossing over it. This matches the
+  // requested lapped/interlocked look without miters or protruding tails.
   const lap = Math.min(Math.max(0, boardWidthPx), Math.max(0, dir.length / 2 - 1));
-  const startTrim = course % 2 === 0 ? lap : 0;
-  const endTrim = course % 2 === 0 ? 0 : lap;
+  const startTrim = course === 0 ? 0 : lap;
+  const endTrim = course === 0 ? 0 : lap;
 
   const p1 = offsetSvgPoint(a, dir, normal, startTrim, outer);
   const p2 = offsetSvgPoint(b, dir, normal, -endTrim, outer);
@@ -824,8 +824,12 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                 const span = segment.length;
                 const blockDistances = Array.from({ length: Math.max(1, Math.floor(span)) }, (_, i) => Math.min(span - 0.15, i + 0.5)).filter((d) => d > 0.15 && d < span - 0.15);
                 return <g key={`blocking-${segIdx}`}>{Array.from({ length: pictureFrameCount }, (_, course) => {
-                  const inner = 0.15 + course * 0.48;
-                  const outer = 1.05 + course * 0.48;
+                  // Blocking supports only the unsupported picture-frame run.
+                  // Keep it clear of the band board and short of the first joist
+                  // so the framing diagram does not show blocking overlapping
+                  // either member.
+                  const inner = 0.34 + course * 0.48;
+                  const outer = 0.86 + course * 0.48;
                   return blockDistances.map((distance, idx) => {
                     const pt = pointAlong(segment, distance);
                     const a = toSvg(pt.x + inset.x * inner, pt.y + inset.y * inner);
@@ -839,14 +843,14 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               deck.boardRun === 'width'
                 ? scanlineIntersections(deck.points, 'vertical', pos).flatMap((pair, pairIdx) => Array.from({ length: Math.max(1, Math.floor(pair.end - pair.start)) }, (_, blockIdx) => {
                     const y = Math.min(pair.end - 0.15, pair.start + blockIdx + 0.5);
-                    const a = toSvg(pos - 0.5, y);
-                    const b = toSvg(pos + 0.5, y);
+                    const a = toSvg(pos - 0.42, y);
+                    const b = toSvg(pos + 0.42, y);
                     return <line key={`breaker-block-v-${idx}-${pairIdx}-${blockIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line required-blocking" />;
                   }))
                 : scanlineIntersections(deck.points, 'horizontal', pos).flatMap((pair, pairIdx) => Array.from({ length: Math.max(1, Math.floor(pair.end - pair.start)) }, (_, blockIdx) => {
                     const x = Math.min(pair.end - 0.15, pair.start + blockIdx + 0.5);
-                    const a = toSvg(x, pos - 0.5);
-                    const b = toSvg(x, pos + 0.5);
+                    const a = toSvg(x, pos - 0.42);
+                    const b = toSvg(x, pos + 0.42);
                     return <line key={`breaker-block-h-${idx}-${pairIdx}-${blockIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line required-blocking" />;
                   }))
             ))}
