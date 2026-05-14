@@ -266,6 +266,8 @@ export function calculateEstimate(serviceSlug: string, inputs: EstimateInputs): 
       return estimateScreenRoom(inputs, false);
     case 'patio-covers':
       return estimatePatioCover(inputs);
+    case 'flat-pans':
+      return estimateFlatPans(inputs);
     case 'renaissance-screen-rooms':
       return estimateScreenRoom(inputs, true);
     case 'sunrooms':
@@ -275,6 +277,68 @@ export function calculateEstimate(serviceSlug: string, inputs: EstimateInputs): 
     default:
       return { summary: [], materials: [], orderNotes: [] };
   }
+}
+
+
+function estimateFlatPans(inputs: EstimateInputs): EstimateResult {
+  const width = Math.max(1, Number(inputs.width ?? 16));
+  const projection = Math.max(1, Number(inputs.projection ?? 10));
+  const postHeight = Math.max(1, Number(inputs.postHeight ?? 8));
+  const attachmentType = String(inputs.attachmentType ?? 'house');
+  const beamType = String(inputs.beamType ?? '3x3');
+  const requestedPostType = String(inputs.postType ?? '3x3');
+  const panColor = String(inputs.panColor ?? 'white');
+  const framingColor = String(inputs.framingColor ?? 'white');
+  const requires4x4 = beamType === 'i-beam' || beamType === 'c-beam';
+  const postType = requires4x4 ? '4x4' : requestedPostType;
+  const beamSpan = beamType === '3x3' ? 10 : (beamType === 'atlas' || beamType === '4x4') ? 16 : 24;
+  const beamDisplay = beamType === 'atlas' ? 'Atlas beam' : beamType === 'i-beam' ? 'I beam' : beamType === 'c-beam' ? 'C beam' : `${beamType} beam`;
+  const panCount = Math.ceil(width);
+  const panLength = Number((projection + 1).toFixed(2));
+  const needsMidBeam = projection > 10;
+  const supportBeamLines = 1 + (needsMidBeam ? 1 : 0);
+  const freestandingHeader = attachmentType === 'freestanding';
+  const postLines = supportBeamLines + (freestandingHeader ? 1 : 0);
+  const postsPerLine = Math.max(2, Math.ceil(width / beamSpan) + 1);
+  const postCount = postsPerLine * postLines;
+  const stock24 = (totalLf: number) => Math.ceil(Math.max(0, totalLf) / 24);
+  const bracketPerPost = beamType === 'atlas' ? 1 : 2;
+  const materials: MaterialItem[] = [
+    toMaterial('Flat pan panels', 'Flat pans', panCount, 'panels', `${feetAndInches(panLength)} ordered panel length`, panColor, `${panCount} interlocking 12 in pan(s) across ${feetAndInches(width)} width · includes 1 ft front overhang`),
+    toMaterial('3 in flat pan header', 'Structure', stock24(width), 'sticks', '24 ft stock', framingColor, `${feetAndInches(width)} header at ${attachmentType === 'house' ? 'house/wall' : attachmentType === 'fascia' ? 'fascia' : 'freestanding rear beam'} attachment`),
+    toMaterial(beamDisplay, 'Structure', stock24(width * supportBeamLines), 'sticks', '24 ft stock', framingColor, `${supportBeamLines} support beam line(s): front beam${needsMidBeam ? ' plus required mid beam because projection exceeds 10 ft' : ''}`),
+    toMaterial(`${postType} post`, 'Structure', Math.ceil((postCount * postHeight) / 24), 'sticks', '24 ft stock', framingColor, `${postCount} post(s) cut to ${feetAndInches(postHeight)} · ${postsPerLine} post(s) per support line · ${beamDisplay} span limit ${feetAndInches(beamSpan)}`),
+    toMaterial('Flat pan side fascia', 'Trim', stock24(projection * 2), 'sticks', '24 ft stock', framingColor, `Left and right side fascia · ${feetAndInches(projection)} each side`),
+    toMaterial('Flat pan gutter', 'Trim', stock24(width), 'sticks', '24 ft stock', framingColor, `Front gutter across ${feetAndInches(width)} width`),
+    toMaterial('Flat pan gutter/fascia corners', 'Trim', 2, 'ea', '1 left + 1 right corner', framingColor, 'Corners tie side fascia into front gutter'),
+    toMaterial('Downspout kits', 'Trim', 2, 'kits', '2 per flat pan cover', framingColor, 'Standard two downspout kits per cover'),
+    toMaterial('3 in lag screws', 'Hardware', Math.ceil((width * 12) / 8), 'ea', 'Every 8 in in W pattern', undefined, 'Header attachment fasteners'),
+    toMaterial('3/4 in washer screws', 'Hardware', panCount * 2 * (1 + supportBeamLines + 1), 'ea', '2 at header + 2 at each beam + 2 at gutter per pan', undefined, `${panCount} pan(s), ${supportBeamLines} beam line(s), header, and gutter fastening`),
+    toMaterial(`${postType} hidden brackets`, 'Hardware', postCount * bracketPerPost, 'ea', beamType === 'atlas' ? '1 bottom bracket per post' : '1 bottom + 1 top bracket per post', framingColor, beamType === 'atlas' ? 'Atlas beam wings attach at top of post' : 'Hidden brackets at top and bottom of each post'),
+    toMaterial('3/4 in tek screws', 'Hardware', (postCount * 12) + (2 * 4), 'ea', '12 per post + 4 per gutter corner', undefined, '6 bottom and 6 top per post; 4 screws at each gutter/fascia corner'),
+    toMaterial('NovaFlex sealant', 'Hardware', Math.ceil((width * projection) / 20), 'tubes', '1 tube per 20 sq ft', framingColor, `${(width * projection).toFixed(1)} sq ft flat pan cover area`),
+  ];
+  if (requires4x4 && requestedPostType !== '4x4') {
+    materials.push(toMaterial('Post requirement note', 'Notes', 1, 'note', 'I beam / C beam require 4x4 posts', framingColor, `Post selection automatically treated as 4x4 because ${beamDisplay} was selected`));
+  }
+  return {
+    summary: [
+      { label: 'Width', value: feetAndInches(width) },
+      { label: 'Projection', value: feetAndInches(projection) },
+      { label: 'Area', value: `${(width * projection).toFixed(1)} sf` },
+      { label: 'Pan count', value: `${panCount} @ 12 in` },
+      { label: 'Pan order length', value: feetAndInches(panLength) },
+      { label: 'Beam / post', value: `${beamDisplay} / ${postType}` },
+      { label: 'Support beams', value: `${supportBeamLines}` },
+      { label: 'Posts', value: `${postCount}` },
+    ],
+    materials: consolidateMaterials(materials).filter((item) => item.quantity > 0),
+    orderNotes: [
+      needsMidBeam ? 'Projection exceeds 10 ft, so a mid support beam and post line are included.' : 'Projection is within the 10 ft flat-pan span with 1 ft front overhang.',
+      requires4x4 ? 'I beam and C beam selections require 4x4 posts.' : 'Selected beam can use the chosen post size unless field conditions require upgrade.',
+      'Verify attachment substrate, flashing, post footing layout, drainage, and local wind/uplift requirements before ordering.',
+    ],
+  };
 }
 
 function estimateDeck(inputs: EstimateInputs): EstimateResult {

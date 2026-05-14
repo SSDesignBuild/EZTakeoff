@@ -2001,4 +2001,114 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
   );
 }
 
-export function LayoutPreview({ serviceSlug, values, onValuesChange }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; if (serviceSlug === 'renaissance-screen-rooms') return <ScreenPreview values={values} renaissance />; if (serviceSlug === 'wooden-structures') return <WoodenStructurePreview values={values} />; return <SunroomPreview values={values} />; }
+
+function FlatPanPreview({ values }: { values: Record<string, string | number | boolean> }) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const width = Math.max(1, Number(values.width ?? 16));
+  const projection = Math.max(1, Number(values.projection ?? 10));
+  const postHeight = Math.max(1, Number(values.postHeight ?? 8));
+  const attachmentType = String(values.attachmentType ?? 'house');
+  const beamType = String(values.beamType ?? '3x3');
+  const requestedPostType = String(values.postType ?? '3x3');
+  const panColor = String(values.panColor ?? 'white');
+  const framingColor = String(values.framingColor ?? 'white');
+  const requires4x4 = beamType === 'i-beam' || beamType === 'c-beam';
+  const postType = requires4x4 ? '4x4' : requestedPostType;
+  const beamSpan = beamType === '3x3' ? 10 : (beamType === 'atlas' || beamType === '4x4') ? 16 : 24;
+  const beamDisplay = beamType === 'atlas' ? 'Atlas beam' : beamType === 'i-beam' ? 'I beam' : beamType === 'c-beam' ? 'C beam' : `${beamType} beam`;
+  const panCount = Math.ceil(width);
+  const panLength = projection + 1;
+  const needsMidBeam = projection > 10;
+  const supportBeamYs = needsMidBeam ? [projection / 2, projection] : [projection];
+  const freestandingHeader = attachmentType === 'freestanding';
+  const postsPerLine = Math.max(2, Math.ceil(width / beamSpan) + 1);
+  const postXs = Array.from({ length: postsPerLine }, (_, index) => postsPerLine === 1 ? width / 2 : (width * index) / (postsPerLine - 1));
+  const postLines = [...supportBeamYs, ...(freestandingHeader ? [0] : [])].sort((a, b) => a - b);
+  const sheetW = 1320;
+  const sheetH = 920;
+  const planX = 160;
+  const planY = 130;
+  const planW = 860;
+  const planH = 560;
+  const scale = Math.min(planW / width, planH / projection);
+  const coverW = width * scale;
+  const coverH = projection * scale;
+  const x0 = planX + (planW - coverW) / 2;
+  const y0 = planY;
+  const toSvg = (x: number, y: number) => ({ x: x0 + x * scale, y: y0 + y * scale });
+  const swatch: Record<string, string> = { white: '#f8fafc', bronze: '#6b4a2f', wheat: '#d6b878', clay: '#b07d62', black: '#111827' };
+  const panFill = swatch[panColor] ?? '#f8fafc';
+  const frameFill = swatch[framingColor] ?? '#f8fafc';
+  const printPlan = () => { void exportSvgAsPdf(svgRef.current, 'Flat pan layout', 'sns-flat-pan-layout.pdf'); };
+  const renderDim = (a:{x:number;y:number}, b:{x:number;y:number}, text:string, offsetX:number, offsetY:number, key:string) => {
+    const x1 = a.x + offsetX; const y1 = a.y + offsetY; const x2 = b.x + offsetX; const y2 = b.y + offsetY;
+    return <g key={key}>
+      <line x1={a.x} y1={a.y} x2={x1} y2={y1} className="dimension-line" stroke="#4b5563" strokeWidth="1.2" strokeDasharray="7 5" />
+      <line x1={b.x} y1={b.y} x2={x2} y2={y2} className="dimension-line" stroke="#4b5563" strokeWidth="1.2" strokeDasharray="7 5" />
+      <line x1={x1} y1={y1} x2={x2} y2={y2} className="dimension-line" stroke="#4b5563" strokeWidth="1.2" strokeDasharray="7 5" />
+      <text x={(x1+x2)/2} y={(y1+y2)/2 - 8} textAnchor="middle" className="dimension-text" fill="#111827" stroke="#ffffff" strokeWidth="3" paintOrder="stroke">{text}</text>
+    </g>;
+  };
+  return (
+    <div className="visual-card cad-card">
+      <div className="visual-header compact-preview-header cad-preview-header">
+        <div><h3>Flat pan layout</h3><p className="muted-text">12 in interlocking pans with header, beams, posts, side fascia, gutter, and fasteners.</p></div>
+        <button type="button" className="ghost-btn small-btn" onClick={printPlan}>Export PDF</button>
+      </div>
+      <div className="deck-sheet-stage">
+        <svg ref={svgRef} viewBox={`0 0 ${sheetW} ${sheetH}`} className="layout-svg deck-sheet-svg">
+          <rect x="18" y="18" width={sheetW - 36} height={sheetH - 36} className="sheet-border" />
+          <rect x="34" y="34" width={sheetW - 68} height={sheetH - 68} className="sheet-border inner" />
+          <text x={60} y={68} className="sheet-title">FLAT PAN PATIO COVER PLAN</text>
+          <text x={60} y={90} className="sheet-subtitle">S&S DESIGN BUILD · 12 IN INTERLOCKING FLAT PAN SYSTEM</text>
+          <rect x={x0} y={y0} width={coverW} height={coverH} fill="#fffdf7" stroke="#111827" strokeWidth="2" />
+          {Array.from({ length: panCount }, (_, index) => {
+            const leftFt = (width * index) / panCount;
+            const rightFt = (width * (index + 1)) / panCount;
+            const a = toSvg(leftFt, 0); const b = toSvg(rightFt, projection);
+            return <g key={`pan-${index}`}>
+              <rect x={a.x} y={a.y} width={b.x - a.x} height={b.y - a.y} fill={panFill} opacity="0.72" stroke="#92400e" strokeWidth="1" />
+              <line x1={a.x} y1={a.y} x2={a.x} y2={b.y} stroke="#8b5e34" strokeWidth="1.1" />
+            </g>;
+          })}
+          <rect x={x0 - 6} y={y0 - 14} width={coverW + 12} height={14} fill={frameFill} stroke="#111827" strokeWidth="2" />
+          <text x={x0 + coverW / 2} y={y0 - 22} textAnchor="middle" className="svg-note">3&quot; header · {attachmentType}</text>
+          <rect x={x0 - 12} y={y0} width={12} height={coverH} fill={frameFill} stroke="#111827" strokeWidth="2" />
+          <rect x={x0 + coverW} y={y0} width={12} height={coverH} fill={frameFill} stroke="#111827" strokeWidth="2" />
+          <text x={x0 - 42} y={y0 + coverH / 2} transform={`rotate(-90 ${x0 - 42} ${y0 + coverH / 2})`} className="svg-note" textAnchor="middle">flat pan fascia</text>
+          <rect x={x0 - 8} y={y0 + coverH} width={coverW + 16} height={18} fill={frameFill} stroke="#111827" strokeWidth="2" />
+          <text x={x0 + coverW / 2} y={y0 + coverH + 42} textAnchor="middle" className="svg-note">flat pan gutter · 2 downspout kits</text>
+          {supportBeamYs.map((beamY, idx) => { const a = toSvg(0, beamY); return <g key={`beam-${idx}`}>
+            <rect x={a.x - 8} y={a.y - 7} width={coverW + 16} height={14} fill="#ef4444" opacity="0.86" stroke="#991b1b" strokeWidth="1.5" />
+            <text x={a.x + coverW + 28} y={a.y + 4} className="svg-note">{idx === supportBeamYs.length - 1 ? 'front' : 'mid'} {beamDisplay}</text>
+          </g>; })}
+          {postLines.flatMap((lineY, lineIdx) => postXs.map((postX, postIdx) => { const p = toSvg(postX, lineY); return <g key={`post-${lineIdx}-${postIdx}`}>
+            <rect x={p.x - 12} y={p.y - 12} width={24} height={24} fill="#2563eb" stroke="#1e40af" strokeWidth="2" />
+            <line x1={p.x} y1={p.y - 18} x2={p.x} y2={p.y + 18} stroke="#dbeafe" strokeWidth="2" />
+          </g>; }))}
+          {renderDim(toSvg(0, 0), toSvg(width, 0), feetAndInches(width), 0, -46, 'dim-width')}
+          {renderDim(toSvg(width, 0), toSvg(width, projection), feetAndInches(projection), 56, 0, 'dim-projection')}
+          <g transform={`translate(${x0 + coverW + 100},${y0 + 82})`}>
+            <rect x="0" y="0" width="250" height="212" fill="#ffffff" stroke="#111827" />
+            <text x="14" y="28" className="sheet-subtitle">TAKE-OFF SUMMARY</text>
+            <text x="14" y="58" className="svg-note">Pans: {panCount} @ 12&quot;</text>
+            <text x="14" y="82" className="svg-note">Pan length: {feetAndInches(panLength)}</text>
+            <text x="14" y="106" className="svg-note">Beam: {beamDisplay}</text>
+            <text x="14" y="130" className="svg-note">Posts: {postLines.length * postsPerLine} {postType} @ {feetAndInches(postHeight)}</text>
+            <text x="14" y="154" className="svg-note">Color: {panColor} pans / {framingColor} frame</text>
+            <text x="14" y="178" className="svg-note">NovaFlex: 1 tube / 20 sf</text>
+          </g>
+          <g transform={`translate(${x0},${y0 + coverH + 95})`}>
+            <text x="0" y="0" className="sheet-subtitle">System notes</text>
+            <text x="0" y="26" className="svg-note">• Header lags: 3&quot; lags every 8&quot; in W pattern.</text>
+            <text x="0" y="50" className="svg-note">• Pans use 2 washer screws at header, each beam, and gutter per pan.</text>
+            <text x="0" y="74" className="svg-note">• {needsMidBeam ? 'Projection is over 10 ft: mid support beam is shown.' : 'Projection is within the 10 ft flat-pan span.'}</text>
+            <text x="0" y="98" className="svg-note">• Verify attachment substrate, flashing, drainage, footings, and uplift requirements in field.</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+export function LayoutPreview({ serviceSlug, values, onValuesChange }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'flat-pans') return <FlatPanPreview values={values} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; if (serviceSlug === 'renaissance-screen-rooms') return <ScreenPreview values={values} renaissance />; if (serviceSlug === 'wooden-structures') return <WoodenStructurePreview values={values} />; return <SunroomPreview values={values} />; }
