@@ -306,7 +306,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       const styleInfo = splitDeckStyle(style);
       deckingPlan.groups.filter((group) => group.kind === 'picture-frame' && group.course === i).forEach((group) => {
         const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
-        materials.push(toMaterial(`Picture-frame deck board ${i + 1}`, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, styleInfo.color, `Picture-frame course ${i + 1} on exposed deck perimeter only. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
+        materials.push(toMaterial(`Picture-frame deck board ${i + 1}`, 'Decking', group.count, 'boards', `${stockLength} ft stock`, styleInfo.color, `Picture-frame course ${i + 1} on exposed deck perimeter only. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)} including 1 in overhang allowance at each end.`, group.label));
       });
     }
   }
@@ -316,7 +316,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       const styleInfo = splitDeckStyle(style);
       deckingPlan.groups.filter((group) => group.kind === 'breaker' && group.course === i).forEach((group) => {
         const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
-        materials.push(toMaterial(`Breaker deck board ${i + 1}`, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, styleInfo.color, `Breaker board row ${i + 1} splitting field decking. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
+        materials.push(toMaterial(`Breaker deck board ${i + 1}`, 'Decking', group.count, 'boards', `${stockLength} ft stock`, styleInfo.color, `Breaker board row ${i + 1} splitting field decking. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)}.`, group.label));
       });
     }
   }

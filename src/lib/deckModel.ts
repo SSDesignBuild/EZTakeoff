@@ -159,13 +159,17 @@ const clamp = (value: number, min: number, max: number) => Math.min(max, Math.ma
 const chooseStockLength = (required: number, stock = STOCK_LENGTHS) => stock.find((item) => item >= required - 1e-6) ?? stock[stock.length - 1];
 
 function generateJoistPositions(min: number, max: number, spacing = JOIST_SPACING) {
-  const inset = spacing / 2;
+  const span = max - min;
+  if (span <= spacing) return [round2(min + span / 2)];
   const positions: number[] = [];
-  for (let value = min + inset; value <= max - inset + 1e-6; value += spacing) positions.push(round2(value));
+  for (let value = min + spacing; value < max - 1e-6; value += spacing) positions.push(round2(value));
+  if (!positions.length) return [round2(min + span / 2)];
   const last = positions[positions.length - 1];
-  if (!positions.length) return [round2((min + max) / 2)];
-  if (max - last > spacing + 1e-6) positions.push(round2(max - inset));
-  return Array.from(new Set(positions));
+  const lastGap = max - last;
+  // First joist starts 12 in from the band. Add one extra only if the
+  // remaining gap to the far band would exceed 12 in, splitting that gap.
+  if (lastGap > spacing + 1e-6) positions.push(round2(last + lastGap / 2));
+  return Array.from(new Set(positions)).sort((a, b) => a - b);
 }
 
 function parseNumberArray(raw: string | number | boolean | undefined) {

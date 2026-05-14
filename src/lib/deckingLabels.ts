@@ -3,6 +3,7 @@ import { DeckModel } from './deckModel';
 const DECK_BOARD_FACE = 5.5 / 12;
 const DECK_GAP = 0.125 / 12;
 const EFFECTIVE_COVERAGE = DECK_BOARD_FACE + DECK_GAP;
+export const PICTURE_FRAME_OVERHANG_ALLOWANCE_FT = 2 / 12;
 
 export interface DeckingLabelGroup {
   kind: 'field' | 'picture-frame' | 'breaker';
@@ -115,7 +116,7 @@ export function deriveDeckingLabelPlan(deck: DeckModel): DeckingLabelPlan {
     groups.push({ kind: 'field', course: 0, cutLength, count, label });
   });
 
-  const pictureLengths = groupedLengths(deck.exposedSegments.map((segment) => segment.length));
+  const pictureLengths = groupedLengths(deck.exposedSegments.map((segment) => segment.length + PICTURE_FRAME_OVERHANG_ALLOWANCE_FT));
   for (let course = 0; course < deck.pictureFrameCount; course += 1) {
     pictureLengths.forEach(({ cutLength, count }) => {
       const label = alphaLabel(cursor++);

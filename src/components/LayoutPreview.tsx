@@ -3,7 +3,7 @@ import { exportSvgAsPdf, exportSvgSectionsAsPdf } from '../lib/export';
 import { buildDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout, serializeFanSelections, shiftFanSelection } from '../lib/patioLayout';
 import { parseGableSections, parseSections, parseSunroomSections } from '../lib/sectioning';
-import { deckingLabelForLength, deriveDeckingLabelPlan } from '../lib/deckingLabels';
+import { deckingLabelForLength, deriveDeckingLabelPlan, PICTURE_FRAME_OVERHANG_ALLOWANCE_FT } from '../lib/deckingLabels';
 import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, SectionConfig } from '../lib/types';
 
 interface LayoutPreviewProps {
@@ -636,7 +636,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
       const normalA = toSvg(center.x + inward.x, center.y + inward.y);
       const normal = svgUnitVector(base, normalA);
       return Array.from({ length: pictureFrameCount }, (_, course) => {
-        const label = deckingLabelForLength(deckingLabelPlan, 'picture-frame', course, segment.length);
+        const label = deckingLabelForLength(deckingLabelPlan, 'picture-frame', course, segment.length + PICTURE_FRAME_OVERHANG_ALLOWANCE_FT);
         if (!label) return null;
         return {
           label,
