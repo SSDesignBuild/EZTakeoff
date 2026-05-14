@@ -259,26 +259,71 @@ function bandSeamLine(
   return { a, b };
 }
 
-function boardStripPolygon(
+function boardStripPolygonTrim(
   a: { x: number; y: number },
   b: { x: number; y: number },
   widthPx: number,
-  miterPx = 0,
+  startTrimPx = 0,
+  endTrimPx = 0,
 ) {
   const dir = svgUnitVector(a, b);
   const normal = { x: -dir.y, y: dir.x };
   const half = widthPx / 2;
-  const trim = Math.min(Math.max(0, miterPx), Math.max(0, dir.length / 2 - 1));
-  const p1 = { x: a.x + dir.x * trim + normal.x * half, y: a.y + dir.y * trim + normal.y * half };
-  const p2 = { x: b.x - dir.x * trim + normal.x * half, y: b.y - dir.y * trim + normal.y * half };
-  const p3 = { x: b.x + dir.x * trim - normal.x * half, y: b.y + dir.y * trim - normal.y * half };
-  const p4 = { x: a.x - dir.x * trim - normal.x * half, y: a.y - dir.y * trim - normal.y * half };
+  const maxTrim = Math.max(0, dir.length / 2 - 1);
+  const startTrim = Math.min(Math.max(0, startTrimPx), maxTrim);
+  const endTrim = Math.min(Math.max(0, endTrimPx), maxTrim);
+  const p1 = { x: a.x + dir.x * startTrim + normal.x * half, y: a.y + dir.y * startTrim + normal.y * half };
+  const p2 = { x: b.x - dir.x * endTrim + normal.x * half, y: b.y - dir.y * endTrim + normal.y * half };
+  const p3 = { x: b.x - dir.x * endTrim - normal.x * half, y: b.y - dir.y * endTrim - normal.y * half };
+  const p4 = { x: a.x + dir.x * startTrim - normal.x * half, y: a.y + dir.y * startTrim - normal.y * half };
   return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
 }
 
 function breakerCourseOffsets(count: number, widthFt: number) {
   return Array.from({ length: count }, (_, i) => (i - (count - 1) / 2) * widthFt);
 }
+
+function pointsMatch(a: DeckPoint, b: DeckPoint, tolerance = 0.01) {
+  return Math.abs(a.x - b.x) <= tolerance && Math.abs(a.y - b.y) <= tolerance;
+}
+
+function mergeCollinearDeckSegments(segments: DeckEdgeSegment[]) {
+  if (segments.length <= 1) return segments;
+  const merged: DeckEdgeSegment[] = [];
+  segments.forEach((segment) => {
+    const previous = merged[merged.length - 1];
+    const canMerge = previous
+      && previous.orientation === segment.orientation
+      && pointsMatch(previous.end, segment.start)
+      && (segment.orientation === 'horizontal'
+        ? Math.abs(previous.start.y - segment.end.y) < 0.01
+        : segment.orientation === 'vertical'
+          ? Math.abs(previous.start.x - segment.end.x) < 0.01
+          : false);
+    if (!canMerge) {
+      merged.push({ ...segment });
+      return;
+    }
+    merged[merged.length - 1] = { ...previous, end: segment.end, length: previous.length + segment.length };
+  });
+  if (merged.length > 1) {
+    const first = merged[0];
+    const last = merged[merged.length - 1];
+    const canWrap = first.orientation === last.orientation
+      && pointsMatch(last.end, first.start)
+      && (first.orientation === 'horizontal'
+        ? Math.abs(first.start.y - last.start.y) < 0.01
+        : first.orientation === 'vertical'
+          ? Math.abs(first.start.x - last.start.x) < 0.01
+          : false);
+    if (canWrap) {
+      merged[0] = { ...first, start: last.start, length: first.length + last.length };
+      merged.pop();
+    }
+  }
+  return merged;
+}
+
 
 function symmetricPostOffsets(length: number, maxSection = 8) {
   const sectionCount = Math.max(1, Math.ceil(length / maxSection));
@@ -552,6 +597,10 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const pictureFrameCount = Math.max(0, Math.round(Number(values.pictureFrameCount ?? deck.pictureFrameCount ?? 0)));
   const breakerBoardCount = Math.max(0, Math.round(Number(values.breakerBoardCount ?? deck.breakerBoardCount ?? 0)));
   const breakerPositions = deck.breakerBoardPositions;
+  const pictureFrameSegments = mergeCollinearDeckSegments(deck.exposedSegments);
+  const pictureFrameBoardWidthPx = Math.max(10, scale * 0.44);
+  const pictureFrameTrimPx = pictureFrameCount * pictureFrameBoardWidthPx;
+  const pointTouchesPictureFrame = (point: DeckPoint) => pictureFrameCount > 0 && pictureFrameSegments.some((segment) => pointOnSegment(point, segment, 0.06));
   const railingSegments = railSegmentsForDeck(deck);
   const editableCoverage = useMemo(() => parseRailCoverageValue(values.railCoverage), [values.railCoverage]);
   const railingInsetFt = 0.78;
@@ -756,11 +805,11 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   </g>;
                 }))}
 
-            {showBoards && pictureFrameCount > 0 && deck.exposedSegments.flatMap((segment) => (
+            {showBoards && pictureFrameCount > 0 && pictureFrameSegments.flatMap((segment) => (
               Array.from({ length: pictureFrameCount }, (_, course) => (
                 <polygon
                   key={`pf-${segment.index}-${course}`}
-                  points={pictureFrameCoursePolygon(segment, deck.points, toSvg, course, Math.max(10, scale * 0.44))}
+                  points={pictureFrameCoursePolygon(segment, deck.points, toSvg, course, pictureFrameBoardWidthPx)}
                   className={`picture-frame-board course-${course + 1}`}
                   onClick={() => setInspect({ title: `Picture frame board ${course + 1}`, detail: `Picture-frame course with outside and inside corner miters around exposed deck perimeter.` })}
                 />
@@ -772,14 +821,22 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               const boardWidthPx = Math.max(10, scale * boardWidthFt);
               return deck.boardRun === 'width'
                 ? breakerCourseOffsets(breakerBoardCount, boardWidthFt).flatMap((offset, course) => scanlineIntersections(deck.points, 'vertical', pos + offset).map((pair, pairIdx) => {
-                    const a = toSvg(pos + offset, pair.start);
-                    const b = toSvg(pos + offset, pair.end);
-                    return <polygon key={`breaker-v-${idx}-${course}-${pairIdx}`} points={boardStripPolygon(a, b, boardWidthPx, Math.max(6, boardWidthPx * 0.45))} className={`breaker-board-strip course-${course + 1}`} />;
+                    const startPoint = { x: pos + offset, y: pair.start };
+                    const endPoint = { x: pos + offset, y: pair.end };
+                    const a = toSvg(startPoint.x, startPoint.y);
+                    const b = toSvg(endPoint.x, endPoint.y);
+                    const startTrim = pointTouchesPictureFrame(startPoint) ? pictureFrameTrimPx : 0;
+                    const endTrim = pointTouchesPictureFrame(endPoint) ? pictureFrameTrimPx : 0;
+                    return <polygon key={`breaker-v-${idx}-${course}-${pairIdx}`} points={boardStripPolygonTrim(a, b, boardWidthPx, startTrim, endTrim)} className={`breaker-board-strip course-${course + 1}`} />;
                   }))
                 : breakerCourseOffsets(breakerBoardCount, boardWidthFt).flatMap((offset, course) => scanlineIntersections(deck.points, 'horizontal', pos + offset).map((pair, pairIdx) => {
-                    const a = toSvg(pair.start, pos + offset);
-                    const b = toSvg(pair.end, pos + offset);
-                    return <polygon key={`breaker-h-${idx}-${course}-${pairIdx}`} points={boardStripPolygon(a, b, boardWidthPx, Math.max(6, boardWidthPx * 0.45))} className={`breaker-board-strip course-${course + 1}`} />;
+                    const startPoint = { x: pair.start, y: pos + offset };
+                    const endPoint = { x: pair.end, y: pos + offset };
+                    const a = toSvg(startPoint.x, startPoint.y);
+                    const b = toSvg(endPoint.x, endPoint.y);
+                    const startTrim = pointTouchesPictureFrame(startPoint) ? pictureFrameTrimPx : 0;
+                    const endTrim = pointTouchesPictureFrame(endPoint) ? pictureFrameTrimPx : 0;
+                    return <polygon key={`breaker-h-${idx}-${course}-${pairIdx}`} points={boardStripPolygonTrim(a, b, boardWidthPx, startTrim, endTrim)} className={`breaker-board-strip course-${course + 1}`} />;
                   }));
             })}
 
@@ -849,7 +906,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   return <rect key={`joist-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - 3} width={Math.max(0, Math.abs(x2 - x1))} height={6} className="joist-rect" onClick={() => setInspect({ title: `Joist ${idx + 1}`, detail: `${deck.joistSize} joist at 12 in O.C.` })} />;
                 }))}
 
-            {showFraming && pictureFrameCount > 0 && deck.exposedSegments
+            {showFraming && pictureFrameCount > 0 && pictureFrameSegments
               .filter((segment) => deck.joistDirection === 'vertical' ? segment.orientation === 'vertical' : segment.orientation === 'horizontal')
               .map((segment, segIdx) => {
                 const inset = inwardNormal(segment, deck.points);
