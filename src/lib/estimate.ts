@@ -2,7 +2,7 @@ import { parseGableSections, parseSections, parseSunroomSections } from './secti
 import { buildDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem, SectionConfig } from './types';
 import { buildPatioPanelLayout } from './patioLayout';
-import { deriveDeckBoardLabels } from './deckBoardLabels';
+import { deriveDeckingLabelPlan } from './deckingLabels';
 
 export type EstimateInputs = Record<string, string | number | boolean>;
 
@@ -51,26 +51,6 @@ const splitDeckStyle = (style: string) => {
   const parts = cleaned.split(' - ');
   if (parts.length >= 2) return { material: `${parts.slice(0, -1).join(' - ')} deck board`, color: parts[parts.length - 1] };
   return { material: `${cleaned} deck board`, color: cleaned };
-};
-
-const addDeckBoardCuts = (materials: MaterialItem[], style: string, label: string, category: string, lengths: number[], notes?: string, layoutLabel?: string) => {
-  const stock = [8, 12, 16, 20];
-  const grouped = new Map<number, number>();
-  lengths.filter((length) => length > 0.05).forEach((length) => {
-    let remaining = length;
-    while (remaining > 20.01) {
-      grouped.set(20, (grouped.get(20) ?? 0) + 1);
-      remaining -= 20;
-    }
-    if (remaining > 0.05) {
-      const chosen = stock.find((item) => item >= remaining - 1e-6) ?? 20;
-      grouped.set(chosen, (grouped.get(chosen) ?? 0) + 1);
-    }
-  });
-  [...grouped.entries()].sort((a, b) => a[0] - b[0]).forEach(([length, count]) => {
-    const styleInfo = splitDeckStyle(style);
-    materials.push(toMaterial(label || styleInfo.material, category, Math.ceil(count * 1.05), 'boards', `${length} ft deck-board stock`, styleInfo.color, `${notes ?? ''}${notes ? ' · ' : ''}Board style: ${style}. Includes 5% waste/damage buffer.`, layoutLabel));
-  });
 };
 
 const normalizeCutLength = (length: number) => Math.round(length * 12) / 12;
@@ -311,23 +291,33 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const drinkRail = inputs.drinkRail === true || String(inputs.drinkRail ?? 'false') === 'true';
   const drinkRailMaterial = resolveBoardStyle(inputs.drinkRailMaterial);
   const materials: MaterialItem[] = [];
-  const deckBoardLabels = deriveDeckBoardLabels(inputs);
+  const deckingPlan = deriveDeckingLabelPlan(deck);
   const deckingStyleInfo = splitDeckStyle(deckingMaterial);
   const fasciaMaterial = resolveBoardStyle(inputs.fasciaMaterial);
   const fasciaStyleInfo = splitDeckStyle(fasciaMaterial);
-  addBoardGroups(materials, 'Decking', deckingStyleInfo.material, deck.boardGroups, deck.boardRun === 'width' ? `Field decking. Board style: ${deckingMaterial}. Boards run parallel to the house, so stock length tracks deck width.` : `Field decking. Board style: ${deckingMaterial}. Boards run perpendicular to the house, so stock length tracks projection.`, true, deckingStyleInfo.color, deckBoardLabels.field);
+  deckingPlan.groups.filter((group) => group.kind === 'field').forEach((group) => {
+    const notes = `${deck.boardRun === 'width' ? 'Field decking. Boards run parallel to the house.' : 'Field decking. Boards run perpendicular to the house.'} Board style: ${deckingMaterial}. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`;
+    const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
+    materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, deckingStyleInfo.color, notes, group.label));
+  });
   if (pictureFrameCount > 0) {
     for (let i = 0; i < pictureFrameCount; i += 1) {
       const style = pictureFrameMaterials[i] || deckingMaterial;
-      const borderLengths = deck.exposedSegments.map((segment) => segment.length);
-      addDeckBoardCuts(materials, style, `Picture-frame deck board ${i + 1}`, 'Decking', borderLengths, `Picture-frame course ${i + 1} on exposed deck perimeter only.`, deckBoardLabels.pictureFrame[i]);
+      const styleInfo = splitDeckStyle(style);
+      deckingPlan.groups.filter((group) => group.kind === 'picture-frame' && group.course === i).forEach((group) => {
+        const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
+        materials.push(toMaterial(`Picture-frame deck board ${i + 1}`, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, styleInfo.color, `Picture-frame course ${i + 1} on exposed deck perimeter only. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
+      });
     }
   }
   if (breakerBoardCount > 0) {
-    const breakerLength = deck.boardRun === 'width' ? deck.depth : deck.width;
     for (let i = 0; i < breakerBoardCount; i += 1) {
       const style = breakerBoardMaterials[i] || deckingMaterial;
-      addDeckBoardCuts(materials, style, `Breaker deck board ${i + 1}`, 'Decking', [breakerLength], `Breaker board row ${i + 1} splitting field decking.`, deckBoardLabels.breaker[i]);
+      const styleInfo = splitDeckStyle(style);
+      deckingPlan.groups.filter((group) => group.kind === 'breaker' && group.course === i).forEach((group) => {
+        const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
+        materials.push(toMaterial(`Breaker deck board ${i + 1}`, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, styleInfo.color, `Breaker board row ${i + 1} splitting field decking. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
+      });
     }
   }
   addBoardGroups(materials, 'Stairs', 'Stair tread deck board', deck.stairTreadGroups, `Two tread boards per tread. Board style: ${deckingMaterial}.`, true, deckingStyleInfo.color);

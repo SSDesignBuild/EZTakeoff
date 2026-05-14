@@ -3,7 +3,7 @@ import { exportSvgAsPdf, exportSvgSectionsAsPdf } from '../lib/export';
 import { buildDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout, serializeFanSelections, shiftFanSelection } from '../lib/patioLayout';
 import { parseGableSections, parseSections, parseSunroomSections } from '../lib/sectioning';
-import { deriveDeckBoardLabels } from '../lib/deckBoardLabels';
+import { deckingLabelForLength, deriveDeckingLabelPlan } from '../lib/deckingLabels';
 import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, SectionConfig } from '../lib/types';
 
 interface LayoutPreviewProps {
@@ -587,16 +587,14 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const showFraming = layer === 'overview' || layer === 'framing';
   const showRailing = layer === 'overview' || layer === 'railing';
   const showStairs = layer === 'overview' || layer === 'stairs';
-  const deckBoardLabels = useMemo(() => deriveDeckBoardLabels(values), [values]);
+  const deckingLabelPlan = useMemo(() => deriveDeckingLabelPlan(deck), [deck]);
 
   const printPlan = () => { void exportSvgAsPdf(svgRef.current, 'Deck framing plan', 'sns-deck-plan.pdf'); };
 
   const boardRuns = deck.boardRun === 'width'
     ? Array.from({ length: Math.max(1, Math.floor(deck.depth / 0.47)) }, (_, i) => deck.minY + 0.22 + i * 0.47)
     : Array.from({ length: Math.max(1, Math.floor(deck.width / 0.47)) }, (_, i) => deck.minX + 0.22 + i * 0.47);
-  const joistRuns = deck.joistDirection === 'vertical'
-    ? Array.from({ length: Math.max(0, Math.floor(deck.width) - 1) }, (_, i) => deck.minX + 1 + i)
-    : Array.from({ length: Math.max(0, Math.floor(deck.depth) - 1) }, (_, i) => deck.minY + 1 + i);
+  const joistRuns = deck.joistPositions;
   const pictureFrameCount = Math.max(0, Math.round(Number(values.pictureFrameCount ?? deck.pictureFrameCount ?? 0)));
   const breakerBoardCount = Math.max(0, Math.round(Number(values.breakerBoardCount ?? deck.breakerBoardCount ?? 0)));
   const breakerPositions = deck.breakerBoardPositions;
@@ -604,52 +602,70 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const pictureFrameBoardWidthPx = Math.max(10, scale * 0.44);
   const pictureFrameTrimPx = pictureFrameCount * pictureFrameBoardWidthPx;
   const pointTouchesPictureFrame = (point: DeckPoint) => pictureFrameCount > 0 && pictureFrameSegments.some((segment) => pointOnSegment(point, segment, 0.06));
-  const fieldBoardLabelAnchor = useMemo(() => {
-    if (!boardRuns.length) return null;
+  const fieldBoardLabelAnchors = useMemo(() => {
+    if (!showBoardLabels) return [] as { label: string; x: number; y: number }[];
+    const anchors: { label: string; x: number; y: number }[] = [];
+    const splitMarks = (start: number, end: number, marks: number[]) => {
+      const local = marks.filter((mark) => mark > start + 0.05 && mark < end - 0.05).sort((a, b) => a - b);
+      const segments = [start, ...local, end];
+      const parts: { start: number; end: number }[] = [];
+      for (let i = 1; i < segments.length; i += 1) parts.push({ start: segments[i - 1], end: segments[i] });
+      return parts;
+    };
     if (deck.boardRun === 'width') {
-      const y = boardRuns[Math.floor(boardRuns.length / 2)];
-      const pair = [...scanlineIntersections(deck.points, 'horizontal', y)].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
-      if (!pair) return null;
-      return toSvg((pair.start + pair.end) / 2, y);
+      boardRuns.forEach((y) => scanlineIntersections(deck.points, 'horizontal', y).forEach((pair) => splitMarks(pair.start, pair.end, breakerPositions).forEach((segment) => {
+        const label = deckingLabelForLength(deckingLabelPlan, 'field', 0, segment.end - segment.start);
+        if (!label) return;
+        anchors.push({ label, ...toSvg((segment.start + segment.end) / 2, y) });
+      })));
+    } else {
+      boardRuns.forEach((x) => scanlineIntersections(deck.points, 'vertical', x).forEach((pair) => splitMarks(pair.start, pair.end, breakerPositions).forEach((segment) => {
+        const label = deckingLabelForLength(deckingLabelPlan, 'field', 0, segment.end - segment.start);
+        if (!label) return;
+        anchors.push({ label, ...toSvg(x, (segment.start + segment.end) / 2) });
+      })));
     }
-    const x = boardRuns[Math.floor(boardRuns.length / 2)];
-    const pair = [...scanlineIntersections(deck.points, 'vertical', x)].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
-    if (!pair) return null;
-    return toSvg(x, (pair.start + pair.end) / 2);
-  }, [boardRuns, deck.boardRun, deck.points, toSvg]);
+    return anchors;
+  }, [showBoardLabels, deck.boardRun, boardRuns, deck.points, breakerPositions, deckingLabelPlan, toSvg]);
   const pictureFrameLabelAnchors = useMemo(() => {
-    if (!pictureFrameCount || !pictureFrameSegments.length) return [] as { label: string; x: number; y: number }[];
-    const longest = [...pictureFrameSegments].sort((a, b) => b.length - a.length)[0];
-    if (!longest) return [] as { label: string; x: number; y: number }[];
-    const center = pointAlong(longest, longest.length / 2);
-    const base = toSvg(center.x, center.y);
-    const inward = inwardNormal(longest, deck.points);
-    const normalA = toSvg(center.x + inward.x, center.y + inward.y);
-    const normal = svgUnitVector(base, normalA);
-    return Array.from({ length: pictureFrameCount }, (_, course) => ({
-      label: deckBoardLabels.pictureFrame[course] ?? '',
-      x: base.x + normal.x * ((course + 0.5) * pictureFrameBoardWidthPx),
-      y: base.y + normal.y * ((course + 0.5) * pictureFrameBoardWidthPx),
-    })).filter((item) => item.label);
-  }, [pictureFrameCount, pictureFrameSegments, toSvg, deck.points, deckBoardLabels.pictureFrame, pictureFrameBoardWidthPx]);
+    if (!showBoardLabels || !pictureFrameCount || !pictureFrameSegments.length) return [] as { label: string; x: number; y: number }[];
+    return pictureFrameSegments.flatMap((segment) => {
+      const center = pointAlong(segment, segment.length / 2);
+      const base = toSvg(center.x, center.y);
+      const inward = inwardNormal(segment, deck.points);
+      const normalA = toSvg(center.x + inward.x, center.y + inward.y);
+      const normal = svgUnitVector(base, normalA);
+      return Array.from({ length: pictureFrameCount }, (_, course) => {
+        const label = deckingLabelForLength(deckingLabelPlan, 'picture-frame', course, segment.length);
+        if (!label) return null;
+        return {
+          label,
+          x: base.x + normal.x * ((course + 0.5) * pictureFrameBoardWidthPx),
+          y: base.y + normal.y * ((course + 0.5) * pictureFrameBoardWidthPx),
+        };
+      }).filter(Boolean) as { label: string; x: number; y: number }[];
+    });
+  }, [showBoardLabels, pictureFrameCount, pictureFrameSegments, toSvg, deck.points, deckingLabelPlan, pictureFrameBoardWidthPx]);
   const breakerLabelAnchors = useMemo(() => {
-    if (!breakerBoardCount || !breakerPositions.length) return [] as { label: string; x: number; y: number }[];
+    if (!showBoardLabels || !breakerBoardCount || !breakerPositions.length) return [] as { label: string; x: number; y: number }[];
     const boardWidthFt = 0.47;
-    return breakerCourseOffsets(breakerBoardCount, boardWidthFt).map((offset, course) => {
-      const label = deckBoardLabels.breaker[course] ?? '';
-      if (!label) return null;
+    return breakerCourseOffsets(breakerBoardCount, boardWidthFt).flatMap((offset, course) => {
       if (deck.boardRun === 'width') {
         const x = breakerPositions[0] + offset;
-        const pair = [...scanlineIntersections(deck.points, 'vertical', x)].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
-        if (!pair) return null;
-        return { label, ...toSvg(x, (pair.start + pair.end) / 2) };
+        return scanlineIntersections(deck.points, 'vertical', x).map((pair) => {
+          const label = deckingLabelForLength(deckingLabelPlan, 'breaker', course, pair.end - pair.start);
+          if (!label) return null;
+          return { label, ...toSvg(x, (pair.start + pair.end) / 2) };
+        }).filter(Boolean) as { label: string; x: number; y: number }[];
       }
       const y = breakerPositions[0] + offset;
-      const pair = [...scanlineIntersections(deck.points, 'horizontal', y)].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
-      if (!pair) return null;
-      return { label, ...toSvg((pair.start + pair.end) / 2, y) };
-    }).filter(Boolean) as { label: string; x: number; y: number }[];
-  }, [breakerBoardCount, breakerPositions, deckBoardLabels.breaker, deck.boardRun, deck.points, toSvg]);
+      return scanlineIntersections(deck.points, 'horizontal', y).map((pair) => {
+        const label = deckingLabelForLength(deckingLabelPlan, 'breaker', course, pair.end - pair.start);
+        if (!label) return null;
+        return { label, ...toSvg((pair.start + pair.end) / 2, y) };
+      }).filter(Boolean) as { label: string; x: number; y: number }[];
+    });
+  }, [showBoardLabels, breakerBoardCount, breakerPositions, deckingLabelPlan, deck.boardRun, deck.points, toSvg]);
   const railingSegments = railSegmentsForDeck(deck);
   const editableCoverage = useMemo(() => parseRailCoverageValue(values.railCoverage), [values.railCoverage]);
   const railingInsetFt = 0.78;
@@ -895,7 +911,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   }));
             })}
 
-            {showBoardLabels && fieldBoardLabelAnchor && renderBoardTag(deckBoardLabels.field, fieldBoardLabelAnchor.x, fieldBoardLabelAnchor.y, 'board-tag-field')}
+            {showBoardLabels && fieldBoardLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-field-${idx}`))}
             {showBoardLabels && pictureFrameLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-pf-${idx}`))}
             {showBoardLabels && breakerLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-breaker-${idx}`))}
 
