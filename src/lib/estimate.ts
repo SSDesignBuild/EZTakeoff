@@ -92,6 +92,27 @@ const packStockCuts = (lengths: number[], stockLength = 24) => {
   return bins;
 };
 
+
+const joistActualHeightInches = (joistSize: string) => {
+  if (joistSize === '2x12') return 11.25;
+  if (joistSize === '2x10') return 9.25;
+  return 7.25;
+};
+
+const optimizeRepeatedCuts = (pieceCount: number, cutLengthFt: number, stock = [8, 10, 12, 16]) => {
+  const cleanCut = Math.max(0.25, normalizeCutLength(cutLengthFt));
+  let best = { stockLength: stock[0], stockCount: Math.max(0, pieceCount), perStock: 1, waste: Number.POSITIVE_INFINITY };
+  stock.forEach((stockLength) => {
+    const perStock = Math.max(1, Math.floor((stockLength + 1e-6) / cleanCut));
+    const stockCount = Math.ceil(pieceCount / perStock);
+    const waste = stockCount * stockLength - pieceCount * cleanCut;
+    if (stockCount < best.stockCount || (stockCount === best.stockCount && waste < best.waste - 1e-6) || (stockCount === best.stockCount && Math.abs(waste - best.waste) < 1e-6 && stockLength < best.stockLength)) {
+      best = { stockLength, stockCount, perStock, waste };
+    }
+  });
+  return { ...best, cutLength: cleanCut };
+};
+
 const add24FtStockFromCuts = (materials: MaterialItem[], name: string, category: string, lengths: number[], notes?: string) => {
   const bins = packStockCuts(lengths, 24);
   if (!bins.length) return;
@@ -307,9 +328,9 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     }
   }
   addBoardGroups(materials, 'Stairs', 'Stair tread deck board', deck.stairTreadGroups, `Two tread boards per tread. Board style: ${deckingMaterial}.`, true, deckingStyleInfo.color);
-  addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.', true, 'Pressure treated');
-  addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', true, 'Pressure treated');
-  addBoardGroups(materials, 'Framing', 'Double band / rim board', deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', true, 'Pressure treated');
+  addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.', false, 'Pressure treated');
+  addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', false, 'Pressure treated');
+  addBoardGroups(materials, 'Framing', 'Double band / rim board', deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', false, 'Pressure treated');
 
   const baseRailSegments = deck.exposedSegments.map((segment) => segment.length);
   const stairOpeningWidth = deck.stairPlacement.edgeIndex !== null ? Math.min(deck.stairPlacement.width, deck.exposedSegments.find((segment) => segment.index === deck.stairPlacement.edgeIndex)?.length ?? 0) : 0;
@@ -326,10 +347,13 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const railingBreakdown = classifyRailing(deck);
 
   const railingPosts = railingBreakdown.endLevelPosts + railingBreakdown.inlineLevelPosts + railingBreakdown.cornerLevelPosts + railingBreakdown.stairsLevelToAngledCornerPosts + railingBreakdown.stairsInlinePosts + railingBreakdown.stairsEndPosts;
+  const deckHeightFt = Math.max(0, Number(inputs.deckHeight ?? 0));
+  const structuralPostCutFt = Math.max(0.5, (deckHeightFt * 12 - joistActualHeightInches(deck.joistSize)) / 12);
+  const structuralPostStock = optimizeRepeatedCuts(deck.postCount, structuralPostCutFt, [8, 10, 12, 16]);
 
   materials.push(
-    toMaterial('Support blocking', 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', 'Pressure treated', `${deck.blockingLf.toFixed(1)} lf total for picture-frame / breaker support blocking only · quantity includes 5% waste/damage buffer · blocking is counted at 1 ft O.C. only where boards run parallel with joists and need support`),
-    toMaterial('6x6 wood posts', 'Structure', deck.postCount, 'ea', `${deck.postLength} ft stock`, 'Pressure treated', deck.lockedPosts.length ? `${deck.lockedPosts.length} post position(s) manually locked` : 'Auto-spaced beam support posts'),
+    toMaterial('Support blocking', 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', 'Pressure treated', `${deck.blockingLf.toFixed(1)} lf total for picture-frame / breaker support blocking only · blocking is counted at 1 ft O.C. only where boards run parallel with joists and need support`),
+    toMaterial('6x6 wood posts', 'Structure', structuralPostStock.stockCount, 'boards', `${structuralPostStock.stockLength} ft stock`, 'Pressure treated', `${deck.postCount} post(s) cut to about ${feetAndInches(structuralPostStock.cutLength)} each after subtracting ${deck.joistSize} joist height from ${feetAndInches(deckHeightFt)} deck height · ${structuralPostStock.perStock} cut(s) per stock board${deck.lockedPosts.length ? ` · ${deck.lockedPosts.length} post position(s) manually locked` : ''}`),
     toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', undefined, '3 bags per post footing'),
     toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined, 'Post base bracket at each footing'),
     toMaterial('Concrete submersible J Anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined, 'Concrete anchor for post base bracket'),
@@ -369,7 +393,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     const balusterCount = Math.ceil(totalWoodRailLf * 3.1);
     const levelBalusters = Math.ceil(levelRailLf * 3.1);
     const stairBalusters = Math.max(0, balusterCount - levelBalusters);
-    if (railingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', railingPosts, 'ea', '4x4 stock', undefined, 'End, inline, corner, and stair posts combined'));
+    if (railingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', railingPosts, 'ea', '8 ft 4x4 stock', 'Pressure treated', 'End, inline, corner, and stair posts combined; cut to field-required rail-post height'));
     materials.push(toMaterial('2x4 pressure-treated top rail', 'Railing', Math.ceil(totalWoodRailLf / 12), 'boards', '12 ft stock', undefined, `${totalWoodRailLf.toFixed(1)} lf rail run`));
     materials.push(toMaterial('2x4 pressure-treated bottom rail', 'Railing', Math.ceil(totalWoodRailLf / 12), 'boards', '12 ft stock', undefined, `${totalWoodRailLf.toFixed(1)} lf rail run`));
     if (spindleType === 'wood') {

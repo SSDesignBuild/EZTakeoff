@@ -311,10 +311,6 @@ function mergeGroups(...groups: BoardGroup[][]) {
 }
 
 
-function applyWasteBuffer(groups: BoardGroup[], factor = 1.05) {
-  return groups.map((group) => ({ ...group, count: Math.ceil(group.count * factor) }));
-}
-
 function boardStockSegments(totalLength: number, availableBreaks: number[] = []) {
   const sortedBreaks = availableBreaks.filter((value) => value > 0.05 && value < totalLength - 0.05).sort((a, b) => a - b);
   const marks = [0, ...sortedBreaks, totalLength];
@@ -376,7 +372,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   } else {
     for (let x = minX + EFFECTIVE_COVERAGE / 2; x < maxX; x += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'vertical', x).forEach((pair) => boardStockSegments(pair.length, breakerBoardPositions.map((y) => y - pair.start)).forEach((len) => boardLengths.push(len)));
   }
-  const boardGroups = applyWasteBuffer(accumulateGroups(boardLengths));
+  const boardGroups = accumulateGroups(boardLengths);
   const borderGroups = inputs.borderSameBoard ? accumulateGroups(exposedSegments.map((segment) => segment.length)) : [];
 
   const rawCustomBeams = parseNumberArray(inputs.customBeamYs).map((value) => clamp(value, 0, depth)).filter((value) => isFreestanding ? value >= 0 && value <= depth : value > 0.2 && value < depth - 0.2);
@@ -477,7 +473,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     : scanlineIntersections(points, 'horizontal', pos).reduce((acc, pair) => acc + Math.max(0, Math.floor(pair.end - pair.start)) * JOIST_SPACING, 0)), 0) * Math.max(0, breakerBoardCount));
   const blockingLf = round2(pictureFrameBlockingLf + breakerBlockingLf);
   const blockingCount = Math.max(0, Math.round(blockingLf / JOIST_SPACING));
-  const blockingBoardCount = Math.max(0, Math.ceil((blockingLf / 12) * 1.05));
+  const blockingBoardCount = Math.max(0, Math.ceil(blockingLf / 12));
   const joistTapeLf = round2(joistLengthsRaw.reduce((sum, length) => sum + length, 0) + doubleBandLf / 2);
   const joistHangers = joistCount * 2;
   const rafterTies = joistCount * Math.max(1, beamLines.length);
