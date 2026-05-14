@@ -377,6 +377,33 @@ function directionBetween(start: DeckPoint, end: DeckPoint) {
   return { x: (end.x - start.x) / length, y: (end.y - start.y) / length };
 }
 
+function pointOnSegment(point: DeckPoint, segment: DeckEdgeSegment, tolerance = 0.05) {
+  const vx = segment.end.x - segment.start.x;
+  const vy = segment.end.y - segment.start.y;
+  const wx = point.x - segment.start.x;
+  const wy = point.y - segment.start.y;
+  const lenSq = vx * vx + vy * vy;
+  if (lenSq <= 0.0001) return false;
+  const t = (wx * vx + wy * vy) / lenSq;
+  if (t < -tolerance || t > 1 + tolerance) return false;
+  const projected = { x: segment.start.x + vx * t, y: segment.start.y + vy * t };
+  return Math.hypot(projected.x - point.x, projected.y - point.y) <= tolerance;
+}
+
+function railingInwardOffsetForNode(point: DeckPoint, deck: ReturnType<typeof buildDeckModel>, insetFt: number) {
+  const matching = deck.edgeSegments.filter((segment) => pointOnSegment(point, segment, 0.08));
+  if (!matching.length) return { x: 0, y: 0 };
+  const normals: { x: number; y: number }[] = [];
+  matching.forEach((segment) => {
+    const normal = inwardNormal(segment, deck.points);
+    const key = `${Math.round(normal.x * 100)}-${Math.round(normal.y * 100)}`;
+    if (!normals.some((item) => `${Math.round(item.x * 100)}-${Math.round(item.y * 100)}` === key)) normals.push(normal);
+  });
+  const x = Math.max(-1, Math.min(1, normals.reduce((sum, normal) => sum + normal.x, 0)));
+  const y = Math.max(-1, Math.min(1, normals.reduce((sum, normal) => sum + normal.y, 0)));
+  return { x: x * insetFt, y: y * insetFt };
+}
+
 type RailingNodeKind = 'corner' | 'inside-corner' | 'inline' | 'level-end' | 'stair-end' | 'stair-inline';
 type RailingNode = { point: DeckPoint; kind: RailingNodeKind; detail: string };
 
@@ -527,13 +554,11 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const breakerPositions = deck.breakerBoardPositions;
   const railingSegments = railSegmentsForDeck(deck);
   const editableCoverage = useMemo(() => parseRailCoverageValue(values.railCoverage), [values.railCoverage]);
-  const railingInsetFt = 1.02;
+  const railingInsetFt = 0.78;
   const railingNodes = Array.from(new Map(buildRailingNodes(deck).map((node) => {
-    const edge = deck.exposedSegments.find((seg) => (Math.abs(seg.start.x - node.point.x) < 0.12 && Math.abs(seg.start.y - node.point.y) < 0.12) || (Math.abs(seg.end.x - node.point.x) < 0.12 && Math.abs(seg.end.y - node.point.y) < 0.12));
-    const shifted = edge ? (() => {
-      const inward = inwardNormal(edge, deck.points);
-      return { ...node, point: { x: node.point.x + inward.x * railingInsetFt, y: node.point.y + inward.y * railingInsetFt } };
-    })() : node;
+    const isStairNode = node.kind === 'stair-end' || node.kind === 'stair-inline';
+    const offset = isStairNode ? { x: 0, y: 0 } : railingInwardOffsetForNode(node.point, deck, railingInsetFt);
+    const shifted = { ...node, point: { x: node.point.x + offset.x, y: node.point.y + offset.y } };
     return [`${Math.round(shifted.point.x*12)}-${Math.round(shifted.point.y*12)}-${shifted.kind}`, shifted] as const;
   })).values());
 
