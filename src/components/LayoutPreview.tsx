@@ -669,15 +669,30 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const railingSegments = railSegmentsForDeck(deck);
   const editableCoverage = useMemo(() => parseRailCoverageValue(values.railCoverage), [values.railCoverage]);
   const railingInsetFt = 0.78;
+  const stairSegment = deck.stairPlacement.edgeIndex !== null ? deck.edgeSegments[deck.stairPlacement.edgeIndex] : null;
+  const stairNormal = stairSegment ? outwardNormal(stairSegment, deck.points) : { x: 0, y: 1 };
+  const stairPostInsetFt = 0.34;
+  const stairSideOffset = (point: DeckPoint) => {
+    if (!deck.stairPlacement.start || !deck.stairPlacement.end) return { x: 0, y: 0 };
+    const across = { x: deck.stairPlacement.end.x - deck.stairPlacement.start.x, y: deck.stairPlacement.end.y - deck.stairPlacement.start.y };
+    const width = Math.hypot(across.x, across.y) || 1;
+    const unit = { x: across.x / width, y: across.y / width };
+    const rel = (point.x - deck.stairPlacement.start.x) * unit.x + (point.y - deck.stairPlacement.start.y) * unit.y;
+    const direction = rel <= width / 2 ? 1 : -1;
+    return { x: unit.x * stairPostInsetFt * direction, y: unit.y * stairPostInsetFt * direction };
+  };
+  const shiftStairRailPoint = (point: DeckPoint, segment: RailSegment) => {
+    if (segment.kind !== 'stair-side') return point;
+    const offset = stairSideOffset(segment.start);
+    return { x: point.x + offset.x, y: point.y + offset.y };
+  };
   const railingNodes = Array.from(new Map(buildRailingNodes(deck).map((node) => {
     const isStairNode = node.kind === 'stair-end' || node.kind === 'stair-inline';
-    const offset = isStairNode ? { x: 0, y: 0 } : railingInwardOffsetForNode(node.point, deck, railingInsetFt);
+    const offset = isStairNode ? stairSideOffset(node.point) : railingInwardOffsetForNode(node.point, deck, railingInsetFt);
     const shifted = { ...node, point: { x: node.point.x + offset.x, y: node.point.y + offset.y } };
     return [`${Math.round(shifted.point.x*12)}-${Math.round(shifted.point.y*12)}-${shifted.kind}`, shifted] as const;
   })).values());
 
-  const stairSegment = deck.stairPlacement.edgeIndex !== null ? deck.edgeSegments[deck.stairPlacement.edgeIndex] : null;
-  const stairNormal = stairSegment ? outwardNormal(stairSegment, deck.points) : { x: 0, y: 1 };
   const stairRunPx = deck.stairRunFt * scale;
 
   const renderDim = (a:{x:number;y:number}, b:{x:number;y:number}, text:string, offsetX:number, offsetY:number, key:string) => {
@@ -968,14 +983,14 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             {showFraming && joistRuns.map((value, idx) => deck.joistDirection === 'vertical'
               ? scanlineIntersections(deck.points, 'vertical', value).map((pair, pairIdx) => {
                   const x = toSvg(value, pair.start).x;
-                  const inset = Math.min(10, Math.abs(toSvg(value, pair.start + 0.22).y - toSvg(value, pair.start).y) || 10);
+                  const inset = Math.max(22, Math.min(32, Math.abs(toSvg(value, pair.start + 0.44).y - toSvg(value, pair.start).y) || 22));
                   const y1 = toSvg(value, pair.start).y + inset;
                   const y2 = toSvg(value, pair.end).y - inset;
                   return <rect key={`joist-v-${idx}-${pairIdx}`} x={x - 3} y={Math.min(y1, y2)} width={6} height={Math.max(0, Math.abs(y2 - y1))} className="joist-rect" onClick={() => setInspect({ title: `Joist ${idx + 1}`, detail: `${deck.joistSize} joist at 12 in O.C.` })} />;
                 })
               : scanlineIntersections(deck.points, 'horizontal', value).map((pair, pairIdx) => {
                   const y = toSvg(pair.start, value).y;
-                  const inset = Math.min(10, Math.abs(toSvg(pair.start + 0.22, value).x - toSvg(pair.start, value).x) || 10);
+                  const inset = Math.max(22, Math.min(32, Math.abs(toSvg(pair.start + 0.44, value).x - toSvg(pair.start, value).x) || 22));
                   const x1 = toSvg(pair.start, value).x + inset;
                   const x2 = toSvg(pair.end, value).x - inset;
                   return <rect key={`joist-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - 3} width={Math.max(0, Math.abs(x2 - x1))} height={6} className="joist-rect" onClick={() => setInspect({ title: `Joist ${idx + 1}`, detail: `${deck.joistSize} joist at 12 in O.C.` })} />;
@@ -992,8 +1007,8 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   // Keep it clear of the band board and short of the first joist
                   // so the framing diagram does not show blocking overlapping
                   // either member.
-                  const inner = 0.34 + course * 0.48;
-                  const outer = 0.86 + course * 0.48;
+                  const inner = 0.56 + course * 0.48;
+                  const outer = 0.92 + course * 0.48;
                   return blockDistances.map((distance, idx) => {
                     const pt = pointAlong(segment, distance);
                     const a = toSvg(pt.x + inset.x * inner, pt.y + inset.y * inner);
@@ -1007,14 +1022,14 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               deck.boardRun === 'width'
                 ? scanlineIntersections(deck.points, 'vertical', pos).flatMap((pair, pairIdx) => Array.from({ length: Math.max(1, Math.floor(pair.end - pair.start)) }, (_, blockIdx) => {
                     const y = Math.min(pair.end - 0.15, pair.start + blockIdx + 0.5);
-                    const a = toSvg(pos - 0.42, y);
-                    const b = toSvg(pos + 0.42, y);
+                    const a = toSvg(pos - 0.34, y);
+                    const b = toSvg(pos + 0.34, y);
                     return <line key={`breaker-block-v-${idx}-${pairIdx}-${blockIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line required-blocking" />;
                   }))
                 : scanlineIntersections(deck.points, 'horizontal', pos).flatMap((pair, pairIdx) => Array.from({ length: Math.max(1, Math.floor(pair.end - pair.start)) }, (_, blockIdx) => {
                     const x = Math.min(pair.end - 0.15, pair.start + blockIdx + 0.5);
-                    const a = toSvg(x, pos - 0.42);
-                    const b = toSvg(x, pos + 0.42);
+                    const a = toSvg(x, pos - 0.34);
+                    const b = toSvg(x, pos + 0.34);
                     return <line key={`breaker-block-h-${idx}-${pairIdx}-${blockIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line required-blocking" />;
                   }))
             ))}
@@ -1083,8 +1098,10 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               const sourceEdge = deck.edgeSegments.find((edge) => (Math.abs(edge.start.x - segment.start.x) < 0.01 && Math.abs(edge.start.y - segment.start.y) < 0.01 && Math.abs(edge.end.x - segment.end.x) < 0.01 && Math.abs(edge.end.y - segment.end.y) < 0.01) || (Math.abs(edge.start.x - segment.end.x) < 0.01 && Math.abs(edge.start.y - segment.end.y) < 0.01 && Math.abs(edge.end.x - segment.start.x) < 0.01 && Math.abs(edge.end.y - segment.start.y) < 0.01));
               const inward = sourceEdge ? inwardNormal(sourceEdge, deck.points) : { x: 0, y: 0 };
               const insetFt = sourceEdge ? railingInsetFt : 0;
-              const start = { x: segment.start.x + inward.x * insetFt, y: segment.start.y + inward.y * insetFt };
-              const end = { x: segment.end.x + inward.x * insetFt, y: segment.end.y + inward.y * insetFt };
+              const baseStart = { x: segment.start.x + inward.x * insetFt, y: segment.start.y + inward.y * insetFt };
+              const baseEnd = { x: segment.end.x + inward.x * insetFt, y: segment.end.y + inward.y * insetFt };
+              const start = shiftStairRailPoint(baseStart, segment);
+              const end = shiftStairRailPoint(baseEnd, segment);
               const a = toSvg(start.x, start.y);
               const b = toSvg(end.x, end.y);
               const midX = (a.x + b.x) / 2;
@@ -1119,7 +1136,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   const ratio = count === 1 ? 0 : idx / (count - 1);
                   const sx = a.x + (b.x - a.x) * ratio;
                   const sy = a.y + (b.y - a.y) * ratio;
-                  return <line key={`stringer-${idx}`} x1={sx} y1={sy} x2={sx + nx} y2={sy + ny} className="stringer-line" />;
+                  return <polygon key={`stringer-${idx}`} points={boardStripPolygonTrim({ x: sx, y: sy }, { x: sx + nx, y: sy + ny }, 9, 0, 0)} className="stringer-rect" />;
                 })}
                 {Array.from({ length: treadCount }, (_, idx) => {
                   const ratio = (idx + 1) / (treadCount + 1);
