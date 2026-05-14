@@ -58,9 +58,9 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
   const margin = 28;
   const rowBaseHeight = 28;
   const gutter = 10;
-  const minWidths = [150, 44, 44, 104, 76, 180];
-  const maxWidths = [210, 58, 58, 150, 110, 320];
-  const headers = ['Material', 'Qty', 'Unit', 'Stock recommendation', 'Color', 'Notes'];
+  const minWidths = [52, 150, 44, 44, 104, 76, 180];
+  const maxWidths = [60, 210, 58, 58, 150, 110, 320];
+  const headers = ['Label', 'Material', 'Qty', 'Unit', 'Stock recommendation', 'Color', 'Notes'];
   const canvas = document.createElement('canvas');
   const probe = canvas.getContext('2d');
   if (!probe) throw new Error('Canvas unavailable');
@@ -69,7 +69,7 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     let width = probe.measureText(header).width + 16;
     Object.values(grouped).forEach((rows) => {
       rows.forEach((row) => {
-        const value = [row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.color ?? '—', row.notes ?? '—'][idx];
+        const value = [row.layoutLabel ?? '', row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.color ?? '—', row.notes ?? '—'][idx];
         const measured = idx === 5 ? Math.min(maxWidths[idx], Math.max(minWidths[idx], probe.measureText(String(value)).width * 0.6 + 24)) : probe.measureText(String(value)).width + 16;
         width = Math.max(width, measured);
       });
@@ -79,7 +79,7 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
   const tableWidth = colWidths.reduce((sum, width) => sum + width, 0) + gutter * (colWidths.length - 1);
   const pageWidth = Math.max(940, tableWidth + margin * 2);
   const rowHeightsByCategory = Object.fromEntries(Object.entries(grouped).map(([category, rows]) => [category, rows.map((row) => {
-    const noteLines = wrapText(probe, row.notes ?? '—', colWidths[5] - 16).length;
+    const noteLines = wrapText(probe, row.notes ?? '—', colWidths[6] - 16).length;
     return Math.max(rowBaseHeight, 18 + noteLines * 14);
   })]));
   let pageHeight = 138;
@@ -149,14 +149,14 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
       ctx.strokeStyle = '#d1d5db';
       ctx.strokeRect(margin, rowY, tableWidth, rowHeight);
       ctx.fillStyle = '#111111';
-      const rowValues = [row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.color ?? '—'];
+      const rowValues = [row.layoutLabel ?? '', row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.color ?? '—'];
       rowValues.forEach((value, colIdx) => {
         const x = cols[colIdx] + 8;
         const maxWidth = colWidths[colIdx] - 16;
         ctx.fillText(fitText(ctx, String(value), maxWidth), x, rowY + 18);
       });
-      const noteLines = wrapText(ctx, row.notes ?? '—', colWidths[5] - 16);
-      noteLines.forEach((line, lineIdx) => ctx.fillText(line, cols[5] + 8, rowY + 18 + lineIdx * 14));
+      const noteLines = wrapText(ctx, row.notes ?? '—', colWidths[6] - 16);
+      noteLines.forEach((line, lineIdx) => ctx.fillText(line, cols[6] + 8, rowY + 18 + lineIdx * 14));
       y += rowHeight;
     });
     y += 20;
@@ -395,6 +395,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
               <table>
                 <thead>
                   <tr>
+                    <th>Label</th>
                     <th>Material</th>
                     <th>Qty</th>
                     <th>Unit</th>
@@ -407,6 +408,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
                 <tbody>
                   {categoryItems.map((item) => (
                     <tr key={item.rowKey}>
+                      <td>{item.layoutLabel ?? ''}</td>
                       <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.name} onChange={(event) => setEditingDraft((current) => ({ ...current, name: event.target.value }))} style={{ width: '100%' }} /> : item.name}</td>
                       <td>{editingKey === item.rowKey ? <input type="number" min="0" step="0.01" value={editingDraft.quantity} onChange={(event) => setEditingDraft((current) => ({ ...current, quantity: event.target.value }))} style={{ width: '82px' }} /> : item.quantity}</td>
                       <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.unit} onChange={(event) => setEditingDraft((current) => ({ ...current, unit: event.target.value }))} style={{ width: '72px' }} /> : item.unit}</td>

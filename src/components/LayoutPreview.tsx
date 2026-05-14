@@ -3,6 +3,7 @@ import { exportSvgAsPdf, exportSvgSectionsAsPdf } from '../lib/export';
 import { buildDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout, serializeFanSelections, shiftFanSelection } from '../lib/patioLayout';
 import { parseGableSections, parseSections, parseSunroomSections } from '../lib/sectioning';
+import { deriveDeckBoardLabels } from '../lib/deckBoardLabels';
 import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, SectionConfig } from '../lib/types';
 
 interface LayoutPreviewProps {
@@ -582,9 +583,11 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
     return pieces;
   };
   const showBoards = layer === 'overview' || layer === 'boards';
+  const showBoardLabels = layer === 'boards';
   const showFraming = layer === 'overview' || layer === 'framing';
   const showRailing = layer === 'overview' || layer === 'railing';
   const showStairs = layer === 'overview' || layer === 'stairs';
+  const deckBoardLabels = useMemo(() => deriveDeckBoardLabels(values), [values]);
 
   const printPlan = () => { void exportSvgAsPdf(svgRef.current, 'Deck framing plan', 'sns-deck-plan.pdf'); };
 
@@ -601,6 +604,52 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const pictureFrameBoardWidthPx = Math.max(10, scale * 0.44);
   const pictureFrameTrimPx = pictureFrameCount * pictureFrameBoardWidthPx;
   const pointTouchesPictureFrame = (point: DeckPoint) => pictureFrameCount > 0 && pictureFrameSegments.some((segment) => pointOnSegment(point, segment, 0.06));
+  const fieldBoardLabelAnchor = useMemo(() => {
+    if (!boardRuns.length) return null;
+    if (deck.boardRun === 'width') {
+      const y = boardRuns[Math.floor(boardRuns.length / 2)];
+      const pair = [...scanlineIntersections(deck.points, 'horizontal', y)].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
+      if (!pair) return null;
+      return toSvg((pair.start + pair.end) / 2, y);
+    }
+    const x = boardRuns[Math.floor(boardRuns.length / 2)];
+    const pair = [...scanlineIntersections(deck.points, 'vertical', x)].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
+    if (!pair) return null;
+    return toSvg(x, (pair.start + pair.end) / 2);
+  }, [boardRuns, deck.boardRun, deck.points, toSvg]);
+  const pictureFrameLabelAnchors = useMemo(() => {
+    if (!pictureFrameCount || !pictureFrameSegments.length) return [] as { label: string; x: number; y: number }[];
+    const longest = [...pictureFrameSegments].sort((a, b) => b.length - a.length)[0];
+    if (!longest) return [] as { label: string; x: number; y: number }[];
+    const center = pointAlong(longest, longest.length / 2);
+    const base = toSvg(center.x, center.y);
+    const inward = inwardNormal(longest, deck.points);
+    const normalA = toSvg(center.x + inward.x, center.y + inward.y);
+    const normal = svgUnitVector(base, normalA);
+    return Array.from({ length: pictureFrameCount }, (_, course) => ({
+      label: deckBoardLabels.pictureFrame[course] ?? '',
+      x: base.x + normal.x * ((course + 0.5) * pictureFrameBoardWidthPx),
+      y: base.y + normal.y * ((course + 0.5) * pictureFrameBoardWidthPx),
+    })).filter((item) => item.label);
+  }, [pictureFrameCount, pictureFrameSegments, toSvg, deck.points, deckBoardLabels.pictureFrame, pictureFrameBoardWidthPx]);
+  const breakerLabelAnchors = useMemo(() => {
+    if (!breakerBoardCount || !breakerPositions.length) return [] as { label: string; x: number; y: number }[];
+    const boardWidthFt = 0.47;
+    return breakerCourseOffsets(breakerBoardCount, boardWidthFt).map((offset, course) => {
+      const label = deckBoardLabels.breaker[course] ?? '';
+      if (!label) return null;
+      if (deck.boardRun === 'width') {
+        const x = breakerPositions[0] + offset;
+        const pair = [...scanlineIntersections(deck.points, 'vertical', x)].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
+        if (!pair) return null;
+        return { label, ...toSvg(x, (pair.start + pair.end) / 2) };
+      }
+      const y = breakerPositions[0] + offset;
+      const pair = [...scanlineIntersections(deck.points, 'horizontal', y)].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
+      if (!pair) return null;
+      return { label, ...toSvg((pair.start + pair.end) / 2, y) };
+    }).filter(Boolean) as { label: string; x: number; y: number }[];
+  }, [breakerBoardCount, breakerPositions, deckBoardLabels.breaker, deck.boardRun, deck.points, toSvg]);
   const railingSegments = railSegmentsForDeck(deck);
   const editableCoverage = useMemo(() => parseRailCoverageValue(values.railCoverage), [values.railCoverage]);
   const railingInsetFt = 0.78;
@@ -629,6 +678,12 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   };
 
 
+  const renderBoardTag = (label: string, x: number, y: number, key: string) => (
+    <g key={key}>
+      <rect x={x - 10} y={y - 10} width={20} height={20} rx={4} className="board-tag-badge" />
+      <text x={x} y={y + 4} textAnchor="middle" className="board-tag-text">{label}</text>
+    </g>
+  );
 
   const startPan = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!panRef.current || zoom <= 1) return;
@@ -839,6 +894,10 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                     return <polygon key={`breaker-h-${idx}-${course}-${pairIdx}`} points={boardStripPolygonTrim(a, b, boardWidthPx, startTrim, endTrim)} className={`breaker-board-strip course-${course + 1}`} />;
                   }));
             })}
+
+            {showBoardLabels && fieldBoardLabelAnchor && renderBoardTag(deckBoardLabels.field, fieldBoardLabelAnchor.x, fieldBoardLabelAnchor.y, 'board-tag-field')}
+            {showBoardLabels && pictureFrameLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-pf-${idx}`))}
+            {showBoardLabels && breakerLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-breaker-${idx}`))}
 
             {showFraming && deck.beamLines.map((beam, beamIdx) => (
               <g key={`beam-${beamIdx}`}>

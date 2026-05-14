@@ -6,6 +6,7 @@ export interface MaterialItem {
   stockRecommendation: string;
   color?: string;
   notes?: string;
+  layoutLabel?: string;
 }
 
 export interface EstimateResult {

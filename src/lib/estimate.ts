@@ -2,10 +2,11 @@ import { parseGableSections, parseSections, parseSunroomSections } from './secti
 import { buildDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem, SectionConfig } from './types';
 import { buildPatioPanelLayout } from './patioLayout';
+import { deriveDeckBoardLabels } from './deckBoardLabels';
 
 export type EstimateInputs = Record<string, string | number | boolean>;
 
-const toMaterial = (name: string, category: string, quantity: number, unit: string, stockRecommendation: string, color?: string, notes?: string): MaterialItem => {
+const toMaterial = (name: string, category: string, quantity: number, unit: string, stockRecommendation: string, color?: string, notes?: string, layoutLabel?: string): MaterialItem => {
   let normalizedColor = color;
   let normalizedNotes = notes;
   // Older rows sometimes passed notes in the color position. Keep real color/style
@@ -22,6 +23,7 @@ const toMaterial = (name: string, category: string, quantity: number, unit: stri
     stockRecommendation,
     color: normalizedColor,
     notes: normalizedNotes,
+    layoutLabel,
   };
 };
 
@@ -32,12 +34,12 @@ const feetAndInches = (feet: number) => {
   return inches ? `${ft}' ${inches}"` : `${ft}'`;
 };
 
-const addBoardGroups = (materials: MaterialItem[], category: string, materialName: string, groups: { length: number; count: number }[], notes: string, includeWasteBuffer = false, color?: string) => {
+const addBoardGroups = (materials: MaterialItem[], category: string, materialName: string, groups: { length: number; count: number }[], notes: string, includeWasteBuffer = false, color?: string, layoutLabel?: string) => {
   groups.forEach((group) => {
     if (group.count > 0) {
       const quantity = includeWasteBuffer ? Math.ceil(group.count * 1.05) : group.count;
       const bufferNote = includeWasteBuffer ? `${notes} · Includes 5% waste/damage buffer.` : notes;
-      materials.push(toMaterial(materialName, category, quantity, 'boards', `${group.length} ft stock`, color, bufferNote));
+      materials.push(toMaterial(materialName, category, quantity, 'boards', `${group.length} ft stock`, color, bufferNote, layoutLabel));
     }
   });
 };
@@ -51,7 +53,7 @@ const splitDeckStyle = (style: string) => {
   return { material: `${cleaned} deck board`, color: cleaned };
 };
 
-const addDeckBoardCuts = (materials: MaterialItem[], style: string, label: string, category: string, lengths: number[], notes?: string) => {
+const addDeckBoardCuts = (materials: MaterialItem[], style: string, label: string, category: string, lengths: number[], notes?: string, layoutLabel?: string) => {
   const stock = [8, 12, 16, 20];
   const grouped = new Map<number, number>();
   lengths.filter((length) => length > 0.05).forEach((length) => {
@@ -67,7 +69,7 @@ const addDeckBoardCuts = (materials: MaterialItem[], style: string, label: strin
   });
   [...grouped.entries()].sort((a, b) => a[0] - b[0]).forEach(([length, count]) => {
     const styleInfo = splitDeckStyle(style);
-    materials.push(toMaterial(label || styleInfo.material, category, Math.ceil(count * 1.05), 'boards', `${length} ft deck-board stock`, styleInfo.color, `${notes ?? ''}${notes ? ' · ' : ''}Board style: ${style}. Includes 5% waste/damage buffer.`));
+    materials.push(toMaterial(label || styleInfo.material, category, Math.ceil(count * 1.05), 'boards', `${length} ft deck-board stock`, styleInfo.color, `${notes ?? ''}${notes ? ' · ' : ''}Board style: ${style}. Includes 5% waste/damage buffer.`, layoutLabel));
   });
 };
 
@@ -148,7 +150,7 @@ const totalCutLength = (lengths: number[]) => lengths.reduce((sum, length) => su
 const consolidateMaterials = (materials: MaterialItem[]) => {
   const merged = new Map<string, MaterialItem>();
   materials.forEach((item) => {
-    const key = [item.name, item.category, item.unit, item.stockRecommendation, item.color ?? ''].join('||');
+    const key = [item.name, item.category, item.unit, item.stockRecommendation, item.color ?? '', item.layoutLabel ?? ''].join('||');
     const existing = merged.get(key);
     if (!existing) {
       merged.set(key, { ...item });
@@ -309,22 +311,23 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const drinkRail = inputs.drinkRail === true || String(inputs.drinkRail ?? 'false') === 'true';
   const drinkRailMaterial = resolveBoardStyle(inputs.drinkRailMaterial);
   const materials: MaterialItem[] = [];
+  const deckBoardLabels = deriveDeckBoardLabels(inputs);
   const deckingStyleInfo = splitDeckStyle(deckingMaterial);
   const fasciaMaterial = resolveBoardStyle(inputs.fasciaMaterial);
   const fasciaStyleInfo = splitDeckStyle(fasciaMaterial);
-  addBoardGroups(materials, 'Decking', deckingStyleInfo.material, deck.boardGroups, deck.boardRun === 'width' ? `Field decking. Board style: ${deckingMaterial}. Boards run parallel to the house, so stock length tracks deck width.` : `Field decking. Board style: ${deckingMaterial}. Boards run perpendicular to the house, so stock length tracks projection.`, true, deckingStyleInfo.color);
+  addBoardGroups(materials, 'Decking', deckingStyleInfo.material, deck.boardGroups, deck.boardRun === 'width' ? `Field decking. Board style: ${deckingMaterial}. Boards run parallel to the house, so stock length tracks deck width.` : `Field decking. Board style: ${deckingMaterial}. Boards run perpendicular to the house, so stock length tracks projection.`, true, deckingStyleInfo.color, deckBoardLabels.field);
   if (pictureFrameCount > 0) {
     for (let i = 0; i < pictureFrameCount; i += 1) {
       const style = pictureFrameMaterials[i] || deckingMaterial;
       const borderLengths = deck.exposedSegments.map((segment) => segment.length);
-      addDeckBoardCuts(materials, style, `Picture-frame deck board ${i + 1}`, 'Decking', borderLengths, `Picture-frame course ${i + 1} on exposed deck perimeter only.`);
+      addDeckBoardCuts(materials, style, `Picture-frame deck board ${i + 1}`, 'Decking', borderLengths, `Picture-frame course ${i + 1} on exposed deck perimeter only.`, deckBoardLabels.pictureFrame[i]);
     }
   }
   if (breakerBoardCount > 0) {
     const breakerLength = deck.boardRun === 'width' ? deck.depth : deck.width;
     for (let i = 0; i < breakerBoardCount; i += 1) {
       const style = breakerBoardMaterials[i] || deckingMaterial;
-      addDeckBoardCuts(materials, style, `Breaker deck board ${i + 1}`, 'Decking', [breakerLength], `Breaker board row ${i + 1} splitting field decking.`);
+      addDeckBoardCuts(materials, style, `Breaker deck board ${i + 1}`, 'Decking', [breakerLength], `Breaker board row ${i + 1} splitting field decking.`, deckBoardLabels.breaker[i]);
     }
   }
   addBoardGroups(materials, 'Stairs', 'Stair tread deck board', deck.stairTreadGroups, `Two tread boards per tread. Board style: ${deckingMaterial}.`, true, deckingStyleInfo.color);
