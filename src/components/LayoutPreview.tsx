@@ -477,8 +477,8 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const layoutMaxY = Math.max(deck.maxY, stairBounds.maxY);
   const widthFt = Math.max(layoutMaxX - layoutMinX, 1);
   const depthFt = Math.max(layoutMaxY - layoutMinY, 1);
-  const titleBlockW = 430;
-  const titleBlockH = 164;
+  const titleBlockW = 520;
+  const titleBlockH = 188;
   const sheetMarginX = 54;
   const sheetMarginTop = 110;
   const sheetMarginBottom = 54;
@@ -527,8 +527,15 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const breakerPositions = deck.breakerBoardPositions;
   const railingSegments = railSegmentsForDeck(deck);
   const editableCoverage = useMemo(() => parseRailCoverageValue(values.railCoverage), [values.railCoverage]);
-  const railingInsetFt = 0.42;
-  const railingNodes = Array.from(new Map(buildRailingNodes(deck).map((node) => { const edge = deck.exposedSegments.find((seg) => (Math.abs(seg.start.x - node.point.x) < 0.12 && Math.abs(seg.start.y - node.point.y) < 0.12) || (Math.abs(seg.end.x - node.point.x) < 0.12 && Math.abs(seg.end.y - node.point.y) < 0.12)); const shifted = edge ? (() => { const inward = inwardNormal(edge, deck.points); return { ...node, point: { x: node.point.x + inward.x * railingInsetFt, y: node.point.y + inward.y * railingInsetFt } }; })() : node; return [`${Math.round(shifted.point.x*12)}-${Math.round(shifted.point.y*12)}-${shifted.kind}`, shifted] as const; })).values());
+  const railingInsetFt = 1.02;
+  const railingNodes = Array.from(new Map(buildRailingNodes(deck).map((node) => {
+    const edge = deck.exposedSegments.find((seg) => (Math.abs(seg.start.x - node.point.x) < 0.12 && Math.abs(seg.start.y - node.point.y) < 0.12) || (Math.abs(seg.end.x - node.point.x) < 0.12 && Math.abs(seg.end.y - node.point.y) < 0.12));
+    const shifted = edge ? (() => {
+      const inward = inwardNormal(edge, deck.points);
+      return { ...node, point: { x: node.point.x + inward.x * railingInsetFt, y: node.point.y + inward.y * railingInsetFt } };
+    })() : node;
+    return [`${Math.round(shifted.point.x*12)}-${Math.round(shifted.point.y*12)}-${shifted.kind}`, shifted] as const;
+  })).values());
 
   const stairSegment = deck.stairPlacement.edgeIndex !== null ? deck.edgeSegments[deck.stairPlacement.edgeIndex] : null;
   const stairNormal = stairSegment ? outwardNormal(stairSegment, deck.points) : { x: 0, y: 1 };
@@ -936,10 +943,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               </g>;
             })}
             {showRailing && railingNodes.map((node, idx) => {
-              const nearby = deck.edgeSegments.filter((edge) => Math.abs(edge.start.x - node.point.x) < 0.01 && Math.abs(edge.start.y - node.point.y) < 0.01 || Math.abs(edge.end.x - node.point.x) < 0.01 && Math.abs(edge.end.y - node.point.y) < 0.01);
-              const offset = nearby.length ? nearby.map((edge) => inwardNormal(edge, deck.points)).reduce((acc, item) => ({ x: acc.x + item.x, y: acc.y + item.y }), { x: 0, y: 0 }) : { x: 0, y: 0 };
-              const mag = Math.hypot(offset.x, offset.y) || 1;
-              const p = toSvg(node.point.x + (offset.x / mag) * 0.26, node.point.y + (offset.y / mag) * 0.26);
+              const p = toSvg(node.point.x, node.point.y);
               const cls = node.kind === 'stair-end' || node.kind === 'stair-inline' ? 'stair-post-node' : 'railing-post-node';
               return <g key={`rail-node-${idx}`} onClick={() => setInspect({ title: node.detail, detail: `${node.detail} at ${feetAndInches(node.point.x - deck.minX)}, ${feetAndInches(node.point.y - deck.minY)}.` })}>
                 <rect x={p.x - 12} y={p.y - 12} width={24} height={24} className={cls} />
@@ -1008,32 +1012,37 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
 
             <g transform={`translate(${sheetW - titleBlockW - 52}, ${planY + planH + 34})`}>
               <rect x="0" y="0" width={titleBlockW} height={titleBlockH} className="title-block" />
-              <line x1="0" y1="28" x2={titleBlockW} y2="28" className="title-block-line" />
-              <line x1="0" y1="58" x2={titleBlockW} y2="58" className="title-block-line" />
-              <line x1="0" y1="88" x2={titleBlockW} y2="88" className="title-block-line" />
-              <line x1="0" y1="116" x2={titleBlockW} y2="116" className="title-block-line" />
-              <line x1="132" y1="28" x2="132" y2={titleBlockH} className="title-block-line" />
-              <line x1="244" y1="28" x2="244" y2={titleBlockH} className="title-block-line" />
-              <text x="12" y="18" className="title-block-title">S&S DESIGN BUILD · DECK FRAMING PLAN</text>
-              <text x="12" y="46" className="title-block-label">Width</text>
-              <text x="76" y="46" className="title-block-value">{feetAndInches(deck.width)}</text>
-              <text x="144" y="46" className="title-block-label">Projection</text>
-              <text x="220" y="46" className="title-block-value">{feetAndInches(deck.depth)}</text>
-              <text x="256" y="46" className="title-block-label">Area</text>
-              <text x="302" y="46" className="title-block-value">{deck.area.toFixed(1)} sf</text>
-              <text x="12" y="76" className="title-block-label">Joists</text>
-              <text x="76" y="76" className="title-block-value">{deck.joistSize} @ 12&quot; O.C.</text>
-              <text x="144" y="76" className="title-block-label">Beam</text>
-              <text x="220" y="76" className="title-block-value">2-{deck.beamMemberSize}</text>
-              <text x="256" y="76" className="title-block-label">Posts</text>
-              <text x="302" y="76" className="title-block-value">{deck.postCount}</text>
-              <text x="12" y="106" className="title-block-label">Attachment</text>
-              <text x="76" y="106" className="title-block-value">{deck.attachment}</text>
-              <text x="144" y="106" className="title-block-label">Cantilever</text>
-              <text x="220" y="106" className="title-block-value">{feetAndInches(Number(values.beamCantilever ?? 2))}</text>
-              <text x="256" y="106" className="title-block-label">Stairs</text>
-              <text x="302" y="106" className="title-block-value">{deck.stairCount ? `${deck.stairRisers}R/${deck.stairTreadsPerRun}T` : 'none'}</text>
-              <text x="12" y="132" className="title-block-note">Double band boards shown on all edges. Doubled beam plies staggered with explicit splice markers.</text>
+              <line x1="0" y1="30" x2={titleBlockW} y2="30" className="title-block-line" />
+              <line x1="0" y1="66" x2={titleBlockW} y2="66" className="title-block-line" />
+              <line x1="0" y1="102" x2={titleBlockW} y2="102" className="title-block-line" />
+              <line x1="0" y1="138" x2={titleBlockW} y2="138" className="title-block-line" />
+              <line x1="172" y1="30" x2="172" y2="138" className="title-block-line" />
+              <line x1="344" y1="30" x2="344" y2="138" className="title-block-line" />
+              <text x="12" y="20" className="title-block-title">S&S DESIGN BUILD · DECK FRAMING PLAN</text>
+
+              <text x="12" y="48" className="title-block-label">Width</text>
+              <text x="82" y="48" className="title-block-value">{feetAndInches(deck.width)}</text>
+              <text x="184" y="48" className="title-block-label">Projection</text>
+              <text x="276" y="48" className="title-block-value">{feetAndInches(deck.depth)}</text>
+              <text x="356" y="48" className="title-block-label">Area</text>
+              <text x="418" y="48" className="title-block-value">{deck.area.toFixed(1)} sf</text>
+
+              <text x="12" y="84" className="title-block-label">Joists</text>
+              <text x="82" y="84" className="title-block-value">{deck.joistSize} @ 12&quot; O.C.</text>
+              <text x="184" y="84" className="title-block-label">Beam</text>
+              <text x="276" y="84" className="title-block-value">2-{deck.beamMemberSize}</text>
+              <text x="356" y="84" className="title-block-label">Posts</text>
+              <text x="418" y="84" className="title-block-value">{deck.postCount}</text>
+
+              <text x="12" y="120" className="title-block-label">Attachment</text>
+              <text x="82" y="120" className="title-block-value">{deck.attachment}</text>
+              <text x="184" y="120" className="title-block-label">Cantilever</text>
+              <text x="276" y="120" className="title-block-value">{feetAndInches(Number(values.beamCantilever ?? 2))}</text>
+              <text x="356" y="120" className="title-block-label">Stairs</text>
+              <text x="418" y="120" className="title-block-value">{deck.stairCount ? `${deck.stairRisers}R/${deck.stairTreadsPerRun}T` : 'none'}</text>
+
+              <text x="12" y="158" className="title-block-note">Double band boards shown on all edges.</text>
+              <text x="12" y="174" className="title-block-note">Doubled beam plies staggered with explicit splice markers.</text>
             </g>
           </svg>
         </div>
