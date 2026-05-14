@@ -20,7 +20,7 @@ function base64ToBytes(base64: string) {
   return out;
 }
 
-type PdfImage = { bytes: Uint8Array; width: number; height: number };
+type PdfImage = { bytes: Uint8Array; width: number; height: number; forcePortrait?: boolean };
 
 function makePdfFromJpegs(images: PdfImage[], title: string) {
   const portrait = { width: 612, height: 792 };
@@ -52,7 +52,7 @@ function makePdfFromJpegs(images: PdfImage[], title: string) {
     pageKids.push(`${pageObjNum} 0 R`);
 
     const imageAspect = image.width / Math.max(1, image.height);
-    const page = imageAspect > 1 ? landscape : portrait;
+    const page = image.forcePortrait ? portrait : (imageAspect > 1 ? landscape : portrait);
     const usableWidth = page.width - margin * 2;
     const usableHeight = page.height - margin * 2;
     let drawWidth = usableWidth;
@@ -224,6 +224,7 @@ export async function exportCanvasAsPdf(canvas: HTMLCanvasElement, title: string
     bytes: base64ToBytes(pageCanvas.toDataURL('image/jpeg', 0.95).split(',')[1] || ''),
     width: pageCanvas.width,
     height: pageCanvas.height,
+    forcePortrait: true,
   }));
   const blob = makePdfFromJpegs(images, title);
   triggerDownload(blob, filename);
@@ -236,12 +237,15 @@ export async function exportCanvasAsPng(canvas: HTMLCanvasElement, filename: str
 }
 
 export async function exportCanvasesAsPdf(canvases: HTMLCanvasElement[], title: string, filename: string) {
-  const pages = canvases.flatMap((canvas) => splitTallCanvasForLetterWidth(canvas));
-  const images = pages.map((canvas) => ({
-    bytes: base64ToBytes(canvas.toDataURL('image/jpeg', 0.95).split(',')[1] || ''),
-    width: canvas.width,
-    height: canvas.height,
-  }));
+  const images = canvases.flatMap((canvas) => {
+    const forcePortrait = canvas.height > canvas.width * 1.15;
+    return splitTallCanvasForLetterWidth(canvas).map((pageCanvas) => ({
+      bytes: base64ToBytes(pageCanvas.toDataURL('image/jpeg', 0.95).split(',')[1] || ''),
+      width: pageCanvas.width,
+      height: pageCanvas.height,
+      forcePortrait,
+    }));
+  });
   const blob = makePdfFromJpegs(images, title);
   triggerDownload(blob, filename);
 }
