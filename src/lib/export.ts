@@ -190,9 +190,42 @@ export async function svgElementToCanvas(svg: SVGSVGElement | null) {
   return svgToCanvas(svg);
 }
 
+function splitTallCanvasForLetterWidth(canvas: HTMLCanvasElement) {
+  // Material-list exports can be much taller than letter paper. If the whole
+  // canvas is scaled onto one PDF page, it becomes tiny. Split tall canvases
+  // into letter-proportioned slices so each page uses the full printable width.
+  const page = { width: 612, height: 792 };
+  const margin = 14;
+  const usableRatio = (page.height - margin * 2) / (page.width - margin * 2);
+  const maxSliceHeight = Math.floor(canvas.width * usableRatio);
+  if (canvas.height <= maxSliceHeight * 1.08) return [canvas];
+
+  const slices: HTMLCanvasElement[] = [];
+  let y = 0;
+  while (y < canvas.height - 1) {
+    const sliceHeight = Math.min(maxSliceHeight, canvas.height - y);
+    const slice = document.createElement('canvas');
+    slice.width = canvas.width;
+    slice.height = sliceHeight;
+    const ctx = slice.getContext('2d');
+    if (!ctx) break;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, slice.width, slice.height);
+    ctx.drawImage(canvas, 0, y, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+    slices.push(slice);
+    y += sliceHeight;
+  }
+  return slices.length ? slices : [canvas];
+}
+
 export async function exportCanvasAsPdf(canvas: HTMLCanvasElement, title: string, filename: string) {
-  const jpeg = canvas.toDataURL('image/jpeg', 0.95).split(',')[1] || '';
-  const blob = makePdfFromJpegs([{ bytes: base64ToBytes(jpeg), width: canvas.width, height: canvas.height }], title);
+  const canvases = splitTallCanvasForLetterWidth(canvas);
+  const images = canvases.map((pageCanvas) => ({
+    bytes: base64ToBytes(pageCanvas.toDataURL('image/jpeg', 0.95).split(',')[1] || ''),
+    width: pageCanvas.width,
+    height: pageCanvas.height,
+  }));
+  const blob = makePdfFromJpegs(images, title);
   triggerDownload(blob, filename);
 }
 
@@ -203,7 +236,8 @@ export async function exportCanvasAsPng(canvas: HTMLCanvasElement, filename: str
 }
 
 export async function exportCanvasesAsPdf(canvases: HTMLCanvasElement[], title: string, filename: string) {
-  const images = canvases.map((canvas) => ({
+  const pages = canvases.flatMap((canvas) => splitTallCanvasForLetterWidth(canvas));
+  const images = pages.map((canvas) => ({
     bytes: base64ToBytes(canvas.toDataURL('image/jpeg', 0.95).split(',')[1] || ''),
     width: canvas.width,
     height: canvas.height,
