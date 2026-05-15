@@ -500,8 +500,9 @@ function buildRailingNodes(deck: ReturnType<typeof buildDeckModel>) {
     });
   });
   stairRuns.forEach((segment) => {
-    nodes.push({ point: segment.start, kind: 'stair-end', detail: 'Stair end post' });
-    nodes.push({ point: segment.end, kind: 'stair-end', detail: 'Stair end post' });
+    // The stair rail starts at the existing deck-edge post. Only draw/count
+    // posts that are actually on the stair run: bottom posts and any inline posts.
+    nodes.push({ point: segment.end, kind: 'stair-end', detail: 'Bottom stair post' });
     symmetricPostOffsets(segment.length, 8).forEach((distance) => {
       const point = pointAlong({ start: segment.start, end: segment.end, length: segment.length, orientation: 'angled', index: -1 }, distance);
       nodes.push({ point, kind: 'stair-inline', detail: 'Stair inline post' });
@@ -1131,20 +1132,27 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               const ny = stairNormal.y * stairRunPx;
               const count = Math.max(2, deck.stairStringers);
               const treadCount = Math.max(1, deck.stairTreadsPerRun);
-              return <g>
+              const treadDepthPx = stairRunPx / Math.max(1, treadCount);
+              const treadBoardWidth = Math.max(4, Math.min(9, treadDepthPx * 0.34));
+              const stringerWidth = Math.max(6, Math.min(10, scale * 0.12));
+              return <g className="stair-framing-group">
+                <polygon points={`${a.x},${a.y} ${b.x},${b.y} ${b.x + nx},${b.y + ny} ${a.x + nx},${a.y + ny}`} className="stair-outline-fill" />
+                {Array.from({ length: treadCount }, (_, idx) => {
+                  const baseRatio = (idx + 0.5) / treadCount;
+                  return [ -0.18, 0.18 ].map((offset, boardIdx) => {
+                    const ratio = Math.max(0.03, Math.min(0.97, baseRatio + offset / treadCount));
+                    const tx1 = a.x + nx * ratio;
+                    const ty1 = a.y + ny * ratio;
+                    const tx2 = b.x + nx * ratio;
+                    const ty2 = b.y + ny * ratio;
+                    return <polygon key={`tread-board-${idx}-${boardIdx}`} points={boardStripPolygonTrim({ x: tx1, y: ty1 }, { x: tx2, y: ty2 }, treadBoardWidth, 0, 0)} className="stair-tread-board" />;
+                  });
+                })}
                 {Array.from({ length: count }, (_, idx) => {
                   const ratio = count === 1 ? 0 : idx / (count - 1);
                   const sx = a.x + (b.x - a.x) * ratio;
                   const sy = a.y + (b.y - a.y) * ratio;
-                  return <polygon key={`stringer-${idx}`} points={boardStripPolygonTrim({ x: sx, y: sy }, { x: sx + nx, y: sy + ny }, 9, 0, 0)} className="stringer-rect" />;
-                })}
-                {Array.from({ length: treadCount }, (_, idx) => {
-                  const ratio = (idx + 1) / (treadCount + 1);
-                  const tx1 = a.x + nx * ratio;
-                  const ty1 = a.y + ny * ratio;
-                  const tx2 = b.x + nx * ratio;
-                  const ty2 = b.y + ny * ratio;
-                  return <line key={`tread-${idx}`} x1={tx1} y1={ty1} x2={tx2} y2={ty2} className="tread-line" />;
+                  return <polygon key={`stringer-${idx}`} points={boardStripPolygonTrim({ x: sx, y: sy }, { x: sx + nx, y: sy + ny }, stringerWidth, 0, 0)} className="stringer-rect" />;
                 })}
               </g>;
             })()}

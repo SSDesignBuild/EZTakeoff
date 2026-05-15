@@ -223,7 +223,9 @@ function classifyRailing(deck: ReturnType<typeof buildDeckModel>) {
     else cornerLevelPosts += 1;
   });
   inlineLevelPosts += topRuns.reduce((sum, run) => sum + interiorPostCount(run.length), 0);
-  const stairsLevelToAngledCornerPosts = stairKeys.size;
+  // The top of the stair rail uses the existing deck-edge railing post at the stair opening.
+  // Do not add a separate top stair post; only count stair inline and bottom posts as new stair posts.
+  const stairsLevelToAngledCornerPosts = 0;
   const stairsEndPosts = stairRuns.length ? deck.stairCount * deck.stairRailSideCount : 0;
   const stairsInlinePosts = stairRuns.reduce((sum, run) => sum + interiorPostCount(run.length), 0);
   return {
@@ -247,14 +249,26 @@ function optimizeRail(length: number) {
       const waste = covered - length;
       const pieces = six + eight;
       if (
-        waste < best.waste - 1e-6 ||
-        (Math.abs(waste - best.waste) < 1e-6 && pieces < best.pieces) ||
-        (Math.abs(waste - best.waste) < 1e-6 && pieces === best.pieces && six > best.six)
+        pieces < best.pieces ||
+        (pieces === best.pieces && waste < best.waste - 1e-6) ||
+        (pieces === best.pieces && Math.abs(waste - best.waste) < 1e-6 && eight > best.eight)
       ) {
         best = { six, eight, waste, pieces };
       }
     }
   }
+  return best;
+}
+
+function optimizeStockLength(totalLf: number, stock = [8, 12, 16, 20]) {
+  let best = { stockLength: stock[0], count: Math.max(1, Math.ceil(totalLf / stock[0])), waste: Number.POSITIVE_INFINITY };
+  stock.forEach((stockLength) => {
+    const count = Math.max(1, Math.ceil(totalLf / stockLength));
+    const waste = count * stockLength - totalLf;
+    if (count < best.count || (count === best.count && waste < best.waste - 1e-6) || (count === best.count && Math.abs(waste - best.waste) < 1e-6 && stockLength > best.stockLength)) {
+      best = { stockLength, count, waste };
+    }
+  });
   return best;
 }
 
@@ -450,9 +464,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     const balusterCount = Math.ceil(totalWoodRailLf * 3.1);
     const levelBalusters = Math.ceil(levelRailLf * 3.1);
     const stairBalusters = Math.max(0, balusterCount - levelBalusters);
-    if (railingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', railingPosts, 'ea', '8 ft 4x4 stock', 'Pressure treated', 'End, inline, corner, and stair posts combined; cut to field-required rail-post height'));
-    materials.push(toMaterial('2x4 pressure-treated top rail', 'Railing', Math.ceil(totalWoodRailLf / 12), 'boards', '12 ft stock', undefined, `${totalWoodRailLf.toFixed(1)} lf rail run`));
-    materials.push(toMaterial('2x4 pressure-treated bottom rail', 'Railing', Math.ceil(totalWoodRailLf / 12), 'boards', '12 ft stock', undefined, `${totalWoodRailLf.toFixed(1)} lf rail run`));
+    const woodRailStock = optimizeStockLength(totalWoodRailLf, [8, 12, 16, 20]);
+    if (railingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', Math.ceil(railingPosts / 2), 'boards', '8 ft 4x4 stock', 'Pressure treated', `${railingPosts} rail post cuts total · 2 rail posts per 8 ft 4x4`));
+    materials.push(toMaterial('2x4 pressure-treated top rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
+    materials.push(toMaterial('2x4 pressure-treated bottom rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
     if (spindleType === 'wood') {
       materials.push(toMaterial('1.5x1.5 wood balusters', 'Railing', balusterCount, 'ea', 'Wood spindle stock', undefined, 'Approx. 4 in max clear spacing'));
       materials.push(toMaterial('Finish nails', 'Hardware', Math.ceil(balusterCount * 2 / 1200), 'boxes', 'Fasten wood balusters', undefined, `${balusterCount * 2} nail points estimated`));
@@ -464,7 +479,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       materials.push(toMaterial('Vinyl spindles for wood rail', 'Railing', balusterCount, 'ea', 'Vinyl balusters', undefined, 'Approx. 4 in max clear spacing'));
     }
     if (drinkRail) {
-      materials.push(toMaterial('2x6 pressure-treated drink rail', 'Railing', Math.ceil(totalWoodRailLf / 12), 'boards', '12 ft stock', undefined, `${totalWoodRailLf.toFixed(1)} lf drink rail`));
+      const drinkStock = optimizeStockLength(totalWoodRailLf, [8, 12, 16, 20]);
+      materials.push(toMaterial('2x6 pressure-treated drink rail', 'Railing', drinkStock.count, 'boards', `${drinkStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf drink rail · optimized to reduce board count and handling`));
     }
   } else {
     if (railingBreakdown.levelMix.eight) materials.push(toMaterial('8 ft vinyl/composite level railing sections', 'Railing', railingBreakdown.levelMix.eight, 'sections', '8 ft sections', undefined, 'Top-level straight runs'));
