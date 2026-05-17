@@ -16,6 +16,19 @@ type DeckLayer = 'overview' | 'boards' | 'framing' | 'railing' | 'stairs';
 type InspectMember = { title: string; detail: string };
 type RailSegment = { edgeIndex: number; start: DeckPoint; end: DeckPoint; length: number; kind: 'deck' | 'stair-side'; railKind: 'level' | 'angled'; coverageStart?: number; coverageEnd?: number };
 
+
+const deckBoardPreviewColor = (style: unknown) => {
+  const value = String(style ?? '').toLowerCase();
+  if (value.includes('pressure treated')) return '#c7a56a';
+  if (value.includes('gray') || value.includes('grey') || value.includes('wharf') || value.includes('harbor') || value.includes('coastline') || value.includes('slate') || value.includes('silver') || value.includes('stone')) return '#9aa0a6';
+  if (value.includes('white') || value.includes('sea salt') || value.includes('coconut')) return '#d8d2c4';
+  if (value.includes('sand') || value.includes('dune') || value.includes('wheat') || value.includes('beach')) return '#c6a77a';
+  if (value.includes('mahogany') || value.includes('espresso') || value.includes('dark roast') || value.includes('dark cocoa')) return '#604235';
+  if (value.includes('walnut') || value.includes('mocha') || value.includes('hickory') || value.includes('chestnut') || value.includes('brown') || value.includes('saddle') || value.includes('pecan') || value.includes('teak') || value.includes('tigerwood')) return '#8a6042';
+  if (value.includes('oak') || value.includes('cedar') || value.includes('elm') || value.includes('honey') || value.includes('golden')) return '#b78956';
+  return '#b89568';
+};
+
 const feetAndInches = (feet: number) => {
   const totalInches = Math.round(feet * 12);
   const ft = Math.floor(totalInches / 12);
@@ -525,6 +538,8 @@ function serializeRailCoverage(items: DeckRailCoverage[]) {
 
 function DeckPreview({ values, onValuesChange }: { values: Record<string, string | number | boolean>; onValuesChange?: React.Dispatch<React.SetStateAction<Record<string, string | number | boolean>>> }) {
   const deck = buildDeckModel(values);
+  const deckingMaterial = String(values.deckingMaterial ?? (String(values.deckingType ?? 'composite') === 'pressure-treated' ? 'Pressure treated 5/4x6' : 'Composite / PVC decking'));
+  const stairBoardFill = deckBoardPreviewColor(deckingMaterial);
   const [layer, setLayer] = useState<DeckLayer>('framing');
   const [inspect, setInspect] = useState<InspectMember | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -1130,7 +1145,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               const b = toSvg(deck.stairPlacement.end.x, deck.stairPlacement.end.y);
               const nx = stairNormal.x * stairRunPx;
               const ny = stairNormal.y * stairRunPx;
-              const count = Math.max(2, deck.stairStringers);
+              const count = Math.max(2, Math.floor(deck.stairPlacement.width / 1) + 1);
               const treadCount = Math.max(1, deck.stairTreadsPerRun);
               const treadDepthPx = stairRunPx / Math.max(1, treadCount);
               const treadBoardWidth = Math.max(4, Math.min(9, treadDepthPx * 0.34));
@@ -1145,7 +1160,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                     const ty1 = a.y + ny * ratio;
                     const tx2 = b.x + nx * ratio;
                     const ty2 = b.y + ny * ratio;
-                    return <polygon key={`tread-board-${idx}-${boardIdx}`} points={boardStripPolygonTrim({ x: tx1, y: ty1 }, { x: tx2, y: ty2 }, treadBoardWidth, 0, 0)} className="stair-tread-board" />;
+                    return <polygon key={`tread-board-${idx}-${boardIdx}`} points={boardStripPolygonTrim({ x: tx1, y: ty1 }, { x: tx2, y: ty2 }, treadBoardWidth, 0, 0)} className="stair-tread-board" style={{ fill: stairBoardFill }} />;
                   });
                 })}
                 {Array.from({ length: count }, (_, idx) => {

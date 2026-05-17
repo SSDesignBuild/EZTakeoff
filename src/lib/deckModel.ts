@@ -506,13 +506,20 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const treadLengths: number[] = [];
   for (let run = 0; run < stairCount; run += 1) for (let tread = 0; tread < stairTreadsPerRun; tread += 1) treadLengths.push(stairWidth, stairWidth);
   const stairTreadGroups = accumulateGroups(treadLengths);
-  const stairStringersPerRun = stairCount > 0 ? Math.max(2, Math.ceil(stairWidth / 1) + 1) : 0;
+  // Stringers are laid out at 12 in. on center across each stair run,
+  // including both outside stringers. A 4 ft wide stair therefore needs
+  // 5 stringers per run, not one stringer per tread/riser.
+  const stairStringersPerRun = stairCount > 0 ? Math.max(2, Math.floor(stairWidth / 1) + 1) : 0;
   const stairStringers = stairStringersPerRun * stairCount;
   const stairStringerLength = chooseStockLength(Math.max(12, Math.sqrt(stairRiseFt ** 2 + stairRunFt ** 2)), [12, 16, 20]);
   const stairRailingLeft = inputs.stairRailingLeft !== false && String(inputs.stairRailingLeft ?? 'true') !== 'false';
   const stairRailingRight = inputs.stairRailingRight !== false && String(inputs.stairRailingRight ?? 'true') !== 'false';
   const stairRailSideCount = stairCount > 0 ? Number(stairRailingLeft) + Number(stairRailingRight) : 0;
   const useFascia = String(inputs.deckingType ?? 'composite') !== 'pressure-treated';
+  // Fascia covers only the exposed deck edges plus stair-specific cuts:
+  // both stair stringer sides and each riser face. For a 12 x 16 attached
+  // deck this is left + right + front (40 lf), then 2 stair sides and
+  // one fascia board across each riser.
   const stairSideFascia = useFascia ? stairCount * stairRunFt * 2 : 0;
   const riserFascia = useFascia ? stairCount * stairRisers * stairWidth : 0;
   const fasciaLf = useFascia ? round2(exposedPerimeter + stairSideFascia + riserFascia) : 0;

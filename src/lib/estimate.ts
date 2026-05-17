@@ -113,6 +113,21 @@ const add24FtStockFromCuts = (materials: MaterialItem[], name: string, category:
   );
 };
 
+const optimizeStockCuts = (lengths: number[], stock = [8, 12, 16, 20]) => {
+  const cleanLengths = lengths.map((length) => normalizeCutLength(length)).filter((length) => length > 0);
+  let best = { stockLength: stock[0], count: 0, waste: Number.POSITIVE_INFINITY };
+  stock.forEach((stockLength) => {
+    const bins = packStockCuts(cleanLengths, stockLength).filter((bin) => bin.remaining >= -1e-6);
+    if (bins.length === 0 && cleanLengths.length > 0) return;
+    if (bins.some((bin) => bin.remaining < -1e-6)) return;
+    const waste = bins.reduce((sum, bin) => sum + Math.max(0, bin.remaining), 0);
+    if (bins.length < best.count || best.count === 0 || (bins.length === best.count && waste < best.waste - 1e-6) || (bins.length === best.count && Math.abs(waste - best.waste) < 1e-6 && stockLength > best.stockLength)) {
+      best = { stockLength, count: bins.length, waste };
+    }
+  });
+  return best;
+};
+
 const addCustomCutGroups = (materials: MaterialItem[], name: string, category: string, lengths: number[], note?: string) => {
   const map = new Map<number, number>();
   lengths.forEach((length) => {
@@ -368,6 +383,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const spindleType = String(inputs.spindleType ?? 'black-round');
   const drinkRail = inputs.drinkRail === true || String(inputs.drinkRail ?? 'false') === 'true';
   const drinkRailMaterial = resolveBoardStyle(inputs.drinkRailMaterial);
+  const drinkStyleInfo = splitDeckStyle(drinkRailMaterial);
   const materials: MaterialItem[] = [];
   const deckingPlan = deriveDeckingLabelPlan(deck);
   const deckingStyleInfo = splitDeckStyle(deckingMaterial);
@@ -489,8 +505,30 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     if (railingBreakdown.stairMix.six) materials.push(toMaterial('6 ft vinyl/composite angled railing sections', 'Railing', railingBreakdown.stairMix.six, 'sections', '6 ft sections', undefined, 'Stair-side or angled runs'));
   }
   if (drinkRail && railingType !== 'wood') {
-    const drinkRailLf = deriveTopRailRuns(deck).reduce((sum, run) => sum + run.length, 0) + (deck.stairRisers > 3 ? deck.stairRunFt * deck.stairCount * deck.stairRailSideCount : 0);
-    add24FtStockFromCuts(materials, `${drinkRailMaterial} drink rail boards`, 'Railing', [drinkRailLf], 'Composite/PVC drink rail board selected from decking styles.');
+    const splitRailRunIntoStockCuts = (length: number) => {
+      const mix = optimizeRail(length);
+      return [
+        ...Array.from({ length: mix.eight }, () => 8),
+        ...Array.from({ length: mix.six }, () => 6),
+      ];
+    };
+    const drinkRailCuts = [
+      ...deriveTopRailRuns(deck).flatMap((run) => splitRailRunIntoStockCuts(run.length)),
+      ...(deck.stairRisers > 3 ? Array.from({ length: deck.stairCount * deck.stairRailSideCount }).flatMap(() => splitRailRunIntoStockCuts(deck.stairRunFt)) : []),
+    ];
+    const drinkRailLf = drinkRailCuts.reduce((sum, length) => sum + length, 0);
+    const drinkStock = optimizeStockCuts(drinkRailCuts, [8, 12, 16, 20]);
+    if (drinkStock.count > 0) {
+      materials.push(toMaterial(
+        `${drinkRailMaterial} drink rail boards`,
+        'Railing',
+        drinkStock.count,
+        'boards',
+        `${drinkStock.stockLength} ft stock`,
+        drinkRailMaterial === deckingMaterial ? deckingStyleInfo.color : drinkStyleInfo.color,
+        `${drinkRailLf.toFixed(1)} lf drink rail across ${drinkRailCuts.length} level/angled railing section cut(s) · optimized from available 8, 12, 16, and 20 ft decking stock`,
+      ));
+    }
   }
   return {
     summary: [
