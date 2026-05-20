@@ -248,8 +248,14 @@ function interlockedBandCoursePolygon(
   const lap = Math.min(Math.max(0, boardWidthPx), maxTrim);
   const startCorner = vertexCornerKind(points, segment.start);
   const endCorner = vertexCornerKind(points, segment.end);
-  const trimFor = (offset: number, corner: 'outside' | 'inside' | 'straight') => {
-    if (corner === 'inside') return -Math.min(maxTrim, offset);
+  const trimFor = (_offset: number, corner: 'outside' | 'inside' | 'straight') => {
+    // Inside corners must be square interlocked butt joints, not 45-degree
+    // miters. The previous inside-corner logic extended each edge by its
+    // offset, so the outer and inner points used different trims and rendered
+    // a diagonal/mitered board end. Use the same reverse lap for both the
+    // outer and inner points so each band course stays rectangular and laps
+    // into the notch like the normal interlocked deck corners.
+    if (corner === 'inside') return -lap;
     if (corner === 'outside') return course === 0 ? 0 : lap;
     return course === 0 ? 0 : lap;
   };
