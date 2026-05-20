@@ -239,19 +239,25 @@ function interlockedBandCoursePolygon(
   const outer = course * boardWidthPx;
   const inner = (course + 1) * boardWidthPx;
 
-  // Double band boards are drawn as two clean board courses.
-  // The outside course stays continuous on the outside perimeter. The inside
-  // course is trimmed back one board width at both ends so it butts into the
-  // outside course at corners instead of crossing over it. This matches the
-  // requested lapped/interlocked look without miters or protruding tails.
-  const lap = Math.min(Math.max(0, boardWidthPx), Math.max(0, dir.length / 2 - 1));
-  const startTrim = course === 0 ? 0 : lap;
-  const endTrim = course === 0 ? 0 : lap;
+  // Double band boards need different corner behavior at outside and inside
+  // corners. Outside corners keep the outer course continuous and lap the
+  // inner course back one board width. Inside corners are concave, so the
+  // offset edges must extend into the corner by their offset; otherwise the
+  // two offset band courses leave visible gaps at notches/returns.
+  const maxTrim = Math.max(0, dir.length / 2 - 1);
+  const lap = Math.min(Math.max(0, boardWidthPx), maxTrim);
+  const startCorner = vertexCornerKind(points, segment.start);
+  const endCorner = vertexCornerKind(points, segment.end);
+  const trimFor = (offset: number, corner: 'outside' | 'inside' | 'straight') => {
+    if (corner === 'inside') return -Math.min(maxTrim, offset);
+    if (corner === 'outside') return course === 0 ? 0 : lap;
+    return course === 0 ? 0 : lap;
+  };
 
-  const p1 = offsetSvgPoint(a, dir, normal, startTrim, outer);
-  const p2 = offsetSvgPoint(b, dir, normal, -endTrim, outer);
-  const p3 = offsetSvgPoint(b, dir, normal, -endTrim, inner);
-  const p4 = offsetSvgPoint(a, dir, normal, startTrim, inner);
+  const p1 = offsetSvgPoint(a, dir, normal, trimFor(outer, startCorner), outer);
+  const p2 = offsetSvgPoint(b, dir, normal, -trimFor(outer, endCorner), outer);
+  const p3 = offsetSvgPoint(b, dir, normal, -trimFor(inner, endCorner), inner);
+  const p4 = offsetSvgPoint(a, dir, normal, trimFor(inner, startCorner), inner);
   return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
 }
 
