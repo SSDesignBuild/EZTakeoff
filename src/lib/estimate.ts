@@ -1058,9 +1058,10 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
       if (!touchesLeft) cutGroups.hBeam.push(doorHeight);
       if (!touchesRight) cutGroups.hBeam.push(doorHeight);
       cutGroups.hBeam.push(doorWidth);
-      cutGroups.drc.push(doorWidth);
-      if (!touchesLeft) cutGroups.drc.push(doorHeight);
-      if (!touchesRight) cutGroups.drc.push(doorHeight);
+      // Door H-beam framing needs DRC on each exposed side of the jamb/header H-beams.
+      cutGroups.drc.push(doorWidth, doorWidth);
+      if (!touchesLeft) cutGroups.drc.push(doorHeight, doorHeight);
+      if (!touchesRight) cutGroups.drc.push(doorHeight, doorHeight);
       if (section.doorType === 'single') doorSingles += 1; else doorSliders += 1;
     }
 
@@ -1082,8 +1083,8 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   if (cutGroups.chase.length) add24(extrusionName('Channel with chase & snap', 'Channel with chase'), 'Sunroom frame', cutGroups.chase, 'electric chase enabled in selected sections');
   if (buildMode === 'new-structure') materials.push(toMaterial(extrusionName('Corner post', 'Corner post'), 'Sunroom frame', 2, 'ea', isThreeIn ? '8 ft or 25 ft stock' : '8 ft or 24 ft stock', framingColor, 'Only for build-from-scratch corners'));
   if (cutGroups.wallPanelArea > 0) materials.push(toMaterial('Wall panel stock', 'Sunroom panels', Math.ceil(cutGroups.wallPanelArea / 40), 'panels', isThreeIn ? '4x10 panel stock' : 'Cut from 24 ft stock', panelColor, `${cutGroups.wallPanelArea.toFixed(1)} sq ft panel fill`));
-  if (doorSingles) materials.push(toMaterial("Single swinging doors 3 ft x 6 ft 8 in", 'Doors', doorSingles, 'ea', 'Standard unit', undefined, undefined));
-  if (doorSliders) materials.push(toMaterial("Sliding doors 6 ft x 6 ft 8 in", 'Doors', doorSliders, 'ea', 'Standard unit', undefined, undefined));
+  if (doorSingles) materials.push(toMaterial('Prime glass door 3 ft x 6 ft 8 in', 'Doors', doorSingles, 'ea', 'Standard unit', undefined, undefined));
+  if (doorSliders) materials.push(toMaterial('Prime glass door 6 ft x 6 ft 8 in', 'Doors', doorSliders, 'ea', 'Standard unit', undefined, undefined));
   materials.push(toMaterial('Novaflex caulking', 'Sealants', Math.max(1, Math.ceil(sealantLf / 10)), 'tubes', '1 tube per 10 lf perimeter', framingColor, `${sealantLf.toFixed(1)} lf opening / section perimeter`));
   if (fastenerLf.wood > 0) materials.push(toMaterial('1 1/8 in wood screws', 'Hardware', Math.ceil(fastenerLf.wood / 2.5), 'ea', 'Fasteners every 2.5 ft', undefined, `${fastenerLf.wood.toFixed(1)} lf attaching to wood`));
   if (fastenerLf.metal > 0) materials.push(toMaterial('3/4 in tek screws', 'Hardware', Math.ceil(fastenerLf.metal / 2.5), 'ea', 'Fasteners every 2.5 ft', undefined, `${fastenerLf.metal.toFixed(1)} lf attaching to metal`));

@@ -4,7 +4,7 @@ import { buildDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout, serializeFanSelections, shiftFanSelection } from '../lib/patioLayout';
 import { parseGableSections, parseSections, parseSunroomSections } from '../lib/sectioning';
 import { deckingLabelForLength, deriveDeckingLabelPlan, PICTURE_FRAME_OVERHANG_ALLOWANCE_FT } from '../lib/deckingLabels';
-import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, SectionConfig } from '../lib/types';
+import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, SectionConfig, SunroomSectionConfig } from '../lib/types';
 
 interface LayoutPreviewProps {
   serviceSlug: string;
@@ -1655,6 +1655,32 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
   </div>;
 }
 
+
+function sunroomDoorWidthFeet(section: SunroomSectionConfig) {
+  return section.doorType === 'slider' ? 6 : section.doorType === 'single' ? 3 : 0;
+}
+
+function sunroomDoorLeftFeet(section: SunroomSectionConfig) {
+  const doorWidth = Math.min(sunroomDoorWidthFeet(section), section.width);
+  const maxOffset = Math.max(0, section.width - doorWidth);
+  if (section.doorType === 'none') return 0;
+  if (section.doorPlacement === 'left') return 0;
+  if (section.doorPlacement === 'right') return maxOffset;
+  if (section.doorPlacement === 'custom') return Math.max(0, Math.min(maxOffset, Number(section.doorOffsetInches || 0) / 12));
+  return maxOffset / 2;
+}
+
+function sunroomSpansExcludingDoor(section: SunroomSectionConfig) {
+  const doorWidth = Math.min(sunroomDoorWidthFeet(section), section.width);
+  if (section.doorType === 'none' || doorWidth <= 0) return [{ start: 0, end: section.width }];
+  const left = sunroomDoorLeftFeet(section);
+  const right = left + doorWidth;
+  return [
+    ...(left > 0.01 ? [{ start: 0, end: left }] : []),
+    ...(right < section.width - 0.01 ? [{ start: right, end: section.width }] : []),
+  ];
+}
+
 function SunroomPreview({ values }: { values: Record<string, string | number | boolean> }) {
   const sections = parseSunroomSections(values.sunroomSections, 3);
   const framingColor = String(values.framingColor ?? 'white');
@@ -1702,12 +1728,14 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           const receiverInset = 4;
           const frameInset = 12;
           const bayCount = Math.max(1, section.uprights + 1);
+          const spans = sunroomSpansExcludingDoor(section);
           const showKickUprights = section.uprightMode === 'main-kick' || section.uprightMode === 'all';
           const showTransomUprights = section.uprightMode === 'main-transom' || section.uprightMode === 'all';
-          const uprightXs = Array.from({ length: section.uprights }, (_, idx) => left + ((idx + 1) * w) / (section.uprights + 1));
-          const doorWidth = section.doorType === 'slider' ? 6 * scale : section.doorType === 'single' ? 3 * scale : 0;
-          const maxDoorOffset = Math.max(0, w - doorWidth);
-          const doorOffset = section.doorPlacement === 'left' ? 0 : section.doorPlacement === 'right' ? maxDoorOffset : section.doorPlacement === 'custom' ? Math.max(0, Math.min(maxDoorOffset, (Number(section.doorOffsetInches || 0) / 12) * scale)) : maxDoorOffset / 2;
+          const uprightXs = Array.from({ length: section.uprights }, (_, idx) => ((idx + 1) * section.width) / (section.uprights + 1))
+            .filter((x) => spans.some((span) => x > span.start && x < span.end))
+            .map((x) => left + x * scale);
+          const doorWidth = Math.min(sunroomDoorWidthFeet(section), section.width) * scale;
+          const doorOffset = sunroomDoorLeftFeet(section) * scale;
           const doorLeft = left + doorOffset;
           const doorRight = doorLeft + doorWidth;
           const doorTop = bottom - (6 + 8/12) * scale;
@@ -1735,9 +1763,9 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
                 const y2 = showKickUprights ? bottom - frameInset : mainBottom;
                 return <g key={idx}><line x1={x} y1={y1} x2={x} y2={y2} className="sunroom-hbeam-line" /><line x1={x - 6} y1={y1} x2={x - 6} y2={y2} className="sunroom-drc-line" /><line x1={x + 6} y1={y1} x2={x + 6} y2={y2} className="sunroom-drc-line" />{section.electricChase && <line x1={x} y1={y1} x2={x} y2={y2} className="sunroom-chase-line" />}</g>;
               })}
-              {mainBottom > mainTop && <rect x={left + 18} y={mainTop + 6} width={Math.max(0, w - 36)} height={Math.max(0, mainBottom - mainTop - 12)} fill={mainFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />}
-              {section.kickSection !== 'none' && <rect x={left + 18} y={kickTop + 6} width={Math.max(0, w - 36)} height={Math.max(0, bottom - kickTop - 12)} fill={kickFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />}
-              {section.kickSection !== 'none' && !showKickUprights && <line x1={left + frameInset} y1={kickTop} x2={left + w - frameInset} y2={kickTop} className="sunroom-hbeam-support-line" />}
+              {mainBottom > mainTop && spans.map((span, idx) => <rect key={`main-fill-${idx}`} x={left + span.start * scale + 18} y={mainTop + 6} width={Math.max(0, (span.end - span.start) * scale - 36)} height={Math.max(0, mainBottom - mainTop - 12)} fill={mainFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />)}
+              {section.kickSection !== 'none' && spans.map((span, idx) => <rect key={`kick-fill-${idx}`} x={left + span.start * scale + 18} y={kickTop + 6} width={Math.max(0, (span.end - span.start) * scale - 36)} height={Math.max(0, bottom - kickTop - 12)} fill={kickFillColor} stroke="rgba(0,0,0,0.12)" rx="4" />)}
+              {section.kickSection !== 'none' && !showKickUprights && spans.map((span, idx) => <line key={`kick-support-${idx}`} x1={left + span.start * scale + frameInset} y1={kickTop} x2={left + span.end * scale - frameInset} y2={kickTop} className="sunroom-hbeam-support-line" />)}
               {section.kickSection !== 'none' && (() => {
                 const kickWindow = isWindowZone(section.kickSection);
                 const mainWindow = isWindowZone(section.mainSection);
@@ -1795,18 +1823,22 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
                 return <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />;
               })()}
               {section.doorType !== 'none' && <g>
-                {!doorTouchesLeft && <line x1={doorLeft} y1={doorTop} x2={doorLeft} y2={bottom - receiverInset} className="sunroom-hbeam-line" />}
-                {!doorTouchesRight && <line x1={doorRight} y1={doorTop} x2={doorRight} y2={bottom - receiverInset} className="sunroom-hbeam-line" />}
+                <rect x={doorLeft - 2} y={doorTop - 2} width={doorWidth + 4} height={(6 + 8/12) * scale + 4} fill="#fff" stroke="rgba(0,0,0,0.10)" rx="4" />
+                <rect x={doorLeft + 4} y={doorTop + 8} width={Math.max(0, doorWidth - 8)} height={(6 + 8/12) * scale - 12} className="door-fill" rx="4" />
+                {!doorTouchesLeft && <><line x1={doorLeft} y1={doorTop} x2={doorLeft} y2={bottom - receiverInset} className="sunroom-hbeam-line" /><line x1={doorLeft - 6} y1={doorTop} x2={doorLeft - 6} y2={bottom - receiverInset} className="sunroom-drc-line" /><line x1={doorLeft + 6} y1={doorTop} x2={doorLeft + 6} y2={bottom - receiverInset} className="sunroom-drc-line" /></>}
+                {!doorTouchesRight && <><line x1={doorRight} y1={doorTop} x2={doorRight} y2={bottom - receiverInset} className="sunroom-hbeam-line" /><line x1={doorRight - 6} y1={doorTop} x2={doorRight - 6} y2={bottom - receiverInset} className="sunroom-drc-line" /><line x1={doorRight + 6} y1={doorTop} x2={doorRight + 6} y2={bottom - receiverInset} className="sunroom-drc-line" /></>}
                 <line x1={doorLeft} y1={doorTop} x2={doorRight} y2={doorTop} className="sunroom-hbeam-line" />
-                <rect x={doorLeft} y={doorTop} width={doorWidth} height={(6 + 8/12) * scale} className="door-fill" rx="4" />
-                <text x={doorLeft + doorWidth / 2} y={doorTop + 18} className="svg-note" textAnchor="middle">{section.doorPlacement === 'custom' ? `${Math.round(doorOffset / scale * 12)} in from left` : section.doorPlacement}</text>
+                <line x1={doorLeft} y1={doorTop - 6} x2={doorRight} y2={doorTop - 6} className="sunroom-drc-line" />
+                <line x1={doorLeft} y1={doorTop + 6} x2={doorRight} y2={doorTop + 6} className="sunroom-drc-line" />
+                <text x={doorLeft + doorWidth / 2} y={doorTop + 24} className="svg-note" textAnchor="middle">Prime glass door</text>
+                <text x={doorLeft + doorWidth / 2} y={doorTop + 42} className="svg-note" textAnchor="middle">{section.doorPlacement === 'custom' ? `${Math.round(doorOffset / scale * 12)} in from left` : section.doorPlacement}</text>
               </g>}
               <text x={left + 6} y={bottom + 16} className="svg-note">{`${bayCount} bay${bayCount === 1 ? '' : 's'}`}</text>
             </g>
           );
         })}
         <text x={x0} y={y0 + totalH + 24} className="svg-note">{`Front ${feetAndInches(frontWidth)} · ${framingColor} frame · ${panelColor} panel · ${windowColor} window`}</text>
-        <g transform={`translate(${x0}, ${viewH - 28})`}>
+        <g transform={`translate(${x0}, ${viewH - 28})`} data-export-legend="true">
           <line x1={0} y1={0} x2={18} y2={0} className="sunroom-receiver-line" /><text x={24} y={4} className="svg-note">Receiver</text>
           <line x1={104} y1={0} x2={122} y2={0} className="sunroom-drc-line" /><text x={128} y={4} className="svg-note">DRC</text>
           <line x1={180} y1={0} x2={198} y2={0} className="sunroom-topcap-line" /><text x={204} y={4} className="svg-note">Top cap</text>
