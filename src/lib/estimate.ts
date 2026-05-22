@@ -942,10 +942,19 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   let doorSingles = 0;
   let doorSliders = 0;
   let sealantLf = 0;
-  let lagBoltLf = 0;
-  let weatherSealLf = 0;
+  const fastenerLf: Record<'wood' | 'metal' | 'concrete', number> = { wood: 0, metal: 0, concrete: 0 };
 
   const isWindowZone = (kind: string) => kind === 'horizontal-sliders' || kind === 'picture-window' || kind === 'window';
+  const doorOffsetFeet = (section: typeof sections[number], doorWidth: number) => {
+    const maxOffset = Math.max(0, section.width - doorWidth);
+    if (section.doorPlacement === 'left') return 0;
+    if (section.doorPlacement === 'right') return maxOffset;
+    if (section.doorPlacement === 'custom') return Math.max(0, Math.min(maxOffset, Number(section.doorOffsetInches || 0) / 12));
+    return maxOffset / 2;
+  };
+  const addFasteners = (surface: 'wood' | 'metal' | 'concrete', length: number) => {
+    if (length > 0) fastenerLf[surface] += length;
+  };
   const addWindowBay = (count: number, totalWidth: number, bayHeight: number, includeBottomReceiver = false) => {
     if (count <= 0 || totalWidth <= 0 || bayHeight <= 0) return;
     const bayWidth = totalWidth / Math.max(1, count);
@@ -953,7 +962,6 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
       cutGroups.receiver.push(bayWidth);
       if (includeBottomReceiver) cutGroups.receiver.push(bayWidth);
       cutGroups.drc.push(bayHeight, bayHeight);
-      weatherSealLf += bayWidth * (includeBottomReceiver ? 2 : 1) + bayHeight * 2;
     }
   };
   const addHorizontalDivider = (width: number, lowerKind: string, upperKind: string) => {
@@ -971,13 +979,11 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     if ((lowerWindow && upperPanel) || (upperWindow && lowerPanel)) {
       cutGroups.hBeam.push(width);
       cutGroups.receiver.push(width);
-      weatherSealLf += width;
       return;
     }
     if (lowerWindow || upperWindow) {
       cutGroups.receiver.push(width);
       cutGroups.drc.push(width, width);
-      weatherSealLf += width;
       return;
     }
     cutGroups.hBeam.push(width);
@@ -1046,12 +1052,23 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
 
     if (section.doorType !== 'none') {
       const doorHeight = 6 + 8 / 12;
-      cutGroups.drc.push(doorHeight, doorHeight, doorWidth);
+      const offset = doorOffsetFeet(section, doorWidth);
+      const touchesLeft = offset <= 0.01;
+      const touchesRight = offset + doorWidth >= section.width - 0.01;
+      if (!touchesLeft) cutGroups.hBeam.push(doorHeight);
+      if (!touchesRight) cutGroups.hBeam.push(doorHeight);
+      cutGroups.hBeam.push(doorWidth);
+      cutGroups.drc.push(doorWidth);
+      if (!touchesLeft) cutGroups.drc.push(doorHeight);
+      if (!touchesRight) cutGroups.drc.push(doorHeight);
       if (section.doorType === 'single') doorSingles += 1; else doorSliders += 1;
     }
 
     sealantLf += section.width * 2 + section.height * 2;
-    lagBoltLf += section.width;
+    addFasteners(section.bottomAttach, section.width);
+    addFasteners(section.topAttach, section.width);
+    addFasteners(section.leftAttach, section.height);
+    addFasteners(section.rightAttach, section.height);
   });
 
   const add24 = (name: string, category: string, lengths: number[], notes?: string) => {
@@ -1067,9 +1084,10 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   if (cutGroups.wallPanelArea > 0) materials.push(toMaterial('Wall panel stock', 'Sunroom panels', Math.ceil(cutGroups.wallPanelArea / 40), 'panels', isThreeIn ? '4x10 panel stock' : 'Cut from 24 ft stock', panelColor, `${cutGroups.wallPanelArea.toFixed(1)} sq ft panel fill`));
   if (doorSingles) materials.push(toMaterial("Single swinging doors 3 ft x 6 ft 8 in", 'Doors', doorSingles, 'ea', 'Standard unit', undefined, undefined));
   if (doorSliders) materials.push(toMaterial("Sliding doors 6 ft x 6 ft 8 in", 'Doors', doorSliders, 'ea', 'Standard unit', undefined, undefined));
-  if (weatherSealLf > 0) materials.push(toMaterial('Rounded weather seal bulb vinyl', 'Hardware', Math.max(1, Math.ceil(weatherSealLf / 500)), 'rolls', '500 ft rolls', undefined, `${weatherSealLf.toFixed(1)} lf glazing seal`));
-  materials.push(toMaterial('Structural adhesive sealant', 'Hardware', Math.max(2, Math.ceil(sealantLf / 10)), 'tubes', 'Approx. 10 lf per tube', undefined, `${sealantLf.toFixed(1)} lf around channels, windows, seams`));
-  materials.push(toMaterial('1/4 in lag bolts with neoprene washers', 'Hardware', Math.max(1, Math.ceil(lagBoltLf * 2)), 'ea', 'Perimeter roof / attachment', undefined, `${lagBoltLf.toFixed(1)} lf around attachment perimeter`));
+  materials.push(toMaterial('Novaflex caulking', 'Sealants', Math.max(1, Math.ceil(sealantLf / 10)), 'tubes', '1 tube per 10 lf perimeter', framingColor, `${sealantLf.toFixed(1)} lf opening / section perimeter`));
+  if (fastenerLf.wood > 0) materials.push(toMaterial('1 1/8 in wood screws', 'Hardware', Math.ceil(fastenerLf.wood / 2.5), 'ea', 'Fasteners every 2.5 ft', undefined, `${fastenerLf.wood.toFixed(1)} lf attaching to wood`));
+  if (fastenerLf.metal > 0) materials.push(toMaterial('3/4 in tek screws', 'Hardware', Math.ceil(fastenerLf.metal / 2.5), 'ea', 'Fasteners every 2.5 ft', undefined, `${fastenerLf.metal.toFixed(1)} lf attaching to metal`));
+  if (fastenerLf.concrete > 0) materials.push(toMaterial('1 1/2 in Tapcon screws', 'Hardware', Math.ceil(fastenerLf.concrete / 2.5), 'ea', 'Fasteners every 2.5 ft', undefined, `${fastenerLf.concrete.toFixed(1)} lf attaching to concrete`));
 
   materials.forEach((item) => {
     const lower = item.name.toLowerCase();

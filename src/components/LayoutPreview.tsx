@@ -1681,7 +1681,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           <h3>Layout preview</h3>
           <span>Elite Add-A-Room wall sections with color-coded channels, DRC, uprights, and fill zones.</span>
         </div>
-        <div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, 'Sunroom plan', 'sns-sunroom-plan.pdf'); }}>Export PDF</button></div>
+        <div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgSectionsAsPdf(svgRef.current, 'Sunroom section plan', 'sns-sunroom-plan.pdf'); }}>Export PDF</button></div>
       </div>
       <svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg patio-sheet-svg">
         {Array.from({ length: Math.ceil(totalW / scale) + 4 }, (_, index) => <line key={`sun-gx-${index}`} x1={x0 - 20 + index * scale} y1={24} x2={x0 - 20 + index * scale} y2={viewH - 50} className="svg-grid" />)}
@@ -1706,11 +1706,19 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           const showTransomUprights = section.uprightMode === 'main-transom' || section.uprightMode === 'all';
           const uprightXs = Array.from({ length: section.uprights }, (_, idx) => left + ((idx + 1) * w) / (section.uprights + 1));
           const doorWidth = section.doorType === 'slider' ? 6 * scale : section.doorType === 'single' ? 3 * scale : 0;
-          const doorLeft = left + Math.max(0, (w - doorWidth) / 2);
+          const maxDoorOffset = Math.max(0, w - doorWidth);
+          const doorOffset = section.doorPlacement === 'left' ? 0 : section.doorPlacement === 'right' ? maxDoorOffset : section.doorPlacement === 'custom' ? Math.max(0, Math.min(maxDoorOffset, (Number(section.doorOffsetInches || 0) / 12) * scale)) : maxDoorOffset / 2;
+          const doorLeft = left + doorOffset;
+          const doorRight = doorLeft + doorWidth;
+          const doorTop = bottom - (6 + 8/12) * scale;
+          const doorTouchesLeft = doorOffset <= 1;
+          const doorTouchesRight = doorOffset + doorWidth >= w - 1;
           const mainFillColor = section.mainSection === 'panel' ? panelFill : windowFill;
           const kickFillColor = section.kickSection === 'panel' || section.kickSection === 'insulated' ? panelFill : section.kickSection === 'window' ? windowFill : 'transparent';
           const transomFillColor = !transomNeeded ? 'transparent' : section.transomType === 'picture-window' ? windowFill : panelFill;
-          const transomPoly = transomNeeded ? `${left + frameInset},${top + section.leftTransomHeight * scale} ${left + w - frameInset},${top + section.rightTransomHeight * scale} ${left + w - frameInset},${mainTop} ${left + frameInset},${mainTop}` : '';
+          const transomSlopeLeft = top + section.leftTransomHeight * scale;
+          const transomSlopeRight = top + section.rightTransomHeight * scale;
+          const transomPoly = transomNeeded ? `${left + frameInset},${transomSlopeLeft} ${left + w - frameInset},${transomSlopeRight} ${left + w - frameInset},${mainTop} ${left + frameInset},${mainTop}` : '';
           return (
             <g key={section.id} data-export-section="true">
               <rect x={left} y={top} width={w} height={h} className="screen-box" rx="6" />
@@ -1758,6 +1766,8 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
                 return <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />;
               })()}
               {transomNeeded && <polygon points={transomPoly} fill={transomFillColor} stroke="rgba(0,0,0,0.12)" />}
+              {transomNeeded && <line x1={left + frameInset} y1={transomSlopeLeft} x2={left + w - frameInset} y2={transomSlopeRight} className="sunroom-hbeam-line" />}
+              {transomNeeded && <text x={left + w / 2} y={Math.min(transomSlopeLeft, transomSlopeRight) - 8} className="svg-note" textAnchor="middle">slope</text>}
               {transomNeeded && !showTransomUprights && <line x1={left + frameInset} y1={mainTop} x2={left + w - frameInset} y2={mainTop} className="sunroom-hbeam-support-line" />}
               {transomNeeded && (() => {
                 const mainWindow = isWindowZone(section.mainSection);
@@ -1784,7 +1794,13 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
                 }
                 return <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />;
               })()}
-              {section.doorType !== 'none' && <rect x={doorLeft} y={bottom - (6 + 8/12) * scale} width={doorWidth} height={(6 + 8/12) * scale} className="door-fill" rx="4" />}
+              {section.doorType !== 'none' && <g>
+                {!doorTouchesLeft && <line x1={doorLeft} y1={doorTop} x2={doorLeft} y2={bottom - receiverInset} className="sunroom-hbeam-line" />}
+                {!doorTouchesRight && <line x1={doorRight} y1={doorTop} x2={doorRight} y2={bottom - receiverInset} className="sunroom-hbeam-line" />}
+                <line x1={doorLeft} y1={doorTop} x2={doorRight} y2={doorTop} className="sunroom-hbeam-line" />
+                <rect x={doorLeft} y={doorTop} width={doorWidth} height={(6 + 8/12) * scale} className="door-fill" rx="4" />
+                <text x={doorLeft + doorWidth / 2} y={doorTop + 18} className="svg-note" textAnchor="middle">{section.doorPlacement === 'custom' ? `${Math.round(doorOffset / scale * 12)} in from left` : section.doorPlacement}</text>
+              </g>}
               <text x={left + 6} y={bottom + 16} className="svg-note">{`${bayCount} bay${bayCount === 1 ? '' : 's'}`}</text>
             </g>
           );

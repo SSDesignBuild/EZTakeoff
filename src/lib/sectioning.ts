@@ -50,6 +50,12 @@ export const DEFAULT_SUNROOM_SECTION: SunroomSectionConfig = {
   leftTransomHeight: 1,
   rightTransomHeight: 1,
   doorType: 'none',
+  doorPlacement: 'center',
+  doorOffsetInches: 0,
+  bottomAttach: 'concrete',
+  topAttach: 'wood',
+  leftAttach: 'wood',
+  rightAttach: 'wood',
 };
 
 export function createSection(index: number, overrides: Partial<SectionConfig> = {}): SectionConfig {
@@ -160,6 +166,12 @@ export function parseSunroomSections(raw: string | number | boolean | undefined,
           leftTransomHeight: Number(item.leftTransomHeight ?? item.transomHeight ?? DEFAULT_SUNROOM_SECTION.leftTransomHeight),
           rightTransomHeight: Number(item.rightTransomHeight ?? item.transomHeight ?? DEFAULT_SUNROOM_SECTION.rightTransomHeight),
           doorType: (item.doorType ?? DEFAULT_SUNROOM_SECTION.doorType) as SunroomSectionConfig['doorType'],
+          doorPlacement: (item.doorPlacement ?? DEFAULT_SUNROOM_SECTION.doorPlacement) as SunroomSectionConfig['doorPlacement'],
+          doorOffsetInches: Number(item.doorOffsetInches ?? DEFAULT_SUNROOM_SECTION.doorOffsetInches),
+          bottomAttach: (item.bottomAttach ?? DEFAULT_SUNROOM_SECTION.bottomAttach) as SunroomSectionConfig['bottomAttach'],
+          topAttach: (item.topAttach ?? DEFAULT_SUNROOM_SECTION.topAttach) as SunroomSectionConfig['topAttach'],
+          leftAttach: (item.leftAttach ?? DEFAULT_SUNROOM_SECTION.leftAttach) as SunroomSectionConfig['leftAttach'],
+          rightAttach: (item.rightAttach ?? DEFAULT_SUNROOM_SECTION.rightAttach) as SunroomSectionConfig['rightAttach'],
         }));
       }
     } catch {}
