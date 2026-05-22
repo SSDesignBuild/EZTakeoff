@@ -93,6 +93,7 @@ export interface SunroomSectionConfig {
   leftTransomHeight: number;
   rightTransomHeight: number;
   doorType: 'none' | 'single' | 'slider';
+  doorAboveSection: 'panel' | 'window' | 'none';
   doorPlacement: 'left' | 'center' | 'right' | 'custom';
   doorOffsetInches: number;
   bottomAttach: 'wood' | 'metal' | 'concrete';

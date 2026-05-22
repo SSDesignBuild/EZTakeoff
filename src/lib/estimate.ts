@@ -1052,16 +1052,22 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
 
     if (section.doorType !== 'none') {
       const doorHeight = 6 + 8 / 12;
+      const aboveDoorHeight = Math.max(0, section.height - doorHeight);
       const offset = doorOffsetFeet(section, doorWidth);
       const touchesLeft = offset <= 0.01;
       const touchesRight = offset + doorWidth >= section.width - 0.01;
-      if (!touchesLeft) cutGroups.hBeam.push(doorHeight);
-      if (!touchesRight) cutGroups.hBeam.push(doorHeight);
+      // Door jamb H-beams run full section height so they tie into the top cap.
+      if (!touchesLeft) cutGroups.hBeam.push(section.height);
+      if (!touchesRight) cutGroups.hBeam.push(section.height);
       cutGroups.hBeam.push(doorWidth);
       // Door H-beam framing needs DRC on each exposed side of the jamb/header H-beams.
       cutGroups.drc.push(doorWidth, doorWidth);
-      if (!touchesLeft) cutGroups.drc.push(doorHeight, doorHeight);
-      if (!touchesRight) cutGroups.drc.push(doorHeight, doorHeight);
+      if (!touchesLeft) cutGroups.drc.push(section.height, section.height);
+      if (!touchesRight) cutGroups.drc.push(section.height, section.height);
+      if (aboveDoorHeight > 0) {
+        if (section.doorAboveSection === 'window') addWindowBay(1, doorWidth, aboveDoorHeight);
+        if (section.doorAboveSection === 'panel') cutGroups.wallPanelArea += doorWidth * aboveDoorHeight;
+      }
       if (section.doorType === 'single') doorSingles += 1; else doorSliders += 1;
     }
 

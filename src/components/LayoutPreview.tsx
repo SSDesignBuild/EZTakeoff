@@ -1681,6 +1681,27 @@ function sunroomSpansExcludingDoor(section: SunroomSectionConfig) {
   ];
 }
 
+
+function sunroomUprightOffsetsExcludingDoor(section: SunroomSectionConfig) {
+  const spans = sunroomSpansExcludingDoor(section).filter((span) => span.end - span.start > 0.05);
+  const total = Math.max(0, Math.floor(Number(section.uprights || 0)));
+  if (total === 0 || spans.length === 0) return [] as number[];
+  const totalWidth = spans.reduce((sum, span) => sum + (span.end - span.start), 0);
+  const allocations = spans.map((span) => {
+    const exact = totalWidth > 0 ? total * (span.end - span.start) / totalWidth : 0;
+    return { span, count: Math.floor(exact), remainder: exact - Math.floor(exact) };
+  });
+  let remaining = total - allocations.reduce((sum, item) => sum + item.count, 0);
+  allocations.sort((a, b) => b.remainder - a.remainder || (b.span.end - b.span.start) - (a.span.end - a.span.start));
+  for (const item of allocations) {
+    if (remaining <= 0) break;
+    item.count += 1;
+    remaining -= 1;
+  }
+  allocations.sort((a, b) => a.span.start - b.span.start);
+  return allocations.flatMap(({ span, count }) => Array.from({ length: count }, (_, idx) => span.start + ((idx + 1) * (span.end - span.start)) / (count + 1)));
+}
+
 function SunroomPreview({ values }: { values: Record<string, string | number | boolean> }) {
   const sections = parseSunroomSections(values.sunroomSections, 3);
   const framingColor = String(values.framingColor ?? 'white');
@@ -1731,9 +1752,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           const spans = sunroomSpansExcludingDoor(section);
           const showKickUprights = section.uprightMode === 'main-kick' || section.uprightMode === 'all';
           const showTransomUprights = section.uprightMode === 'main-transom' || section.uprightMode === 'all';
-          const uprightXs = Array.from({ length: section.uprights }, (_, idx) => ((idx + 1) * section.width) / (section.uprights + 1))
-            .filter((x) => spans.some((span) => x > span.start && x < span.end))
-            .map((x) => left + x * scale);
+          const uprightXs = sunroomUprightOffsetsExcludingDoor(section).map((x) => left + x * scale);
           const doorWidth = Math.min(sunroomDoorWidthFeet(section), section.width) * scale;
           const doorOffset = sunroomDoorLeftFeet(section) * scale;
           const doorLeft = left + doorOffset;
@@ -1823,10 +1842,12 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
                 return <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />;
               })()}
               {section.doorType !== 'none' && <g>
+                <rect x={doorLeft - 8} y={top + frameInset} width={doorWidth + 16} height={Math.max(0, bottom - top - frameInset - receiverInset)} fill="#fff" opacity="0.96" />
+                {section.doorAboveSection !== 'none' && <rect x={doorLeft + 8} y={top + frameInset + 6} width={Math.max(0, doorWidth - 16)} height={Math.max(0, doorTop - top - frameInset - 12)} fill={section.doorAboveSection === 'window' ? windowFill : panelFill} stroke="rgba(0,0,0,0.12)" rx="4" />}
                 <rect x={doorLeft - 2} y={doorTop - 2} width={doorWidth + 4} height={(6 + 8/12) * scale + 4} fill="#fff" stroke="rgba(0,0,0,0.10)" rx="4" />
                 <rect x={doorLeft + 4} y={doorTop + 8} width={Math.max(0, doorWidth - 8)} height={(6 + 8/12) * scale - 12} className="door-fill" rx="4" />
-                {!doorTouchesLeft && <><line x1={doorLeft} y1={doorTop} x2={doorLeft} y2={bottom - receiverInset} className="sunroom-hbeam-line" /><line x1={doorLeft - 6} y1={doorTop} x2={doorLeft - 6} y2={bottom - receiverInset} className="sunroom-drc-line" /><line x1={doorLeft + 6} y1={doorTop} x2={doorLeft + 6} y2={bottom - receiverInset} className="sunroom-drc-line" /></>}
-                {!doorTouchesRight && <><line x1={doorRight} y1={doorTop} x2={doorRight} y2={bottom - receiverInset} className="sunroom-hbeam-line" /><line x1={doorRight - 6} y1={doorTop} x2={doorRight - 6} y2={bottom - receiverInset} className="sunroom-drc-line" /><line x1={doorRight + 6} y1={doorTop} x2={doorRight + 6} y2={bottom - receiverInset} className="sunroom-drc-line" /></>}
+                {!doorTouchesLeft && <><line x1={doorLeft} y1={top + receiverInset} x2={doorLeft} y2={bottom - receiverInset} className="sunroom-hbeam-line" /><line x1={doorLeft - 6} y1={top + receiverInset} x2={doorLeft - 6} y2={bottom - receiverInset} className="sunroom-drc-line" /><line x1={doorLeft + 6} y1={top + receiverInset} x2={doorLeft + 6} y2={bottom - receiverInset} className="sunroom-drc-line" /></>}
+                {!doorTouchesRight && <><line x1={doorRight} y1={top + receiverInset} x2={doorRight} y2={bottom - receiverInset} className="sunroom-hbeam-line" /><line x1={doorRight - 6} y1={top + receiverInset} x2={doorRight - 6} y2={bottom - receiverInset} className="sunroom-drc-line" /><line x1={doorRight + 6} y1={top + receiverInset} x2={doorRight + 6} y2={bottom - receiverInset} className="sunroom-drc-line" /></>}
                 <line x1={doorLeft} y1={doorTop} x2={doorRight} y2={doorTop} className="sunroom-hbeam-line" />
                 <line x1={doorLeft} y1={doorTop - 6} x2={doorRight} y2={doorTop - 6} className="sunroom-drc-line" />
                 <line x1={doorLeft} y1={doorTop + 6} x2={doorRight} y2={doorTop + 6} className="sunroom-drc-line" />
