@@ -966,80 +966,83 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   const roomHeight = Math.max(...sections.map((section) => section.height), 0);
   const extrusionName = (three: string, two: string) => isThreeIn ? three : two;
   const materials: MaterialItem[] = [];
-  const cutGroups = { base: [] as number[], receiver: [] as number[], topCap: [] as number[], hBeam: [] as number[], drc: [] as number[], chase: [] as number[], wallPanelArea: 0 };
+  const cutGroups = {
+    base: [] as number[],
+    receiver: [] as number[],
+    topCap: [] as number[],
+    hBeam: [] as number[],
+    drc: [] as number[],
+    chase: [] as number[],
+    wallPanelArea: 0,
+  };
   let doorSingles = 0;
   let doorSliders = 0;
   let sealantLf = 0;
   const fastenerLf: Record<'wood' | 'metal' | 'concrete', number> = { wood: 0, metal: 0, concrete: 0 };
 
   const isWindowZone = (kind: string) => kind === 'horizontal-sliders' || kind === 'picture-window' || kind === 'window';
-  const doorOffsetFeet = (section: typeof sections[number], doorWidth: number) => {
+  const doorWidthFeet = (section: typeof sections[number]) => Math.min(section.doorType === 'slider' ? 6 : section.doorType === 'single' ? 3 : 0, section.width);
+  const doorOffsetFeet = (section: typeof sections[number]) => {
+    const doorWidth = doorWidthFeet(section);
     const maxOffset = Math.max(0, section.width - doorWidth);
+    if (section.doorType === 'none') return 0;
     if (section.doorPlacement === 'left') return 0;
     if (section.doorPlacement === 'right') return maxOffset;
     if (section.doorPlacement === 'custom') return Math.max(0, Math.min(maxOffset, Number(section.doorOffsetInches || 0) / 12));
     return maxOffset / 2;
   };
-  const windowSpansExcludingDoor = (section: typeof sections[number], doorWidth: number) => {
-    if (section.doorType === 'none' || doorWidth <= 0) return [{ width: section.width, bayCount: Math.max(1, section.uprights + 1) }];
-    const offset = doorOffsetFeet(section, doorWidth);
-    const leftWidth = Math.max(0, offset);
-    const rightWidth = Math.max(0, section.width - offset - doorWidth);
-    const spans = [leftWidth, rightWidth].filter((width) => width > 0.05);
-    if (!spans.length) return [];
-    return spans.map((width) => ({ width, bayCount: Math.max(1, Math.round((width / Math.max(0.1, section.width - doorWidth)) * Math.max(1, section.uprights + 1))) }));
+  const horizontalSpansExcludingDoor = (section: typeof sections[number]) => {
+    const doorWidth = doorWidthFeet(section);
+    if (section.doorType === 'none' || doorWidth <= 0) return [{ start: 0, end: section.width }];
+    const doorLeft = doorOffsetFeet(section);
+    const doorRight = doorLeft + doorWidth;
+    return [
+      ...(doorLeft > 0.01 ? [{ start: 0, end: doorLeft }] : []),
+      ...(doorRight < section.width - 0.01 ? [{ start: doorRight, end: section.width }] : []),
+    ];
   };
-  const addWindowSpans = (section: typeof sections[number], doorWidth: number, bayHeight: number, includeBottomReceiver = true) => {
-    windowSpansExcludingDoor(section, doorWidth).forEach((span) => addWindowBay(span.bayCount, span.width, bayHeight, includeBottomReceiver));
+  const horizontalVisibleWidths = (section: typeof sections[number]) => horizontalSpansExcludingDoor(section)
+    .map((span) => normalizeCutLength(span.end - span.start))
+    .filter((length) => length > 0.01);
+  const uprightOffsetsExcludingDoor = (section: typeof sections[number]) => {
+    const spans = horizontalSpansExcludingDoor(section).filter((span) => span.end - span.start > 0.05);
+    const total = Math.max(0, Math.floor(Number(section.uprights || 0)));
+    if (total === 0 || spans.length === 0) return [] as number[];
+    const totalWidth = spans.reduce((sum, span) => sum + (span.end - span.start), 0);
+    const allocations = spans.map((span) => {
+      const exact = totalWidth > 0 ? total * (span.end - span.start) / totalWidth : 0;
+      return { span, count: Math.floor(exact), remainder: exact - Math.floor(exact) };
+    });
+    let remaining = total - allocations.reduce((sum, item) => sum + item.count, 0);
+    allocations.sort((a, b) => b.remainder - a.remainder || (b.span.end - b.span.start) - (a.span.end - a.span.start));
+    for (const item of allocations) {
+      if (remaining <= 0) break;
+      item.count += 1;
+      remaining -= 1;
+    }
+    allocations.sort((a, b) => a.span.start - b.span.start);
+    return allocations.flatMap(({ span, count }) => Array.from({ length: count }, (_, idx) => span.start + ((idx + 1) * (span.end - span.start)) / (count + 1)));
   };
-  const addHorizontalDividersForSpans = (section: typeof sections[number], doorWidth: number, lowerKind: string, upperKind: string) => {
-    windowSpansExcludingDoor(section, doorWidth).forEach((span) => addHorizontalDivider(span.width, lowerKind, upperKind));
+  const addVisibleHorizontal = (target: number[], section: typeof sections[number], piecesPerSpan = 1) => {
+    horizontalVisibleWidths(section).forEach((width) => {
+      for (let index = 0; index < piecesPerSpan; index += 1) target.push(width);
+    });
   };
   const addFasteners = (surface: 'wood' | 'metal' | 'concrete', length: number) => {
     if (length > 0) fastenerLf[surface] += length;
   };
-  const addWindowBay = (count: number, totalWidth: number, bayHeight: number, includeBottomReceiver = true) => {
-    if (count <= 0 || totalWidth <= 0 || bayHeight <= 0) return;
-    // Match the red receiving-channel lines shown in the sunroom layout.
-    // Each uninterrupted visible window span gets one receiver cut. DRC is not
-    // counted here because the purple layout lines are only at edge frames,
-    // uprights, door jambs, and horizontal H-beam dividers, not at every bay.
-    if (includeBottomReceiver) cutGroups.receiver.push(totalWidth);
-  };
-  const addHorizontalDivider = (width: number, lowerKind: string, upperKind: string) => {
-    if (width <= 0) return;
-    const lowerWindow = isWindowZone(lowerKind);
-    const upperWindow = isWindowZone(upperKind);
-    const lowerPanel = lowerKind === 'panel' || lowerKind === 'insulated';
-    const upperPanel = upperKind === 'panel' || upperKind === 'insulated';
-
-    if (lowerWindow && upperWindow) {
-      cutGroups.hBeam.push(width);
-      cutGroups.drc.push(width, width);
-      return;
-    }
-    if ((lowerWindow && upperPanel) || (upperWindow && lowerPanel)) {
-      cutGroups.hBeam.push(width);
-      cutGroups.receiver.push(width);
-      return;
-    }
-    if (lowerWindow || upperWindow) {
-      cutGroups.receiver.push(width);
-      cutGroups.drc.push(width, width);
-      return;
-    }
-    cutGroups.hBeam.push(width);
-  };
 
   sections.forEach((section) => {
-    const doorWidth = section.doorType === 'slider' ? 6 : section.doorType === 'single' ? 3 : 0;
+    const doorWidth = doorWidthFeet(section);
     const usableWidth = Math.max(0, section.width - doorWidth);
+    const doorOffset = doorOffsetFeet(section);
+    const touchesLeft = section.doorType !== 'none' && doorOffset <= 0.01;
+    const touchesRight = section.doorType !== 'none' && doorOffset + doorWidth >= section.width - 0.01;
     const transomNeeded = section.transomType === 'panel' || section.transomType === 'picture-window' || (section.transomType === 'auto' && section.height > 10 && section.mainSection !== 'picture-window');
     const transomMaxHeight = transomNeeded ? Math.max(section.leftTransomHeight, section.rightTransomHeight) : 0;
     const transomFillHeight = transomNeeded ? (section.leftTransomHeight + section.rightTransomHeight) / 2 : 0;
     const kickHeight = Math.max(0, Math.min(section.kickHeight, 4));
     const mainHeight = Math.max(0, section.height - kickHeight - transomMaxHeight);
-
     const uprightHeight = section.uprightMode === 'main-only'
       ? mainHeight
       : section.uprightMode === 'main-kick'
@@ -1047,77 +1050,100 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
         : section.uprightMode === 'main-transom'
           ? mainHeight + transomMaxHeight
           : section.height;
-    const visibleUprightCount = section.doorType === 'none'
-      ? Math.max(0, Math.floor(Number(section.uprights || 0)))
-      : windowSpansExcludingDoor(section, doorWidth).length
-        ? Math.max(0, Math.floor(Number(section.uprights || 0)))
-        : 0;
-    for (let i = 0; i < visibleUprightCount; i += 1) {
+
+    // Layout-matched perimeter pieces. These are the always-visible red and
+    // purple vertical lines drawn at the outside of every section.
+    cutGroups.base.push(section.width);
+    cutGroups.topCap.push(section.width);
+    cutGroups.receiver.push(section.height, section.height);
+    cutGroups.drc.push(section.height, section.height);
+
+    // Layout top receiver: red line across the top whenever the section has a
+    // window zone or transom. It is a full-width piece, even when a door is at an edge.
+    if (section.mainSection !== 'panel' || transomNeeded) {
+      cutGroups.receiver.push(section.width);
+    }
+
+    // Upright H-beams and their DRC are placed only in the remaining opening
+    // space after subtracting the door, using the same allocation as the layout.
+    uprightOffsetsExcludingDoor(section).forEach(() => {
       if (uprightHeight > 0) {
         cutGroups.hBeam.push(uprightHeight);
         cutGroups.drc.push(uprightHeight, uprightHeight);
         if (section.electricChase) cutGroups.chase.push(uprightHeight);
       }
-    }
+    });
+
+    // If uprights do not run into the kick/transom, the layout still shows a
+    // support H-beam across each visible non-door span.
     if (section.kickSection !== 'none' && (section.uprightMode === 'main-only' || section.uprightMode === 'main-transom')) {
-      cutGroups.hBeam.push(section.width);
+      addVisibleHorizontal(cutGroups.hBeam, section);
     }
     if (transomNeeded && (section.uprightMode === 'main-only' || section.uprightMode === 'main-kick')) {
-      cutGroups.hBeam.push(section.width);
+      addVisibleHorizontal(cutGroups.hBeam, section);
     }
 
-    cutGroups.base.push(section.width);
-    cutGroups.topCap.push(section.width);
-    // Edge receiving channel shown on the layout runs full height at both
-    // sides of every sunroom opening. Count those as individual 24 ft-stock
-    // cut pieces so edge doors still have the receiver material they attach to.
-    cutGroups.receiver.push(section.height, section.height);
-    // A full-width top receiver is shown when the section includes a window
-    // zone or a transom; panel-only sections do not need this added receiver.
-    if (section.mainSection !== 'panel' || transomNeeded) {
-      cutGroups.receiver.push(section.width);
+    // Main/kick horizontal break. Count the exact red/purple line types the
+    // layout draws, but as actual non-door cut pieces instead of a single gross width.
+    if (section.kickSection !== 'none') {
+      const kickWindow = isWindowZone(section.kickSection);
+      const mainWindow = isWindowZone(section.mainSection);
+      if (kickWindow && mainWindow) {
+        addVisibleHorizontal(cutGroups.hBeam, section);
+        addVisibleHorizontal(cutGroups.drc, section, 2);
+        addVisibleHorizontal(cutGroups.receiver, section); // bottom receiver for window kick zone
+      } else if (kickWindow && !mainWindow) {
+        addVisibleHorizontal(cutGroups.hBeam, section);
+        addVisibleHorizontal(cutGroups.receiver, section, 2); // upper receiver plus bottom receiver
+      } else if (!kickWindow && mainWindow) {
+        addVisibleHorizontal(cutGroups.hBeam, section);
+        addVisibleHorizontal(cutGroups.receiver, section); // receiver on window side of divider
+      } else {
+        addVisibleHorizontal(cutGroups.hBeam, section);
+      }
     }
 
-    if (section.mainSection !== 'panel') {
-      addWindowSpans(section, doorWidth, mainHeight, true);
-    } else if (buildMode !== 'existing-structure') {
+    // Transom horizontal break. Same rule as the layout: window-to-window gets
+    // DRC on both sides; window-to-panel gets receiver on the window side.
+    if (transomNeeded) {
+      const mainWindow = isWindowZone(section.mainSection);
+      const transomWindow = isWindowZone(section.transomType);
+      if (mainWindow && transomWindow) {
+        addVisibleHorizontal(cutGroups.hBeam, section);
+        addVisibleHorizontal(cutGroups.drc, section, 2);
+      } else if ((mainWindow && !transomWindow) || (!mainWindow && transomWindow)) {
+        addVisibleHorizontal(cutGroups.hBeam, section);
+        addVisibleHorizontal(cutGroups.receiver, section);
+      } else {
+        addVisibleHorizontal(cutGroups.hBeam, section);
+      }
+    }
+
+    // Infill material is based on the same visible non-door spans used above.
+    if (section.mainSection === 'panel' && buildMode !== 'existing-structure') {
       cutGroups.wallPanelArea += usableWidth * mainHeight;
     }
-
-    if (section.kickSection === 'window') {
-      addHorizontalDividersForSpans(section, doorWidth, section.kickSection, section.mainSection);
-      addWindowSpans(section, doorWidth, kickHeight, true);
-    } else if (section.kickSection === 'panel' || section.kickSection === 'insulated') {
+    if (section.kickSection === 'panel' || section.kickSection === 'insulated') {
       cutGroups.wallPanelArea += usableWidth * kickHeight;
-      if (isWindowZone(section.mainSection)) addHorizontalDividersForSpans(section, doorWidth, section.kickSection, section.mainSection);
     }
-
-    if (transomNeeded) {
-      if (section.transomType === 'picture-window') {
-        addHorizontalDividersForSpans(section, doorWidth, section.mainSection, section.transomType);
-        addWindowSpans(section, doorWidth, transomFillHeight, true);
-      } else {
-        cutGroups.wallPanelArea += usableWidth * transomFillHeight;
-        if (isWindowZone(section.mainSection)) addHorizontalDividersForSpans(section, doorWidth, section.mainSection, section.transomType);
-      }
+    if (transomNeeded && section.transomType !== 'picture-window') {
+      cutGroups.wallPanelArea += usableWidth * transomFillHeight;
     }
 
     if (section.doorType !== 'none') {
       const doorHeight = 6 + 8 / 12;
       const aboveDoorHeight = Math.max(0, section.height - doorHeight);
-      const offset = doorOffsetFeet(section, doorWidth);
-      const touchesLeft = offset <= 0.01;
-      const touchesRight = offset + doorWidth >= section.width - 0.01;
       // Door jamb H-beams run full section height so they tie into the top cap.
       if (!touchesLeft) cutGroups.hBeam.push(section.height);
       if (!touchesRight) cutGroups.hBeam.push(section.height);
       cutGroups.hBeam.push(doorWidth);
-      // Door H-beam framing needs DRC on each exposed side of the jamb/header H-beams.
+      // Purple DRC shown at the door jambs/header. Edge-mounted doors reuse the
+      // already-counted edge DRC and receiver on the side touching the opening edge.
       cutGroups.drc.push(doorWidth, doorWidth);
       if (!touchesLeft) cutGroups.drc.push(section.height, section.height);
       if (!touchesRight) cutGroups.drc.push(section.height, section.height);
       if (aboveDoorHeight > 0) {
-        if (section.doorAboveSection === 'window') addWindowBay(1, doorWidth, aboveDoorHeight);
+        if (section.doorAboveSection === 'window') cutGroups.receiver.push(doorWidth);
         if (section.doorAboveSection === 'panel') cutGroups.wallPanelArea += doorWidth * aboveDoorHeight;
       }
       if (section.doorType === 'single') doorSingles += 1; else doorSliders += 1;
@@ -1134,10 +1160,10 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     add24FtStockFromCuts(materials, name, category, lengths, notes);
   };
   add24(extrusionName('Base channel with weep', 'Cabana base / base channel'), 'Sunroom frame', cutGroups.base, 'perimeter base');
-  add24(extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', cutGroups.receiver, 'red layout lines: full-height side receivers plus visible window, kick, transom, and door-above receiver cuts');
+  add24(extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', cutGroups.receiver, 'red layout lines counted as individual full-height edge pieces and visible horizontal pieces');
   add24(extrusionName('Top cap, flat', 'Top cap'), 'Sunroom frame', cutGroups.topCap, 'perimeter cap');
   add24(extrusionName('H-beam', 'H-beam'), 'Sunroom frame', cutGroups.hBeam, 'uprights and horizontal dividers');
-  add24(extrusionName('DRC', 'DRC'), 'Sunroom frame', cutGroups.drc, 'purple layout lines: edge DRC, upright DRC, door jamb/header DRC, and horizontal divider DRC');
+  add24(extrusionName('DRC', 'DRC'), 'Sunroom frame', cutGroups.drc, 'purple layout lines counted as individual edge, upright, divider, and door pieces');
   if (cutGroups.chase.length) add24(extrusionName('Channel with chase & snap', 'Channel with chase'), 'Sunroom frame', cutGroups.chase, 'electric chase enabled in selected sections');
   if (buildMode === 'new-structure') materials.push(toMaterial(extrusionName('Corner post', 'Corner post'), 'Sunroom frame', 2, 'ea', isThreeIn ? '8 ft or 25 ft stock' : '8 ft or 24 ft stock', framingColor, 'Only for build-from-scratch corners'));
   if (cutGroups.wallPanelArea > 0) materials.push(toMaterial('Wall panel stock', 'Sunroom panels', Math.ceil(cutGroups.wallPanelArea / 40), 'panels', isThreeIn ? '4x10 panel stock' : 'Cut from 24 ft stock', panelColor, `${cutGroups.wallPanelArea.toFixed(1)} sq ft panel fill`));
@@ -1165,8 +1191,8 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     materials: materials.filter((item) => item.quantity > 0),
     orderNotes: [
       buildMode === 'existing-structure' ? 'Existing-structure mode avoids unnecessary corner-post assumptions.' : 'Build-from-scratch mode adds corner-post assumptions.',
-      'Sunroom framing is grouped from actual required cut pieces into 24 ft stock lengths; receiving channel and DRC counts are derived from the red and purple pieces shown on the layout instead of total linear footage only.',
-      'Window-to-window horizontal breaks use H-beam with DRC on both sides. Window-to-panel breaks use H-beam with receiver only on the window side.',
+      'Sunroom receiving channel and DRC are now taken from the same red/purple section pieces used in the layout and packed as individual 24 ft stock cuts.',
+      'Door openings subtract horizontal pieces through the door width, while top receivers and side edge receiver/DRC remain full pieces where the layout shows them.',
     ],
   };
 }
