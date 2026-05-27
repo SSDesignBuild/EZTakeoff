@@ -1000,15 +1000,11 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   };
   const addWindowBay = (count: number, totalWidth: number, bayHeight: number, includeBottomReceiver = true) => {
     if (count <= 0 || totalWidth <= 0 || bayHeight <= 0) return;
-    // Receiving channel on the layout is one continuous horizontal cut for
-    // each uninterrupted window span, not one cut per bay between uprights.
-    // DRC is still counted per bay side. This keeps the material list aligned
-    // with the drawn red receiver pieces and avoids under-counting the long
-    // top/side receivers or over-splitting them into short pieces.
+    // Match the red receiving-channel lines shown in the sunroom layout.
+    // Each uninterrupted visible window span gets one receiver cut. DRC is not
+    // counted here because the purple layout lines are only at edge frames,
+    // uprights, door jambs, and horizontal H-beam dividers, not at every bay.
     if (includeBottomReceiver) cutGroups.receiver.push(totalWidth);
-    for (let i = 0; i < count; i += 1) {
-      cutGroups.drc.push(bayHeight, bayHeight);
-    }
   };
   const addHorizontalDivider = (width: number, lowerKind: string, upperKind: string) => {
     if (width <= 0) return;
@@ -1051,7 +1047,12 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
         : section.uprightMode === 'main-transom'
           ? mainHeight + transomMaxHeight
           : section.height;
-    for (let i = 0; i < section.uprights; i += 1) {
+    const visibleUprightCount = section.doorType === 'none'
+      ? Math.max(0, Math.floor(Number(section.uprights || 0)))
+      : windowSpansExcludingDoor(section, doorWidth).length
+        ? Math.max(0, Math.floor(Number(section.uprights || 0)))
+        : 0;
+    for (let i = 0; i < visibleUprightCount; i += 1) {
       if (uprightHeight > 0) {
         cutGroups.hBeam.push(uprightHeight);
         cutGroups.drc.push(uprightHeight, uprightHeight);
@@ -1133,10 +1134,10 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     add24FtStockFromCuts(materials, name, category, lengths, notes);
   };
   add24(extrusionName('Base channel with weep', 'Cabana base / base channel'), 'Sunroom frame', cutGroups.base, 'perimeter base');
-  add24(extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', cutGroups.receiver, 'side-edge receivers plus window, transom, kick, and door-above receiving channel cuts');
+  add24(extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', cutGroups.receiver, 'red layout lines: full-height side receivers plus visible window, kick, transom, and door-above receiver cuts');
   add24(extrusionName('Top cap, flat', 'Top cap'), 'Sunroom frame', cutGroups.topCap, 'perimeter cap');
   add24(extrusionName('H-beam', 'H-beam'), 'Sunroom frame', cutGroups.hBeam, 'uprights and horizontal dividers');
-  add24(extrusionName('DRC', 'DRC'), 'Sunroom frame', cutGroups.drc, 'window / upright finish channel');
+  add24(extrusionName('DRC', 'DRC'), 'Sunroom frame', cutGroups.drc, 'purple layout lines: edge DRC, upright DRC, door jamb/header DRC, and horizontal divider DRC');
   if (cutGroups.chase.length) add24(extrusionName('Channel with chase & snap', 'Channel with chase'), 'Sunroom frame', cutGroups.chase, 'electric chase enabled in selected sections');
   if (buildMode === 'new-structure') materials.push(toMaterial(extrusionName('Corner post', 'Corner post'), 'Sunroom frame', 2, 'ea', isThreeIn ? '8 ft or 25 ft stock' : '8 ft or 24 ft stock', framingColor, 'Only for build-from-scratch corners'));
   if (cutGroups.wallPanelArea > 0) materials.push(toMaterial('Wall panel stock', 'Sunroom panels', Math.ceil(cutGroups.wallPanelArea / 40), 'panels', isThreeIn ? '4x10 panel stock' : 'Cut from 24 ft stock', panelColor, `${cutGroups.wallPanelArea.toFixed(1)} sq ft panel fill`));
@@ -1164,7 +1165,7 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     materials: materials.filter((item) => item.quantity > 0),
     orderNotes: [
       buildMode === 'existing-structure' ? 'Existing-structure mode avoids unnecessary corner-post assumptions.' : 'Build-from-scratch mode adds corner-post assumptions.',
-      'Sunroom framing is grouped from actual required cut pieces into 24 ft stock lengths; receiver counts include full-height side-edge receivers and separate window/top/bottom channel cuts.',
+      'Sunroom framing is grouped from actual required cut pieces into 24 ft stock lengths; receiving channel and DRC counts are derived from the red and purple pieces shown on the layout instead of total linear footage only.',
       'Window-to-window horizontal breaks use H-beam with DRC on both sides. Window-to-panel breaks use H-beam with receiver only on the window side.',
     ],
   };
