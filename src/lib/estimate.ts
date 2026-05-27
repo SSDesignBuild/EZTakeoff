@@ -55,8 +55,22 @@ const splitDeckStyle = (style: string) => {
 
 const normalizeCutLength = (length: number) => Math.round(length * 12) / 12;
 
+const expandCutsToStockSegments = (lengths: number[], stockLength = 24) => {
+  const expanded: number[] = [];
+  lengths.forEach((rawLength) => {
+    let length = normalizeCutLength(rawLength);
+    if (length <= 0) return;
+    while (length > stockLength + 1e-6) {
+      expanded.push(stockLength);
+      length = normalizeCutLength(length - stockLength);
+    }
+    if (length > 0) expanded.push(length);
+  });
+  return expanded;
+};
+
 const packStockCuts = (lengths: number[], stockLength = 24) => {
-  const cuts = lengths
+  const cuts = expandCutsToStockSegments(lengths, stockLength)
     .map((length) => normalizeCutLength(length))
     .filter((length) => length > 0)
     .sort((a, b) => b - a);
@@ -95,11 +109,25 @@ const optimizeRepeatedCuts = (pieceCount: number, cutLengthFt: number, stock = [
   return { ...best, cutLength: cleanCut };
 };
 
+const summarizeCuts = (lengths: number[]) => {
+  const counts = new Map<number, number>();
+  expandCutsToStockSegments(lengths, 24).forEach((length) => {
+    const clean = normalizeCutLength(length);
+    counts.set(clean, (counts.get(clean) ?? 0) + 1);
+  });
+  return Array.from(counts.entries())
+    .sort((a, b) => b[0] - a[0])
+    .slice(0, 8)
+    .map(([length, count]) => `${feetAndInches(length)} x${count}`)
+    .join(', ');
+};
+
 const add24FtStockFromCuts = (materials: MaterialItem[], name: string, category: string, lengths: number[], notes?: string) => {
   const bins = packStockCuts(lengths, 24);
   if (!bins.length) return;
   const total = lengths.reduce((sum, length) => sum + length, 0);
   const waste = bins.reduce((sum, bin) => sum + Math.max(0, bin.remaining), 0);
+  const cutSummary = summarizeCuts(lengths);
   materials.push(
     toMaterial(
       name,
@@ -108,7 +136,7 @@ const add24FtStockFromCuts = (materials: MaterialItem[], name: string, category:
       'sticks',
       '24 ft stock',
       undefined,
-      `${total.toFixed(1)} lf total · ${waste.toFixed(1)} lf estimated offcut${notes ? ` · ${notes}` : ''}`,
+      `${total.toFixed(1)} lf total · ${bins.length} stock stick(s) based on actual required pieces, not just linear footage · ${waste.toFixed(1)} lf estimated offcut${cutSummary ? ` · cuts: ${cutSummary}` : ''}${notes ? ` · ${notes}` : ''}`,
     ),
   );
 };

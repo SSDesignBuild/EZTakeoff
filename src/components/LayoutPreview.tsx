@@ -1766,6 +1766,8 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           const transomSlopeLeft = top + section.leftTransomHeight * scale;
           const transomSlopeRight = top + section.rightTransomHeight * scale;
           const transomPoly = transomNeeded ? `${left + frameInset},${transomSlopeLeft} ${left + w - frameInset},${transomSlopeRight} ${left + w - frameInset},${mainTop} ${left + frameInset},${mainTop}` : '';
+          const mainHeight = Math.max(0, section.height - kickHeight - transomMaxHeight);
+          const dimensionX = left + w + 12;
           return (
             <g key={section.id} data-export-section="true">
               <rect x={left} y={top} width={w} height={h} className="screen-box" rx="6" />
@@ -1842,18 +1844,25 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
                 return <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />;
               })()}
               {section.doorType !== 'none' && <g>
-                <rect x={doorLeft - 8} y={top + frameInset} width={doorWidth + 16} height={Math.max(0, bottom - top - frameInset - receiverInset)} fill="#fff" opacity="0.96" />
+                <rect x={doorLeft + (doorTouchesLeft ? frameInset + 2 : -8)} y={top + frameInset} width={Math.max(0, doorWidth + 16 - (doorTouchesLeft ? frameInset + 10 : 0) - (doorTouchesRight ? frameInset + 10 : 0))} height={Math.max(0, bottom - top - frameInset - receiverInset)} fill="#fff" opacity="0.96" />
                 {section.doorAboveSection !== 'none' && <rect x={doorLeft + 8} y={top + frameInset + 6} width={Math.max(0, doorWidth - 16)} height={Math.max(0, doorTop - top - frameInset - 12)} fill={section.doorAboveSection === 'window' ? windowFill : panelFill} stroke="rgba(0,0,0,0.12)" rx="4" />}
                 <rect x={doorLeft - 2} y={doorTop - 2} width={doorWidth + 4} height={(6 + 8/12) * scale + 4} fill="#fff" stroke="rgba(0,0,0,0.10)" rx="4" />
                 <rect x={doorLeft + 4} y={doorTop + 8} width={Math.max(0, doorWidth - 8)} height={(6 + 8/12) * scale - 12} className="door-fill" rx="4" />
                 {!doorTouchesLeft && <><line x1={doorLeft} y1={top + receiverInset} x2={doorLeft} y2={bottom - receiverInset} className="sunroom-hbeam-line" /><line x1={doorLeft - 6} y1={top + receiverInset} x2={doorLeft - 6} y2={bottom - receiverInset} className="sunroom-drc-line" /><line x1={doorLeft + 6} y1={top + receiverInset} x2={doorLeft + 6} y2={bottom - receiverInset} className="sunroom-drc-line" /></>}
                 {!doorTouchesRight && <><line x1={doorRight} y1={top + receiverInset} x2={doorRight} y2={bottom - receiverInset} className="sunroom-hbeam-line" /><line x1={doorRight - 6} y1={top + receiverInset} x2={doorRight - 6} y2={bottom - receiverInset} className="sunroom-drc-line" /><line x1={doorRight + 6} y1={top + receiverInset} x2={doorRight + 6} y2={bottom - receiverInset} className="sunroom-drc-line" /></>}
+                {doorTouchesLeft && <><line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="sunroom-receiver-line" /><line x1={left + frameInset} y1={top + frameInset} x2={left + frameInset} y2={bottom - frameInset} className="sunroom-drc-line" /></>}
+                {doorTouchesRight && <><line x1={left + w - receiverInset} y1={top + receiverInset} x2={left + w - receiverInset} y2={bottom - receiverInset} className="sunroom-receiver-line" /><line x1={left + w - frameInset} y1={top + frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="sunroom-drc-line" /></>}
                 <line x1={doorLeft} y1={doorTop} x2={doorRight} y2={doorTop} className="sunroom-hbeam-line" />
                 <line x1={doorLeft} y1={doorTop - 6} x2={doorRight} y2={doorTop - 6} className="sunroom-drc-line" />
                 <line x1={doorLeft} y1={doorTop + 6} x2={doorRight} y2={doorTop + 6} className="sunroom-drc-line" />
                 <text x={doorLeft + doorWidth / 2} y={doorTop + 24} className="svg-note" textAnchor="middle">Prime glass door</text>
                 <text x={doorLeft + doorWidth / 2} y={doorTop + 42} className="svg-note" textAnchor="middle">{section.doorPlacement === 'custom' ? `${Math.round(doorOffset / scale * 12)} in from left` : section.doorPlacement}</text>
               </g>}
+              <line x1={dimensionX} y1={top} x2={dimensionX} y2={bottom} className="dimension-line" />
+              <text x={dimensionX + 8} y={(top + bottom) / 2} className="svg-note">{`opening ${feetAndInches(section.height)}`}</text>
+              {section.kickSection !== 'none' && <text x={dimensionX + 8} y={(kickTop + bottom) / 2} className="svg-note">{`kick ${feetAndInches(kickHeight)}`}</text>}
+              {mainHeight > 0 && <text x={dimensionX + 8} y={(mainTop + mainBottom) / 2} className="svg-note">{`window ${feetAndInches(mainHeight)}`}</text>}
+              {transomNeeded && <text x={dimensionX + 8} y={(top + mainTop) / 2} className="svg-note">{`transom ${feetAndInches(section.leftTransomHeight)} / ${feetAndInches(section.rightTransomHeight)}`}</text>}
               <text x={left + 6} y={bottom + 16} className="svg-note">{`${bayCount} bay${bayCount === 1 ? '' : 's'}`}</text>
             </g>
           );
