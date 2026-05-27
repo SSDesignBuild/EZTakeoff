@@ -980,15 +980,33 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     if (section.doorPlacement === 'custom') return Math.max(0, Math.min(maxOffset, Number(section.doorOffsetInches || 0) / 12));
     return maxOffset / 2;
   };
+  const windowSpansExcludingDoor = (section: typeof sections[number], doorWidth: number) => {
+    if (section.doorType === 'none' || doorWidth <= 0) return [{ width: section.width, bayCount: Math.max(1, section.uprights + 1) }];
+    const offset = doorOffsetFeet(section, doorWidth);
+    const leftWidth = Math.max(0, offset);
+    const rightWidth = Math.max(0, section.width - offset - doorWidth);
+    const spans = [leftWidth, rightWidth].filter((width) => width > 0.05);
+    if (!spans.length) return [];
+    return spans.map((width) => ({ width, bayCount: Math.max(1, Math.round((width / Math.max(0.1, section.width - doorWidth)) * Math.max(1, section.uprights + 1))) }));
+  };
+  const addWindowSpans = (section: typeof sections[number], doorWidth: number, bayHeight: number, includeBottomReceiver = true) => {
+    windowSpansExcludingDoor(section, doorWidth).forEach((span) => addWindowBay(span.bayCount, span.width, bayHeight, includeBottomReceiver));
+  };
+  const addHorizontalDividersForSpans = (section: typeof sections[number], doorWidth: number, lowerKind: string, upperKind: string) => {
+    windowSpansExcludingDoor(section, doorWidth).forEach((span) => addHorizontalDivider(span.width, lowerKind, upperKind));
+  };
   const addFasteners = (surface: 'wood' | 'metal' | 'concrete', length: number) => {
     if (length > 0) fastenerLf[surface] += length;
   };
-  const addWindowBay = (count: number, totalWidth: number, bayHeight: number, includeBottomReceiver = false) => {
+  const addWindowBay = (count: number, totalWidth: number, bayHeight: number, includeBottomReceiver = true) => {
     if (count <= 0 || totalWidth <= 0 || bayHeight <= 0) return;
-    const bayWidth = totalWidth / Math.max(1, count);
+    // Receiving channel on the layout is one continuous horizontal cut for
+    // each uninterrupted window span, not one cut per bay between uprights.
+    // DRC is still counted per bay side. This keeps the material list aligned
+    // with the drawn red receiver pieces and avoids under-counting the long
+    // top/side receivers or over-splitting them into short pieces.
+    if (includeBottomReceiver) cutGroups.receiver.push(totalWidth);
     for (let i = 0; i < count; i += 1) {
-      cutGroups.receiver.push(bayWidth);
-      if (includeBottomReceiver) cutGroups.receiver.push(bayWidth);
       cutGroups.drc.push(bayHeight, bayHeight);
     }
   };
@@ -1049,32 +1067,37 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
 
     cutGroups.base.push(section.width);
     cutGroups.topCap.push(section.width);
+    // Edge receiving channel shown on the layout runs full height at both
+    // sides of every sunroom opening. Count those as individual 24 ft-stock
+    // cut pieces so edge doors still have the receiver material they attach to.
+    cutGroups.receiver.push(section.height, section.height);
+    // A full-width top receiver is shown when the section includes a window
+    // zone or a transom; panel-only sections do not need this added receiver.
     if (section.mainSection !== 'panel' || transomNeeded) {
       cutGroups.receiver.push(section.width);
     }
 
-    const bayCount = Math.max(1, section.uprights + 1);
     if (section.mainSection !== 'panel') {
-      addWindowBay(bayCount, usableWidth, mainHeight);
+      addWindowSpans(section, doorWidth, mainHeight, true);
     } else if (buildMode !== 'existing-structure') {
       cutGroups.wallPanelArea += usableWidth * mainHeight;
     }
 
     if (section.kickSection === 'window') {
-      addHorizontalDivider(section.width, section.kickSection, section.mainSection);
-      addWindowBay(bayCount, usableWidth, kickHeight, true);
+      addHorizontalDividersForSpans(section, doorWidth, section.kickSection, section.mainSection);
+      addWindowSpans(section, doorWidth, kickHeight, true);
     } else if (section.kickSection === 'panel' || section.kickSection === 'insulated') {
       cutGroups.wallPanelArea += usableWidth * kickHeight;
-      if (isWindowZone(section.mainSection)) addHorizontalDivider(section.width, section.kickSection, section.mainSection);
+      if (isWindowZone(section.mainSection)) addHorizontalDividersForSpans(section, doorWidth, section.kickSection, section.mainSection);
     }
 
     if (transomNeeded) {
       if (section.transomType === 'picture-window') {
-        addHorizontalDivider(section.width, section.mainSection, section.transomType);
-        addWindowBay(bayCount, usableWidth, transomFillHeight);
+        addHorizontalDividersForSpans(section, doorWidth, section.mainSection, section.transomType);
+        addWindowSpans(section, doorWidth, transomFillHeight, true);
       } else {
         cutGroups.wallPanelArea += usableWidth * transomFillHeight;
-        if (isWindowZone(section.mainSection)) addHorizontalDivider(section.width, section.mainSection, section.transomType);
+        if (isWindowZone(section.mainSection)) addHorizontalDividersForSpans(section, doorWidth, section.mainSection, section.transomType);
       }
     }
 
@@ -1110,7 +1133,7 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     add24FtStockFromCuts(materials, name, category, lengths, notes);
   };
   add24(extrusionName('Base channel with weep', 'Cabana base / base channel'), 'Sunroom frame', cutGroups.base, 'perimeter base');
-  add24(extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', cutGroups.receiver, 'window receiving channel');
+  add24(extrusionName('Receiving channel', 'Receiving channel'), 'Sunroom frame', cutGroups.receiver, 'side-edge receivers plus window, transom, kick, and door-above receiving channel cuts');
   add24(extrusionName('Top cap, flat', 'Top cap'), 'Sunroom frame', cutGroups.topCap, 'perimeter cap');
   add24(extrusionName('H-beam', 'H-beam'), 'Sunroom frame', cutGroups.hBeam, 'uprights and horizontal dividers');
   add24(extrusionName('DRC', 'DRC'), 'Sunroom frame', cutGroups.drc, 'window / upright finish channel');
@@ -1141,7 +1164,7 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     materials: materials.filter((item) => item.quantity > 0),
     orderNotes: [
       buildMode === 'existing-structure' ? 'Existing-structure mode avoids unnecessary corner-post assumptions.' : 'Build-from-scratch mode adds corner-post assumptions.',
-      'Sunroom framing is grouped from 24 ft stock lengths, so leftover stock can be reused on equal-or-shorter cuts before waste occurs.',
+      'Sunroom framing is grouped from actual required cut pieces into 24 ft stock lengths; receiver counts include full-height side-edge receivers and separate window/top/bottom channel cuts.',
       'Window-to-window horizontal breaks use H-beam with DRC on both sides. Window-to-panel breaks use H-beam with receiver only on the window side.',
     ],
   };
