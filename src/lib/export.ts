@@ -133,6 +133,48 @@ function inlineComputedStyles(source: Element, target: Element) {
   });
 }
 
+function wrapTitleLines(title: string, pageWidth: number, fontSize = 18) {
+  const clean = title.replace(/\s+/g, ' ').trim();
+  if (!clean) return [] as string[];
+  const maxChars = Math.max(24, Math.floor((pageWidth - 56) / (fontSize * 0.54)));
+  const words = clean.split(' ');
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length <= maxChars || !line) {
+      line = next;
+      continue;
+    }
+    lines.push(line);
+    line = word;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function appendWrappedTitle(svg: SVGSVGElement, title: string, x: number, y: number, pageWidth: number, fontSize = 18) {
+  const lines = wrapTitleLines(title, pageWidth, fontSize);
+  if (!lines.length) return 0;
+  const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  titleText.setAttribute('x', String(x));
+  titleText.setAttribute('y', String(y));
+  titleText.setAttribute('font-size', String(fontSize));
+  titleText.setAttribute('font-family', 'Inter, Arial, sans-serif');
+  titleText.setAttribute('font-weight', '700');
+  titleText.setAttribute('text-anchor', 'middle');
+  titleText.setAttribute('fill', '#111111');
+  lines.forEach((line, index) => {
+    const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+    tspan.setAttribute('x', String(x));
+    tspan.setAttribute('dy', index === 0 ? '0' : String(Math.round(fontSize * 1.25)));
+    tspan.textContent = line;
+    titleText.appendChild(tspan);
+  });
+  svg.appendChild(titleText);
+  return Math.max(fontSize, lines.length * fontSize * 1.25);
+}
+
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -161,7 +203,8 @@ async function svgToCanvas(svg: SVGSVGElement, exportTitle = '') {
     width = Math.max(1200, width);
     height = Math.max(900, height);
   }
-  const headerHeight = exportTitle.trim() ? 72 : 0;
+  const titleLines = wrapTitleLines(exportTitle, width, 22);
+  const headerHeight = titleLines.length ? Math.max(72, 30 + titleLines.length * 28) : 0;
   if (headerHeight) {
     const contentGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     contentGroup.setAttribute('transform', `translate(0 ${headerHeight})`);
@@ -180,15 +223,8 @@ async function svgToCanvas(svg: SVGSVGElement, exportTitle = '') {
   bg.setAttribute('fill', '#ffffff');
   clone.insertBefore(bg, clone.firstChild);
   if (headerHeight) {
-    const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    titleText.setAttribute('x', String(width / 2));
-    titleText.setAttribute('y', '30');
-    titleText.setAttribute('font-size', '22');
-    titleText.setAttribute('font-family', 'Inter, Arial, sans-serif');
-    titleText.setAttribute('font-weight', '700');
-    titleText.setAttribute('text-anchor', 'middle');
-    titleText.setAttribute('fill', '#111111');
-    titleText.textContent = exportTitle;
+    const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    appendWrappedTitle(titleText as unknown as SVGSVGElement, exportTitle, width / 2, 30, width, 22);
     clone.insertBefore(titleText, clone.childNodes[1] ?? null);
   }
   const markup = new XMLSerializer().serializeToString(clone);
@@ -297,7 +333,8 @@ export async function svgElementToExportCanvases(svg: SVGSVGElement | null, titl
     const bbox = section.getBBox();
     const legendBox = legend?.getBBox();
     const paddingX = 36;
-    const paddingTop = 78;
+    const titleLines = wrapTitleLines(title, Math.max(612, bbox.width + paddingX * 2), 18);
+    const paddingTop = Math.max(78, 44 + titleLines.length * 24);
     const paddingBottom = 36;
     const legendGap = legend && legendBox ? 18 : 0;
     const contentWidth = Math.max(bbox.width, legendBox?.width ?? 0);
@@ -316,16 +353,7 @@ export async function svgElementToExportCanvases(svg: SVGSVGElement | null, titl
     bg.setAttribute('height', String(pageHeight));
     bg.setAttribute('fill', '#ffffff');
     clone.appendChild(bg);
-    const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    titleText.setAttribute('x', String(pageWidth / 2));
-    titleText.setAttribute('y', '34');
-    titleText.setAttribute('font-size', '18');
-    titleText.setAttribute('font-family', 'Inter, Arial, sans-serif');
-    titleText.setAttribute('font-weight', '700');
-    titleText.setAttribute('text-anchor', 'middle');
-    titleText.setAttribute('fill', '#111111');
-    titleText.textContent = title;
-    clone.appendChild(titleText);
+    appendWrappedTitle(clone, title, pageWidth / 2, 34, pageWidth, 18);
 
     const sectionOffsetX = (pageWidth - bbox.width) / 2;
     const contentBlockHeight = bbox.height + (legendBox?.height ?? 0) + legendGap;
