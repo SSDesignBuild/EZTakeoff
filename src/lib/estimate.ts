@@ -1398,6 +1398,8 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const framingColor = String(inputs.framingColor ?? 'white');
   const panelColor = String(inputs.panelColor ?? 'white');
   const fanBeamCount = Math.max(0, Number(inputs.fanBeamCount ?? 0));
+  const postAttachmentPoint = String(inputs.postAttachmentPoint ?? 'concrete');
+  const houseAttachmentMaterial = String(inputs.houseAttachmentMaterial ?? 'wood-fascia');
   const screenUnderneath = Boolean(inputs.screenUnderneath ?? false);
   const beamStyle = screenUnderneath ? '3x3' : 'atlas';
   const projectionOverhang = Math.max(0, Math.min(2, Number(inputs.projectionOverhang ?? 2)));
@@ -1439,9 +1441,14 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
   const washerScrews = panelCount * totalBeamLines * 5;
   const tekScrewLf = width + (projection * 2) + (structureType === 'attached' ? width : 0);
   const tekScrews = Math.ceil((tekScrewLf * 12) / 6);
+  const cChannelFasteners = structureType === 'attached' ? Math.ceil((width * 12) / 8) : 0;
   const panelSeams = Math.max(panelCount - 1, 0);
-  const sealantLf = (panelSeams * projection) + (width * 2) + (projection * 2) + (structureType === 'attached' ? width : 0);
+  const perimeterLf = (width * 2) + (projection * 2);
+  const seamLf = panelSeams * projection;
+  const sealantLf = seamLf + perimeterLf + (structureType === 'attached' ? width : 0);
   const sealantTubes = Math.max(1, Math.ceil(sealantLf / 10));
+  const butylTapeLf = perimeterLf + seamLf;
+  const butylTapeRolls = Math.max(1, Math.ceil(butylTapeLf / 50));
   const gutterPieces = Math.ceil(width / 24);
   const cChannelPieces = structureType === 'attached' ? Math.ceil(width / 24) : 0;
   const fasciaLf = (projection + (5 / 12)) * 2;
@@ -1463,13 +1470,25 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
     toMaterial('3x3 post stock', 'Structure', postStockPieces, 'sticks', '24 ft stock', framingColor, `${totalPostCount} total posts cut to about ${postCutLength} ft each`),
     toMaterial('Hidden brackets', 'Hardware', hiddenBracketCount, 'ea', 'Per post', framingColor, beamStyle === '3x3' ? 'Two hidden brackets per post for screened-under framing' : 'One hidden bracket per post when using Atlas beam'),
     toMaterial('Washer screws', 'Hardware', washerScrews, 'ea', '5 per panel per beam line', framingColor, `${panelCount} panels across ${totalBeamLines} beam line(s)`),
-    toMaterial('Tek screws', 'Hardware', tekScrews, 'ea', 'Approx. every 6 in', framingColor, 'For C-channel, gutter, fascia, and hardware'),
+    toMaterial('Tek screws', 'Hardware', tekScrews, 'ea', 'Approx. every 6 in', framingColor, 'For gutter, fascia, and general hardware not otherwise itemized'),
     toMaterial('Solar Seal sealant', 'Hardware', sealantTubes, 'tubes', 'Approx. 10 lf per tube', panelColor, `Snap-lock seams + full perimeter + behind C-channel = ${sealantLf.toFixed(1)} lf`),
+    toMaterial('Butyl tape', 'Hardware', butylTapeRolls, 'rolls', '50 ft rolls', panelColor, `Full patio-cover perimeter ${perimeterLf.toFixed(1)} lf + panel seams ${seamLf.toFixed(1)} lf = ${butylTapeLf.toFixed(1)} lf`),
+    ...(postAttachmentPoint === 'concrete' ? [toMaterial('2.5 in Tapcon screws', 'Hardware', totalPostCount * 4, 'ea', '4 per post base bracket', undefined, `${totalPostCount} post base bracket(s) attached to concrete`)] : []),
+    ...(postAttachmentPoint === 'wood-deck' ? [toMaterial('Wood lags', 'Hardware', totalPostCount * 4, 'ea', '4 per post base bracket', undefined, `${totalPostCount} post base bracket(s) attached to wooden deck/framing`)] : []),
+    ...(structureType === 'attached' && houseAttachmentMaterial === 'brick-masonry' ? [toMaterial('2.5 in Tapcon screws', 'Hardware', cChannelFasteners, 'ea', 'Every 8 in along C-channel', undefined, `${feetAndInches(width)} C-channel into brick/masonry house siding`)] : []),
+    ...(structureType === 'attached' && houseAttachmentMaterial !== 'brick-masonry' ? [toMaterial('Wood lags', 'Hardware', cChannelFasteners, 'ea', 'Every 8 in along C-channel', undefined, `${feetAndInches(width)} C-channel into ${houseAttachmentMaterial === 'wood-siding' ? 'wood house siding' : 'wood fascia'}`)] : []),
   ].filter((item) => item.quantity > 0);
 
-  fanPanels.forEach((piece) => {
+  const fanPanelGroups = fanPanels.reduce((groups, piece) => {
+    const key = `${piece.panelWidth}`;
+    groups[key] = groups[key] || { panelWidth: piece.panelWidth, count: 0, placements: [] as string[] };
+    groups[key].count += 1;
     const placement = piece.fanPlacement === 'female-offset' ? 'female side' : piece.fanPlacement === 'male-offset' ? 'male side' : 'centered';
-    materials.push(toMaterial('Fan-beam roof panel', 'Roof system', 1, 'ea', `${piece.panelWidth} ft fan beam panel`, panelColor, `${piece.panelWidth} ft fan beam panel ${placement}`));
+    groups[key].placements.push(`Panel ${piece.positionIn / 12}-${(piece.positionIn + piece.widthIn) / 12} ft ${placement}`);
+    return groups;
+  }, {} as Record<string, { panelWidth: number; count: number; placements: string[] }>);
+  Object.values(fanPanelGroups).forEach((group) => {
+    materials.push(toMaterial(`${group.panelWidth} ft x ${panelLength} ft fan-beam roof panel`, 'Roof system', group.count, 'ea', `${panelLength} ft factory-cut fan beam panel`, panelColor, group.placements.join(' · ')));
   });
   if (supportBeamCount > 0) {
     materials.push(toMaterial(beamStyle === '3x3' ? 'Intermediate 3x3 support beam' : 'Intermediate support beam', 'Structure', supportBeamCount, 'lines', `${width.toFixed(1)} ft each`, framingColor, 'Added because projection exceeds 13 ft without the full upgrade package'));
@@ -1490,6 +1509,7 @@ function estimatePatioCover(inputs: EstimateInputs): EstimateResult {
       supportBeamCount > 0 ? `Projection is over 13 ft without the full upgrade package, so ${supportBeamCount} intermediate support beam line(s) were added with ${supportPostCount} posts per support beam.` : 'No intermediate support beam was required by the current projection/upgrade combination.',
       panelLayout.notes.join(' '),
       Number(inputs.postCount ?? 0) > 0 ? 'Front post count was manually overridden.' : `Front post count auto-sized to ${frontPostCount} based on the selected beam system.`,
+      `Post bracket fasteners use ${postAttachmentPoint === 'wood-deck' ? 'wood lags for wooden deck/framing' : '2.5 in Tapcons for concrete'}; C-channel fasteners use ${houseAttachmentMaterial === 'brick-masonry' ? '2.5 in Tapcons for brick/masonry' : 'wood lags for wood fascia/siding'} every 8 in.`,
     ].filter(Boolean),
   };
 }
