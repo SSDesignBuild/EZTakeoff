@@ -36,6 +36,12 @@ const feetAndInches = (feet: number) => {
   return inches ? `${ft}' ${inches}"` : `${ft}'`;
 };
 
+const projectExportTitle = (baseTitle: string, values: Record<string, string | number | boolean>) => {
+  const job = String(values.poJobName ?? '').trim();
+  const address = String(values.jobAddress ?? '').trim();
+  return [baseTitle, job, address].filter(Boolean).join(' · ');
+};
+
 
 function scanlineIntersections(points: DeckPoint[], axis: 'horizontal' | 'vertical', position: number) {
   const intersections: number[] = [];
@@ -617,7 +623,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const showStairs = layer === 'overview' || layer === 'stairs';
   const deckingLabelPlan = useMemo(() => deriveDeckingLabelPlan(deck), [deck]);
 
-  const printPlan = () => { void exportSvgAsPdf(svgRef.current, 'Deck framing plan', 'sns-deck-plan.pdf'); };
+  const printPlan = () => { void exportSvgAsPdf(svgRef.current, projectExportTitle('Deck framing plan', values), 'sns-deck-plan.pdf'); };
 
   const boardRuns = deck.boardRun === 'width'
     ? Array.from({ length: Math.max(1, Math.floor(deck.depth / 0.47)) }, (_, i) => deck.minY + 0.22 + i * 0.47)
@@ -1424,7 +1430,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           <span>Scaled installer plan with separate centered gable section layouts.</span>
         </div>
         <div className="preview-toolbar">
-          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((z) => Math.max(0.8, z - 0.2))}>−</button><button type="button" className="ghost-btn small-btn" onClick={() => setZoom((z) => Math.min(2.2, z + 0.2))}>+</button><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgSectionsAsPdf(svgRef.current, renaissance ? 'Renaissance screen room plan' : 'Screen room plan', renaissance ? 'sns-renaissance-plan.pdf' : 'sns-screen-room-plan.pdf'); }}>Export PDF</button>
+          <button type="button" className="ghost-btn small-btn" onClick={() => setZoom((z) => Math.max(0.8, z - 0.2))}>−</button><button type="button" className="ghost-btn small-btn" onClick={() => setZoom((z) => Math.min(2.2, z + 0.2))}>+</button><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgSectionsAsPdf(svgRef.current, projectExportTitle(renaissance ? 'Renaissance screen room plan' : 'Screen room plan', values), renaissance ? 'sns-renaissance-plan.pdf' : 'sns-screen-room-plan.pdf'); }}>Export PDF</button>
         </div>
       </div>
       <div style={{ overflow: 'auto' }}><svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg" style={{ width: `${Math.max(100, zoom * 100)}%`, height: 'auto' }}>
@@ -1514,10 +1520,18 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const doorJambTop = bottom - sectionDoorJambHeight(section) * scale;
           const picketBottom = section.kickPanel === 'none' ? bottom - 16 : kickTop + 10;
           const uprightXs = sectionUprightPositions(section).filter((x) => spans.some((span) => x > span.start && x < span.end));
+          const windowHeight = Math.max(0, section.height - kickHeight);
+          const dimensionRightX = right + 12;
           return (
             <g key={section.id} data-export-section="true">
               <rect x={left} y={top} width={sectionW} height={sectionH} className="screen-box" rx="8" />
               <text x={left} y={top - 12} className="svg-note">{`${section.label} · ${feetAndInches(section.width)} x ${feetAndInches(section.height)}`}</text>
+              <line x1={left} y1={bottom + 18} x2={right} y2={bottom + 18} className="dimension-line" />
+              <text x={(left + right) / 2 - 16} y={bottom + 34} className="svg-note">{`width ${feetAndInches(section.width)}`}</text>
+              <line x1={dimensionRightX} y1={top} x2={dimensionRightX} y2={bottom} className="dimension-line" />
+              <text x={dimensionRightX + 6} y={top + 16} className="svg-note">{`total ${feetAndInches(section.height)}`}</text>
+              {kickHeight > 0 && <text x={dimensionRightX + 6} y={(kickTop + bottom) / 2} className="svg-note">{`kick ${feetAndInches(kickHeight)}`}</text>}
+              <text x={dimensionRightX + 6} y={(top + Math.max(top, kickTop)) / 2} className="svg-note">{`screen ${feetAndInches(windowHeight)}`}</text>
               {!renaissance && <>
                 <line x1={left + receiverInset} y1={top + receiverInset} x2={left + receiverInset} y2={bottom - receiverInset} className="receiver-line" />
                 <line x1={right - receiverInset} y1={top + receiverInset} x2={right - receiverInset} y2={bottom - receiverInset} className="receiver-line" />
@@ -1540,8 +1554,8 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
               {section.kickPanel !== 'none' && spans.map((span, idx) => <g key={`kick-${idx}`}><rect x={left + span.start * scale + frameInset - 2} y={kickTop + 10} width={Math.max(0, (span.end - span.start) * scale - frameInset * 2 + 4)} height={Math.max(0, bottom - kickTop - 20)} className="kick-panel-fill" rx="4" /><line x1={left + span.start * scale + frameInset} y1={kickTop} x2={left + span.end * scale - frameInset} y2={kickTop} className={chairRailClass} /></g>)}
               {section.pickets && spans.map((span, idx) => <g key={`p-${idx}`}><line x1={left + span.start * scale + frameInset} y1={picketTop} x2={left + span.end * scale - frameInset} y2={picketTop} className={renaissance ? 'reno-picket-line' : 'picket-rail-line'} />{Array.from({ length: Math.max(0, Math.ceil(((span.end - span.start) * 12) / 4)) }, (_, picketIndex) => { const px = left + span.start * scale + frameInset + (((span.end - span.start) * scale - frameInset * 2) * (picketIndex + 0.5)) / Math.max(Math.ceil(((span.end - span.start) * 12) / 4), 1); return <line key={picketIndex} x1={px} y1={picketTop + 4} x2={px} y2={picketBottom} className="picket-line" />; })}</g>)}
               {chairRailYs.flatMap((chairY, railIdx) => spans.map((span, idx) => <line key={`chair-${railIdx}-${idx}`} x1={left + span.start * scale + frameInset} y1={chairY} x2={left + span.end * scale - frameInset} y2={chairY} className={chairRailClass} />))}
-              {uprightXs.map((x, idx) => <line key={`upr-${idx}`} x1={left + x * scale} y1={top + frameInset} x2={left + x * scale} y2={bottom - frameInset} className={uprightClass} />)}
-              {section.doorType !== 'none' && <><rect x={doorLeft + frameInset - 8} y={doorTop} width={Math.max(0, doorRight - doorLeft - frameInset * 2 + 16)} height={Math.max(0, bottom - doorTop - 18)} className="door-fill" rx="8" /><line x1={doorLeft + frameInset} y1={doorJambTop} x2={doorLeft + frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorRight - frameInset} y1={doorJambTop} x2={doorRight - frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorLeft + frameInset} y1={doorTop} x2={doorRight - frameInset} y2={doorTop} className={doorFrameClass} />{section.doorType === 'french' && <line x1={(doorLeft + doorRight) / 2} y1={doorTop + 6} x2={(doorLeft + doorRight) / 2} y2={bottom - frameInset - 4} className={doorFrameClass} />}</>}
+              {uprightXs.map((x, idx) => <g key={`upr-${idx}`}><line x1={left + x * scale} y1={top + frameInset} x2={left + x * scale} y2={bottom - frameInset} className={uprightClass} /><text x={left + x * scale + 4} y={top + 30} className="svg-note">{`upright ${feetAndInches(section.height)}`}</text></g>)}
+              {section.doorType !== 'none' && <><rect x={doorLeft + frameInset - 8} y={doorTop} width={Math.max(0, doorRight - doorLeft - frameInset * 2 + 16)} height={Math.max(0, bottom - doorTop - 18)} className="door-fill" rx="8" /><line x1={doorLeft + frameInset} y1={doorJambTop} x2={doorLeft + frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorRight - frameInset} y1={doorJambTop} x2={doorRight - frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorLeft + frameInset} y1={doorTop} x2={doorRight - frameInset} y2={doorTop} className={doorFrameClass} /><text x={doorLeft + frameInset} y={doorTop - 8} className="svg-note">{`door ${feetAndInches(doorWidth / scale)}w × ${feetAndInches(sectionDoorHeight(section))}h`}</text>{section.doorType === 'french' && <line x1={(doorLeft + doorRight) / 2} y1={doorTop + 6} x2={(doorLeft + doorRight) / 2} y2={bottom - frameInset - 4} className={doorFrameClass} />}</>}
             </g>
           );
         })})()}
@@ -1610,7 +1624,7 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
         <h3>Layout preview</h3>
         <span>Scaled roof plan with beam line, support beams, post layout, gutter, fascia, and fan-beam placement by panel.</span>
       </div>
-      <div className="preview-toolbar">{fanBeamCount > 0 && onValuesChange && <><button type="button" className="ghost-btn small-btn" onClick={() => onValuesChange((current) => ({ ...current, activeFanBeamIndex: Math.max(0, Math.min((Number(current.activeFanBeamIndex ?? 0) - 1 + layout.selectedFanOptions.length) % Math.max(layout.selectedFanOptions.length, 1), layout.selectedFanOptions.length - 1)) }))}>Prev beam</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftActiveFan(-1)}>← Slot</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftActiveFan(1)}>Slot →</button><button type="button" className="ghost-btn small-btn" onClick={() => onValuesChange((current) => ({ ...current, activeFanBeamIndex: layout.selectedFanOptions.length ? (Number(current.activeFanBeamIndex ?? 0) + 1) % layout.selectedFanOptions.length : 0 }))}>Next beam</button></>}<button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, 'Patio cover plan', 'sns-patio-cover-plan.pdf'); }}>Export PDF</button></div>
+      <div className="preview-toolbar">{fanBeamCount > 0 && onValuesChange && <><button type="button" className="ghost-btn small-btn" onClick={() => onValuesChange((current) => ({ ...current, activeFanBeamIndex: Math.max(0, Math.min((Number(current.activeFanBeamIndex ?? 0) - 1 + layout.selectedFanOptions.length) % Math.max(layout.selectedFanOptions.length, 1), layout.selectedFanOptions.length - 1)) }))}>Prev beam</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftActiveFan(-1)}>← Slot</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftActiveFan(1)}>Slot →</button><button type="button" className="ghost-btn small-btn" onClick={() => onValuesChange((current) => ({ ...current, activeFanBeamIndex: layout.selectedFanOptions.length ? (Number(current.activeFanBeamIndex ?? 0) + 1) % layout.selectedFanOptions.length : 0 }))}>Next beam</button></>}<button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, projectExportTitle('Patio cover plan', values), 'sns-patio-cover-plan.pdf'); }}>Export PDF</button></div>
     </div>
     <svg ref={svgRef} viewBox={`0 0 ${roofW + 130} ${roofD + 180}`} className="layout-svg patio-sheet-svg">
       {Array.from({ length: Math.ceil(width) + 2 }, (_, index) => <line key={`px-${index}`} x1={x0 + index * scale} y1={y0 - 20} x2={x0 + index * scale} y2={y0 + roofD + 40} className="svg-grid" />)}
@@ -1728,7 +1742,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           <h3>Layout preview</h3>
           <span>Elite Add-A-Room wall sections with color-coded channels, DRC, uprights, and fill zones.</span>
         </div>
-        <div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgSectionsAsPdf(svgRef.current, 'Sunroom section plan', 'sns-sunroom-plan.pdf'); }}>Export PDF</button></div>
+        <div className="preview-toolbar"><button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgSectionsAsPdf(svgRef.current, projectExportTitle('Sunroom section plan', values), 'sns-sunroom-plan.pdf'); }}>Export PDF</button></div>
       </div>
       <svg ref={svgRef} viewBox={`0 0 ${viewW} ${viewH}`} className="layout-svg patio-sheet-svg">
         {Array.from({ length: Math.ceil(totalW / scale) + 4 }, (_, index) => <line key={`sun-gx-${index}`} x1={x0 - 20 + index * scale} y1={24} x2={x0 - 20 + index * scale} y2={viewH - 50} className="svg-grid" />)}
@@ -1965,7 +1979,7 @@ function WoodenStructurePreview({ values }: { values: Record<string, string | nu
     : (attachmentAxis === 'horizontal' ? planW : planD);
   for (let value = 0; value <= alongLength + 2; value += memberSpacingPx) memberPositions.push(value);
   if (memberPositions[memberPositions.length - 1] < alongLength - 2) memberPositions.push(alongLength);
-  const printPlan = () => exportSvgAsPdf(svgRef.current, 'Wooden structure framing layout', 'sns-wooden-structure-layout.pdf');
+  const printPlan = () => exportSvgAsPdf(svgRef.current, projectExportTitle('Wooden structure framing layout', values), 'sns-wooden-structure-layout.pdf');
   const clipId = `wood-clip-${mainSideName}-${roofType}`;
   const attachLabel = structureType === 'attached' ? 'Existing structure / selected house wall' : 'Reference / selected house wall side';
   const obstructionList = houseEdges.length ? `${houseEdges.length} house wall side(s) selected on footprint` : 'No house wall side selected — verify attachment side.';
@@ -2169,7 +2183,7 @@ function FlatPanPreview({ values }: { values: Record<string, string | number | b
   const swatch: Record<string, string> = { white: '#f8fafc', bronze: '#6b4a2f', wheat: '#d6b878', clay: '#b07d62', black: '#111827' };
   const panFill = swatch[panColor] ?? '#f8fafc';
   const frameFill = swatch[framingColor] ?? '#f8fafc';
-  const printPlan = () => { void exportSvgAsPdf(svgRef.current, 'Flat pan layout', 'sns-flat-pan-layout.pdf'); };
+  const printPlan = () => { void exportSvgAsPdf(svgRef.current, projectExportTitle('Flat pan layout', values), 'sns-flat-pan-layout.pdf'); };
   const renderDim = (a:{x:number;y:number}, b:{x:number;y:number}, text:string, offsetX:number, offsetY:number, key:string) => {
     const x1 = a.x + offsetX; const y1 = a.y + offsetY; const x2 = b.x + offsetX; const y2 = b.y + offsetY;
     return <g key={key}>

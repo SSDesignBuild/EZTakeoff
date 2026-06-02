@@ -604,6 +604,37 @@ function sectionDoorJambHeight(section: Pick<SectionConfig, 'height' | 'doorType
   return section.height;
 }
 
+
+function sectionDoorLeftFeet(section: SectionConfig) {
+  const sectionWidthIn = section.width * 12;
+  const doorWidthIn = Math.min(sectionDoorWidth(section) * 12, sectionWidthIn);
+  if (section.doorType === 'none' || doorWidthIn <= 0) return 0;
+  if (section.doorPlacement === 'left') return 0;
+  if (section.doorPlacement === 'right') return Math.max(0, sectionWidthIn - doorWidthIn) / 12;
+  if (section.doorPlacement === 'custom') return Math.max(0, Math.min(section.doorOffsetInches, sectionWidthIn - doorWidthIn)) / 12;
+  return Math.max(0, (sectionWidthIn - doorWidthIn) / 2) / 12;
+}
+
+function sectionSpansExcludingDoorCuts(section: SectionConfig) {
+  const doorWidth = sectionDoorWidth(section);
+  if (section.doorType === 'none' || doorWidth <= 0.01) return [{ start: 0, end: section.width }];
+  const left = sectionDoorLeftFeet(section);
+  const right = left + doorWidth;
+  return [
+    ...(left > 0.01 ? [{ start: 0, end: left }] : []),
+    ...(right < section.width - 0.01 ? [{ start: right, end: section.width }] : []),
+  ].filter((span) => span.end - span.start > 0.05);
+}
+
+function sectionUprightPositionsForCuts(section: SectionConfig) {
+  const count = Math.max(0, Math.floor(section.uprights || 0));
+  const raw = Array.isArray(section.uprightOffsets) ? section.uprightOffsets : [];
+  const spans = sectionSpansExcludingDoorCuts(section);
+  return Array.from({ length: count }, (_, index) => raw[index] !== undefined ? Number(raw[index]) : ((index + 1) * section.width) / (count + 1))
+    .map((x) => Math.max(0, Math.min(section.width, x)))
+    .filter((x) => spans.some((span) => x > span.start + 0.05 && x < span.end - 0.05));
+}
+
 function receiverSizeLabel(value: string) {
   return value === '1' ? '1 in' : '5/8 in';
 }
@@ -686,20 +717,25 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
 
   sections.forEach((section) => {
     const doorWidth = sectionDoorWidth(section);
-    const wallWidthExcludingDoor = Math.max(0, section.width - doorWidth);
-    const doorJambHeight = sectionDoorJambHeight(section);
+    const doorHeight = sectionDoorHeight(section);
     const hasDoor = section.doorType !== 'none' && doorWidth > 0.01;
+    const doorJambHeight = sectionDoorJambHeight(section);
+    const spans = sectionSpansExcludingDoorCuts(section);
+    const spanLengths = spans.map((span) => Math.max(0, span.end - span.start)).filter((len) => len > 0.05);
+    const wallWidthExcludingDoor = spanLengths.reduce((sum, len) => sum + len, 0);
+    const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
+
     const topReceiverCut = section.width;
-    const bottomReceiverCut = Math.max(0, section.width - doorWidth);
+    const bottomReceiverCuts = spanLengths;
     const sideReceiverCuts = [section.height, section.height];
     const doorReceiverCuts = hasDoor ? [doorJambHeight, doorJambHeight, doorWidth] : [];
-    const receiverCuts = [topReceiverCut, bottomReceiverCut, ...sideReceiverCuts, ...doorReceiverCuts];
+    const receiverCuts = [topReceiverCut, ...bottomReceiverCuts, ...sideReceiverCuts, ...doorReceiverCuts];
     const receiverPerimeter = receiverCuts.reduce((sum, len) => sum + len, 0);
     if (!renaissance) receiverCuts24.push(...receiverCuts);
     if (renaissance) renaissanceReceiverLf += receiverPerimeter;
 
-    const floorMountedReceiverLf = bottomReceiverCut;
-    const wallMountedReceiverLf = sideReceiverCuts.reduce((sum, len) => sum + len, 0) + (hasDoor ? doorReceiverCuts.reduce((sum, len) => sum + len, 0) : 0);
+    const floorMountedReceiverLf = bottomReceiverCuts.reduce((sum, len) => sum + len, 0);
+    const wallMountedReceiverLf = sideReceiverCuts.reduce((sum, len) => sum + len, 0) + doorReceiverCuts.reduce((sum, len) => sum + len, 0) + topReceiverCut;
     if (section.floorMount === 'concrete') concreteScrews += masonryReceiverScrews(floorMountedReceiverLf);
     else if (section.floorMount === 'metal') selfTappingScrews += metalReceiverScrews(floorMountedReceiverLf);
     else woodScrews += Math.max(0, Math.ceil(floorMountedReceiverLf / 2.5));
@@ -707,69 +743,70 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     else if (section.wallMount === 'metal') selfTappingScrews += metalReceiverScrews(wallMountedReceiverLf);
     else woodScrews += Math.max(0, Math.ceil(wallMountedReceiverLf / 2.5));
 
-    const perimeter1x2Lf = renaissance ? receiverPerimeter : receiverPerimeter - (section.kickPanel === 'insulated' ? wallWidthExcludingDoor : 0);
-    const oneByTwoCuts = renaissance
-      ? [section.width, section.width, section.height, section.height, ...(hasDoor ? [doorJambHeight, doorJambHeight, doorWidth] : [])]
-      : [section.width, section.height, section.height, ...(section.kickPanel !== 'insulated' ? [Math.max(0, section.width - doorWidth)] : []), ...(hasDoor ? [doorJambHeight, doorJambHeight, doorWidth] : [])];
-    if (renaissance) oneByTwoCustom.push(...oneByTwoCuts);
-    else oneByTwoCuts24.push(...oneByTwoCuts);
-    tekScrewCount += Math.ceil(perimeter1x2Lf / 2);
-
-    const chairRailCount = sectionChairRailCount(section);
-    const chairRailOnlyLength = chairRailCount > 0 ? wallWidthExcludingDoor * chairRailCount : 0;
-    const picketRailLength = section.pickets ? wallWidthExcludingDoor : 0;
-    const uprightCount = Math.max(0, section.uprights);
-    const kickHeight = section.kickPanel === 'none' ? 0 : Math.min(section.kickPanelHeight, section.kickPanel === 'trim-coil' ? 2 : 4);
+    const chairRailYs = sectionChairRailHeights(section);
+    const chairRailClassUsesGroove = section.pickets || section.kickPanel === 'insulated';
+    const chairRailCuts = chairRailYs.flatMap(() => spanLengths);
+    const picketRailCuts = section.pickets ? spanLengths : [];
+    const kickTopCuts = section.kickPanel !== 'none' ? spanLengths : [];
+    const uprightCuts = sectionUprightPositionsForCuts(section).map(() => section.height);
 
     if (renaissance) {
-      for (let i = 0; i < uprightCount; i += 1) twoByTwoCustomNoGroove.push(section.height);
-      if (chairRailOnlyLength > 0) twoByTwoCustomNoGroove.push(chairRailOnlyLength);
-      if (section.kickPanel === 'insulated') twoByTwoCustomGroove.push(wallWidthExcludingDoor);
-      if (picketRailLength > 0) twoByTwoCustomGroove.push(picketRailLength);
+      // Match the Renaissance layout exactly: 1x2 7/8 is the outer perimeter
+      // (two sides, one top, and only bottom spans not occupied by a door).
+      oneByTwoCustom.push(section.width, section.height, section.height, ...spanLengths);
+
+      // Match visible 2x2 7/8 no-channel lines in the layout.
+      twoByTwoCustomNoGroove.push(...uprightCuts);
+      if (!chairRailClassUsesGroove) twoByTwoCustomNoGroove.push(...chairRailCuts);
+      if (section.kickPanel !== 'none' && !chairRailClassUsesGroove) twoByTwoCustomNoGroove.push(...kickTopCuts);
+      if (hasDoor) {
+        twoByTwoCustomNoGroove.push(doorJambHeight, doorJambHeight, doorWidth);
+        if (section.doorType === 'french') twoByTwoCustomNoGroove.push(doorHeight);
+      }
+
+      // Match visible 2x2 7/8 with-channel lines in the layout.
+      if (chairRailClassUsesGroove) twoByTwoCustomGroove.push(...chairRailCuts);
+      if (section.kickPanel !== 'none' && chairRailClassUsesGroove) twoByTwoCustomGroove.push(...kickTopCuts);
+      twoByTwoCustomGroove.push(...picketRailCuts);
     } else {
-      for (let i = 0; i < uprightCount; i += 1) twoByTwoCuts24.push(section.height);
-      if (chairRailOnlyLength > 0) twoByTwoCuts24.push(chairRailOnlyLength);
-      if (picketRailLength > 0) twoByTwoCuts24.push(picketRailLength);
+      const perimeter1x2Cuts = [section.width, section.height, section.height, ...(section.kickPanel !== 'insulated' ? spanLengths : []), ...(hasDoor ? [doorJambHeight, doorJambHeight, doorWidth] : [])];
+      oneByTwoCuts24.push(...perimeter1x2Cuts);
+      twoByTwoCuts24.push(...uprightCuts, ...chairRailCuts, ...picketRailCuts);
       const clips = clipCountForSection(section, doorJambHeight);
       capriClips += clips;
       tekScrewCount += clips * 4;
     }
 
+    const perimeter1x2Lf = (renaissance ? [section.width, section.height, section.height, ...spanLengths] : [section.width, section.height, section.height, ...spanLengths]).reduce((sum, len) => sum + len, 0);
+    tekScrewCount += Math.ceil(perimeter1x2Lf / 2);
+
     if (section.pickets) {
-      const picketSpanIn = wallWidthExcludingDoor * 12;
-      const sectionPickets = Math.max(0, Math.ceil(picketSpanIn / 4));
+      const sectionPickets = spanLengths.reduce((sum, len) => sum + Math.max(0, Math.ceil((len * 12) / 4)), 0);
       picketCount += sectionPickets;
-      if (!renaissance) uChannelCuts24.push(wallWidthExcludingDoor, wallWidthExcludingDoor);
-      if (renaissance) {
-        // Precut 36 in pickets for Renaissance.
-      } else {
-        picketStockLf += sectionPickets * 3;
-      }
+      if (!renaissance) uChannelCuts24.push(...spanLengths, ...spanLengths);
+      if (!renaissance) picketStockLf += sectionPickets * 3;
       tekScrewCount += sectionPickets * 2;
     }
 
     if (section.kickPanel === 'trim-coil' && !renaissance) {
-      vGroove1x2Cuts24.push(wallWidthExcludingDoor);
-      vGroove2x2Cuts24.push(wallWidthExcludingDoor);
+      vGroove1x2Cuts24.push(...spanLengths);
+      vGroove2x2Cuts24.push(...spanLengths);
       trimCoilSqFt += wallWidthExcludingDoor * kickHeight;
     }
 
     if (section.kickPanel === 'insulated') {
       panelSqFt += wallWidthExcludingDoor * kickHeight;
-      insulatedReceiverCuts24.push(wallWidthExcludingDoor);
-      if (renaissance) twoByTwoCustomGroove.push(wallWidthExcludingDoor);
-      else {
-        twoByTwoCuts24.push(wallWidthExcludingDoor);
-      }
+      insulatedReceiverCuts24.push(...spanLengths);
+      if (!renaissance) twoByTwoCuts24.push(...spanLengths);
+    }
+
+    if (!renaissance && hasDoor) {
+      const headerLf = doorWidth;
+      twoByTwoCuts24.push(doorJambHeight, doorJambHeight, headerLf);
+      if (section.doorType === 'french') twoByTwoCuts24.push(doorHeight);
     }
 
     if (section.doorType !== 'none') {
-      const headerLf = doorWidth;
-      if (renaissance) {
-        twoByTwoCustomNoGroove.push(doorJambHeight, doorJambHeight, headerLf);
-      } else {
-        twoByTwoCuts24.push(doorJambHeight, doorJambHeight, headerLf);
-      }
       if (section.doorType === 'single') singleDoors += 1;
       else frenchDoors += 1;
       if (section.doorSwing === 'inswing') inswingKits += 1;

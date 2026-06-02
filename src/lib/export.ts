@@ -144,17 +144,25 @@ function triggerDownload(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-async function svgToCanvas(svg: SVGSVGElement) {
+async function svgToCanvas(svg: SVGSVGElement, exportTitle = '') {
   const clone = svg.cloneNode(true) as SVGSVGElement;
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   clone.querySelectorAll('[data-export-ignore="true"]').forEach((node) => node.remove());
   inlineComputedStyles(svg, clone);
   const viewBox = svg.viewBox.baseVal;
-  const width = Math.max(1200, Math.round(viewBox?.width || svg.clientWidth || 1200));
-  const height = Math.max(900, Math.round(viewBox?.height || svg.clientHeight || 900));
+  let width = Math.max(1200, Math.round(viewBox?.width || svg.clientWidth || 1200));
+  let height = Math.max(900, Math.round(viewBox?.height || svg.clientHeight || 900));
+  const headerHeight = exportTitle.trim() ? 72 : 0;
+  if (headerHeight) {
+    const contentGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    contentGroup.setAttribute('transform', `translate(0 ${headerHeight})`);
+    Array.from(clone.childNodes).forEach((node) => contentGroup.appendChild(node));
+    clone.appendChild(contentGroup);
+    height += headerHeight;
+  }
   clone.setAttribute('width', String(width));
   clone.setAttribute('height', String(height));
-  if (!clone.getAttribute('viewBox')) clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  clone.setAttribute('viewBox', `0 0 ${width} ${height}`);
   const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
   bg.setAttribute('x', '0');
   bg.setAttribute('y', '0');
@@ -162,6 +170,18 @@ async function svgToCanvas(svg: SVGSVGElement) {
   bg.setAttribute('height', String(height));
   bg.setAttribute('fill', '#ffffff');
   clone.insertBefore(bg, clone.firstChild);
+  if (headerHeight) {
+    const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    titleText.setAttribute('x', String(width / 2));
+    titleText.setAttribute('y', '30');
+    titleText.setAttribute('font-size', '22');
+    titleText.setAttribute('font-family', 'Inter, Arial, sans-serif');
+    titleText.setAttribute('font-weight', '700');
+    titleText.setAttribute('text-anchor', 'middle');
+    titleText.setAttribute('fill', '#111111');
+    titleText.textContent = exportTitle;
+    clone.insertBefore(titleText, clone.childNodes[1] ?? null);
+  }
   const markup = new XMLSerializer().serializeToString(clone);
   const url = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml;charset=utf-8' }));
   try {
@@ -252,7 +272,7 @@ export async function exportCanvasesAsPdf(canvases: HTMLCanvasElement[], title: 
 
 export async function exportSvgAsPdf(svg: SVGSVGElement | null, title: string, filename: string) {
   if (!svg) return;
-  const canvas = await svgToCanvas(svg);
+  const canvas = await svgToCanvas(svg, title);
   await exportCanvasAsPdf(canvas, title, filename);
 }
 
