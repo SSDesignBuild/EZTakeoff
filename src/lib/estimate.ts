@@ -442,10 +442,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       });
     }
   }
-  addBoardGroups(materials, 'Stairs', 'Stair tread deck board', deck.stairTreadGroups, `Two tread boards per tread. Board style: ${deckingMaterial}.`, true, deckingStyleInfo.color);
+  addBoardGroups(materials, 'Stairs', 'Stair tread deck board', deck.stairTreadGroups, `${String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'Two tread boards per tread plus two deck-board riser boards per riser.' : 'Two tread boards per tread only; risers are not deck boards unless decking is pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
   addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.', false, 'Pressure treated');
   addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', false, 'Pressure treated');
-  addBoardGroups(materials, 'Framing', 'Double band / rim board', deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', false, 'Pressure treated');
+  addBoardGroups(materials, 'Framing', `${deck.joistSize} double band / rim board`, deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', false, 'Pressure treated');
 
   const baseRailSegments = deck.exposedSegments.map((segment) => segment.length);
   const stairOpeningWidth = deck.stairPlacement.edgeIndex !== null ? Math.min(deck.stairPlacement.width, deck.exposedSegments.find((segment) => segment.index === deck.stairPlacement.edgeIndex)?.length ?? 0) : 0;
@@ -467,26 +467,26 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const structuralPostStock = optimizeRepeatedCuts(deck.postCount, structuralPostCutFt, [8, 10, 12, 16]);
 
   materials.push(
-    toMaterial('Support blocking', 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', 'Pressure treated', `${deck.blockingLf.toFixed(1)} lf total for picture-frame / breaker support blocking only · blocking is counted at 1 ft O.C. only where boards run parallel with joists and need support`),
+    toMaterial(`${deck.joistSize} support blocking`, 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', 'Pressure treated', `${deck.blockingLf.toFixed(1)} lf total for picture-frame / breaker support blocking only · blocking is counted at 1 ft O.C. only where boards run parallel with joists and need support`),
     toMaterial('6x6 wood posts', 'Structure', structuralPostStock.stockCount, 'boards', `${structuralPostStock.stockLength} ft stock`, 'Pressure treated', `${deck.postCount} post(s) cut to about ${feetAndInches(structuralPostStock.cutLength)} each after subtracting ${deck.joistSize} joist height from ${feetAndInches(deckHeightFt)} deck height · ${structuralPostStock.perStock} cut(s) per stock board${deck.lockedPosts.length ? ` · ${deck.lockedPosts.length} post position(s) manually locked` : ''}`),
     toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', undefined, '3 bags per post footing'),
     toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined, 'Post base bracket at each footing'),
     toMaterial('Concrete submersible J Anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined, 'Concrete anchor for post base bracket'),
     toMaterial('Joist hangers', 'Hardware', deck.joistHangers, 'ea', 'Match joist size', undefined, 'One hanger at each end of every joist'),
-    toMaterial('Rafter ties', 'Hardware', deck.rafterTies, 'ea', '1 per joist to beam condition', undefined, 'One tie where each joist bears on each beam'),
+    toMaterial('Hurricane ties', 'Hardware', deck.rafterTies, 'ea', '1 per joist to beam condition', undefined, 'One hurricane tie where each joist bears on each beam'),
     toMaterial('Carriage bolt sets', 'Hardware', deck.postCount * 2 + ((railingType === 'wood' || railingType === 'vinyl-composite') ? railingPosts * 2 : 0), 'sets', 'Bolt + washer + nut', undefined),
     toMaterial('Ledger lateral load brackets', 'Hardware', deck.lateralLoadBrackets, 'ea', 'Every 2 ft on ledger', undefined),
     ...(deck.attachment === 'siding' ? [toMaterial('1/2 in x 6 in lag screws', 'Hardware', Math.max(1, Math.ceil(deck.houseContactLength)), 'ea', 'W pattern every 12 in', 'Ledger to house attachment')] : []),
-    toMaterial('SDS structural screws', 'Hardware', deck.sdsCorners, 'ea', '4 per corner', 'All band-board corners'),
+    toMaterial('Hex head LedgerLOK screws 5 in', 'Hardware', deck.sdsCorners, 'ea', '4 per corner', undefined, 'All band-board corners'),
     toMaterial('Joist tape', 'Hardware', deck.joistTapeLf, 'lf', 'Match roll coverage', undefined, 'Tape joists and band-board top edges'),
-    toMaterial(deck.fastenerType === 'top screws' ? '3 in deck screws' : '2-3/8 in CAMO screws', 'Hardware', deck.deckFastenerBoxes, 'boxes', deck.fastenerType === 'top screws' ? '365 per box' : '1750 per box', undefined),
-    toMaterial('Exterior wood screws 3-1/2 in', 'Hardware', Math.max(1, Math.ceil(deck.area / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For decking, breaker boards, and picture-frame areas that are face screwed'),
+    toMaterial(deck.fastenerType === 'top screws' ? '3-1/2 in exterior framing screws' : '2-3/8 in CAMO screws', 'Hardware', deck.deckFastenerBoxes, 'boxes', deck.fastenerType === 'top screws' ? '365 per box' : '1750 per box', undefined),
+    toMaterial('3-1/2 in exterior screws used for deck boards', 'Hardware', Math.max(1, Math.ceil(deck.area / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For decking, breaker boards, and picture-frame areas that are face screwed'),
     toMaterial('3 in nails', 'Hardware', deck.joistHangers * 10 + deck.postBases * 10 + deck.lateralLoadBrackets * 10, 'nails', '10 per connector', undefined, 'Joist hangers, post brackets, and lateral load brackets'),
-    toMaterial('1-1/2 in nails', 'Hardware', deck.rafterTies * 10, 'nails', '10 per rafter tie', undefined, 'For rafter ties'),
+    toMaterial('1-1/2 in nails', 'Hardware', deck.rafterTies * 10, 'nails', '10 per hurricane tie', undefined, 'For hurricane ties'),
     ...(deck.fasciaPieces > 0 ? [toMaterial('Fascia board', 'Trim', deck.fasciaPieces, 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${deck.fasciaLf.toFixed(1)} lf on exposed deck perimeter plus stair risers/stringer sides only. Fascia style: ${fasciaMaterial}.`)] : []),
   );
   if (deck.stairStringers > 0) {
-    materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringers, 'boards', `${deck.stairStringerLength} ft stock`, undefined, `Stringers cut on site at 12 in. O.C. · ${deck.stairRisers} risers / ${deck.stairTreadsPerRun} treads per run`));
+    materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringerBoardCount, 'boards', `${deck.stairStringerLength} ft stock`, 'Pressure treated', `${deck.stairStringers} stringer cut(s) at about ${feetAndInches(deck.stairStringerCutLength)} each · 12 in. O.C. · ${deck.stairRisers} risers / ${deck.stairTreadsPerRun} treads per run`));
   }
 
   if (railingType === 'aluminum') {

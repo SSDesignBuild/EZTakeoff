@@ -121,7 +121,9 @@ export interface DeckModel {
   stairRunFt: number;
   stairTreadGroups: BoardGroup[];
   stairStringers: number;
+  stairStringerBoardCount: number;
   stairStringerLength: number;
+  stairStringerCutLength: number;
   stairRailingLeft: boolean;
   stairRailingRight: boolean;
   stairRailSideCount: number;
@@ -325,6 +327,13 @@ function mergeGroups(...groups: BoardGroup[][]) {
   return Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([length, count]) => ({ length, count }));
 }
 
+function groupRepeatedCutsIntoStock(pieceCount: number, cutLength: number, stock = BOARD_STOCK_LENGTHS): BoardGroup[] {
+  if (pieceCount <= 0 || cutLength <= 0) return [];
+  const chosen = chooseStockLength(cutLength, stock);
+  const piecesPerStock = Math.max(1, Math.floor((chosen + 1e-6) / cutLength));
+  return [{ length: chosen, count: Math.ceil(pieceCount / piecesPerStock) }];
+}
+
 
 function boardStockSegments(totalLength: number, availableBreaks: number[] = []) {
   const sortedBreaks = availableBreaks.filter((value) => value > 0.05 && value < totalLength - 0.05).sort((a, b) => a - b);
@@ -503,15 +512,24 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const stairRisers = stairCount > 0 && stairRiseFt > 0 ? Math.ceil((stairRiseFt * 12) / 7.5) : 0;
   const stairTreadsPerRun = stairRisers > 0 ? Math.max(stairRisers - 1, 1) : 0;
   const stairRunFt = round2(stairTreadsPerRun * (11 / 12));
-  const treadLengths: number[] = [];
-  for (let run = 0; run < stairCount; run += 1) for (let tread = 0; tread < stairTreadsPerRun; tread += 1) treadLengths.push(stairWidth, stairWidth);
-  const stairTreadGroups = accumulateGroups(treadLengths);
+  const isPressureTreatedDecking = String(inputs.deckingType ?? 'composite') === 'pressure-treated';
+  const treadBoardPieces = stairCount * stairTreadsPerRun * 2;
+  const riserBoardPieces = isPressureTreatedDecking ? stairCount * stairRisers * 2 : 0;
+  // Stair deck boards are short repeated cuts, so count the purchasable stock
+  // boards needed to make those cuts. Example: 4 ft stair treads from 8 ft
+  // stock yields two tread boards per stock board. Pressure-treated stairs also
+  // use deck boards on risers; composite/PVC stairs do not because risers are
+  // covered by fascia.
+  const stairTreadGroups = groupRepeatedCutsIntoStock(treadBoardPieces + riserBoardPieces, stairWidth, BOARD_STOCK_LENGTHS);
   // Stringers are laid out at 12 in. on center across each stair run,
   // including both outside stringers. A 4 ft wide stair therefore needs
-  // 5 stringers per run, not one stringer per tread/riser.
+  // 5 stringers per run, not one stringer per tread/riser. Count stock boards
+  // by how many actual stringer cuts fit on the selected 2x12 stock length.
   const stairStringersPerRun = stairCount > 0 ? Math.max(2, Math.floor(stairWidth / 1) + 1) : 0;
   const stairStringers = stairStringersPerRun * stairCount;
-  const stairStringerLength = chooseStockLength(Math.max(12, Math.sqrt(stairRiseFt ** 2 + stairRunFt ** 2)), [12, 16, 20]);
+  const stairStringerCutLength = stairStringers > 0 ? Math.max(4, Math.sqrt(stairRiseFt ** 2 + stairRunFt ** 2)) : 0;
+  const stairStringerLength = chooseStockLength(stairStringerCutLength, [12, 16, 20]);
+  const stairStringerBoardCount = stairStringers > 0 ? Math.ceil(stairStringers / Math.max(1, Math.floor((stairStringerLength + 1e-6) / stairStringerCutLength))) : 0;
   const stairRailingLeft = inputs.stairRailingLeft !== false && String(inputs.stairRailingLeft ?? 'true') !== 'false';
   const stairRailingRight = inputs.stairRailingRight !== false && String(inputs.stairRailingRight ?? 'true') !== 'false';
   const stairRailSideCount = stairCount > 0 ? Number(stairRailingLeft) + Number(stairRailingRight) : 0;
@@ -578,5 +596,5 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const deckFastenerBoxes = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? Math.ceil(deckFastenerCount / 365) : Math.ceil(deckFastenerCount / 1750);
   const fastenerType = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'top screws' : 'hidden camo screws';
 
-  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), stairPlacement };
+  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), stairPlacement };
 }
