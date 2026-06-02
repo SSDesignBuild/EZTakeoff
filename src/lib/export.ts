@@ -150,8 +150,17 @@ async function svgToCanvas(svg: SVGSVGElement, exportTitle = '') {
   clone.querySelectorAll('[data-export-ignore="true"]').forEach((node) => node.remove());
   inlineComputedStyles(svg, clone);
   const viewBox = svg.viewBox.baseVal;
-  let width = Math.max(1200, Math.round(viewBox?.width || svg.clientWidth || 1200));
-  let height = Math.max(900, Math.round(viewBox?.height || svg.clientHeight || 900));
+  const hasViewBox = Boolean(viewBox && viewBox.width > 0 && viewBox.height > 0);
+  // Respect the SVG's own viewBox when rendering exports. The previous 1200 x 900
+  // minimum expanded smaller export pages after they had already been composed,
+  // which left the actual layout parked in the upper-left corner of the PDF page.
+  // If an SVG has no viewBox, keep a safe minimum for browser-rendered previews.
+  let width = Math.round(hasViewBox ? viewBox.width : (svg.clientWidth || 1200));
+  let height = Math.round(hasViewBox ? viewBox.height : (svg.clientHeight || 900));
+  if (!hasViewBox) {
+    width = Math.max(1200, width);
+    height = Math.max(900, height);
+  }
   const headerHeight = exportTitle.trim() ? 72 : 0;
   if (headerHeight) {
     const contentGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -288,7 +297,7 @@ export async function svgElementToExportCanvases(svg: SVGSVGElement | null, titl
     const bbox = section.getBBox();
     const legendBox = legend?.getBBox();
     const paddingX = 36;
-    const paddingTop = 54;
+    const paddingTop = 78;
     const paddingBottom = 36;
     const legendGap = legend && legendBox ? 18 : 0;
     const contentWidth = Math.max(bbox.width, legendBox?.width ?? 0);
@@ -309,7 +318,7 @@ export async function svgElementToExportCanvases(svg: SVGSVGElement | null, titl
     clone.appendChild(bg);
     const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     titleText.setAttribute('x', String(pageWidth / 2));
-    titleText.setAttribute('y', '32');
+    titleText.setAttribute('y', '34');
     titleText.setAttribute('font-size', '18');
     titleText.setAttribute('font-family', 'Inter, Arial, sans-serif');
     titleText.setAttribute('font-weight', '700');
@@ -320,8 +329,8 @@ export async function svgElementToExportCanvases(svg: SVGSVGElement | null, titl
 
     const sectionOffsetX = (pageWidth - bbox.width) / 2;
     const contentBlockHeight = bbox.height + (legendBox?.height ?? 0) + legendGap;
-    const availableTop = 48;
-    const contentStartY = Math.max(paddingTop, availableTop + (pageHeight - availableTop - contentBlockHeight) / 2);
+    const availableTop = paddingTop;
+    const contentStartY = Math.max(paddingTop, availableTop + (pageHeight - availableTop - paddingBottom - contentBlockHeight) / 2);
     const sectionClone = section.cloneNode(true) as SVGGElement;
     inlineComputedStyles(section, sectionClone);
     sectionClone.setAttribute('transform', `translate(${sectionOffsetX - bbox.x}, ${contentStartY - bbox.y})`);
