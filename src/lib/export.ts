@@ -256,9 +256,10 @@ export async function exportCanvasAsPng(canvas: HTMLCanvasElement, filename: str
   triggerDownload(blob, filename);
 }
 
-export async function exportCanvasesAsPdf(canvases: HTMLCanvasElement[], title: string, filename: string) {
-  const images = canvases.flatMap((canvas) => {
-    const forcePortrait = canvas.height > canvas.width * 1.15;
+export async function exportCanvasesAsPdf(canvases: HTMLCanvasElement[], title: string, filename: string, options?: { forcePortraitByIndex?: Record<number, boolean> }) {
+  const images = canvases.flatMap((canvas, canvasIndex) => {
+    const forced = options?.forcePortraitByIndex?.[canvasIndex];
+    const forcePortrait = forced ?? (canvas.height > canvas.width * 1.15);
     return splitTallCanvasForLetterWidth(canvas).map((pageCanvas) => ({
       bytes: base64ToBytes(pageCanvas.toDataURL('image/jpeg', 0.95).split(',')[1] || ''),
       width: pageCanvas.width,
@@ -276,26 +277,24 @@ export async function exportSvgAsPdf(svg: SVGSVGElement | null, title: string, f
   await exportCanvasAsPdf(canvas, title, filename);
 }
 
-export async function exportSvgSectionsAsPdf(svg: SVGSVGElement | null, title: string, filename: string, sectionSelector = '[data-export-section="true"]', legendSelector = '[data-export-legend="true"]') {
-  if (!svg) return;
+export async function svgElementToExportCanvases(svg: SVGSVGElement | null, title: string, sectionSelector = '[data-export-section="true"]', legendSelector = '[data-export-legend="true"]') {
+  if (!svg) return [] as HTMLCanvasElement[];
   const sections = Array.from(svg.querySelectorAll<SVGGElement>(sectionSelector));
-  if (sections.length === 0) {
-    await exportSvgAsPdf(svg, title, filename);
-    return;
-  }
+  if (sections.length === 0) return [await svgToCanvas(svg, title)];
+
   const legend = svg.querySelector<SVGGElement>(legendSelector);
   const canvases: HTMLCanvasElement[] = [];
   for (const section of sections) {
     const bbox = section.getBBox();
     const legendBox = legend?.getBBox();
-    const paddingX = 24;
-    const paddingTop = 42;
-    const paddingBottom = 24;
+    const paddingX = 36;
+    const paddingTop = 54;
+    const paddingBottom = 36;
     const legendGap = legend && legendBox ? 18 : 0;
     const contentWidth = Math.max(bbox.width, legendBox?.width ?? 0);
     const contentHeight = bbox.height + (legendBox?.height ?? 0) + legendGap;
-    const pageWidth = Math.max(320, contentWidth + paddingX * 2);
-    const pageHeight = Math.max(320, contentHeight + paddingTop + paddingBottom);
+    const pageWidth = Math.max(612, contentWidth + paddingX * 2);
+    const pageHeight = Math.max(792, contentHeight + paddingTop + paddingBottom);
     const clone = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
     clone.setAttribute('viewBox', `0 0 ${pageWidth} ${pageHeight}`);
@@ -310,7 +309,7 @@ export async function exportSvgSectionsAsPdf(svg: SVGSVGElement | null, title: s
     clone.appendChild(bg);
     const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     titleText.setAttribute('x', String(pageWidth / 2));
-    titleText.setAttribute('y', '28');
+    titleText.setAttribute('y', '32');
     titleText.setAttribute('font-size', '18');
     titleText.setAttribute('font-family', 'Inter, Arial, sans-serif');
     titleText.setAttribute('font-weight', '700');
@@ -320,20 +319,29 @@ export async function exportSvgSectionsAsPdf(svg: SVGSVGElement | null, title: s
     clone.appendChild(titleText);
 
     const sectionOffsetX = (pageWidth - bbox.width) / 2;
+    const contentBlockHeight = bbox.height + (legendBox?.height ?? 0) + legendGap;
+    const availableTop = 48;
+    const contentStartY = Math.max(paddingTop, availableTop + (pageHeight - availableTop - contentBlockHeight) / 2);
     const sectionClone = section.cloneNode(true) as SVGGElement;
     inlineComputedStyles(section, sectionClone);
-    sectionClone.setAttribute('transform', `translate(${sectionOffsetX - bbox.x}, ${paddingTop - bbox.y})`);
+    sectionClone.setAttribute('transform', `translate(${sectionOffsetX - bbox.x}, ${contentStartY - bbox.y})`);
     clone.appendChild(sectionClone);
 
     if (legend && legendBox) {
       const legendOffsetX = (pageWidth - legendBox.width) / 2;
       const legendClone = legend.cloneNode(true) as SVGGElement;
       inlineComputedStyles(legend, legendClone);
-      legendClone.setAttribute('transform', `translate(${legendOffsetX - legendBox.x}, ${paddingTop + bbox.height + legendGap - legendBox.y})`);
+      legendClone.setAttribute('transform', `translate(${legendOffsetX - legendBox.x}, ${contentStartY + bbox.height + legendGap - legendBox.y})`);
       clone.appendChild(legendClone);
     }
     canvases.push(await svgToCanvas(clone));
   }
+  return canvases;
+}
+
+export async function exportSvgSectionsAsPdf(svg: SVGSVGElement | null, title: string, filename: string, sectionSelector = '[data-export-section="true"]', legendSelector = '[data-export-legend="true"]') {
+  const canvases = await svgElementToExportCanvases(svg, title, sectionSelector, legendSelector);
+  if (!canvases.length) return;
   await exportCanvasesAsPdf(canvases, title, filename);
 }
 

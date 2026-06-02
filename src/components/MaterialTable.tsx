@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { exportCanvasAsPdf, exportCanvasAsPng, exportCanvasesAsPdf, svgElementToCanvas } from '../lib/export';
+import { exportCanvasAsPdf, exportCanvasAsPng, exportCanvasesAsPdf, svgElementToExportCanvases } from '../lib/export';
 import { MaterialItem } from '../lib/types';
 
 interface MaterialTableProps {
@@ -28,6 +28,13 @@ function parseJsonArray<T>(raw: string | number | boolean | undefined, fallback:
   } catch {
     return fallback;
   }
+}
+
+
+function projectExportTitle(baseTitle: string, values: Record<string, string | number | boolean>) {
+  const job = String(values.poJobName ?? '').trim();
+  const address = String(values.jobAddress ?? '').trim();
+  return [baseTitle, job, address].filter(Boolean).join(' · ');
 }
 
 function sanitizeFilePart(value: string) {
@@ -331,10 +338,12 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
     const root = document.getElementById('service-export-root');
     const svg = root?.querySelector('svg') as SVGSVGElement | null;
     if (!svg) return;
-    const layoutCanvas = await svgElementToCanvas(svg);
-    if (!layoutCanvas) return;
+    const layoutTitle = projectExportTitle('S&S Design Build · Layout', values);
+    const layoutCanvases = await svgElementToExportCanvases(svg, layoutTitle);
+    if (!layoutCanvases.length) return;
     const materialCanvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
-    await exportCanvasesAsPdf([layoutCanvas, materialCanvas], 'S&S Design Build · Layout and material order list', `${exportBaseName}-layout-materials.pdf`);
+    const forcePortraitByIndex = { [layoutCanvases.length]: true } as Record<number, boolean>;
+    await exportCanvasesAsPdf([...layoutCanvases, materialCanvas], 'S&S Design Build · Layout and material order list', `${exportBaseName}-layout-materials.pdf`, { forcePortraitByIndex });
   };
 
   return (
