@@ -1568,3 +1568,51 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .legend-c-channel { stroke: #64748b; stroke-width: 5; stroke-linecap: round; }
 .legend-gutter { stroke: #0ea5e9; stroke-width: 5; stroke-linecap: round; }
 .legend-fascia { stroke: #f97316; stroke-width: 5; stroke-linecap: round; }
+
+/* v94: keep Decks manual beam trim controls inside the mobile viewport */
+.beam-editor-row,
+.beam-edit-grid,
+.inline-mini-field,
+.inline-mini-field input {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.beam-edit-grid {
+  width: 100%;
+}
+
+.inline-mini-field input {
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .deck-designer-controls,
+  .deck-designer-controls .callout-box,
+  .beam-editor-list,
+  .beam-editor-row {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .beam-editor-row.beam-edit-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+    align-items: end;
+  }
+
+  .beam-editor-row.beam-edit-grid > .inline-mini-field,
+  .beam-editor-row.beam-edit-grid > button {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 420px) {
+  .beam-editor-row.beam-edit-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .beam-editor-row.beam-edit-grid > * {
+    grid-column: 1 / -1;
+  }
+}
