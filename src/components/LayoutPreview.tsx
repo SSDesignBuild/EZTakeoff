@@ -1244,26 +1244,41 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               return chunks;
             })()}
 
-            <g transform={`translate(60, ${planY + planH + 36})`} className="layout-legend-box">
-              <rect x="0" y="0" width="410" height="124" rx="10" className="legend-box" />
+            <g transform={`translate(60, ${planY + planH + 36})`} className="layout-legend-box deck-layout-legend">
+              <rect x="0" y="0" width="430" height="134" rx="10" className="legend-box" />
               <text x="14" y="22" className="layout-legend-title">Layout legend</text>
               {[
-                ['6x6 post', 'legend-post-6x6'],
-                ['railing post', 'legend-railing-post'],
-                ['band boards', 'legend-band-board'],
-                ['joist', 'legend-joist'],
-                ['stair stringer', 'legend-stair-joist'],
-                ['deck boards', 'legend-deck-board'],
-                ['beams', 'legend-beam'],
-                ['blocking', 'legend-blocking'],
-              ].map(([label, cls], index) => {
+                { label: '6x6 post', kind: 'post' },
+                { label: 'railing post', kind: 'railPost' },
+                { label: 'band boards', kind: 'band' },
+                { label: 'joist', kind: 'joist' },
+                { label: 'stair stringer', kind: 'stringer' },
+                { label: 'deck boards', kind: 'deckBoard' },
+                { label: 'beams', kind: 'beam' },
+                { label: 'blocking', kind: 'blocking' },
+              ].map((item, index) => {
                 const col = index % 2;
                 const row = Math.floor(index / 2);
-                const x = 18 + col * 196;
-                const y = 42 + row * 20;
-                return <g key={`deck-legend-${label}`} transform={`translate(${x}, ${y})`}>
-                  <line x1="0" y1="0" x2="28" y2="0" className={cls} />
-                  <text x="38" y="4" className="layout-legend-label">{label}</text>
+                const x = 18 + col * 206;
+                const y = 42 + row * 22;
+                const swatch = item.kind === 'post'
+                  ? <rect x="6" y="-8" width="16" height="16" rx="3" className="post-node" />
+                  : item.kind === 'railPost'
+                    ? <rect x="7" y="-8" width="14" height="14" rx="2" className="railing-post-node" />
+                    : item.kind === 'band'
+                      ? <g><line x1="0" y1="-3" x2="30" y2="-3" className="band-line" /><line x1="0" y1="4" x2="30" y2="4" className="band-line secondary" /></g>
+                      : item.kind === 'joist'
+                        ? <rect x="10" y="-12" width="8" height="24" className="joist-rect" />
+                        : item.kind === 'stringer'
+                          ? <rect x="4" y="-7" width="26" height="14" className="stringer-rect" />
+                          : item.kind === 'deckBoard'
+                            ? <rect x="0" y="-7" width="32" height="14" className="deck-board-strip" />
+                            : item.kind === 'beam'
+                              ? <g><rect x="0" y="-8" width="32" height="7" className="beam-rect primary" /><rect x="0" y="2" width="32" height="7" className="beam-rect secondary" /></g>
+                              : <line x1="0" y1="0" x2="32" y2="0" className="blocking-line" />;
+                return <g key={`deck-legend-${item.label}`} transform={`translate(${x}, ${y})`}>
+                  {swatch}
+                  <text x="40" y="4" className="layout-legend-label">{item.label}</text>
                 </g>;
               })}
             </g>
@@ -1707,26 +1722,41 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
       <line x1={x0 - 28} y1={y0} x2={x0 - 28} y2={y0 + roofD} className="dimension-line" />
       <text x={x0 - 42} y={y0 + roofD / 2} textAnchor="middle" className="svg-note">{feetAndInches(projection)}</text>
       <text x={x0} y={y0 + roofD + 62} className="svg-note">{`${beamStyle} beam · ${frontPostCount} front posts · ${supportBeamCount} intermediate beam(s)${supportBeamCount ? ` · ${supportPostCount} posts each` : ''} · ${frontOverhang}' side overhang · ${projectionOverhang}' projection overhang`}</text>
-      <g transform={`translate(${x0}, ${y0 + roofD + 88})`} className="layout-legend-box">
-        <rect x="0" y="0" width="520" height="64" rx="10" className="legend-box" />
+      <g transform={`translate(${x0}, ${y0 + roofD + 88})`} className="layout-legend-box patio-layout-legend">
+        <rect x="0" y="0" width="560" height="76" rx="10" className="legend-box" />
         <text x="14" y="22" className="layout-legend-title">Layout legend</text>
         {[
-          ['regular panel', 'legend-roof-panel'],
-          ['fan-beam panel', 'legend-fan-panel'],
-          ['cut panel', 'legend-cut-panel'],
-          ['C-channel / house side', 'legend-c-channel'],
-          ['gutter', 'legend-gutter'],
-          ['fascia', 'legend-fascia'],
-          ['beam', 'legend-beam'],
-          ['post', 'legend-post-6x6'],
-        ].map(([label, cls], index) => {
+          { label: 'regular panel', kind: 'roof' },
+          { label: 'fan-beam panel', kind: 'fan' },
+          { label: 'cut panel', kind: 'cut' },
+          { label: 'C-channel / house side', kind: 'trim' },
+          { label: 'gutter', kind: 'gutter' },
+          { label: 'fascia', kind: 'fascia' },
+          { label: 'beam', kind: 'beam' },
+          { label: 'post', kind: 'post' },
+        ].map((item, index) => {
           const col = index % 4;
           const row = Math.floor(index / 4);
-          const x = 14 + col * 126;
-          const y = 40 + row * 16;
-          return <g key={`patio-legend-${label}`} transform={`translate(${x}, ${y})`}>
-            <line x1="0" y1="0" x2="24" y2="0" className={cls} />
-            <text x="30" y="4" className="layout-legend-label small">{label}</text>
+          const x = 14 + col * 136;
+          const y = 42 + row * 22;
+          const swatch = item.kind === 'roof'
+            ? <rect x="0" y="-8" width="26" height="16" className="roof-panel" />
+            : item.kind === 'fan'
+              ? <g><rect x="0" y="-8" width="26" height="16" className="fan-beam-panel" /><line x1="13" y1="-8" x2="13" y2="8" className="fan-axis-line" /></g>
+              : item.kind === 'cut'
+                ? <rect x="0" y="-8" width="26" height="16" className="cut-panel" />
+                : item.kind === 'trim'
+                  ? <line x1="0" y1="0" x2="26" y2="0" className="trim-line" />
+                  : item.kind === 'gutter'
+                    ? <line x1="0" y1="0" x2="26" y2="0" className="gutter-line" />
+                    : item.kind === 'fascia'
+                      ? <line x1="0" y1="0" x2="26" y2="0" className="fascia-line" />
+                      : item.kind === 'beam'
+                        ? <line x1="0" y1="0" x2="26" y2="0" className="beam-line" />
+                        : <rect x="7" y="-7" width="14" height="14" className="post-node" rx="2" />;
+          return <g key={`patio-legend-${item.label}`} transform={`translate(${x}, ${y})`}>
+            {swatch}
+            <text x="32" y="4" className="layout-legend-label small">{item.label}</text>
           </g>;
         })}
       </g>
