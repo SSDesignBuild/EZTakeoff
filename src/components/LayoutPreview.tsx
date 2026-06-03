@@ -29,6 +29,15 @@ const deckBoardPreviewColor = (style: unknown) => {
   return '#b89568';
 };
 
+
+const deckBoardLabelColor = (label: string) => {
+  const palette = ['#b91c1c', '#1d4ed8', '#047857', '#92400e', '#6d28d9', '#0f766e', '#be123c', '#0369a1', '#7c2d12', '#4338ca'];
+  const clean = String(label || '').trim().toLowerCase();
+  const charCode = clean.charCodeAt(0);
+  const index = Number.isFinite(charCode) && charCode >= 97 && charCode <= 122 ? charCode - 97 : 0;
+  return palette[index % palette.length];
+};
+
 const feetAndInches = (feet: number) => {
   const totalInches = Math.round(feet * 12);
   const ft = Math.floor(totalInches / 12);
@@ -39,7 +48,17 @@ const feetAndInches = (feet: number) => {
 const projectExportTitle = (baseTitle: string, values: Record<string, string | number | boolean>) => {
   const job = String(values.poJobName ?? '').trim();
   const address = String(values.jobAddress ?? '').trim();
-  return [baseTitle, job, address].filter(Boolean).join(' · ');
+  const phone = String(values.customerPhone ?? '').trim();
+  const balance = String(values.balanceDueCompletion ?? '').trim();
+  const financed = String(values.financedYesNo ?? '').trim();
+  return [
+    baseTitle,
+    job,
+    address,
+    phone ? `Phone: ${phone}` : '',
+    balance ? `Balance due at completion: ${balance}` : '',
+    financed ? `Financed: ${financed}` : '',
+  ].filter(Boolean).join(' · ');
 };
 
 
@@ -746,7 +765,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const renderBoardTag = (label: string, x: number, y: number, key: string) => (
     <g key={key}>
       <rect x={x - 10} y={y - 10} width={20} height={20} rx={4} className="board-tag-badge" />
-      <text x={x} y={y + 4} textAnchor="middle" className="board-tag-text">{label}</text>
+      <text x={x} y={y + 4} textAnchor="middle" className="board-tag-text" style={{ fill: deckBoardLabelColor(label) }}>{label}</text>
     </g>
   );
 
@@ -1225,6 +1244,30 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               return chunks;
             })()}
 
+            <g transform={`translate(60, ${planY + planH + 36})`} className="layout-legend-box">
+              <rect x="0" y="0" width="410" height="124" rx="10" className="legend-box" />
+              <text x="14" y="22" className="layout-legend-title">Layout legend</text>
+              {[
+                ['6x6 post', 'legend-post-6x6'],
+                ['railing post', 'legend-railing-post'],
+                ['band boards', 'legend-band-board'],
+                ['joist', 'legend-joist'],
+                ['stair stringer', 'legend-stair-joist'],
+                ['deck boards', 'legend-deck-board'],
+                ['beams', 'legend-beam'],
+                ['blocking', 'legend-blocking'],
+              ].map(([label, cls], index) => {
+                const col = index % 2;
+                const row = Math.floor(index / 2);
+                const x = 18 + col * 196;
+                const y = 42 + row * 20;
+                return <g key={`deck-legend-${label}`} transform={`translate(${x}, ${y})`}>
+                  <line x1="0" y1="0" x2="28" y2="0" className={cls} />
+                  <text x="38" y="4" className="layout-legend-label">{label}</text>
+                </g>;
+              })}
+            </g>
+
             <g transform={`translate(${sheetW - titleBlockW - 52}, ${planY + planH + 34})`}>
               <rect x="0" y="0" width={titleBlockW} height={titleBlockH} className="title-block" />
               <line x1="0" y1="30" x2={titleBlockW} y2="30" className="title-block-line" />
@@ -1591,8 +1634,8 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
   const effectiveProjection = Math.max(0, projection - projectionOverhang);
   const supportBeamCount = ((panelThickness === 3 && !upgraded3 && effectiveProjection > 13) ? Math.ceil(effectiveProjection / 13) - 1 : 0) + extraBeams;
   const scale = Math.min(560 / Math.max(width, 1), 340 / Math.max(projection, 1));
-  const x0 = 48;
-  const y0 = 48;
+  const x0 = 92;
+  const y0 = 58;
   const roofW = width * scale;
   const roofD = projection * scale;
   const beamStyle = screenUnderneath ? '3x3' : 'Atlas';
@@ -1626,7 +1669,7 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
       </div>
       <div className="preview-toolbar">{fanBeamCount > 0 && onValuesChange && <><button type="button" className="ghost-btn small-btn" onClick={() => onValuesChange((current) => ({ ...current, activeFanBeamIndex: Math.max(0, Math.min((Number(current.activeFanBeamIndex ?? 0) - 1 + layout.selectedFanOptions.length) % Math.max(layout.selectedFanOptions.length, 1), layout.selectedFanOptions.length - 1)) }))}>Prev beam</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftActiveFan(-1)}>← Slot</button><button type="button" className="ghost-btn small-btn" onClick={() => shiftActiveFan(1)}>Slot →</button><button type="button" className="ghost-btn small-btn" onClick={() => onValuesChange((current) => ({ ...current, activeFanBeamIndex: layout.selectedFanOptions.length ? (Number(current.activeFanBeamIndex ?? 0) + 1) % layout.selectedFanOptions.length : 0 }))}>Next beam</button></>}<button type="button" className="ghost-btn small-btn" onClick={() => { void exportSvgAsPdf(svgRef.current, projectExportTitle('Patio cover plan', values), 'sns-patio-cover-plan.pdf'); }}>Export PDF</button></div>
     </div>
-    <svg ref={svgRef} viewBox={`0 0 ${roofW + 130} ${roofD + 180}`} className="layout-svg patio-sheet-svg">
+    <svg ref={svgRef} viewBox={`0 0 ${roofW + 210} ${roofD + 240}`} className="layout-svg patio-sheet-svg">
       {Array.from({ length: Math.ceil(width) + 2 }, (_, index) => <line key={`px-${index}`} x1={x0 + index * scale} y1={y0 - 20} x2={x0 + index * scale} y2={y0 + roofD + 40} className="svg-grid" />)}
       {Array.from({ length: Math.ceil(projection) + 2 }, (_, index) => <line key={`py-${index}`} x1={x0 - 20} y1={y0 + index * scale} x2={x0 + roofW + 20} y2={y0 + index * scale} className="svg-grid" />)}
       <rect x={x0} y={y0} width={roofW} height={roofD} className="roof-box" rx="8" />
@@ -1662,8 +1705,31 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
       <line x1={x0} y1={y0 + roofD + 40} x2={x0 + roofW} y2={y0 + roofD + 40} className="dimension-line" />
       <text x={x0 + roofW / 2 - 16} y={y0 + roofD + 34} className="svg-note">{feetAndInches(width)}</text>
       <line x1={x0 - 28} y1={y0} x2={x0 - 28} y2={y0 + roofD} className="dimension-line" />
-      <text x={x0 - 62} y={y0 + roofD / 2} className="svg-note">{feetAndInches(projection)}</text>
+      <text x={x0 - 42} y={y0 + roofD / 2} textAnchor="middle" className="svg-note">{feetAndInches(projection)}</text>
       <text x={x0} y={y0 + roofD + 62} className="svg-note">{`${beamStyle} beam · ${frontPostCount} front posts · ${supportBeamCount} intermediate beam(s)${supportBeamCount ? ` · ${supportPostCount} posts each` : ''} · ${frontOverhang}' side overhang · ${projectionOverhang}' projection overhang`}</text>
+      <g transform={`translate(${x0}, ${y0 + roofD + 88})`} className="layout-legend-box">
+        <rect x="0" y="0" width="520" height="64" rx="10" className="legend-box" />
+        <text x="14" y="22" className="layout-legend-title">Layout legend</text>
+        {[
+          ['regular panel', 'legend-roof-panel'],
+          ['fan-beam panel', 'legend-fan-panel'],
+          ['cut panel', 'legend-cut-panel'],
+          ['C-channel / house side', 'legend-c-channel'],
+          ['gutter', 'legend-gutter'],
+          ['fascia', 'legend-fascia'],
+          ['beam', 'legend-beam'],
+          ['post', 'legend-post-6x6'],
+        ].map(([label, cls], index) => {
+          const col = index % 4;
+          const row = Math.floor(index / 4);
+          const x = 14 + col * 126;
+          const y = 40 + row * 16;
+          return <g key={`patio-legend-${label}`} transform={`translate(${x}, ${y})`}>
+            <line x1="0" y1="0" x2="24" y2="0" className={cls} />
+            <text x="30" y="4" className="layout-legend-label small">{label}</text>
+          </g>;
+        })}
+      </g>
     </svg>
     <div className="legend-row wrap-legend"><span><i className="legend-swatch roof-panel-swatch" /> regular panel</span><span><i className="legend-swatch fan-panel-swatch" /> fan-beam panel</span><span><i className="legend-swatch cut-panel-swatch" /> cut closure panel</span><span><i className="legend-swatch beam-line-swatch" /> beam</span></div>
   </div>;

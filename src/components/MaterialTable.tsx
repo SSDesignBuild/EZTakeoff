@@ -14,6 +14,9 @@ interface DisplayMaterialItem extends MaterialItem { rowKey: string; source: 'es
 const infoFields = [
   { key: 'poJobName', label: 'P.O / Job name', type: 'text' as const },
   { key: 'jobAddress', label: 'Address', type: 'text' as const },
+  { key: 'customerPhone', label: 'Customer phone', type: 'text' as const },
+  { key: 'balanceDueCompletion', label: 'Balance due at completion', type: 'text' as const },
+  { key: 'financedYesNo', label: 'Financed', type: 'select' as const, options: ['No', 'Yes'] },
   { key: 'deliverYesNo', label: 'Deliver', type: 'select' as const, options: ['No', 'Yes'] },
   { key: 'deliverDate', label: 'Deliver date', type: 'date' as const },
 ];
@@ -34,7 +37,17 @@ function parseJsonArray<T>(raw: string | number | boolean | undefined, fallback:
 function projectExportTitle(baseTitle: string, values: Record<string, string | number | boolean>) {
   const job = String(values.poJobName ?? '').trim();
   const address = String(values.jobAddress ?? '').trim();
-  return [baseTitle, job, address].filter(Boolean).join(' · ');
+  const phone = String(values.customerPhone ?? '').trim();
+  const balance = String(values.balanceDueCompletion ?? '').trim();
+  const financed = String(values.financedYesNo ?? '').trim();
+  return [
+    baseTitle,
+    job,
+    address,
+    phone ? `Phone: ${phone}` : '',
+    balance ? `Balance due at completion: ${balance}` : '',
+    financed ? `Financed: ${financed}` : '',
+  ].filter(Boolean).join(' · ');
 }
 
 function sanitizeFilePart(value: string) {
@@ -109,12 +122,15 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
   const info = [
     ['P.O / Job name', String(values.poJobName ?? '') || '—'],
     ['Address', String(values.jobAddress ?? '') || '—'],
+    ['Phone', String(values.customerPhone ?? '') || '—'],
+    ['Balance due', String(values.balanceDueCompletion ?? '') || '—'],
+    ['Financed', String(values.financedYesNo ?? 'No')],
     ['Deliver', String(values.deliverYesNo ?? 'No')],
     ['Deliver date', String(values.deliverDate ?? '') || '—'],
   ];
   const infoWidths = info.map(([label, value], idx) => {
-    const max = idx === 1 ? pageWidth * 0.62 : idx >= 2 ? 110 : 150;
-    return Math.min(max, Math.max(idx === 1 ? 180 : 90, probe.measureText(String(value)).width + 18, probe.measureText(label).width + 12));
+    const preferred = idx === 1 ? pageWidth * 0.34 : idx === 0 ? 145 : idx === 3 ? 130 : 105;
+    return Math.min(preferred, Math.max(idx === 1 ? 170 : 84, probe.measureText(String(value)).width + 18, probe.measureText(label).width + 12));
   });
   const infoTotal = infoWidths.reduce((a,b) => a+b,0);
   const stretch = Math.max(0, pageWidth - margin * 2 - infoTotal);
