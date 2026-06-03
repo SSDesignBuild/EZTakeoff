@@ -366,6 +366,12 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const depth = round2(maxY - minY);
   const attachment = String(inputs.attachment ?? 'siding') as DeckModel['attachment'];
   const isFreestanding = attachment === 'freestanding';
+  // Siding/wall attachments act as the rear support ledger and do not need a
+  // post/beam line at the house. Brick/masonry is different: it may be
+  // anchored for lateral restraint, but it must not be treated as the main
+  // gravity support. Brick therefore keeps the house edge as a non-railing
+  // attachment side while also forcing a rear support beam/post line.
+  const needsHouseSupportBeam = attachment === 'brick' || isFreestanding;
   const boardRun = String(inputs.boardRun ?? 'width') === 'projection' ? 'projection' : 'width';
   const joistDirection = boardRun === 'width' ? 'vertical' : 'horizontal';
   const deckingDirection = boardRun === 'width' ? 'horizontal' : 'vertical';
@@ -399,7 +405,9 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const boardGroups = accumulateGroups(boardLengths);
   const borderGroups = inputs.borderSameBoard ? accumulateGroups(exposedSegments.map((segment) => segment.length)) : [];
 
-  const rawCustomBeams = parseNumberArray(inputs.customBeamYs).map((value) => clamp(value, 0, depth)).filter((value) => isFreestanding ? value >= 0 && value <= depth : value > 0.2 && value < depth - 0.2);
+  const rawCustomBeams = parseNumberArray(inputs.customBeamYs)
+    .map((value) => clamp(value, 0, depth))
+    .filter((value) => needsHouseSupportBeam ? value >= 0 && value <= depth : value > 0.2 && value < depth - 0.2);
   const beamCantilever = Math.max(0, Math.min(2, Number(inputs.beamCantilever ?? 2)));
 
   const insetFrontSegments = attachment === 'brick'
@@ -416,12 +424,12 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     : [];
   const insetBeamOffsets = insetFrontSegments.map((entry) => entry.offsetFromHouse);
   const beamOffsets = uniqueSorted((rawCustomBeams.length > 0 ? uniqueSorted(rawCustomBeams) : (() => {
-    if (depth <= beamCantilever) return isFreestanding ? [0] : [depth];
+    if (depth <= beamCantilever) return needsHouseSupportBeam ? uniqueSorted([0, depth]) : [depth];
     const positions: number[] = [];
     const frontBeam = Math.max(0, round2(depth - beamCantilever));
     positions.push(frontBeam);
-    while (positions[positions.length - 1] > BEAM_TARGET_SPACING + (isFreestanding ? 0 : 0.01)) positions.push(round2(positions[positions.length - 1] - BEAM_TARGET_SPACING));
-    if (isFreestanding) positions.push(0);
+    while (positions[positions.length - 1] > BEAM_TARGET_SPACING + (needsHouseSupportBeam ? 0 : 0.01)) positions.push(round2(positions[positions.length - 1] - BEAM_TARGET_SPACING));
+    if (needsHouseSupportBeam) positions.push(0);
     return uniqueSorted(positions);
   })()).filter((value) => !insetBeamOffsets.some((offset) => Math.abs(offset - value) < 0.01)).concat(insetBeamOffsets));
 

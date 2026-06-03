@@ -604,7 +604,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const widthFt = Math.max(layoutMaxX - layoutMinX, 1);
   const depthFt = Math.max(layoutMaxY - layoutMinY, 1);
   const titleBlockW = 520;
-  const titleBlockH = 188;
+  const titleBlockH = 214;
   const sheetMarginX = 54;
   const sheetMarginTop = 110;
   const sheetMarginBottom = 54;
@@ -614,7 +614,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const planW = widthFt * scale;
   const planH = depthFt * scale;
   const sheetW = Math.max(1580, planW + sheetMarginX * 2);
-  const sheetH = Math.max(1260, planH + titleBlockH + sheetMarginTop + sheetMarginBottom + 90);
+  const sheetH = Math.max(1320, planH + titleBlockH + sheetMarginTop + sheetMarginBottom + 120);
   const planX = (sheetW - planW) / 2;
   const planY = sheetMarginTop;
   const toSvg = (x: number, y: number) => ({ x: planX + (x - layoutMinX) * scale, y: planY + (y - layoutMinY) * scale });
@@ -759,6 +759,32 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
       <line x1={x1} y1={y1} x2={x2} y2={y2} className="dimension-line" stroke="#4b5563" strokeWidth="1.2" strokeDasharray="7 5" />
       <text x={(x1+x2)/2 + (Math.abs(offsetX) > Math.abs(offsetY) ? 0 : -14)} y={(y1+y2)/2 + (Math.abs(offsetY) > Math.abs(offsetX) ? 0 : -10)} className="dimension-text" fill="#111827" stroke="#ffffff" strokeWidth="3" paintOrder="stroke">{text}</text>
     </g>;
+  };
+
+  const renderBeamPostDims = () => {
+    if (!showFraming) return null;
+    const dims: React.ReactNode[] = [];
+    deck.beamLines.forEach((beam, beamIdx) => {
+      beam.segments.forEach((segment, segIdx) => {
+        const posts = beam.postXs.filter((x) => x >= segment.startX - 0.01 && x <= segment.endX + 0.01).sort((a, b) => a - b);
+        const marks = [segment.startX, ...posts, segment.endX];
+        for (let i = 1; i < marks.length; i += 1) {
+          const len = marks[i] - marks[i - 1];
+          if (len < 0.15) continue;
+          const a = toSvg(marks[i - 1], beam.y);
+          const b = toSvg(marks[i], beam.y);
+          dims.push(renderDim(a, b, feetAndInches(len), 0, 52 + beamIdx * 14, `beam-post-span-${beamIdx}-${segIdx}-${i}`));
+        }
+        // Show the joist/deck cantilever from the beam line out to the nearest outside edge.
+        const midX = posts.length ? posts[Math.floor(posts.length / 2)] : (segment.startX + segment.endX) / 2;
+        const frontEdgeY = beam.y > (deck.minY + deck.maxY) / 2 ? deck.maxY : deck.minY;
+        const cantilever = Math.abs(frontEdgeY - beam.y);
+        if (cantilever > 0.1) {
+          dims.push(renderDim(toSvg(midX, beam.y), toSvg(midX, frontEdgeY), feetAndInches(cantilever), 34 + segIdx * 12, 0, `beam-cantilever-${beamIdx}-${segIdx}`));
+        }
+      });
+    });
+    return <g className="beam-post-dimensions">{dims}</g>;
   };
 
 
@@ -1227,6 +1253,8 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               return renderDim(a, b, feetAndInches(segment.length), outward.x * offset, outward.y * offset, `seg-v-${segment.index}`);
             })}
 
+            {renderBeamPostDims()}
+
             {stairSegment && deck.stairPlacement.start && deck.stairPlacement.end && (() => {
               const a = toSvg(stairSegment.start.x, stairSegment.start.y);
               const s = toSvg(deck.stairPlacement.start.x, deck.stairPlacement.start.y);
@@ -1289,8 +1317,9 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               <line x1="0" y1="66" x2={titleBlockW} y2="66" className="title-block-line" />
               <line x1="0" y1="102" x2={titleBlockW} y2="102" className="title-block-line" />
               <line x1="0" y1="138" x2={titleBlockW} y2="138" className="title-block-line" />
-              <line x1="172" y1="30" x2="172" y2="138" className="title-block-line" />
-              <line x1="344" y1="30" x2="344" y2="138" className="title-block-line" />
+              <line x1="0" y1="168" x2={titleBlockW} y2="168" className="title-block-line" />
+              <line x1="172" y1="30" x2="172" y2="168" className="title-block-line" />
+              <line x1="344" y1="30" x2="344" y2="168" className="title-block-line" />
               <text x="12" y="20" className="title-block-title">S&S DESIGN BUILD · DECK FRAMING PLAN</text>
 
               <text x="12" y="48" className="title-block-label">Width</text>
@@ -1308,14 +1337,17 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               <text x="418" y="84" className="title-block-value">{deck.postCount}</text>
 
               <text x="12" y="120" className="title-block-label">Attachment</text>
-              <text x="82" y="120" className="title-block-value">{deck.attachment}</text>
+              <text x="108" y="120" className="title-block-value">{deck.attachment}</text>
               <text x="184" y="120" className="title-block-label">Cantilever</text>
               <text x="276" y="120" className="title-block-value">{feetAndInches(Number(values.beamCantilever ?? 2))}</text>
               <text x="356" y="120" className="title-block-label">Stairs</text>
               <text x="418" y="120" className="title-block-value">{deck.stairCount ? `${deck.stairRisers}R/${deck.stairTreadsPerRun}T` : 'none'}</text>
 
-              <text x="12" y="158" className="title-block-note">Double band boards shown on all edges.</text>
-              <text x="12" y="174" className="title-block-note">Doubled beam plies staggered with explicit splice markers.</text>
+              <text x="12" y="156" className="title-block-label">Footings</text>
+              <text x="108" y="156" className="title-block-value">12&quot; deep x 18&quot; wide</text>
+
+              <text x="12" y="186" className="title-block-note">Double band boards shown on all edges.</text>
+              <text x="12" y="202" className="title-block-note">Doubled beam plies staggered with explicit splice markers.</text>
             </g>
           </svg>
         </div>
