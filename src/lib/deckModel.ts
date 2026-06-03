@@ -552,7 +552,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
 
   const topRailSegments = deriveTopRailSegments(railCoverage, stairPlacement);
   const topRailRun = round2(topRailSegments.reduce((sum, item) => sum + (item.end - item.start), 0));
-  const stairRailRun = stairRisers > 3 ? round2(stairRunFt * stairRailSideCount) : 0;
+  const stairRailRun = stairCount > 0 && stairRailSideCount > 0 ? round2(stairRunFt * stairRailSideCount) : 0;
   const railingRun = round2(Number(inputs.perimeterRailingFt ?? 0) || (topRailRun + stairRailRun));
   let railingSections6 = 0;
   let railingSections8 = 0;
@@ -573,7 +573,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     railingSections6 += segmentBest.six;
     railingSections8 += segmentBest.eight;
   });
-  if (stairRisers > 3) {
+  if (stairCount > 0 && stairRailSideCount > 0) {
     const stairBest = (() => {
       let best = { six: 0, eight: 0, waste: Number.POSITIVE_INFINITY, pieces: Number.POSITIVE_INFINITY };
       for (let six = 0; six < 10; six += 1) for (let eight = 0; eight < 10; eight += 1) {
@@ -588,7 +588,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     railingSections8 += stairBest.eight * stairRailSideCount;
   }
   const railingType = String(inputs.railingType ?? 'aluminum');
-  const railingPosts = railingType === 'aluminum' ? 0 : Math.max(0, topRailSegments.reduce((sum, item) => sum + Math.max(0, Math.ceil((item.end - item.start) / 8) - 1), 0) + topRailSegments.length * 2 + (stairRisers > 3 && stairRailSideCount > 0 ? Math.max(stairRailSideCount * 2, Math.ceil(stairRunFt / 8) * stairRailSideCount + stairRailSideCount) : 0));
+  const railingPosts = railingType === 'aluminum' ? 0 : Math.max(0, topRailSegments.reduce((sum, item) => sum + Math.max(0, Math.ceil((item.end - item.start) / 8) - 1), 0) + topRailSegments.length * 2 + (stairCount > 0 && stairRailSideCount > 0 ? Math.max(stairRailSideCount * 2, Math.ceil(stairRunFt / 8) * stairRailSideCount + stairRailSideCount) : 0));
   const carriageBolts = postCount * 2 + (railingPosts > 0 ? railingPosts * 2 : 0);
   const lateralLoadBrackets = isFreestanding ? 0 : Math.max(2, Math.ceil(houseContactLength / 2));
   const sdsCorners = Math.max(4, segments.length) * 4;

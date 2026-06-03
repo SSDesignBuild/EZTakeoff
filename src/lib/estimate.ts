@@ -227,7 +227,7 @@ function interiorPostCount(length: number, maxSpan = 8) {
 
 function classifyRailing(deck: ReturnType<typeof buildDeckModel>) {
   const topRuns = deriveTopRailRuns(deck);
-  const stairRuns = deck.stairRisers > 3 && deck.stairCount > 0 && deck.stairRailSideCount > 0
+  const stairRuns = deck.stairCount > 0 && deck.stairRailSideCount > 0
     ? Array.from({ length: deck.stairCount * deck.stairRailSideCount }, () => ({ length: deck.stairRunFt, kind: 'stair' as const }))
     : [];
   const levelMix = topRuns.reduce((sum, run) => { const opt = optimizeRail(run.length); return { six: sum.six + opt.six, eight: sum.eight + opt.eight }; }, { six: 0, eight: 0 });
@@ -456,7 +456,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     if (leftRight <= 0) return [];
     return [leftRight / 2, leftRight / 2].filter((value) => value > 0.05);
   });
-  if (deck.stairRisers > 3 && deck.stairCount > 0 && deck.stairRailSideCount > 0) {
+  if (deck.stairCount > 0 && deck.stairRailSideCount > 0) {
     for (let run = 0; run < deck.stairCount * deck.stairRailSideCount; run += 1) adjustedRailSegments.push(deck.stairRunFt);
   }
   const railingBreakdown = classifyRailing(deck);
@@ -470,6 +470,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     toMaterial(`${deck.joistSize} support blocking`, 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', 'Pressure treated', `${deck.blockingLf.toFixed(1)} lf total for picture-frame / breaker support blocking only · blocking is counted at 1 ft O.C. only where boards run parallel with joists and need support`),
     toMaterial('6x6 wood posts', 'Structure', structuralPostStock.stockCount, 'boards', `${structuralPostStock.stockLength} ft stock`, 'Pressure treated', `${deck.postCount} post(s) cut to about ${feetAndInches(structuralPostStock.cutLength)} each after subtracting ${deck.joistSize} joist height from ${feetAndInches(deckHeightFt)} deck height · ${structuralPostStock.perStock} cut(s) per stock board${deck.lockedPosts.length ? ` · ${deck.lockedPosts.length} post position(s) manually locked` : ''}`),
     toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', undefined, '3 bags per post footing'),
+    toMaterial('12 in x 48 in Sonotubes', 'Structure', Math.ceil(deck.postCount / 3), 'tubes', '1 tube per 3 footers', undefined, `${deck.postCount} 6x6 post footer(s) total`),
     toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined, 'Post base bracket at each footing'),
     toMaterial('Concrete submersible J Anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined, 'Concrete anchor for post base bracket'),
     toMaterial('Joist hangers', 'Hardware', deck.joistHangers, 'ea', 'Match joist size', undefined, 'One hanger at each end of every joist'),
@@ -503,7 +504,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     if (railingPosts) materials.push(toMaterial('Blocking under top-mount aluminum posts', 'Railing', railingPosts, 'locations', '2x framing blocking', 'Blocking required under each aluminum post location'));
   } else if (railingType === 'wood') {
     const levelRailLf = deriveTopRailRuns(deck).reduce((sum, run) => sum + run.length, 0);
-    const stairRailLf = deck.stairRisers > 3 ? deck.stairRunFt * deck.stairCount * deck.stairRailSideCount : 0;
+    const stairRailLf = deck.stairCount > 0 && deck.stairRailSideCount > 0 ? deck.stairRunFt * deck.stairCount * deck.stairRailSideCount : 0;
     const totalWoodRailLf = levelRailLf + stairRailLf;
     const balusterCount = Math.ceil(totalWoodRailLf * 3.1);
     const levelBalusters = Math.ceil(levelRailLf * 3.1);
@@ -542,7 +543,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     };
     const drinkRailCuts = [
       ...deriveTopRailRuns(deck).flatMap((run) => splitRailRunIntoStockCuts(run.length)),
-      ...(deck.stairRisers > 3 ? Array.from({ length: deck.stairCount * deck.stairRailSideCount }).flatMap(() => splitRailRunIntoStockCuts(deck.stairRunFt)) : []),
+      ...(deck.stairCount > 0 && deck.stairRailSideCount > 0 ? Array.from({ length: deck.stairCount * deck.stairRailSideCount }).flatMap(() => splitRailRunIntoStockCuts(deck.stairRunFt)) : []),
     ];
     const drinkRailLf = drinkRailCuts.reduce((sum, length) => sum + length, 0);
     const drinkStock = optimizeStockCuts(drinkRailCuts, [8, 12, 16, 20]);
@@ -568,8 +569,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     materials: consolidateMaterials(materials).filter((item) => item.quantity > 0),
     orderNotes: [
       deck.attachment === 'brick' ? 'Brick attachment is treated as freestanding, so the house side still needs beam and post support, including beam segments at any inside corner/jut-out.' : 'Siding attachment keeps ledger logic active unless the deck is marked freestanding.',
-      deck.stairPlacement.edgeIndex !== null ? `Stairs sit on edge ${deck.stairPlacement.edgeIndex + 1}. Preview now shows tread count, stringer layout, and ${deck.stairRailSideCount === 0 ? 'no stair-side railing' : `${deck.stairRailSideCount} stair-side railing run(s)`} when more than 3 risers are required.` : 'No stair edge is assigned yet in the drawing tool.',
-      'Railing optimizer solves each straight run separately, subtracts stair openings from the deck edge, and adds stair-side railing runs when the stair count requires guard rail.',
+      deck.stairPlacement.edgeIndex !== null ? `Stairs sit on edge ${deck.stairPlacement.edgeIndex + 1}. Preview now shows tread count, stringer layout, and ${deck.stairRailSideCount === 0 ? 'no stair-side railing' : `${deck.stairRailSideCount} stair-side railing run(s)`} based on the left/right stair railing inputs.` : 'No stair edge is assigned yet in the drawing tool.',
+      'Railing optimizer solves each straight run separately, subtracts stair openings from the deck edge, and adds stair-side railing runs when the left/right stair railing inputs are selected.',
       deck.requiredFieldBoardBreaks.length > 0 ? 'Field board run exceeds 20 ft. Add a breaker board to avoid staggered decking; the app no longer shows staggered board seams.' : 'Field decking uses available 8, 12, 16, and 20 ft board lengths with breaker boards where selected.',
       deck.lockedPosts.length > 0 ? 'Locked posts stay in the take-off even after beam edits so you can preserve preferred field locations.' : 'Use post lock mode when you want to hold a post location while still letting the app auto-space the rest.',
     ],

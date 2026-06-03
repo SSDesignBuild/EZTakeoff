@@ -450,7 +450,7 @@ function railSegmentsForDeck(deck: ReturnType<typeof buildDeckModel>) {
       result.push({ start: pointAlong(edge, Math.max(coverage.start, stairEnd)), end: pointAlong(edge, coverage.end), length: coverage.end - Math.max(coverage.start, stairEnd), kind: 'deck', railKind: coverage.kind, edgeIndex: edge.index, coverageStart: Math.max(coverage.start, stairEnd), coverageEnd: coverage.end });
     }
   });
-  if (deck.stairRisers > 3 && deck.stairPlacement.start && deck.stairPlacement.end && deck.stairRailSideCount > 0) {
+  if (deck.stairPlacement.start && deck.stairPlacement.end && deck.stairRailSideCount > 0) {
     const segment = deck.edgeSegments[deck.stairPlacement.edgeIndex ?? 0];
     const normal = outwardNormal(segment, deck.points);
     const run = deck.stairRunFt;
@@ -1148,7 +1148,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             })()}
 
             {showRailing && railingSegments.map((segment, idx) => {
-              const sourceEdge = deck.edgeSegments.find((edge) => (Math.abs(edge.start.x - segment.start.x) < 0.01 && Math.abs(edge.start.y - segment.start.y) < 0.01 && Math.abs(edge.end.x - segment.end.x) < 0.01 && Math.abs(edge.end.y - segment.end.y) < 0.01) || (Math.abs(edge.start.x - segment.end.x) < 0.01 && Math.abs(edge.start.y - segment.end.y) < 0.01 && Math.abs(edge.end.x - segment.start.x) < 0.01 && Math.abs(edge.end.y - segment.start.y) < 0.01));
+              const sourceEdge = deck.edgeSegments[segment.edgeIndex] ?? null;
               const inward = sourceEdge ? inwardNormal(sourceEdge, deck.points) : { x: 0, y: 0 };
               const insetFt = sourceEdge ? railingInsetFt : 0;
               const baseStart = { x: segment.start.x + inward.x * insetFt, y: segment.start.y + inward.y * insetFt };
