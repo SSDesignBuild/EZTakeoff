@@ -415,9 +415,17 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const drinkStyleInfo = splitDeckStyle(drinkRailMaterial);
   const materials: MaterialItem[] = [];
   const deckingPlan = deriveDeckingLabelPlan(deck);
+  const lowerDeckingPlanForTotals = lowerDeck ? deriveDeckingLabelPlan(lowerDeck) : null;
   const deckingStyleInfo = splitDeckStyle(deckingMaterial);
   const fasciaMaterial = resolveBoardStyle(inputs.fasciaMaterial);
   const fasciaStyleInfo = splitDeckStyle(fasciaMaterial);
+  const sumGroupLf = (groups: { length?: number; cutLength?: number; count: number }[]) => groups.reduce((sum, group) => sum + Math.max(0, Number(group.length ?? group.cutLength ?? 0)) * Math.max(0, Number(group.count || 0)), 0);
+  const pictureFrameBoardLf = sumGroupLf(deckingPlan.groups.filter((group) => group.kind === 'picture-frame')) + (lowerDeckingPlanForTotals ? sumGroupLf(lowerDeckingPlanForTotals.groups.filter((group) => group.kind === 'picture-frame')) : 0);
+  const stairDeckBoardLf = sumGroupLf(deck.stairTreadGroups) + (lowerDeck ? sumGroupLf(lowerDeck.stairTreadGroups) : 0);
+  const totalFasciaBoardLf = Math.max(0, Number(deck.fasciaLf || 0)) + (lowerDeck ? Math.max(0, Number(lowerDeck.fasciaLf || 0)) : 0);
+  const colorMatchedTrimFastenerPoints = Math.ceil((pictureFrameBoardLf + stairDeckBoardLf + totalFasciaBoardLf) * 2);
+  const totalDeckAreaForNails = Math.max(0, Number(deck.area || 0)) + (lowerDeck ? Math.max(0, Number(lowerDeck.area || 0)) : 0);
+  const connectorNails = (deck.joistHangers + deck.postBases + deck.lateralLoadBrackets + deck.rafterTies) * 10 + (lowerDeck ? (lowerDeck.joistHangers + lowerDeck.postBases + lowerDeck.lateralLoadBrackets + lowerDeck.rafterTies) * 10 : 0);
   deckingPlan.groups.filter((group) => group.kind === 'field').forEach((group) => {
     const notes = `${deck.boardRun === 'width' ? 'Field decking. Boards run parallel to the house.' : 'Field decking. Boards run perpendicular to the house.'} Board style: ${deckingMaterial}. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`;
     const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
@@ -509,9 +517,14 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     toMaterial('Hex head LedgerLOK screws 5 in', 'Hardware', deck.sdsCorners, 'ea', '4 per corner', undefined, 'All band-board corners'),
     toMaterial('Joist tape', 'Hardware', deck.joistTapeLf, 'lf', 'Match roll coverage', undefined, 'Tape joists and band-board top edges'),
     toMaterial(deck.fastenerType === 'top screws' ? '3-1/2 in exterior framing screws' : '2-3/8 in CAMO screws', 'Hardware', deck.deckFastenerBoxes, 'boxes', deck.fastenerType === 'top screws' ? '365 per box' : '1750 per box', undefined),
-    toMaterial('3-1/2 in exterior screws used for deck boards', 'Hardware', Math.max(1, Math.ceil(deck.area / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For decking, breaker boards, and picture-frame areas that are face screwed'),
-    toMaterial('3 in nails', 'Hardware', deck.joistHangers * 10 + deck.postBases * 10 + deck.lateralLoadBrackets * 10, 'nails', '10 per connector', undefined, 'Joist hangers, post brackets, and lateral load brackets'),
-    toMaterial('1-1/2 in nails', 'Hardware', deck.rafterTies * 10, 'nails', '10 per hurricane tie', undefined, 'For hurricane ties'),
+    toMaterial('3-1/2 in exterior screws used for deck boards', 'Hardware', Math.max(1, Math.ceil((deck.area + (lowerDeck ? lowerDeck.area : 0)) / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For decking, breaker boards, and picture-frame areas that are face screwed'),
+    toMaterial('1-1/2 in nails', 'Hardware', connectorNails, 'nails', '10 per connector/tie', undefined, 'Used for joist hangers, post brackets, lateral load brackets, and hurricane ties; replaces separate 3 in nail takeoff for easier ordering'),
+    toMaterial('21 degree 3 in x .120 exterior collated nails with ring shank', 'Hardware', Math.max(1, Math.ceil(totalDeckAreaForNails / 200)), 'boxes', '1000 nails per box', undefined, 'Add 1000 nails per 200 sq ft of decking'),
+    ...(colorMatchedTrimFastenerPoints > 0 ? [
+      toMaterial('Cortex color match fascia screws', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '2 screws per lf', fasciaStyleInfo.color ?? deckingStyleInfo.color, `Small head screws, not big flat head screws. 2 screws every 1 ft of picture-frame board, stair board, and fascia board used. Picture frame ${pictureFrameBoardLf.toFixed(1)} lf + step boards ${stairDeckBoardLf.toFixed(1)} lf + fascia ${totalFasciaBoardLf.toFixed(1)} lf.`),
+      toMaterial('Color match screws for plugs', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '2 screws per lf', deckingStyleInfo.color ?? fasciaStyleInfo.color, `Same count logic as fascia screws: picture-frame boards, step boards, and fascia board runs.`),
+      toMaterial('Color match plugs', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '1 plug per color-match screw', deckingStyleInfo.color ?? fasciaStyleInfo.color, `Same count logic as fascia screws: picture-frame boards, step boards, and fascia board runs.`),
+    ] : []),
     ...(deck.fasciaPieces > 0 ? [toMaterial('Fascia board', 'Trim', deck.fasciaPieces, 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${deck.fasciaLf.toFixed(1)} lf on exposed deck perimeter plus stair risers/stringer sides only. Fascia style: ${fasciaMaterial}.`)] : []),
   );
   if (deck.stairStringers > 0) {
