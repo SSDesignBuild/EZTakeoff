@@ -469,9 +469,15 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const joistSize: DeckModel['joistSize'] = maxSpan <= JOIST_SPAN_LIMITS['2x8'] ? '2x8' : maxSpan <= JOIST_SPAN_LIMITS['2x10'] ? '2x10' : '2x12';
 
   const baseJoistAxisPositions = generateJoistPositions(joistDirection === 'vertical' ? minX : minY, joistDirection === 'vertical' ? maxX : maxY);
+  // Picture-frame support joists need to sit just inside the double band/rim boards,
+  // not centered on top of the band boards in the drawing. The physical support
+  // location is 2 in inboard from the inside face of the double rim pack
+  // (roughly 3 in thick), so use a 5 in offset from the deck perimeter.
+  const pictureFrameSupportOffsetFt = 5 / 12;
+  const breakerBoardSupportOffsetFt = 2 / 12;
   const supportJoistPositions = [
-    ...(pictureFrameCount > 0 ? (joistDirection === 'vertical' ? [minX + 2 / 12, maxX - 2 / 12] : [minY + 2 / 12, maxY - 2 / 12]) : []),
-    ...breakerBoardPositions.flatMap((pos) => breakerBoardCount > 0 ? [pos - 2 / 12, pos + 2 / 12] : []),
+    ...(pictureFrameCount > 0 ? (joistDirection === 'vertical' ? [minX + pictureFrameSupportOffsetFt, maxX - pictureFrameSupportOffsetFt] : [minY + pictureFrameSupportOffsetFt, maxY - pictureFrameSupportOffsetFt]) : []),
+    ...breakerBoardPositions.flatMap((pos) => breakerBoardCount > 0 ? [pos - breakerBoardSupportOffsetFt, pos + breakerBoardSupportOffsetFt] : []),
   ].filter((value) => value > (joistDirection === 'vertical' ? minX : minY) + 0.05 && value < (joistDirection === 'vertical' ? maxX : maxY) - 0.05);
   const joistAxisPositions = uniqueSorted([...baseJoistAxisPositions, ...supportJoistPositions]);
   const joistLengthsRaw: number[] = [];

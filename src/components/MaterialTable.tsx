@@ -261,18 +261,43 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
       .filter((item) => !deletedKeys.has(item.rowKey));
   }, [items, customItems, deletedKeys, nameOverrides, quantityOverrides, unitOverrides, stockOverrides, colorOverrides, noteOverrides]);
 
+  const stockOrderIdentity = (item: DisplayMaterialItem) => {
+    const name = String(item.name ?? '').trim();
+    const stockRecommendation = String(item.stockRecommendation ?? '').trim();
+    const color = String(item.color ?? '').trim();
+    const unit = String(item.unit ?? '').trim();
+    const combined = `${name} ${stockRecommendation}`;
+    const lumberMatch = combined.match(/\b(\d+x\d+)\b/i);
+    if (lumberMatch && /\b(?:ft|foot)\b/i.test(stockRecommendation)) {
+      const size = lumberMatch[1].toLowerCase().replace('x', 'x');
+      return {
+        name: `${size} lumber`,
+        key: [`lumber:${size}`, unit, stockRecommendation.toLowerCase(), color.toLowerCase()].join('||'),
+      };
+    }
+    if (/deck board/i.test(name) && /\b(?:ft|foot)\b/i.test(stockRecommendation)) {
+      const materialName = name.replace(/^(picture-frame|breaker|stair tread|lower tier stair tread)\s+/i, '').replace(/\s+\d+$/i, '').trim();
+      return {
+        name: materialName,
+        key: [`deck-board:${materialName.toLowerCase()}`, unit, stockRecommendation.toLowerCase(), color.toLowerCase()].join('||'),
+      };
+    }
+    return { name, key: [name.toLowerCase(), unit, stockRecommendation.toLowerCase(), color.toLowerCase()].join('||') };
+  };
+
   const stockOrderItems = useMemo<DisplayMaterialItem[]>(() => {
     const merged = new Map<string, DisplayMaterialItem>();
     displayItems.forEach((item) => {
-      const key = [item.name, item.unit, item.stockRecommendation, item.color ?? ''].join('||');
-      const existing = merged.get(key);
+      const identity = stockOrderIdentity(item);
+      const existing = merged.get(identity.key);
       if (!existing) {
-        merged.set(key, { ...item, category: 'Stock order view', rowKey: `stock:${key}`, source: item.source, notes: item.notes ?? '' });
+        merged.set(identity.key, { ...item, name: identity.name, category: 'Stock order view', rowKey: `stock:${identity.key}`, source: item.source, notes: item.notes ?? '' });
         return;
       }
       existing.quantity = Number((existing.quantity + item.quantity).toFixed(2));
       const label = item.layoutLabel ? ` ${item.layoutLabel}` : '';
-      existing.notes = [existing.notes, item.category + label].filter(Boolean).join(' · ');
+      const useNote = item.category + (item.name !== existing.name ? ` - ${item.name}` : '') + label;
+      existing.notes = Array.from(new Set([existing.notes, useNote].filter(Boolean).join(' · ').split(' · ').filter(Boolean))).join(' · ');
     });
     return Array.from(merged.values()).sort((a, b) => String(a.name).localeCompare(String(b.name)) || String(a.stockRecommendation).localeCompare(String(b.stockRecommendation)));
   }, [displayItems]);
