@@ -45,6 +45,12 @@ export interface DeckInputs {
   lowerAdditionalStairs?: string | number | boolean;
   lowerLockedPosts?: string | number | boolean;
   lowerBeamEdits?: string | number | boolean;
+  lowerUseCustomSettings?: string | number | boolean;
+  lowerDeckingType?: string | number | boolean;
+  lowerPictureFrameCount?: string | number | boolean;
+  lowerRailingType?: string | number | boolean;
+  lowerStairRailingLeft?: string | number | boolean;
+  lowerStairRailingRight?: string | number | boolean;
 }
 
 
@@ -682,10 +688,16 @@ export function hasLowerTierDeck(inputs: DeckInputs) {
 
 export function buildLowerTierDeckModel(inputs: DeckInputs): DeckModel | null {
   if (!hasLowerTierDeck(inputs)) return null;
+  const custom = inputs.lowerUseCustomSettings === true || String(inputs.lowerUseCustomSettings ?? 'false') === 'true';
   return buildDeckModel({
     ...inputs,
     deckShape: inputs.lowerDeckShape,
     deckHeight: inputs.lowerDeckHeight || inputs.deckHeight,
+    deckingType: custom ? (inputs.lowerDeckingType || inputs.deckingType) : inputs.deckingType,
+    pictureFrameCount: custom ? (inputs.lowerPictureFrameCount ?? inputs.pictureFrameCount) : inputs.pictureFrameCount,
+    railingType: custom ? (inputs.lowerRailingType || inputs.railingType) : inputs.railingType,
+    stairRailingLeft: custom ? (inputs.lowerStairRailingLeft ?? inputs.stairRailingLeft) : inputs.stairRailingLeft,
+    stairRailingRight: custom ? (inputs.lowerStairRailingRight ?? inputs.stairRailingRight) : inputs.stairRailingRight,
     manualRailingEdges: inputs.lowerManualRailingEdges || JSON.stringify([]),
     customBeamYs: inputs.lowerCustomBeamYs || JSON.stringify([]),
     stairEdgeIndex: inputs.lowerStairEdgeIndex ?? -1,

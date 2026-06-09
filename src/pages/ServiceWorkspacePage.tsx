@@ -17,6 +17,18 @@ export function ServiceWorkspacePage() {
   const service = getServiceBySlug(serviceSlug);
   const { values, setValues } = useLocalProjectState(service);
   const estimate = useMemo(() => calculateEstimate(service.slug, values), [service.slug, values]);
+  const visibleFields = service.fields.filter((field) => {
+    if (service.slug === 'decks' && field.key.startsWith('lower') && field.key !== 'lowerDeckShape') {
+      const lowerEnabled = values.multiTierEnabled === true || String(values.multiTierEnabled ?? 'false') === 'true';
+      if (!lowerEnabled) return false;
+    }
+    if (!field.showIf) return true;
+    const actual = values[field.showIf.key];
+    const expected = field.showIf.equals;
+    if (expected === undefined) return Boolean(actual);
+    if (typeof expected === 'boolean') return Boolean(actual) === expected || String(actual) === String(expected);
+    return String(actual) === String(expected);
+  });
 
   return (
     <div className="page-stack">
@@ -34,7 +46,7 @@ export function ServiceWorkspacePage() {
             <h3>Project configuration</h3>
           </div>
           <div className="form-grid organized-config-grid">
-            {service.fields.map((field) => (
+            {visibleFields.map((field) => (
               <FieldRenderer key={field.key} field={field} value={values[field.key]} onChange={(key, value) => setValues((current) => ({ ...current, [key]: value }))} />
             ))}
           </div>

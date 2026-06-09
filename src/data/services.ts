@@ -74,6 +74,7 @@ export interface ServiceField {
   step?: number;
   helper?: string;
   options?: ServiceFieldOption[];
+  showIf?: { key: string; equals?: string | number | boolean };
 }
 
 export interface ServiceDefinition {
@@ -147,13 +148,37 @@ export const SERVICES: ServiceDefinition[] = [
       quickWidth: 16,
       quickProjection: 12,
       deckShape: JSON.stringify([]),
+      lowerUseCustomSettings: false,
+      lowerDeckingType: 'composite',
+      lowerPictureFrameCount: '1',
+      lowerRailingType: 'aluminum',
+      lowerStairRailingLeft: true,
+      lowerStairRailingRight: true,
     },
     fields: [
       { key: 'deckHeight', label: 'Deck height (ft)', type: 'number', min: 0, step: 0.1 },
-      { key: 'multiTierEnabled', label: 'Add lower deck tier', type: 'boolean', helper: 'Use stair run count for connecting stairs between tiers.' },
-      { key: 'lowerDeckHeight', label: 'Lower tier height (ft)', type: 'number', min: 0, step: 0.1 },
-      { key: 'lowerDeckWidth', label: 'Lower tier width (ft)', type: 'number', min: 0, step: 0.5 },
-      { key: 'lowerDeckProjection', label: 'Lower tier projection (ft)', type: 'number', min: 0, step: 0.5 },
+      { key: 'multiTierEnabled', label: 'Add lower deck tier', type: 'boolean', helper: 'When enabled, the deck designer shows lower-tier drawing/editing controls.' },
+      { key: 'lowerDeckHeight', label: 'Lower tier height (ft)', type: 'number', min: 0, step: 0.1, showIf: { key: 'multiTierEnabled', equals: true } },
+      { key: 'lowerDeckWidth', label: 'Lower tier width (ft)', type: 'number', min: 0, step: 0.5, showIf: { key: 'multiTierEnabled', equals: true } },
+      { key: 'lowerDeckProjection', label: 'Lower tier projection (ft)', type: 'number', min: 0, step: 0.5, showIf: { key: 'multiTierEnabled', equals: true } },
+      { key: 'lowerUseCustomSettings', label: 'Lower tier uses different settings', type: 'boolean', helper: 'Leave off to inherit the main deck board, picture-frame, and railing settings.', showIf: { key: 'multiTierEnabled', equals: true } },
+      { key: 'lowerDeckingType', label: 'Lower tier decking family', type: 'select', showIf: { key: 'lowerUseCustomSettings', equals: true }, options: [
+        { label: 'Pressure treated wood', value: 'pressure-treated' },
+        { label: 'Composite / PVC', value: 'composite' },
+      ] },
+      { key: 'lowerPictureFrameCount', label: 'Lower tier picture frame border', type: 'select', showIf: { key: 'lowerUseCustomSettings', equals: true }, options: [
+        { label: 'None', value: '0' },
+        { label: 'Single picture frame', value: '1' },
+        { label: 'Double picture frame', value: '2' },
+        { label: 'Triple picture frame', value: '3' },
+      ] },
+      { key: 'lowerRailingType', label: 'Lower tier railing type', type: 'select', showIf: { key: 'lowerUseCustomSettings', equals: true }, options: [
+        { label: 'Aluminum top-mounted', value: 'aluminum' },
+        { label: 'Wood railing', value: 'wood' },
+        { label: 'Vinyl / composite railing over 4x4', value: 'vinyl-composite' },
+      ] },
+      { key: 'lowerStairRailingLeft', label: 'Lower tier stair railing left', type: 'boolean', showIf: { key: 'lowerUseCustomSettings', equals: true } },
+      { key: 'lowerStairRailingRight', label: 'Lower tier stair railing right', type: 'boolean', showIf: { key: 'lowerUseCustomSettings', equals: true } },
       { key: 'quickWidth', label: 'Quick width (ft)', type: 'number', min: 1, step: 1 },
       { key: 'quickProjection', label: 'Quick projection (ft)', type: 'number', min: 1, step: 1 },
       {

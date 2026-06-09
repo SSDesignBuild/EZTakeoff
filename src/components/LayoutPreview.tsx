@@ -963,7 +963,12 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
         ? scanlineIntersections(lowerDeck.points, 'vertical', value).map((pair, pairIdx) => { const x = toSvg(value, pair.start).x; const y1 = toSvg(value, pair.start).y + 22; const y2 = toSvg(value, pair.end).y - 22; return <rect key={`lower-joist-v-${idx}-${pairIdx}`} x={x - 3} y={Math.min(y1, y2)} width={6} height={Math.max(0, Math.abs(y2 - y1))} className="joist-rect" />; })
         : scanlineIntersections(lowerDeck.points, 'horizontal', value).map((pair, pairIdx) => { const y = toSvg(pair.start, value).y; const x1 = toSvg(pair.start, value).x + 22; const x2 = toSvg(pair.end, value).x - 22; return <rect key={`lower-joist-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - 3} width={Math.max(0, Math.abs(x2 - x1))} height={6} className="joist-rect" />; }))}
       {showRailing && lowerRails.map((segment, idx) => { const edge = lowerDeck.edgeSegments[segment.edgeIndex] ?? null; const inward = edge ? inwardNormal(edge, lowerDeck.points) : { x: 0, y: 0 }; const start = { x: segment.start.x + inward.x * railingInsetFt, y: segment.start.y + inward.y * railingInsetFt }; const end = { x: segment.end.x + inward.x * railingInsetFt, y: segment.end.y + inward.y * railingInsetFt }; const a = toSvg(start.x, start.y); const b = toSvg(end.x, end.y); return <line key={`lower-rail-${idx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={segment.kind === 'stair-side' ? 'stair-rail-line' : 'railing-line'} />; })}
-      {showRailing && lowerNodes.map((node, idx) => { const p = toSvg(node.point.x, node.point.y); const cls = node.kind === 'stair-end' || node.kind === 'stair-inline' ? 'stair-post-node' : 'railing-post-node'; return <rect key={`lower-rail-node-${idx}`} x={p.x - 12} y={p.y - 12} width={24} height={24} className={cls} />; })}
+      {showRailing && lowerNodes.map((node, idx) => {
+        const offset = node.kind === 'stair-end' || node.kind === 'stair-inline' ? { x: 0, y: 0 } : railingInwardOffsetForNode(node.point, lowerDeck, railingInsetFt);
+        const p = toSvg(node.point.x + offset.x, node.point.y + offset.y);
+        const cls = node.kind === 'stair-end' || node.kind === 'stair-inline' ? 'stair-post-node' : 'railing-post-node';
+        return <rect key={`lower-rail-node-${idx}`} x={p.x - 12} y={p.y - 12} width={24} height={24} className={cls} />;
+      })}
       {showStairs && (lowerDeck.stairPlacements?.length ? lowerDeck.stairPlacements : [lowerDeck.stairPlacement]).map((placement, stairIdx) => {
         if (!placement.start || !placement.end || placement.edgeIndex === null) return null;
         const edge = lowerDeck.edgeSegments[placement.edgeIndex];
