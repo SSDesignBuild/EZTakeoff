@@ -37,7 +37,16 @@ export interface DeckInputs {
   lowerDeckProjection?: string | number | boolean;
   lowerDeckShape?: string | number | boolean;
   additionalStairs?: string | number | boolean;
+
+  lowerManualRailingEdges?: string | number | boolean;
+  lowerCustomBeamYs?: string | number | boolean;
+  lowerStairEdgeIndex?: string | number | boolean;
+  lowerStairOffset?: string | number | boolean;
+  lowerAdditionalStairs?: string | number | boolean;
+  lowerLockedPosts?: string | number | boolean;
+  lowerBeamEdits?: string | number | boolean;
 }
+
 
 export interface BeamEdit { beamIndex: number; startTrim: number; endTrim: number; }
 
@@ -642,4 +651,26 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const fastenerType = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'top screws' : 'hidden camo screws';
 
   return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, angledJoistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), stairPlacement, stairPlacements };
+}
+
+
+export function hasLowerTierDeck(inputs: DeckInputs) {
+  const pts = parseDeckShape(inputs.lowerDeckShape);
+  return pts.length >= 3;
+}
+
+export function buildLowerTierDeckModel(inputs: DeckInputs): DeckModel | null {
+  if (!hasLowerTierDeck(inputs)) return null;
+  return buildDeckModel({
+    ...inputs,
+    deckShape: inputs.lowerDeckShape,
+    deckHeight: inputs.lowerDeckHeight || inputs.deckHeight,
+    manualRailingEdges: inputs.lowerManualRailingEdges || JSON.stringify([]),
+    customBeamYs: inputs.lowerCustomBeamYs || JSON.stringify([]),
+    stairEdgeIndex: inputs.lowerStairEdgeIndex ?? -1,
+    stairOffset: inputs.lowerStairOffset ?? 0,
+    additionalStairs: inputs.lowerAdditionalStairs || JSON.stringify([]),
+    lockedPosts: inputs.lowerLockedPosts || JSON.stringify([]),
+    beamEdits: inputs.lowerBeamEdits || JSON.stringify([]),
+  });
 }

@@ -1,5 +1,5 @@
 import { parseGableSections, parseSections, parseSunroomSections } from './sectioning';
-import { buildDeckModel } from './deckModel';
+import { buildDeckModel, buildLowerTierDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem, SectionConfig } from './types';
 import { buildPatioPanelLayout } from './patioLayout';
 import { deriveDeckingLabelPlan } from './deckingLabels';
@@ -400,6 +400,7 @@ function estimateFlatPans(inputs: EstimateInputs): EstimateResult {
 
 function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const deck = buildDeckModel(inputs);
+  const lowerDeck = buildLowerTierDeckModel(inputs);
   const railingType = String(inputs.railingType ?? 'aluminum');
   const deckingType = String(inputs.deckingType ?? 'composite');
   const deckingMaterial = String(inputs.deckingMaterial ?? (deckingType === 'pressure-treated' ? 'Pressure treated 5/4x6' : 'Composite / PVC decking'));
@@ -447,6 +448,32 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', false, 'Pressure treated');
   addBoardGroups(materials, 'Framing', `${deck.joistSize} double band / rim board`, deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', false, 'Pressure treated');
 
+  if (lowerDeck) {
+    const lowerDeckingPlan = deriveDeckingLabelPlan(lowerDeck);
+    lowerDeckingPlan.groups.filter((group) => group.kind === 'field').forEach((group) => {
+      const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
+      materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, deckingStyleInfo.color, `Lower tier field decking. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
+    });
+    addBoardGroups(materials, 'Lower tier stairs', 'Lower tier stair tread deck board', lowerDeck.stairTreadGroups, `${String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'Lower tier treads and risers.' : 'Lower tier treads only; risers are not deck boards unless pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
+    addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} joist`, lowerDeck.joistLengthGroups, 'Lower tier joists at 12 in. O.C.', false, 'Pressure treated');
+    addBoardGroups(materials, 'Framing', `${lowerDeck.beamMemberSize} beam ply`, lowerDeck.beamBoardGroups, 'Lower tier doubled beam members.', false, 'Pressure treated');
+    addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} double band / rim board`, lowerDeck.doubleBandGroups, 'Lower tier double band applied to full perimeter.', false, 'Pressure treated');
+    const lowerHeightFt = Math.max(0, Number(inputs.lowerDeckHeight ?? inputs.deckHeight ?? 0));
+    const lowerPostCutFt = Math.max(0.5, (lowerHeightFt * 12 - joistActualHeightInches(lowerDeck.joistSize)) / 12);
+    const lowerPostStock = optimizeRepeatedCuts(lowerDeck.postCount, lowerPostCutFt, [8, 10, 12, 16]);
+    materials.push(
+      toMaterial('6x6 wood posts', 'Structure', lowerPostStock.stockCount, 'boards', `${lowerPostStock.stockLength} ft stock`, 'Pressure treated', `Lower tier: ${lowerDeck.postCount} post(s) cut to about ${feetAndInches(lowerPostStock.cutLength)} each`),
+      toMaterial('Concrete mix', 'Structure', lowerDeck.concreteBags, 'bags', '80 lb bags', undefined, 'Lower tier: 3 bags per post footing'),
+      toMaterial('12 in x 48 in Sonotubes', 'Structure', Math.ceil(lowerDeck.postCount / 3), 'tubes', '1 tube per 3 footers', undefined, `Lower tier: ${lowerDeck.postCount} 6x6 post footer(s) total`),
+      toMaterial('Post brackets', 'Hardware', lowerDeck.postBases, 'ea', '1 per post', undefined, 'Lower tier post base bracket at each footing'),
+      toMaterial('Concrete submersible J Anchors', 'Hardware', lowerDeck.concreteAnchors, 'ea', '1 per post bracket', undefined, 'Lower tier concrete anchor for post base bracket'),
+      toMaterial('Joist hangers', 'Hardware', lowerDeck.joistHangers, 'ea', 'Match joist size', undefined, 'Lower tier: one hanger at each end of every joist'),
+      ...(lowerDeck.angledJoistHangers > 0 ? [toMaterial('Angled joist hangers', 'Hardware', lowerDeck.angledJoistHangers, 'ea', 'Match joist size', undefined, 'Lower tier joists landing against angled deck edges')] : []),
+      toMaterial('Hurricane ties', 'Hardware', lowerDeck.rafterTies, 'ea', '1 per joist to beam condition', undefined, 'Lower tier hurricane ties'),
+      toMaterial('Hex head LedgerLOK screws 5 in', 'Hardware', lowerDeck.sdsCorners, 'ea', '4 per corner', undefined, 'Lower tier band-board corners')
+    );
+  }
+
   const baseRailSegments = deck.exposedSegments.map((segment) => segment.length);
   const stairOpeningWidth = deck.stairPlacement.edgeIndex !== null ? Math.min(deck.stairPlacement.width, deck.exposedSegments.find((segment) => segment.index === deck.stairPlacement.edgeIndex)?.length ?? 0) : 0;
   const adjustedRailSegments = baseRailSegments.flatMap((length, index) => {
@@ -490,6 +517,12 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   if (deck.stairStringers > 0) {
     materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringerBoardCount, 'boards', `${deck.stairStringerLength} ft stock`, 'Pressure treated', `${deck.stairStringers} stringer cut(s) at about ${feetAndInches(deck.stairStringerCutLength)} each · 12 in. O.C. · ${deck.stairRisers} risers / ${deck.stairTreadsPerRun} treads per run`));
   }
+  if (lowerDeck && lowerDeck.stairStringers > 0) {
+    materials.push(toMaterial('2x12 stringers', 'Lower tier stairs', lowerDeck.stairStringerBoardCount, 'boards', `${lowerDeck.stairStringerLength} ft stock`, 'Pressure treated', `Lower tier: ${lowerDeck.stairStringers} stringer cut(s) at about ${feetAndInches(lowerDeck.stairStringerCutLength)} each · 12 in. O.C. · ${lowerDeck.stairRisers} risers / ${lowerDeck.stairTreadsPerRun} treads per run`));
+  }
+
+  const lowerRailingBreakdown = lowerDeck ? classifyRailing(lowerDeck) : null;
+  const lowerRailingPosts = lowerRailingBreakdown ? lowerRailingBreakdown.endLevelPosts + lowerRailingBreakdown.inlineLevelPosts + lowerRailingBreakdown.cornerLevelPosts + lowerRailingBreakdown.stairsLevelToAngledCornerPosts + lowerRailingBreakdown.stairsInlinePosts + lowerRailingBreakdown.stairsEndPosts : 0;
 
   if (railingType === 'aluminum') {
     if (railingBreakdown.levelMix.eight) materials.push(toMaterial('8 ft level railing sections', 'Railing', railingBreakdown.levelMix.eight, 'sections', '8 ft sections', 'Top-level straight runs'));
@@ -502,6 +535,18 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     if (railingBreakdown.stairsLevelToAngledCornerPosts) materials.push(toMaterial('Stairs level-to-angled corner posts', 'Railing', railingBreakdown.stairsLevelToAngledCornerPosts, 'ea', 'Match railing system', 'Top posts where level rail turns onto stair rail'));
     if (railingBreakdown.stairsInlinePosts) materials.push(toMaterial('Stairs inline posts', 'Railing', railingBreakdown.stairsInlinePosts, 'ea', 'Match railing system', 'Intermediate stair-side posts'));
     if (railingBreakdown.stairsEndPosts) materials.push(toMaterial('Stairs end posts', 'Railing', railingBreakdown.stairsEndPosts, 'ea', 'Match railing system', 'Bottom stair-end posts'));
+    if (lowerRailingBreakdown) {
+      if (lowerRailingBreakdown.levelMix.eight) materials.push(toMaterial('8 ft level railing sections', 'Lower tier railing', lowerRailingBreakdown.levelMix.eight, 'sections', '8 ft sections', 'Lower tier straight runs'));
+      if (lowerRailingBreakdown.levelMix.six) materials.push(toMaterial('6 ft level railing sections', 'Lower tier railing', lowerRailingBreakdown.levelMix.six, 'sections', '6 ft sections', 'Lower tier straight runs'));
+      if (lowerRailingBreakdown.stairMix.eight) materials.push(toMaterial('8 ft angled railing sections', 'Lower tier railing', lowerRailingBreakdown.stairMix.eight, 'sections', '8 ft sections', 'Lower tier stair-side or angled runs'));
+      if (lowerRailingBreakdown.stairMix.six) materials.push(toMaterial('6 ft angled railing sections', 'Lower tier railing', lowerRailingBreakdown.stairMix.six, 'sections', '6 ft sections', 'Lower tier stair-side or angled runs'));
+      if (lowerRailingBreakdown.endLevelPosts) materials.push(toMaterial('End level posts', 'Lower tier railing', lowerRailingBreakdown.endLevelPosts, 'ea', 'Match railing system', 'Lower tier posts'));
+      if (lowerRailingBreakdown.inlineLevelPosts) materials.push(toMaterial('Inline level posts', 'Lower tier railing', lowerRailingBreakdown.inlineLevelPosts, 'ea', 'Match railing system', 'Lower tier posts'));
+      if (lowerRailingBreakdown.cornerLevelPosts) materials.push(toMaterial('Corner level posts', 'Lower tier railing', lowerRailingBreakdown.cornerLevelPosts, 'ea', 'Match railing system', 'Lower tier posts'));
+      if (lowerRailingBreakdown.stairsLevelToAngledCornerPosts) materials.push(toMaterial('Stairs level-to-angled corner posts', 'Lower tier railing', lowerRailingBreakdown.stairsLevelToAngledCornerPosts, 'ea', 'Match railing system', 'Lower tier stair top posts'));
+      if (lowerRailingBreakdown.stairsInlinePosts) materials.push(toMaterial('Stairs inline posts', 'Lower tier railing', lowerRailingBreakdown.stairsInlinePosts, 'ea', 'Match railing system', 'Lower tier stair posts'));
+      if (lowerRailingBreakdown.stairsEndPosts) materials.push(toMaterial('Stairs end posts', 'Lower tier railing', lowerRailingBreakdown.stairsEndPosts, 'ea', 'Match railing system', 'Lower tier bottom stair-end posts'));
+    }
   } else if (railingType === 'wood') {
     const levelRailLf = deriveTopRailRuns(deck).reduce((sum, run) => sum + run.length, 0);
     const stairRailLf = deck.stairCount > 0 && deck.stairRailSideCount > 0 ? deck.stairRunFt * deck.stairCount * deck.stairRailSideCount : 0;
@@ -511,6 +556,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     const stairBalusters = Math.max(0, balusterCount - levelBalusters);
     const woodRailStock = optimizeStockLength(totalWoodRailLf, [8, 12, 16, 20]);
     if (railingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', Math.ceil(railingPosts / 2), 'boards', '8 ft 4x4 stock', 'Pressure treated', `${railingPosts} rail post cuts total · 2 rail posts per 8 ft 4x4`));
+    if (lowerRailingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Lower tier railing', Math.ceil(lowerRailingPosts / 2), 'boards', '8 ft 4x4 stock', 'Pressure treated', `Lower tier: ${lowerRailingPosts} rail post cuts total · 2 rail posts per 8 ft 4x4`));
     materials.push(toMaterial('2x4 pressure-treated top rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
     materials.push(toMaterial('2x4 pressure-treated bottom rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
     if (spindleType === 'wood') {
@@ -561,7 +607,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   }
   return {
     summary: [
-      { label: 'Deck area', value: `${deck.area.toFixed(1)} sq ft` },
+      { label: 'Deck area', value: lowerDeck ? `${(deck.area + lowerDeck.area).toFixed(1)} sq ft total` : `${deck.area.toFixed(1)} sq ft` },
       { label: 'Board direction', value: deck.boardRun === 'width' ? 'Parallel to house / stock tracks width' : 'Perpendicular to house / stock tracks projection' },
       { label: 'Stairs', value: deck.stairCount ? `${deck.stairRisers} risers · ${deck.stairTreadsPerRun} treads · ${deck.stairStringers} stringers` : 'No stairs' },
       { label: 'Railing mix', value: `Level ${railingBreakdown.levelMix.six}x6' + ${railingBreakdown.levelMix.eight}x8' · Angled ${railingBreakdown.stairMix.six}x6' + ${railingBreakdown.stairMix.eight}x8'` },
@@ -572,7 +618,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       deck.stairPlacement.edgeIndex !== null ? `Stairs sit on edge ${deck.stairPlacement.edgeIndex + 1}. Preview now shows tread count, stringer layout, and ${deck.stairRailSideCount === 0 ? 'no stair-side railing' : `${deck.stairRailSideCount} stair-side railing run(s)`} based on the left/right stair railing inputs.` : 'No stair edge is assigned yet in the drawing tool.',
       'Railing optimizer solves each straight run separately, subtracts stair openings from the deck edge, and adds stair-side railing runs when the left/right stair railing inputs are selected.',
       deck.requiredFieldBoardBreaks.length > 0 ? 'Field board run exceeds 20 ft. Add a breaker board to avoid staggered decking; the app no longer shows staggered board seams.' : 'Field decking uses available 8, 12, 16, and 20 ft board lengths with breaker boards where selected.',
-      (inputs.multiTierEnabled === true || String(inputs.multiTierEnabled ?? 'false') === 'true') ? `Multi-tier deck mode: lower tier shown in notes at ${feetAndInches(Number(inputs.lowerDeckHeight ?? 0))} high and ${feetAndInches(Number(inputs.lowerDeckWidth ?? 0))} x ${feetAndInches(Number(inputs.lowerDeckProjection ?? 0))}; stairs/materials use the stair-run count input until individual lower-tier drawing is placed.` : 'Single tier deck mode.',
+      lowerDeck ? `Multi-tier deck mode: lower tier is drawn and included in layout/materials at ${feetAndInches(Number(inputs.lowerDeckHeight ?? 0))} high with ${lowerDeck.area.toFixed(1)} sq ft.` : 'Single tier deck mode.',
       deck.lockedPosts.length > 0 ? 'Locked posts stay in the take-off even after beam edits so you can preserve preferred field locations.' : 'Use post lock mode when you want to hold a post location while still letting the app auto-space the rest.',
     ],
   };

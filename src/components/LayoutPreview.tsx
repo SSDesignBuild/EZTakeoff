@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { exportSvgAsPdf, exportSvgSectionsAsPdf } from '../lib/export';
-import { buildDeckModel } from '../lib/deckModel';
+import { buildDeckModel, buildLowerTierDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout, serializeFanSelections, shiftFanSelection } from '../lib/patioLayout';
 import { parseGableSections, parseSections, parseSunroomSections } from '../lib/sectioning';
 import { deckingLabelForLength, deriveDeckingLabelPlan, PICTURE_FRAME_OVERHANG_ALLOWANCE_FT } from '../lib/deckingLabels';
@@ -579,6 +579,8 @@ function serializeRailCoverage(items: DeckRailCoverage[]) {
 
 function DeckPreview({ values, onValuesChange }: { values: Record<string, string | number | boolean>; onValuesChange?: React.Dispatch<React.SetStateAction<Record<string, string | number | boolean>>> }) {
   const deck = buildDeckModel(values);
+  const lowerDeck = buildLowerTierDeckModel(values);
+  const decksForBounds = lowerDeck ? [deck, lowerDeck] : [deck];
   const deckingMaterial = String(values.deckingMaterial ?? (String(values.deckingType ?? 'composite') === 'pressure-treated' ? 'Pressure treated 5/4x6' : 'Composite / PVC decking'));
   const stairBoardFill = deckBoardPreviewColor(deckingMaterial);
   const [layer, setLayer] = useState<DeckLayer>('framing');
@@ -591,17 +593,20 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragPanRef = useRef<{ active: boolean; x: number; y: number; left: number; top: number }>({ active: false, x: 0, y: 0, left: 0, top: 0 });
 
-  const stairBounds = (deck.stairPlacements?.length ? deck.stairPlacements : [deck.stairPlacement]).reduce((bounds, placement) => {
-    if (!placement.start || !placement.end || placement.edgeIndex === null) return bounds;
-    const edge = deck.edgeSegments[placement.edgeIndex];
-    const normal = edge ? outwardNormal(edge, deck.points) : { x: 0, y: 1 };
-    const pts = [placement.start, placement.end, { x: placement.start.x + normal.x * deck.stairRunFt, y: placement.start.y + normal.y * deck.stairRunFt }, { x: placement.end.x + normal.x * deck.stairRunFt, y: placement.end.y + normal.y * deck.stairRunFt }];
-    return { minX: Math.min(bounds.minX, ...pts.map((p) => p.x)), maxX: Math.max(bounds.maxX, ...pts.map((p) => p.x)), minY: Math.min(bounds.minY, ...pts.map((p) => p.y)), maxY: Math.max(bounds.maxY, ...pts.map((p) => p.y)) };
+  const stairBounds = decksForBounds.reduce((overall, deckItem) => {
+    const stairBox = (deckItem.stairPlacements?.length ? deckItem.stairPlacements : [deckItem.stairPlacement]).reduce((bounds, placement) => {
+      if (!placement.start || !placement.end || placement.edgeIndex === null) return bounds;
+      const edge = deckItem.edgeSegments[placement.edgeIndex];
+      const normal = edge ? outwardNormal(edge, deckItem.points) : { x: 0, y: 1 };
+      const pts = [placement.start, placement.end, { x: placement.start.x + normal.x * deckItem.stairRunFt, y: placement.start.y + normal.y * deckItem.stairRunFt }, { x: placement.end.x + normal.x * deckItem.stairRunFt, y: placement.end.y + normal.y * deckItem.stairRunFt }];
+      return { minX: Math.min(bounds.minX, ...pts.map((pt) => pt.x)), maxX: Math.max(bounds.maxX, ...pts.map((pt) => pt.x)), minY: Math.min(bounds.minY, ...pts.map((pt) => pt.y)), maxY: Math.max(bounds.maxY, ...pts.map((pt) => pt.y)) };
+    }, { minX: deckItem.minX, maxX: deckItem.maxX, minY: deckItem.minY, maxY: deckItem.maxY });
+    return { minX: Math.min(overall.minX, stairBox.minX), maxX: Math.max(overall.maxX, stairBox.maxX), minY: Math.min(overall.minY, stairBox.minY), maxY: Math.max(overall.maxY, stairBox.maxY) };
   }, { minX: deck.minX, maxX: deck.maxX, minY: deck.minY, maxY: deck.maxY });
-  const layoutMinX = Math.min(deck.minX, stairBounds.minX);
-  const layoutMaxX = Math.max(deck.maxX, stairBounds.maxX);
-  const layoutMinY = Math.min(deck.minY, stairBounds.minY);
-  const layoutMaxY = Math.max(deck.maxY, stairBounds.maxY);
+  const layoutMinX = stairBounds.minX;
+  const layoutMaxX = stairBounds.maxX;
+  const layoutMinY = stairBounds.minY;
+  const layoutMaxY = stairBounds.maxY;
   const widthFt = Math.max(layoutMaxX - layoutMinX, 1);
   const depthFt = Math.max(layoutMaxY - layoutMinY, 1);
   const titleBlockW = 520;
@@ -922,6 +927,56 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
     updateCoverage(next);
   };
 
+  const renderLowerTierDeck = () => {
+    if (!lowerDeck) return null;
+    const lowerPointString = lowerDeck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ');
+    const lowerBoardRuns = lowerDeck.boardRun === 'width'
+      ? Array.from({ length: Math.max(1, Math.floor(lowerDeck.depth / 0.47)) }, (_, i) => lowerDeck.minY + 0.22 + i * 0.47)
+      : Array.from({ length: Math.max(1, Math.floor(lowerDeck.width / 0.47)) }, (_, i) => lowerDeck.minX + 0.22 + i * 0.47);
+    const lowerRails = railSegmentsForDeck(lowerDeck);
+    const lowerNodes = buildRailingNodes(lowerDeck);
+    const lowerStairPx = lowerDeck.stairRunFt * scale;
+    return <g className="lower-tier-deck-layout">
+      <polygon points={lowerPointString} className="deck-polygon muted-fill lower-tier-fill" />
+      <text x={toSvg(lowerDeck.minX, lowerDeck.minY).x + 8} y={toSvg(lowerDeck.minX, lowerDeck.minY).y - 12} className="svg-note tier-label">LOWER TIER · {feetAndInches(Number(values.lowerDeckHeight ?? 0))} HIGH</text>
+      {showBoards && lowerBoardRuns.map((value, idx) => lowerDeck.boardRun === 'width'
+        ? scanlineIntersections(lowerDeck.points, 'horizontal', value).map((pair, pairIdx) => {
+            const y = toSvg(pair.start, value).y;
+            const x1 = toSvg(pair.start, value).x;
+            const x2 = toSvg(pair.end, value).x;
+            return <rect key={`lower-board-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - Math.max(4, scale * 0.22)} width={Math.abs(x2 - x1)} height={Math.max(8, scale * 0.44)} className="deck-board-strip lower-tier-board" />;
+          })
+        : scanlineIntersections(lowerDeck.points, 'vertical', value).map((pair, pairIdx) => {
+            const x = toSvg(value, pair.start).x;
+            const y1 = toSvg(value, pair.start).y;
+            const y2 = toSvg(value, pair.end).y;
+            return <rect key={`lower-board-v-${idx}-${pairIdx}`} x={x - Math.max(4, scale * 0.22)} y={Math.min(y1, y2)} width={Math.max(8, scale * 0.44)} height={Math.abs(y2 - y1)} className="deck-board-strip lower-tier-board" />;
+          }))}
+      {showFraming && lowerDeck.beamLines.map((beam, beamIdx) => <g key={`lower-beam-${beamIdx}`}>{beam.segments.map((segment, segIdx) => {
+        const y = toSvg(segment.startX, beam.y).y;
+        const x1 = toSvg(segment.startX, beam.y).x;
+        const x2 = toSvg(segment.endX, beam.y).x;
+        return <g key={`lower-beam-seg-${segIdx}`}><rect x={Math.min(x1, x2)} y={y - 11} width={Math.abs(x2 - x1)} height={8} className="beam-rect primary" /><rect x={Math.min(x1, x2)} y={y - 1} width={Math.abs(x2 - x1)} height={8} className="beam-rect secondary" /></g>;
+      })}{beam.postXs.map((postX, postIdx) => { const p = toSvg(postX, beam.y); return <rect key={`lower-post-${beamIdx}-${postIdx}`} x={p.x - 15} y={p.y - 15} width={30} height={30} className="post-node" />; })}</g>)}
+      {showFraming && lowerDeck.edgeSegments.map((segment) => <g key={`lower-band-${segment.index}`}><polygon points={interlockedBandCoursePolygon(segment, lowerDeck.points, toSvg, 0, 9)} className="double-band-rect interlocked" /><polygon points={interlockedBandCoursePolygon(segment, lowerDeck.points, toSvg, 1, 9)} className="double-band-rect secondary interlocked" /></g>)}
+      {showFraming && lowerDeck.joistPositions.map((value, idx) => lowerDeck.joistDirection === 'vertical'
+        ? scanlineIntersections(lowerDeck.points, 'vertical', value).map((pair, pairIdx) => { const x = toSvg(value, pair.start).x; const y1 = toSvg(value, pair.start).y + 22; const y2 = toSvg(value, pair.end).y - 22; return <rect key={`lower-joist-v-${idx}-${pairIdx}`} x={x - 3} y={Math.min(y1, y2)} width={6} height={Math.max(0, Math.abs(y2 - y1))} className="joist-rect" />; })
+        : scanlineIntersections(lowerDeck.points, 'horizontal', value).map((pair, pairIdx) => { const y = toSvg(pair.start, value).y; const x1 = toSvg(pair.start, value).x + 22; const x2 = toSvg(pair.end, value).x - 22; return <rect key={`lower-joist-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - 3} width={Math.max(0, Math.abs(x2 - x1))} height={6} className="joist-rect" />; }))}
+      {showRailing && lowerRails.map((segment, idx) => { const edge = lowerDeck.edgeSegments[segment.edgeIndex] ?? null; const inward = edge ? inwardNormal(edge, lowerDeck.points) : { x: 0, y: 0 }; const start = { x: segment.start.x + inward.x * railingInsetFt, y: segment.start.y + inward.y * railingInsetFt }; const end = { x: segment.end.x + inward.x * railingInsetFt, y: segment.end.y + inward.y * railingInsetFt }; const a = toSvg(start.x, start.y); const b = toSvg(end.x, end.y); return <line key={`lower-rail-${idx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={segment.kind === 'stair-side' ? 'stair-rail-line' : 'railing-line'} />; })}
+      {showRailing && lowerNodes.map((node, idx) => { const p = toSvg(node.point.x, node.point.y); const cls = node.kind === 'stair-end' || node.kind === 'stair-inline' ? 'stair-post-node' : 'railing-post-node'; return <rect key={`lower-rail-node-${idx}`} x={p.x - 12} y={p.y - 12} width={24} height={24} className={cls} />; })}
+      {showStairs && (lowerDeck.stairPlacements?.length ? lowerDeck.stairPlacements : [lowerDeck.stairPlacement]).map((placement, stairIdx) => {
+        if (!placement.start || !placement.end || placement.edgeIndex === null) return null;
+        const edge = lowerDeck.edgeSegments[placement.edgeIndex];
+        const normal = edge ? outwardNormal(edge, lowerDeck.points) : { x: 0, y: 1 };
+        const a = toSvg(placement.start.x, placement.start.y); const b = toSvg(placement.end.x, placement.end.y);
+        const nx = normal.x * lowerStairPx; const ny = normal.y * lowerStairPx;
+        const count = Math.max(2, Math.floor(placement.width / 1) + 1);
+        return <g key={`lower-stairs-${stairIdx}`}><polygon points={`${a.x},${a.y} ${b.x},${b.y} ${b.x + nx},${b.y + ny} ${a.x + nx},${a.y + ny}`} className="stair-outline-fill" />{Array.from({ length: count }, (_, i) => { const ratio = count === 1 ? 0 : i / (count - 1); const sx = a.x + (b.x - a.x) * ratio; const sy = a.y + (b.y - a.y) * ratio; return <polygon key={`lower-stringer-${i}`} points={boardStripPolygonTrim({ x: sx, y: sy }, { x: sx + nx, y: sy + ny }, Math.max(6, Math.min(10, scale * 0.12)), 0, 0)} className="stringer-rect" />; })}</g>;
+      })}
+      {lowerDeck.edgeSegments.map((segment) => { const a = toSvg(segment.start.x, segment.start.y); const b = toSvg(segment.end.x, segment.end.y); const outward = outwardNormal(segment, lowerDeck.points); return renderDim(a, b, feetAndInches(segment.length), outward.x * 26, outward.y * 26, `lower-seg-${segment.index}`); })}
+    </g>;
+  };
+
   const toggleManualEdge = (edgeIndex: number) => {
     ensureEdgeCoverage(edgeIndex);
   };
@@ -950,6 +1005,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             <text x={60} y={68} className="sheet-title">PLAN VIEW CONSTRUCTION</text>
             <text x={60} y={90} className="sheet-subtitle">S&S DESIGN BUILD · DECK FRAMING SCHEMATIC · DOUBLE BAND STANDARD</text>
 
+            {renderLowerTierDeck()}
             <polygon points={pointString} className="deck-polygon muted-fill" />
 
             {showBoards && boardRuns.map((value, idx) => deck.boardRun === 'width'
