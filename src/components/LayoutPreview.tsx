@@ -434,33 +434,37 @@ function sectionSpansExcludingDoor(section: SectionConfig) {
 
 function railSegmentsForDeck(deck: ReturnType<typeof buildDeckModel>) {
   const result: RailSegment[] = [];
+  const placements = (deck.stairPlacements?.length ? deck.stairPlacements : [deck.stairPlacement]).filter((item) => item.edgeIndex !== null && item.start && item.end);
   deck.railCoverage.forEach((coverage) => {
     const edge = deck.edgeSegments[coverage.edgeIndex];
     if (!edge) return;
-    if (edge.index !== deck.stairPlacement.edgeIndex || !deck.stairPlacement.start || !deck.stairPlacement.end) {
-      result.push({ start: pointAlong(edge, coverage.start), end: pointAlong(edge, coverage.end), length: coverage.end - coverage.start, kind: 'deck', railKind: coverage.kind, edgeIndex: edge.index, coverageStart: coverage.start, coverageEnd: coverage.end });
-      return;
-    }
-    const stairStart = deck.stairPlacement.offset;
-    const stairEnd = deck.stairPlacement.offset + deck.stairPlacement.width;
-    if (coverage.start < stairStart - 0.05) {
-      result.push({ start: pointAlong(edge, coverage.start), end: pointAlong(edge, Math.min(coverage.end, stairStart)), length: Math.min(coverage.end, stairStart) - coverage.start, kind: 'deck', railKind: coverage.kind, edgeIndex: edge.index, coverageStart: coverage.start, coverageEnd: Math.min(coverage.end, stairStart) });
-    }
-    if (coverage.end > stairEnd + 0.05) {
-      result.push({ start: pointAlong(edge, Math.max(coverage.start, stairEnd)), end: pointAlong(edge, coverage.end), length: coverage.end - Math.max(coverage.start, stairEnd), kind: 'deck', railKind: coverage.kind, edgeIndex: edge.index, coverageStart: Math.max(coverage.start, stairEnd), coverageEnd: coverage.end });
+    const stairCuts = placements
+      .filter((placement) => placement.edgeIndex === edge.index)
+      .map((placement) => ({ start: placement.offset, end: placement.offset + placement.width }))
+      .sort((a, b) => a.start - b.start);
+    let cursor = coverage.start;
+    stairCuts.forEach((cut) => {
+      const cutStart = Math.max(coverage.start, cut.start);
+      const cutEnd = Math.min(coverage.end, cut.end);
+      if (cutEnd <= coverage.start || cutStart >= coverage.end) return;
+      if (cursor < cutStart - 0.05) {
+        result.push({ start: pointAlong(edge, cursor), end: pointAlong(edge, cutStart), length: cutStart - cursor, kind: 'deck', railKind: coverage.kind, edgeIndex: edge.index, coverageStart: cursor, coverageEnd: cutStart });
+      }
+      cursor = Math.max(cursor, cutEnd);
+    });
+    if (cursor < coverage.end - 0.05) {
+      result.push({ start: pointAlong(edge, cursor), end: pointAlong(edge, coverage.end), length: coverage.end - cursor, kind: 'deck', railKind: coverage.kind, edgeIndex: edge.index, coverageStart: cursor, coverageEnd: coverage.end });
     }
   });
-  if (deck.stairPlacement.start && deck.stairPlacement.end && deck.stairRailSideCount > 0) {
-    const segment = deck.edgeSegments[deck.stairPlacement.edgeIndex ?? 0];
+  placements.forEach((placement) => {
+    if (!placement.start || !placement.end || deck.stairRailSideCount <= 0 || placement.edgeIndex === null) return;
+    const segment = deck.edgeSegments[placement.edgeIndex];
+    if (!segment) return;
     const normal = outwardNormal(segment, deck.points);
     const run = deck.stairRunFt;
-    if (deck.stairRailingLeft) {
-      result.push({ start: deck.stairPlacement.start, end: { x: deck.stairPlacement.start.x + normal.x * run, y: deck.stairPlacement.start.y + normal.y * run }, length: run, kind: 'stair-side', railKind: 'angled', edgeIndex: segment.index });
-    }
-    if (deck.stairRailingRight) {
-      result.push({ start: deck.stairPlacement.end, end: { x: deck.stairPlacement.end.x + normal.x * run, y: deck.stairPlacement.end.y + normal.y * run }, length: run, kind: 'stair-side', railKind: 'angled', edgeIndex: segment.index });
-    }
-  }
+    if (deck.stairRailingLeft) result.push({ start: placement.start, end: { x: placement.start.x + normal.x * run, y: placement.start.y + normal.y * run }, length: run, kind: 'stair-side', railKind: 'angled', edgeIndex: segment.index });
+    if (deck.stairRailingRight) result.push({ start: placement.end, end: { x: placement.end.x + normal.x * run, y: placement.end.y + normal.y * run }, length: run, kind: 'stair-side', railKind: 'angled', edgeIndex: segment.index });
+  });
   return result.filter((item) => item.length > 0.05);
 }
 
@@ -587,16 +591,13 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragPanRef = useRef<{ active: boolean; x: number; y: number; left: number; top: number }>({ active: false, x: 0, y: 0, left: 0, top: 0 });
 
-  const stairEdgeForBounds = deck.stairPlacement.edgeIndex !== null ? deck.edgeSegments[deck.stairPlacement.edgeIndex] : null;
-  const stairNormalForBounds = stairEdgeForBounds ? outwardNormal(stairEdgeForBounds, deck.points) : { x: 0, y: 1 };
-  const stairBounds = deck.stairPlacement.start && deck.stairPlacement.end
-    ? {
-        minX: Math.min(deck.stairPlacement.start.x, deck.stairPlacement.end.x, deck.stairPlacement.start.x + stairNormalForBounds.x * deck.stairRunFt, deck.stairPlacement.end.x + stairNormalForBounds.x * deck.stairRunFt),
-        maxX: Math.max(deck.stairPlacement.start.x, deck.stairPlacement.end.x, deck.stairPlacement.start.x + stairNormalForBounds.x * deck.stairRunFt, deck.stairPlacement.end.x + stairNormalForBounds.x * deck.stairRunFt),
-        minY: Math.min(deck.stairPlacement.start.y, deck.stairPlacement.end.y, deck.stairPlacement.start.y + stairNormalForBounds.y * deck.stairRunFt, deck.stairPlacement.end.y + stairNormalForBounds.y * deck.stairRunFt),
-        maxY: Math.max(deck.stairPlacement.start.y, deck.stairPlacement.end.y, deck.stairPlacement.start.y + stairNormalForBounds.y * deck.stairRunFt, deck.stairPlacement.end.y + stairNormalForBounds.y * deck.stairRunFt),
-      }
-    : { minX: deck.minX, maxX: deck.maxX, minY: deck.minY, maxY: deck.maxY };
+  const stairBounds = (deck.stairPlacements?.length ? deck.stairPlacements : [deck.stairPlacement]).reduce((bounds, placement) => {
+    if (!placement.start || !placement.end || placement.edgeIndex === null) return bounds;
+    const edge = deck.edgeSegments[placement.edgeIndex];
+    const normal = edge ? outwardNormal(edge, deck.points) : { x: 0, y: 1 };
+    const pts = [placement.start, placement.end, { x: placement.start.x + normal.x * deck.stairRunFt, y: placement.start.y + normal.y * deck.stairRunFt }, { x: placement.end.x + normal.x * deck.stairRunFt, y: placement.end.y + normal.y * deck.stairRunFt }];
+    return { minX: Math.min(bounds.minX, ...pts.map((p) => p.x)), maxX: Math.max(bounds.maxX, ...pts.map((p) => p.x)), minY: Math.min(bounds.minY, ...pts.map((p) => p.y)), maxY: Math.max(bounds.maxY, ...pts.map((p) => p.y)) };
+  }, { minX: deck.minX, maxX: deck.maxX, minY: deck.minY, maxY: deck.maxY });
   const layoutMinX = Math.min(deck.minX, stairBounds.minX);
   const layoutMaxX = Math.max(deck.maxX, stairBounds.maxX);
   const layoutMinY = Math.min(deck.minY, stairBounds.minY);
@@ -723,7 +724,6 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const editableCoverage = useMemo(() => parseRailCoverageValue(values.railCoverage), [values.railCoverage]);
   const railingInsetFt = 0.78;
   const stairSegment = deck.stairPlacement.edgeIndex !== null ? deck.edgeSegments[deck.stairPlacement.edgeIndex] : null;
-  const stairNormal = stairSegment ? outwardNormal(stairSegment, deck.points) : { x: 0, y: 1 };
   const stairPostInsetFt = 0.34;
   const stairSideOffset = (point: DeckPoint) => {
     if (!deck.stairPlacement.start || !deck.stairPlacement.end) return { x: 0, y: 0 };
@@ -1203,17 +1203,20 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               </g>;
             })}
 
-            {showStairs && stairSegment && deck.stairPlacement.start && deck.stairPlacement.end && (() => {
-              const a = toSvg(deck.stairPlacement.start.x, deck.stairPlacement.start.y);
-              const b = toSvg(deck.stairPlacement.end.x, deck.stairPlacement.end.y);
-              const nx = stairNormal.x * stairRunPx;
-              const ny = stairNormal.y * stairRunPx;
-              const count = Math.max(2, Math.floor(deck.stairPlacement.width / 1) + 1);
+            {showStairs && (deck.stairPlacements?.length ? deck.stairPlacements : [deck.stairPlacement]).map((placement, stairIdx) => {
+              if (!placement.start || !placement.end || placement.edgeIndex === null) return null;
+              const stairSegmentLocal = deck.edgeSegments[placement.edgeIndex];
+              const stairNormalLocal = stairSegmentLocal ? outwardNormal(stairSegmentLocal, deck.points) : { x: 0, y: 1 };
+              const a = toSvg(placement.start.x, placement.start.y);
+              const b = toSvg(placement.end.x, placement.end.y);
+              const nx = stairNormalLocal.x * stairRunPx;
+              const ny = stairNormalLocal.y * stairRunPx;
+              const count = Math.max(2, Math.floor(placement.width / 1) + 1);
               const treadCount = Math.max(1, deck.stairTreadsPerRun);
               const treadDepthPx = stairRunPx / Math.max(1, treadCount);
               const treadBoardWidth = Math.max(4, Math.min(9, treadDepthPx * 0.34));
               const stringerWidth = Math.max(6, Math.min(10, scale * 0.12));
-              return <g className="stair-framing-group">
+              return <g key={`stair-framing-${stairIdx}`} className="stair-framing-group">
                 <polygon points={`${a.x},${a.y} ${b.x},${b.y} ${b.x + nx},${b.y + ny} ${a.x + nx},${a.y + ny}`} className="stair-outline-fill" />
                 {Array.from({ length: treadCount }, (_, idx) => {
                   const baseRatio = (idx + 0.5) / treadCount;
@@ -1223,17 +1226,17 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                     const ty1 = a.y + ny * ratio;
                     const tx2 = b.x + nx * ratio;
                     const ty2 = b.y + ny * ratio;
-                    return <polygon key={`tread-board-${idx}-${boardIdx}`} points={boardStripPolygonTrim({ x: tx1, y: ty1 }, { x: tx2, y: ty2 }, treadBoardWidth, 0, 0)} className="stair-tread-board" style={{ fill: stairBoardFill }} />;
+                    return <polygon key={`tread-board-${stairIdx}-${idx}-${boardIdx}`} points={boardStripPolygonTrim({ x: tx1, y: ty1 }, { x: tx2, y: ty2 }, treadBoardWidth, 0, 0)} className="stair-tread-board" style={{ fill: stairBoardFill }} />;
                   });
                 })}
                 {Array.from({ length: count }, (_, idx) => {
                   const ratio = count === 1 ? 0 : idx / (count - 1);
                   const sx = a.x + (b.x - a.x) * ratio;
                   const sy = a.y + (b.y - a.y) * ratio;
-                  return <polygon key={`stringer-${idx}`} points={boardStripPolygonTrim({ x: sx, y: sy }, { x: sx + nx, y: sy + ny }, stringerWidth, 0, 0)} className="stringer-rect" />;
+                  return <polygon key={`stringer-${stairIdx}-${idx}`} points={boardStripPolygonTrim({ x: sx, y: sy }, { x: sx + nx, y: sy + ny }, stringerWidth, 0, 0)} className="stringer-rect" />;
                 })}
               </g>;
-            })()}
+            })}
 
 
             {renderDim({ x: planX, y: planY - 34 }, { x: planX + planW, y: planY - 34 }, feetAndInches(deck.width), 0, 0, 'overall-top')}

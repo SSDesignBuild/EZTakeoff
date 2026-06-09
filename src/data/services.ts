@@ -111,6 +111,8 @@ export const SERVICES: ServiceDefinition[] = [
       lowerDeckHeight: 3,
       lowerDeckWidth: 8,
       lowerDeckProjection: 6,
+      lowerDeckShape: JSON.stringify([]),
+      additionalStairs: JSON.stringify([]),
       attachment: 'siding',
       boardRun: 'width',
       deckingType: 'composite',
