@@ -660,8 +660,23 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
 }
 
 
+function parseOptionalDeckShape(raw: string | number | boolean | undefined): DeckPoint[] {
+  if (typeof raw !== 'string' || !raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as DeckPoint[];
+    if (Array.isArray(parsed) && parsed.length >= 3) {
+      return parsed
+        .map((point) => ({ x: Number(point.x), y: Number(point.y) }))
+        .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+    }
+  } catch {}
+  return [];
+}
+
 export function hasLowerTierDeck(inputs: DeckInputs) {
-  const pts = parseDeckShape(inputs.lowerDeckShape);
+  const enabled = inputs.multiTierEnabled === true || String(inputs.multiTierEnabled ?? 'false') === 'true';
+  if (!enabled) return false;
+  const pts = parseOptionalDeckShape(inputs.lowerDeckShape);
   return pts.length >= 3;
 }
 
