@@ -1075,7 +1075,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   return <rect key={`joist-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - 3} width={Math.max(0, Math.abs(x2 - x1))} height={6} className="joist-rect" onClick={() => setInspect({ title: `Joist ${idx + 1}`, detail: `${deck.joistSize} joist at 12 in O.C.` })} />;
                 }))}
 
-            {showFraming && pictureFrameCount > 0 && pictureFrameSegments
+            {false && showFraming && pictureFrameCount > 0 && pictureFrameSegments
               .filter((segment) => deck.joistDirection === 'vertical' ? segment.orientation === 'vertical' : segment.orientation === 'horizontal')
               .map((segment, segIdx) => {
                 const inset = inwardNormal(segment, deck.points);
@@ -1097,7 +1097,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                 })}</g>;
               })}
 
-            {showFraming && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => (
+            {false && showFraming && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => (
               deck.boardRun === 'width'
                 ? scanlineIntersections(deck.points, 'vertical', pos).flatMap((pair, pairIdx) => Array.from({ length: Math.max(1, Math.floor(pair.end - pair.start)) }, (_, blockIdx) => {
                     const y = Math.min(pair.end - 0.15, pair.start + blockIdx + 0.5);
@@ -1283,7 +1283,6 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                 { label: 'stair stringer', kind: 'stringer' },
                 { label: 'deck boards', kind: 'deckBoard' },
                 { label: 'beams', kind: 'beam' },
-                { label: 'blocking', kind: 'blocking' },
               ].map((item, index) => {
                 const col = index % 2;
                 const row = Math.floor(index / 2);
@@ -1642,8 +1641,8 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
                 {section.kickPanel !== 'insulated' && spans.map((span, idx) => <line key={`base-${idx}`} x1={left + span.start * scale + oneByInset} y1={bottom - oneByInset} x2={left + span.end * scale - oneByInset} y2={bottom - oneByInset} className={perimeterClass} />)}
               </>}
               {section.kickPanel !== 'none' && spans.map((span, idx) => <g key={`kick-${idx}`}><rect x={left + span.start * scale + frameInset - 2} y={kickTop + 10} width={Math.max(0, (span.end - span.start) * scale - frameInset * 2 + 4)} height={Math.max(0, bottom - kickTop - 20)} className="kick-panel-fill" rx="4" /><line x1={left + span.start * scale + frameInset} y1={kickTop} x2={left + span.end * scale - frameInset} y2={kickTop} className={chairRailClass} /></g>)}
-              {section.pickets && spans.map((span, idx) => <g key={`p-${idx}`}><line x1={left + span.start * scale + frameInset} y1={picketTop} x2={left + span.end * scale - frameInset} y2={picketTop} className={renaissance ? 'reno-picket-line' : 'picket-rail-line'} />{Array.from({ length: Math.max(0, Math.ceil(((span.end - span.start) * 12) / 4)) }, (_, picketIndex) => { const px = left + span.start * scale + frameInset + (((span.end - span.start) * scale - frameInset * 2) * (picketIndex + 0.5)) / Math.max(Math.ceil(((span.end - span.start) * 12) / 4), 1); return <line key={picketIndex} x1={px} y1={picketTop + 4} x2={px} y2={picketBottom} className="picket-line" />; })}</g>)}
-              {chairRailYs.flatMap((chairY, railIdx) => spans.map((span, idx) => <line key={`chair-${railIdx}-${idx}`} x1={left + span.start * scale + frameInset} y1={chairY} x2={left + span.end * scale - frameInset} y2={chairY} className={chairRailClass} />))}
+              {section.pickets && spans.map((span, idx) => <g key={`p-${idx}`}><line x1={left + span.start * scale + frameInset} y1={picketTop} x2={left + span.end * scale - frameInset} y2={picketTop} className={renaissance ? 'reno-picket-line' : 'picket-rail-line'} />{idx === 0 && <text x={left + span.start * scale + frameInset + 4} y={picketTop - 7} className="svg-note">{`pickets ${feetAndInches((picketBottom - picketTop) / scale)}`}</text>}{Array.from({ length: Math.max(0, Math.ceil(((span.end - span.start) * 12) / 4)) }, (_, picketIndex) => { const px = left + span.start * scale + frameInset + (((span.end - span.start) * scale - frameInset * 2) * (picketIndex + 0.5)) / Math.max(Math.ceil(((span.end - span.start) * 12) / 4), 1); return <line key={picketIndex} x1={px} y1={picketTop + 4} x2={px} y2={picketBottom} className="picket-line" />; })}</g>)}
+              {chairRailYs.flatMap((chairY, railIdx) => spans.map((span, idx) => <g key={`chair-${railIdx}-${idx}`}><line x1={left + span.start * scale + frameInset} y1={chairY} x2={left + span.end * scale - frameInset} y2={chairY} className={chairRailClass} />{idx === 0 && <text x={left + span.start * scale + frameInset + 4} y={chairY - 7} className="svg-note">{`chair rail ${feetAndInches((bottom - chairY) / scale)}`}</text>}</g>))}
               {uprightXs.map((x, idx) => <g key={`upr-${idx}`}><line x1={left + x * scale} y1={top + frameInset} x2={left + x * scale} y2={bottom - frameInset} className={uprightClass} /><text x={left + x * scale + 4} y={top + 30} className="svg-note">{`upright ${feetAndInches(section.height)}`}</text></g>)}
               {section.doorType !== 'none' && <><rect x={doorLeft + frameInset - 8} y={doorTop} width={Math.max(0, doorRight - doorLeft - frameInset * 2 + 16)} height={Math.max(0, bottom - doorTop - 18)} className="door-fill" rx="8" /><line x1={doorLeft + frameInset} y1={doorJambTop} x2={doorLeft + frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorRight - frameInset} y1={doorJambTop} x2={doorRight - frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorLeft + frameInset} y1={doorTop} x2={doorRight - frameInset} y2={doorTop} className={doorFrameClass} /><text x={doorLeft + frameInset} y={doorTop - 8} className="svg-note">{`door ${feetAndInches(doorWidth / scale)}w × ${feetAndInches(sectionDoorHeight(section))}h`}</text>{section.doorType === 'french' && <line x1={(doorLeft + doorRight) / 2} y1={doorTop + 6} x2={(doorLeft + doorRight) / 2} y2={bottom - frameInset - 4} className={doorFrameClass} />}</>}
             </g>
@@ -1944,14 +1943,14 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
                 if (kickWindow && !mainWindow) {
                   return <>
                     <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />
-                    <line x1={left + frameInset} y1={y + 6} x2={left + w - frameInset} y2={y + 6} className="sunroom-receiver-line" />
+                    <line x1={left + frameInset} y1={y + 6} x2={left + w - frameInset} y2={y + 6} className="sunroom-drc-line" />
                     <line x1={left + frameInset} y1={bottom - frameInset} x2={left + w - frameInset} y2={bottom - frameInset} className="sunroom-receiver-line" />
                   </>;
                 }
                 if (!kickWindow && mainWindow) {
                   return <>
                     <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />
-                    <line x1={left + frameInset} y1={y - 6} x2={left + w - frameInset} y2={y - 6} className="sunroom-receiver-line" />
+                    <line x1={left + frameInset} y1={y - 6} x2={left + w - frameInset} y2={y - 6} className="sunroom-drc-line" />
                   </>;
                 }
                 return <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />;
@@ -1974,13 +1973,13 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
                 if (mainWindow && !transomWindow) {
                   return <>
                     <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />
-                    <line x1={left + frameInset} y1={y + 6} x2={left + w - frameInset} y2={y + 6} className="sunroom-receiver-line" />
+                    <line x1={left + frameInset} y1={y + 6} x2={left + w - frameInset} y2={y + 6} className="sunroom-drc-line" />
                   </>;
                 }
                 if (!mainWindow && transomWindow) {
                   return <>
                     <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />
-                    <line x1={left + frameInset} y1={y - 6} x2={left + w - frameInset} y2={y - 6} className="sunroom-receiver-line" />
+                    <line x1={left + frameInset} y1={y - 6} x2={left + w - frameInset} y2={y - 6} className="sunroom-drc-line" />
                   </>;
                 }
                 return <line x1={left + frameInset} y1={y} x2={left + w - frameInset} y2={y} className="sunroom-hbeam-line" />;
@@ -2370,7 +2369,16 @@ function FlatPanPreview({ values }: { values: Record<string, string | number | b
             <text x="14" y="154" className="svg-note">Color: {panColor} pans / {framingColor} frame</text>
             <text x="14" y="178" className="svg-note">NovaFlex: 1 tube / 20 sf</text>
           </g>
-          <g transform={`translate(${x0},${y0 + coverH + 95})`}>
+
+          <g transform={`translate(${x0},${y0 + coverH + 66})`} data-export-legend="true">
+            <rect x="-10" y="-20" width="760" height="34" rx="8" className="legend-box" />
+            <rect x="0" y="-10" width="18" height="12" fill={panFill} opacity="0.72" stroke="#92400e" /><text x="26" y="1" className="svg-note">flat pan</text>
+            <rect x="120" y="-10" width="24" height="12" fill={frameFill} stroke="#111827" /><text x="152" y="1" className="svg-note">header / fascia / gutter</text>
+            <rect x="330" y="-7" width="34" height="8" fill="#ef4444" opacity="0.86" stroke="#991b1b" /><text x="372" y="1" className="svg-note">beam</text>
+            <rect x="450" y="-12" width="20" height="20" fill="#2563eb" stroke="#1e40af" /><text x="478" y="1" className="svg-note">post</text>
+            <line x1="560" y1="0" x2="600" y2="0" className="dimension-line" stroke="#4b5563" strokeWidth="1.2" strokeDasharray="7 5" /><text x="608" y="1" className="svg-note">dimensions</text>
+          </g>
+          <g transform={`translate(${x0},${y0 + coverH + 112})`}>
             <text x="0" y="0" className="sheet-subtitle">System notes</text>
             <text x="0" y="26" className="svg-note">• Header lags: 3&quot; lags every 8&quot; in W pattern.</text>
             <text x="0" y="50" className="svg-note">• Pans use 2 washer screws at header, each beam, and gutter per pan.</text>

@@ -99,9 +99,10 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
   const tableWidth = colWidths.reduce((sum, width) => sum + width, 0) + gutter * (colWidths.length - 1);
   const pageWidth = Math.max(940, tableWidth + margin * 2);
   const rowHeightsByCategory = Object.fromEntries(Object.entries(grouped).map(([category, rows]) => [category, rows.map((row) => {
+    const stockLines = wrapText(probe, row.stockRecommendation ?? '—', colWidths[4] - 16).length;
     const colorLines = wrapText(probe, row.color ?? '—', colWidths[5] - 16).length;
     const noteLines = wrapText(probe, row.notes ?? '—', colWidths[6] - 16).length;
-    return Math.max(rowBaseHeight, 18 + Math.max(colorLines, noteLines) * 14);
+    return Math.max(rowBaseHeight, 18 + Math.max(stockLines, colorLines, noteLines) * 14);
   })]));
   let pageHeight = 138;
   Object.entries(grouped).forEach(([category]) => {
@@ -173,12 +174,14 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
       ctx.strokeStyle = '#d1d5db';
       ctx.strokeRect(margin, rowY, tableWidth, rowHeight);
       ctx.fillStyle = '#111111';
-      const rowValues = [row.layoutLabel ?? '', row.name, String(row.quantity), row.unit, row.stockRecommendation ?? ''];
+      const rowValues = [row.layoutLabel ?? '', row.name, String(row.quantity), row.unit];
       rowValues.forEach((value, colIdx) => {
         const x = cols[colIdx] + 8;
         const maxWidth = colWidths[colIdx] - 16;
         ctx.fillText(fitText(ctx, String(value), maxWidth), x, rowY + 18);
       });
+      const stockLines = wrapText(ctx, row.stockRecommendation ?? '—', colWidths[4] - 16);
+      stockLines.forEach((line, lineIdx) => ctx.fillText(line, cols[4] + 8, rowY + 18 + lineIdx * 14));
       const colorLines = wrapText(ctx, row.color ?? '—', colWidths[5] - 16);
       colorLines.forEach((line, lineIdx) => ctx.fillText(line, cols[5] + 8, rowY + 18 + lineIdx * 14));
       const noteLines = wrapText(ctx, row.notes ?? '—', colWidths[6] - 16);
@@ -206,6 +209,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
   const [customDraft, setCustomDraft] = useState(customDefaults);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState({ name: '', quantity: '', unit: '', stockRecommendation: '', color: '', notes: '' });
+  const [stockView, setStockView] = useState(false);
 
   const customItems = useMemo(() => parseJsonArray<CustomMaterialItem>(values.customMaterialItems, []), [values.customMaterialItems]);
   const deletedKeys = useMemo(() => new Set(parseJsonArray<string>(values.deletedMaterialKeys, [])), [values.deletedMaterialKeys]);
@@ -257,11 +261,28 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
       .filter((item) => !deletedKeys.has(item.rowKey));
   }, [items, customItems, deletedKeys, nameOverrides, quantityOverrides, unitOverrides, stockOverrides, colorOverrides, noteOverrides]);
 
-  const grouped = useMemo(() => displayItems.reduce<Record<string, DisplayMaterialItem[]>>((acc, item) => {
+  const stockOrderItems = useMemo<DisplayMaterialItem[]>(() => {
+    const merged = new Map<string, DisplayMaterialItem>();
+    displayItems.forEach((item) => {
+      const key = [item.name, item.unit, item.stockRecommendation, item.color ?? ''].join('||');
+      const existing = merged.get(key);
+      if (!existing) {
+        merged.set(key, { ...item, category: 'Stock order view', rowKey: `stock:${key}`, source: item.source, notes: item.notes ?? '' });
+        return;
+      }
+      existing.quantity = Number((existing.quantity + item.quantity).toFixed(2));
+      const label = item.layoutLabel ? ` ${item.layoutLabel}` : '';
+      existing.notes = [existing.notes, item.category + label].filter(Boolean).join(' · ');
+    });
+    return Array.from(merged.values()).sort((a, b) => String(a.name).localeCompare(String(b.name)) || String(a.stockRecommendation).localeCompare(String(b.stockRecommendation)));
+  }, [displayItems]);
+
+  const activeItems = stockView ? stockOrderItems : displayItems;
+  const grouped = useMemo(() => activeItems.reduce<Record<string, DisplayMaterialItem[]>>((acc, item) => {
     acc[item.category] = acc[item.category] ?? [];
     acc[item.category].push(item);
     return acc;
-  }, {}), [displayItems]);
+  }, {}), [activeItems]);
 
   const hiddenItemCount = deletedKeys.size;
   const exportBaseName = sanitizeFilePart(String(values.poJobName ?? 'sns-material-order-list'));
@@ -370,6 +391,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
           <span>Grouped by family and board length for faster ordering</span>
         </div>
         <div className="preview-toolbar">
+          <button type="button" className={stockView ? 'secondary-btn small-btn' : 'ghost-btn small-btn'} onClick={() => setStockView((current) => !current)}>{stockView ? 'Installer view' : 'Stock order view'}</button>
           <button type="button" className="ghost-btn small-btn" onClick={exportPdf}>Export PDF</button>
           <button type="button" className="ghost-btn small-btn" onClick={exportPng}>Export image</button>
           <button type="button" className="ghost-btn small-btn" onClick={exportCombinedPdf}>Export layout + materials</button>

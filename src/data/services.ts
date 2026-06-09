@@ -107,6 +107,10 @@ export const SERVICES: ServiceDefinition[] = [
     highlights: ['Drag points', 'Undo / redo', 'Snap cleaner corners', 'Lock post locations'],
     defaults: {
       deckHeight: 8,
+      multiTierEnabled: false,
+      lowerDeckHeight: 3,
+      lowerDeckWidth: 8,
+      lowerDeckProjection: 6,
       attachment: 'siding',
       boardRun: 'width',
       deckingType: 'composite',
@@ -144,6 +148,10 @@ export const SERVICES: ServiceDefinition[] = [
     },
     fields: [
       { key: 'deckHeight', label: 'Deck height (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'multiTierEnabled', label: 'Add lower deck tier', type: 'boolean', helper: 'Use stair run count for connecting stairs between tiers.' },
+      { key: 'lowerDeckHeight', label: 'Lower tier height (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'lowerDeckWidth', label: 'Lower tier width (ft)', type: 'number', min: 0, step: 0.5 },
+      { key: 'lowerDeckProjection', label: 'Lower tier projection (ft)', type: 'number', min: 0, step: 0.5 },
       { key: 'quickWidth', label: 'Quick width (ft)', type: 'number', min: 1, step: 1 },
       { key: 'quickProjection', label: 'Quick projection (ft)', type: 'number', min: 1, step: 1 },
       {

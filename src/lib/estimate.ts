@@ -467,17 +467,18 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const structuralPostStock = optimizeRepeatedCuts(deck.postCount, structuralPostCutFt, [8, 10, 12, 16]);
 
   materials.push(
-    toMaterial(`${deck.joistSize} support blocking`, 'Framing', deck.blockingBoardCount, 'boards', '12 ft stock', 'Pressure treated', `${deck.blockingLf.toFixed(1)} lf total for picture-frame / breaker support blocking only · blocking is counted at 1 ft O.C. only where boards run parallel with joists and need support`),
     toMaterial('6x6 wood posts', 'Structure', structuralPostStock.stockCount, 'boards', `${structuralPostStock.stockLength} ft stock`, 'Pressure treated', `${deck.postCount} post(s) cut to about ${feetAndInches(structuralPostStock.cutLength)} each after subtracting ${deck.joistSize} joist height from ${feetAndInches(deckHeightFt)} deck height · ${structuralPostStock.perStock} cut(s) per stock board${deck.lockedPosts.length ? ` · ${deck.lockedPosts.length} post position(s) manually locked` : ''}`),
     toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', undefined, '3 bags per post footing'),
     toMaterial('12 in x 48 in Sonotubes', 'Structure', Math.ceil(deck.postCount / 3), 'tubes', '1 tube per 3 footers', undefined, `${deck.postCount} 6x6 post footer(s) total`),
     toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined, 'Post base bracket at each footing'),
     toMaterial('Concrete submersible J Anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined, 'Concrete anchor for post base bracket'),
     toMaterial('Joist hangers', 'Hardware', deck.joistHangers, 'ea', 'Match joist size', undefined, 'One hanger at each end of every joist'),
+    ...(deck.angledJoistHangers > 0 ? [toMaterial('Angled joist hangers', 'Hardware', deck.angledJoistHangers, 'ea', 'Match joist size', undefined, 'Joists landing against angled deck edges') ] : []),
     toMaterial('Hurricane ties', 'Hardware', deck.rafterTies, 'ea', '1 per joist to beam condition', undefined, 'One hurricane tie where each joist bears on each beam'),
     toMaterial('Carriage bolt sets', 'Hardware', deck.postCount * 2 + ((railingType === 'wood' || railingType === 'vinyl-composite') ? railingPosts * 2 : 0), 'sets', 'Bolt + washer + nut', undefined),
     toMaterial('Ledger lateral load brackets', 'Hardware', deck.lateralLoadBrackets, 'ea', 'Every 2 ft on ledger', undefined),
-    ...(deck.attachment === 'siding' ? [toMaterial('1/2 in x 6 in lag screws', 'Hardware', Math.max(1, Math.ceil(deck.houseContactLength)), 'ea', 'W pattern every 12 in', 'Ledger to house attachment')] : []),
+    ...(deck.attachment === 'siding' || deck.attachment === 'brick' ? [toMaterial('1/2 in x 6 in lag screws', 'Hardware', Math.max(1, Math.ceil(deck.houseContactLength)), 'ea', 'W pattern every 12 in', undefined, deck.attachment === 'brick' ? 'Lag screws used with shield anchors for brick lateral attachment; posts/beams remain the gravity support' : 'Ledger to house attachment')] : []),
+    ...(deck.attachment === 'brick' ? [toMaterial('1/2 in x 3 in lag shield anchors', 'Hardware', Math.max(1, Math.ceil(deck.houseContactLength)), 'ea', 'One shield anchor per lag', undefined, 'Required where lag screws attach to brick/masonry')] : []),
     toMaterial('Hex head LedgerLOK screws 5 in', 'Hardware', deck.sdsCorners, 'ea', '4 per corner', undefined, 'All band-board corners'),
     toMaterial('Joist tape', 'Hardware', deck.joistTapeLf, 'lf', 'Match roll coverage', undefined, 'Tape joists and band-board top edges'),
     toMaterial(deck.fastenerType === 'top screws' ? '3-1/2 in exterior framing screws' : '2-3/8 in CAMO screws', 'Hardware', deck.deckFastenerBoxes, 'boxes', deck.fastenerType === 'top screws' ? '365 per box' : '1750 per box', undefined),
@@ -501,7 +502,6 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     if (railingBreakdown.stairsLevelToAngledCornerPosts) materials.push(toMaterial('Stairs level-to-angled corner posts', 'Railing', railingBreakdown.stairsLevelToAngledCornerPosts, 'ea', 'Match railing system', 'Top posts where level rail turns onto stair rail'));
     if (railingBreakdown.stairsInlinePosts) materials.push(toMaterial('Stairs inline posts', 'Railing', railingBreakdown.stairsInlinePosts, 'ea', 'Match railing system', 'Intermediate stair-side posts'));
     if (railingBreakdown.stairsEndPosts) materials.push(toMaterial('Stairs end posts', 'Railing', railingBreakdown.stairsEndPosts, 'ea', 'Match railing system', 'Bottom stair-end posts'));
-    if (railingPosts) materials.push(toMaterial('Blocking under top-mount aluminum posts', 'Railing', railingPosts, 'locations', '2x framing blocking', 'Blocking required under each aluminum post location'));
   } else if (railingType === 'wood') {
     const levelRailLf = deriveTopRailRuns(deck).reduce((sum, run) => sum + run.length, 0);
     const stairRailLf = deck.stairCount > 0 && deck.stairRailSideCount > 0 ? deck.stairRunFt * deck.stairCount * deck.stairRailSideCount : 0;
@@ -572,6 +572,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       deck.stairPlacement.edgeIndex !== null ? `Stairs sit on edge ${deck.stairPlacement.edgeIndex + 1}. Preview now shows tread count, stringer layout, and ${deck.stairRailSideCount === 0 ? 'no stair-side railing' : `${deck.stairRailSideCount} stair-side railing run(s)`} based on the left/right stair railing inputs.` : 'No stair edge is assigned yet in the drawing tool.',
       'Railing optimizer solves each straight run separately, subtracts stair openings from the deck edge, and adds stair-side railing runs when the left/right stair railing inputs are selected.',
       deck.requiredFieldBoardBreaks.length > 0 ? 'Field board run exceeds 20 ft. Add a breaker board to avoid staggered decking; the app no longer shows staggered board seams.' : 'Field decking uses available 8, 12, 16, and 20 ft board lengths with breaker boards where selected.',
+      (inputs.multiTierEnabled === true || String(inputs.multiTierEnabled ?? 'false') === 'true') ? `Multi-tier deck mode: lower tier shown in notes at ${feetAndInches(Number(inputs.lowerDeckHeight ?? 0))} high and ${feetAndInches(Number(inputs.lowerDeckWidth ?? 0))} x ${feetAndInches(Number(inputs.lowerDeckProjection ?? 0))}; stairs/materials use the stair-run count input until individual lower-tier drawing is placed.` : 'Single tier deck mode.',
       deck.lockedPosts.length > 0 ? 'Locked posts stay in the take-off even after beam edits so you can preserve preferred field locations.' : 'Use post lock mode when you want to hold a post location while still letting the app auto-space the rest.',
     ],
   };
@@ -1146,10 +1147,11 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
         addVisibleHorizontal(cutGroups.receiver, section); // bottom receiver for window kick zone
       } else if (kickWindow && !mainWindow) {
         addVisibleHorizontal(cutGroups.hBeam, section);
-        addVisibleHorizontal(cutGroups.receiver, section, 2); // upper receiver plus bottom receiver
+        addVisibleHorizontal(cutGroups.drc, section); // DRC fits into the H-beam on the kick-window side
+        addVisibleHorizontal(cutGroups.receiver, section); // bottom receiver for the kick window/base side
       } else if (!kickWindow && mainWindow) {
         addVisibleHorizontal(cutGroups.hBeam, section);
-        addVisibleHorizontal(cutGroups.receiver, section); // receiver on window side of divider
+        addVisibleHorizontal(cutGroups.drc, section); // DRC fits into the H-beam; receiver does not
       } else {
         addVisibleHorizontal(cutGroups.hBeam, section);
       }
@@ -1165,7 +1167,7 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
         addVisibleHorizontal(cutGroups.drc, section, 2);
       } else if ((mainWindow && !transomWindow) || (!mainWindow && transomWindow)) {
         addVisibleHorizontal(cutGroups.hBeam, section);
-        addVisibleHorizontal(cutGroups.receiver, section);
+        addVisibleHorizontal(cutGroups.drc, section); // DRC fits into the H-beam between transom/main zones
       } else {
         addVisibleHorizontal(cutGroups.hBeam, section);
       }
