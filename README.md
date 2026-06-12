@@ -87,3 +87,7 @@ The main service definitions are:
 - `src/data/services.ts`
 
 Those two files are the fastest place to begin swapping in real business logic.
+
+## v103 deck material visibility fix
+- Stair takeoff now requires an actual placed staircase on a valid deck edge. Stale stair count/input values no longer add stair or stair-railing materials when no stairs are visible on the plan.
+- Cross-checked no-stair/no-rail and stale-stair-input cases.

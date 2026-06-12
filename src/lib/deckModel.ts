@@ -591,14 +591,34 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const concreteBags = postCount * 3;
   const postBases = postCount;
   const concreteAnchors = postCount;
-  const additionalStairCount = parseAdditionalStairs(inputs.additionalStairs).length;
   const stairCountInput = Math.max(0, Number(inputs.stairCount ?? 0));
-  const stairCount = Math.max(stairCountInput, stairCountInput > 0 ? 1 + additionalStairCount : additionalStairCount);
   const stairWidth = Number(inputs.stairWidth ?? 4);
   const stairRiseFt = Number(inputs.stairRise ?? 0) > 0 ? Number(inputs.stairRise ?? 0) : Number(inputs.deckHeight ?? 0);
-  const stairRisers = stairCount > 0 && stairRiseFt > 0 ? Math.ceil((stairRiseFt * 12) / 7.5) : 0;
-  const stairTreadsPerRun = stairRisers > 0 ? Math.max(stairRisers - 1, 1) : 0;
-  const stairRunFt = round2(stairTreadsPerRun * (11 / 12));
+  const plannedStairRisers = stairRiseFt > 0 ? Math.ceil((stairRiseFt * 12) / 7.5) : 0;
+  const plannedStairTreadsPerRun = plannedStairRisers > 0 ? Math.max(plannedStairRisers - 1, 1) : 0;
+  const plannedStairRunFt = round2(plannedStairTreadsPerRun * (11 / 12));
+
+  const stairEdgeIndexValue = Number(inputs.stairEdgeIndex ?? -1);
+  const stairEdge = stairCountInput > 0 && stairEdgeIndexValue >= 0 && stairEdgeIndexValue < segments.length ? segments[stairEdgeIndexValue] : null;
+  const stairOffset = stairEdge ? clamp(Number(inputs.stairOffset ?? 0), 0, Math.max(0, stairEdge.length - stairWidth)) : 0;
+  const stairStart = stairEdge ? segmentPointAtOffset(stairEdge, stairOffset) : null;
+  const stairEnd = stairEdge ? segmentPointAtOffset(stairEdge, stairOffset + Math.min(stairWidth, stairEdge.length)) : null;
+  const stairPlacement: StairPlacement = { edgeIndex: stairEdge ? stairEdge.index : null, offset: stairOffset, width: stairWidth, landingProjection: plannedStairRunFt, start: stairStart, end: stairEnd };
+  const extraStairPlacements = parseAdditionalStairs(inputs.additionalStairs).map((item) => {
+    const edge = segments[item.edgeIndex];
+    if (!edge) return null;
+    const width = Math.min(item.width, edge.length);
+    const offset = clamp(item.offset, 0, Math.max(0, edge.length - width));
+    return { edgeIndex: edge.index, offset, width, landingProjection: plannedStairRunFt, start: segmentPointAtOffset(edge, offset), end: segmentPointAtOffset(edge, offset + width) } as StairPlacement;
+  }).filter(Boolean) as StairPlacement[];
+  const stairPlacements = [stairPlacement, ...extraStairPlacements].filter((item) => item.edgeIndex !== null && item.start && item.end) as StairPlacement[];
+  // A staircase only exists for material takeoff when it has been placed on a valid deck edge.
+  // This keeps stale/default stair input values from adding stair and stair-railing materials
+  // when no stairs are visible on the plan.
+  const stairCount = stairPlacements.length;
+  const stairRisers = stairCount > 0 ? plannedStairRisers : 0;
+  const stairTreadsPerRun = stairCount > 0 ? plannedStairTreadsPerRun : 0;
+  const stairRunFt = stairCount > 0 ? plannedStairRunFt : 0;
   const isPressureTreatedDecking = String(inputs.deckingType ?? 'composite') === 'pressure-treated';
   const treadBoardPieces = stairCount * stairTreadsPerRun * 2;
   const riserBoardPieces = isPressureTreatedDecking ? stairCount * stairRisers * 2 : 0;
@@ -629,21 +649,6 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const riserFascia = useFascia ? stairCount * stairRisers * stairWidth : 0;
   const fasciaLf = useFascia ? round2(exposedPerimeter + stairSideFascia + riserFascia) : 0;
   const fasciaPieces = useFascia ? Math.ceil(fasciaLf / 12) : 0;
-
-  const stairEdgeIndexValue = Number(inputs.stairEdgeIndex ?? -1);
-  const stairEdge = stairCount > 0 && stairEdgeIndexValue >= 0 && stairEdgeIndexValue < segments.length ? segments[stairEdgeIndexValue] : null;
-  const stairOffset = stairEdge ? clamp(Number(inputs.stairOffset ?? 0), 0, Math.max(0, stairEdge.length - stairWidth)) : 0;
-  const stairStart = stairEdge ? segmentPointAtOffset(stairEdge, stairOffset) : null;
-  const stairEnd = stairEdge ? segmentPointAtOffset(stairEdge, stairOffset + Math.min(stairWidth, stairEdge.length)) : null;
-  const stairPlacement: StairPlacement = { edgeIndex: stairEdge ? stairEdge.index : null, offset: stairOffset, width: stairWidth, landingProjection: stairRunFt, start: stairStart, end: stairEnd };
-  const extraStairPlacements = parseAdditionalStairs(inputs.additionalStairs).map((item) => {
-    const edge = segments[item.edgeIndex];
-    if (!edge) return null;
-    const width = Math.min(item.width, edge.length);
-    const offset = clamp(item.offset, 0, Math.max(0, edge.length - width));
-    return { edgeIndex: edge.index, offset, width, landingProjection: stairRunFt, start: segmentPointAtOffset(edge, offset), end: segmentPointAtOffset(edge, offset + width) } as StairPlacement;
-  }).filter(Boolean) as StairPlacement[];
-  const stairPlacements = [stairPlacement, ...extraStairPlacements].filter((item) => item.edgeIndex !== null && item.start && item.end) as StairPlacement[];
 
   const topRailSegments = stairPlacements.reduce((coverage, placement) => deriveTopRailSegments(coverage, placement), railCoverage);
   const topRailRun = round2(topRailSegments.reduce((sum, item) => sum + (item.end - item.start), 0));
