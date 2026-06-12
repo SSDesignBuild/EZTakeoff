@@ -91,6 +91,51 @@ function scanlineIntersections(points: DeckPoint[], axis: 'horizontal' | 'vertic
   return pairs;
 }
 
+
+function pointInPolygon(point: DeckPoint, polygon: DeckPoint[]) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const pi = polygon[i];
+    const pj = polygon[j];
+    const intersect = ((pi.y > point.y) !== (pj.y > point.y)) &&
+      (point.x < ((pj.x - pi.x) * (point.y - pi.y)) / ((pj.y - pi.y) || 1e-9) + pi.x);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function subfloorSheetsForDeck(deck: ReturnType<typeof buildDeckModel>) {
+  const sheets: { x: number; y: number; w: number; h: number }[] = [];
+  const sheetLong = 8;
+  const sheetShort = 4;
+  if (deck.boardRun === 'width') {
+    let row = 0;
+    for (let y = deck.minY; y < deck.maxY - 0.01; y += sheetShort, row += 1) {
+      const h = Math.min(sheetShort, deck.maxY - y);
+      const startX = deck.minX - (row % 2 ? sheetLong / 2 : 0);
+      for (let x = startX; x < deck.maxX - 0.01; x += sheetLong) {
+        const w = Math.min(sheetLong, deck.maxX - x);
+        const cx = x + Math.max(0.1, Math.min(sheetLong, w)) / 2;
+        const cy = y + h / 2;
+        if (pointInPolygon({ x: cx, y: cy }, deck.points) || pointInPolygon({ x: Math.max(deck.minX + 0.01, x + 0.1), y: cy }, deck.points)) sheets.push({ x, y, w: Math.min(sheetLong, deck.maxX - x), h });
+      }
+    }
+  } else {
+    let col = 0;
+    for (let x = deck.minX; x < deck.maxX - 0.01; x += sheetShort, col += 1) {
+      const w = Math.min(sheetShort, deck.maxX - x);
+      const startY = deck.minY - (col % 2 ? sheetLong / 2 : 0);
+      for (let y = startY; y < deck.maxY - 0.01; y += sheetLong) {
+        const h = Math.min(sheetLong, deck.maxY - y);
+        const cx = x + w / 2;
+        const cy = y + Math.max(0.1, Math.min(sheetLong, h)) / 2;
+        if (pointInPolygon({ x: cx, y: cy }, deck.points) || pointInPolygon({ x: cx, y: Math.max(deck.minY + 0.01, y + 0.1) }, deck.points)) sheets.push({ x, y, w, h: Math.min(sheetLong, deck.maxY - y) });
+      }
+    }
+  }
+  return sheets.filter((sheet) => sheet.w > 0.05 && sheet.h > 0.05);
+}
+
 function sectionDoorLeft(section: SectionConfig) {
   const sectionWidthIn = section.width * 12;
   const doorWidthIn = Math.min(section.doorWidth * 12, sectionWidthIn);
@@ -582,6 +627,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const lowerDeck = buildLowerTierDeckModel(values);
   const decksForBounds = lowerDeck ? [deck, lowerDeck] : [deck];
   const deckingMaterial = String(values.deckingMaterial ?? (String(values.deckingType ?? 'composite') === 'pressure-treated' ? 'Pressure treated 5/4x6' : 'Composite / PVC decking'));
+  const useSubfloorDecking = String(values.deckingSurface ?? 'deck-boards') === 'subfloor';
   const stairBoardFill = deckBoardPreviewColor(deckingMaterial);
   const [layer, setLayer] = useState<DeckLayer>('framing');
   const [inspect, setInspect] = useState<InspectMember | null>(null);
@@ -653,6 +699,8 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const boardRuns = deck.boardRun === 'width'
     ? Array.from({ length: Math.max(1, Math.floor(deck.depth / 0.47)) }, (_, i) => deck.minY + 0.22 + i * 0.47)
     : Array.from({ length: Math.max(1, Math.floor(deck.width / 0.47)) }, (_, i) => deck.minX + 0.22 + i * 0.47);
+  const subfloorSheets = useSubfloorDecking ? subfloorSheetsForDeck(deck) : [];
+  const lowerSubfloorSheets = useSubfloorDecking && lowerDeck ? subfloorSheetsForDeck(lowerDeck) : [];
   const joistRuns = deck.joistPositions;
   const pictureFrameCount = Math.max(0, Math.round(Number(values.pictureFrameCount ?? deck.pictureFrameCount ?? 0)));
   const breakerBoardCount = Math.max(0, Math.round(Number(values.breakerBoardCount ?? deck.breakerBoardCount ?? 0)));
@@ -939,7 +987,8 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
     return <g className="lower-tier-deck-layout">
       <polygon points={lowerPointString} className="deck-polygon muted-fill lower-tier-fill" />
       <text x={toSvg(lowerDeck.minX, lowerDeck.minY).x + 8} y={toSvg(lowerDeck.minX, lowerDeck.minY).y - 12} className="svg-note tier-label">LOWER TIER · {feetAndInches(Number(values.lowerDeckHeight ?? 0))} HIGH</text>
-      {showBoards && lowerBoardRuns.map((value, idx) => lowerDeck.boardRun === 'width'
+      {showBoards && useSubfloorDecking && <g clipPath="url(#lower-deck-clip)">{lowerSubfloorSheets.map((sheet, idx) => { const a = toSvg(sheet.x, sheet.y); const b = toSvg(sheet.x + sheet.w, sheet.y + sheet.h); return <rect key={`lower-subfloor-${idx}`} x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)} className="subfloor-sheet lower-tier-board" />; })}</g>}
+      {showBoards && !useSubfloorDecking && lowerBoardRuns.map((value, idx) => lowerDeck.boardRun === 'width'
         ? scanlineIntersections(lowerDeck.points, 'horizontal', value).map((pair, pairIdx) => {
             const y = toSvg(pair.start, value).y;
             const x1 = toSvg(pair.start, value).x;
@@ -1009,11 +1058,16 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             <rect x="34" y="34" width={sheetW - 68} height={sheetH - 68} className="sheet-border inner" />
             <text x={60} y={68} className="sheet-title">PLAN VIEW CONSTRUCTION</text>
             <text x={60} y={90} className="sheet-subtitle">S&S DESIGN BUILD · DECK FRAMING SCHEMATIC · DOUBLE BAND STANDARD</text>
+            <defs>
+              <clipPath id="main-deck-clip"><polygon points={pointString} /></clipPath>
+              {lowerDeck && <clipPath id="lower-deck-clip"><polygon points={lowerDeck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ')} /></clipPath>}
+            </defs>
 
             {renderLowerTierDeck()}
             <polygon points={pointString} className="deck-polygon muted-fill" />
 
-            {showBoards && boardRuns.map((value, idx) => deck.boardRun === 'width'
+            {showBoards && useSubfloorDecking && <g clipPath="url(#main-deck-clip)">{subfloorSheets.map((sheet, idx) => { const a = toSvg(sheet.x, sheet.y); const b = toSvg(sheet.x + sheet.w, sheet.y + sheet.h); return <rect key={`subfloor-${idx}`} x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)} className="subfloor-sheet" />; })}</g>}
+            {showBoards && !useSubfloorDecking && boardRuns.map((value, idx) => deck.boardRun === 'width'
               ? scanlineIntersections(deck.points, 'horizontal', value).map((pair, pairIdx) => {
                   const y = toSvg(pair.start, value).y;
                   const x1 = toSvg(pair.start, value).x;
@@ -1031,7 +1085,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   </g>;
                 }))}
 
-            {showBoards && pictureFrameCount > 0 && pictureFrameSegments.flatMap((segment) => (
+            {showBoards && !useSubfloorDecking && pictureFrameCount > 0 && pictureFrameSegments.flatMap((segment) => (
               Array.from({ length: pictureFrameCount }, (_, course) => (
                 <polygon
                   key={`pf-${segment.index}-${course}`}
@@ -1042,7 +1096,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               ))
             ))}
 
-            {showBoards && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => {
+            {showBoards && !useSubfloorDecking && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => {
               const boardWidthFt = 0.47;
               const boardWidthPx = Math.max(10, scale * boardWidthFt);
               return deck.boardRun === 'width'
@@ -1066,9 +1120,9 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   }));
             })}
 
-            {showBoardLabels && fieldBoardLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-field-${idx}`))}
-            {showBoardLabels && pictureFrameLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-pf-${idx}`))}
-            {showBoardLabels && breakerLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-breaker-${idx}`))}
+            {showBoardLabels && !useSubfloorDecking && fieldBoardLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-field-${idx}`))}
+            {showBoardLabels && !useSubfloorDecking && pictureFrameLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-pf-${idx}`))}
+            {showBoardLabels && !useSubfloorDecking && breakerLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-breaker-${idx}`))}
 
             {showFraming && deck.beamLines.map((beam, beamIdx) => (
               <g key={`beam-${beamIdx}`}>

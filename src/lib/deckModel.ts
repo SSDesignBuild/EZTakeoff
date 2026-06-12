@@ -37,6 +37,7 @@ export interface DeckInputs {
   lowerDeckProjection?: string | number | boolean;
   lowerDeckShape?: string | number | boolean;
   additionalStairs?: string | number | boolean;
+  deckingSurface?: string | number | boolean;
 
   lowerManualRailingEdges?: string | number | boolean;
   lowerCustomBeamYs?: string | number | boolean;
@@ -174,7 +175,6 @@ const DECK_GAP = 0.125 / 12;
 const EFFECTIVE_COVERAGE = DECK_BOARD_FACE + DECK_GAP;
 const JOIST_SPACING = 1;
 const BEAM_TARGET_SPACING = 10;
-const POST_TARGET_SPACING = 6;
 const POST_MAX_SPACING = 7.5;
 const JOIST_SPAN_LIMITS = { '2x8': 12, '2x10': 14, '2x12': 16 } as const;
 const BEAM_SPAN_LIMITS = { '2x10': 7, '2x12': 9, PSL: 13 } as const;
@@ -182,6 +182,27 @@ const BEAM_SPAN_LIMITS = { '2x10': 7, '2x12': 9, PSL: 13 } as const;
 const round2 = (value: number) => Math.round(value * 100) / 100;
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const chooseStockLength = (required: number, stock = STOCK_LENGTHS) => stock.find((item) => item >= required - 1e-6) ?? stock[stock.length - 1];
+
+function maxPostSpacingForDouble2x10(joistSpanFt: number) {
+  // IRC R507.5-style max beam spans for a double 2x10 Southern Pine beam.
+  const table = [
+    { span: 6, max: 10 + 4 / 12 },
+    { span: 8, max: 9 },
+    { span: 10, max: 8 },
+    { span: 12, max: 7 + 4 / 12 },
+    { span: 14, max: 6 + 9 / 12 },
+  ];
+  if (joistSpanFt <= table[0].span) return table[0].max;
+  for (let i = 1; i < table.length; i += 1) {
+    if (joistSpanFt <= table[i].span) {
+      const prev = table[i - 1];
+      const next = table[i];
+      const t = (joistSpanFt - prev.span) / (next.span - prev.span);
+      return prev.max + (next.max - prev.max) * t;
+    }
+  }
+  return table[table.length - 1].max;
+}
 
 function generateJoistPositions(min: number, max: number, spacing = JOIST_SPACING) {
   const span = max - min;
@@ -417,10 +438,16 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
 
   const manualRailingEdges = parseIndexArray(inputs.manualRailingEdges).filter((index) => index < segments.length);
   const defaultExposedSegments = isFreestanding ? segments : segments.filter((segment) => !(segment.orientation === 'horizontal' && Math.abs(segment.start.y - minY) < 1e-6 && Math.abs(segment.end.y - minY) < 1e-6));
-  const defaultRailIndices = manualRailingEdges.length > 0 ? manualRailingEdges : defaultExposedSegments.map((segment) => segment.index);
   const railCoverage = (() => {
+    // If the designer has written railCoverage/manualRailingEdges, trust it exactly.
+    // This allows installers to remove every rail side without the model re-adding
+    // all exposed sides as the old default.
+    const hasExplicitCoverage = typeof inputs.railCoverage === 'string';
     const parsed = parseRailCoverage(inputs.railCoverage, segments);
-    return parsed.length ? parsed : buildDefaultRailCoverage(segments, defaultRailIndices);
+    if (parsed.length) return parsed;
+    if (manualRailingEdges.length) return buildDefaultRailCoverage(segments, manualRailingEdges);
+    if (hasExplicitCoverage) return [];
+    return [];
   })();
   const exposedSegments = segments.filter((segment) => defaultExposedSegments.some((item) => item.index === segment.index));
   const exposedPerimeter = round2(exposedSegments.reduce((sum, segment) => sum + segment.length, 0));
@@ -515,9 +542,11 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
       const usableLength = Math.max(0, segment.length - (beamCantilever * 2));
       const postStart = segment.startX + beamCantilever;
       const postEnd = segment.endX - beamCantilever;
-      const preferredCount = Math.max(2, Math.ceil(Math.max(usableLength, 0.01) / POST_TARGET_SPACING) + 1);
+      const maxAllowedSpacing = Math.min(maxPostSpacingForDouble2x10(maxSpan), Math.max(POST_MAX_SPACING, maxPostSpacingForDouble2x10(maxSpan)));
+      const targetSpacing = maxAllowedSpacing;
+      const preferredCount = Math.max(2, Math.ceil(Math.max(usableLength, 0.01) / targetSpacing) + 1);
       const spacing = Math.max(usableLength, 0.01) / Math.max(1, preferredCount - 1);
-      const adjustedCount = spacing > POST_MAX_SPACING ? preferredCount + 1 : preferredCount;
+      const adjustedCount = spacing > maxAllowedSpacing + 1e-6 ? preferredCount + 1 : preferredCount;
       for (let index = 0; index < adjustedCount; index += 1) {
         const x = round2(postStart + (Math.max(postEnd - postStart, 0) * index) / Math.max(1, adjustedCount - 1));
         if (!postXs.some((value) => Math.abs(value - x) < 0.1)) postXs.push(x);

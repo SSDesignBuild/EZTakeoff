@@ -420,18 +420,23 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const fasciaMaterial = resolveBoardStyle(inputs.fasciaMaterial);
   const fasciaStyleInfo = splitDeckStyle(fasciaMaterial);
   const sumGroupLf = (groups: { length?: number; cutLength?: number; count: number }[]) => groups.reduce((sum, group) => sum + Math.max(0, Number(group.length ?? group.cutLength ?? 0)) * Math.max(0, Number(group.count || 0)), 0);
-  const pictureFrameBoardLf = sumGroupLf(deckingPlan.groups.filter((group) => group.kind === 'picture-frame')) + (lowerDeckingPlanForTotals ? sumGroupLf(lowerDeckingPlanForTotals.groups.filter((group) => group.kind === 'picture-frame')) : 0);
+  const useSubfloorDecking = String(inputs.deckingSurface ?? 'deck-boards') === 'subfloor';
+  const subfloorSheetCount = (area: number) => Math.max(0, Math.ceil((area / 32) * 1.05));
+  const pictureFrameBoardLf = useSubfloorDecking ? 0 : sumGroupLf(deckingPlan.groups.filter((group) => group.kind === 'picture-frame')) + (lowerDeckingPlanForTotals ? sumGroupLf(lowerDeckingPlanForTotals.groups.filter((group) => group.kind === 'picture-frame')) : 0);
   const stairDeckBoardLf = sumGroupLf(deck.stairTreadGroups) + (lowerDeck ? sumGroupLf(lowerDeck.stairTreadGroups) : 0);
   const totalFasciaBoardLf = Math.max(0, Number(deck.fasciaLf || 0)) + (lowerDeck ? Math.max(0, Number(lowerDeck.fasciaLf || 0)) : 0);
   const colorMatchedTrimFastenerPoints = Math.ceil((pictureFrameBoardLf + stairDeckBoardLf + totalFasciaBoardLf) * 2);
   const totalDeckAreaForNails = Math.max(0, Number(deck.area || 0)) + (lowerDeck ? Math.max(0, Number(lowerDeck.area || 0)) : 0);
   const connectorNails = (deck.joistHangers + deck.postBases + deck.lateralLoadBrackets + deck.rafterTies) * 10 + (lowerDeck ? (lowerDeck.joistHangers + lowerDeck.postBases + lowerDeck.lateralLoadBrackets + lowerDeck.rafterTies) * 10 : 0);
+  if (useSubfloorDecking) {
+    materials.push(toMaterial('4 ft x 8 ft x 3/4 in subfloor sheets', 'Decking', subfloorSheetCount(deck.area), 'sheets', '4 ft x 8 ft x 3/4 in', 'Exterior rated', `${deck.area.toFixed(1)} sq ft main deck area laid out in a staggered brick pattern; includes 5% waste allowance.`));
+  } else {
   deckingPlan.groups.filter((group) => group.kind === 'field').forEach((group) => {
     const notes = `${deck.boardRun === 'width' ? 'Field decking. Boards run parallel to the house.' : 'Field decking. Boards run perpendicular to the house.'} Board style: ${deckingMaterial}. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`;
     const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
     materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, deckingStyleInfo.color, notes, group.label));
   });
-  if (pictureFrameCount > 0) {
+  if (!useSubfloorDecking && pictureFrameCount > 0) {
     for (let i = 0; i < pictureFrameCount; i += 1) {
       const style = pictureFrameMaterials[i] || deckingMaterial;
       const styleInfo = splitDeckStyle(style);
@@ -441,7 +446,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       });
     }
   }
-  if (breakerBoardCount > 0) {
+  if (!useSubfloorDecking && breakerBoardCount > 0) {
     for (let i = 0; i < breakerBoardCount; i += 1) {
       const style = breakerBoardMaterials[i] || deckingMaterial;
       const styleInfo = splitDeckStyle(style);
@@ -451,6 +456,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       });
     }
   }
+  }
   addBoardGroups(materials, 'Stairs', 'Stair tread deck board', deck.stairTreadGroups, `${String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'Two tread boards per tread plus two deck-board riser boards per riser.' : 'Two tread boards per tread only; risers are not deck boards unless decking is pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
   addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.', false, 'Pressure treated');
   addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', false, 'Pressure treated');
@@ -458,10 +464,14 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
 
   if (lowerDeck) {
     const lowerDeckingPlan = deriveDeckingLabelPlan(lowerDeck);
-    lowerDeckingPlan.groups.filter((group) => group.kind === 'field').forEach((group) => {
-      const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
-      materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, deckingStyleInfo.color, `Lower tier field decking. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
-    });
+    if (useSubfloorDecking) {
+      materials.push(toMaterial('4 ft x 8 ft x 3/4 in subfloor sheets', 'Lower tier decking', subfloorSheetCount(lowerDeck.area), 'sheets', '4 ft x 8 ft x 3/4 in', 'Exterior rated', `${lowerDeck.area.toFixed(1)} sq ft lower tier area laid out in a staggered brick pattern; includes 5% waste allowance.`));
+    } else {
+      lowerDeckingPlan.groups.filter((group) => group.kind === 'field').forEach((group) => {
+        const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
+        materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, deckingStyleInfo.color, `Lower tier field decking. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
+      });
+    }
     addBoardGroups(materials, 'Lower tier stairs', 'Lower tier stair tread deck board', lowerDeck.stairTreadGroups, `${String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'Lower tier treads and risers.' : 'Lower tier treads only; risers are not deck boards unless pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
     addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} joist`, lowerDeck.joistLengthGroups, 'Lower tier joists at 12 in. O.C.', false, 'Pressure treated');
     addBoardGroups(materials, 'Framing', `${lowerDeck.beamMemberSize} beam ply`, lowerDeck.beamBoardGroups, 'Lower tier doubled beam members.', false, 'Pressure treated');
@@ -621,7 +631,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   return {
     summary: [
       { label: 'Deck area', value: lowerDeck ? `${(deck.area + lowerDeck.area).toFixed(1)} sq ft total` : `${deck.area.toFixed(1)} sq ft` },
-      { label: 'Board direction', value: deck.boardRun === 'width' ? 'Parallel to house / stock tracks width' : 'Perpendicular to house / stock tracks projection' },
+      { label: 'Surface', value: useSubfloorDecking ? '4x8x3/4 subfloor sheets, staggered brick pattern' : (deck.boardRun === 'width' ? 'Deck boards parallel to house / stock tracks width' : 'Deck boards perpendicular to house / stock tracks projection') },
       { label: 'Stairs', value: deck.stairCount ? `${deck.stairRisers} risers · ${deck.stairTreadsPerRun} treads · ${deck.stairStringers} stringers` : 'No stairs' },
       { label: 'Railing mix', value: `Level ${railingBreakdown.levelMix.six}x6' + ${railingBreakdown.levelMix.eight}x8' · Angled ${railingBreakdown.stairMix.six}x6' + ${railingBreakdown.stairMix.eight}x8'` },
     ],
