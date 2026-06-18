@@ -275,6 +275,66 @@ function vertexTouchesHouseSide(points: DeckPoint[], vertex: DeckPoint, houseEdg
   });
 }
 
+function segmentFromPoints(points: DeckPoint[], startIndex: number): DeckEdgeSegment {
+  const start = points[(startIndex + points.length) % points.length];
+  const end = points[(startIndex + 1 + points.length) % points.length];
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const orientation = Math.abs(dx) < 0.01 ? 'vertical' : Math.abs(dy) < 0.01 ? 'horizontal' : 'angled';
+  return { start, end, length: Math.hypot(dx, dy), orientation, index: (startIndex + points.length) % points.length };
+}
+
+function offsetLineForPictureFrame(
+  segment: DeckEdgeSegment,
+  points: DeckPoint[],
+  toSvg: (x: number, y: number) => { x: number; y: number },
+  offset: number,
+) {
+  const a = toSvg(segment.start.x, segment.start.y);
+  const b = toSvg(segment.end.x, segment.end.y);
+  const inward = inwardNormal(segment, points);
+  const normalA = toSvg(segment.start.x + inward.x, segment.start.y + inward.y);
+  const normal = svgUnitVector(a, normalA);
+  return {
+    a: { x: a.x + normal.x * offset, y: a.y + normal.y * offset },
+    b: { x: b.x + normal.x * offset, y: b.y + normal.y * offset },
+  };
+}
+
+function lineIntersection(
+  lineA: { a: { x: number; y: number }; b: { x: number; y: number } },
+  lineB: { a: { x: number; y: number }; b: { x: number; y: number } },
+) {
+  const x1 = lineA.a.x;
+  const y1 = lineA.a.y;
+  const x2 = lineA.b.x;
+  const y2 = lineA.b.y;
+  const x3 = lineB.a.x;
+  const y3 = lineB.a.y;
+  const x4 = lineB.b.x;
+  const y4 = lineB.b.y;
+  const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  if (Math.abs(denom) < 0.0001) return null;
+  return {
+    x: ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom,
+    y: ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom,
+  };
+}
+
+function pointOnOffsetSegment(
+  segment: DeckEdgeSegment,
+  points: DeckPoint[],
+  toSvg: (x: number, y: number) => { x: number; y: number },
+  atEnd: 'start' | 'end',
+  offset: number,
+) {
+  const base = atEnd === 'start' ? toSvg(segment.start.x, segment.start.y) : toSvg(segment.end.x, segment.end.y);
+  const inward = inwardNormal(segment, points);
+  const normalA = toSvg((atEnd === 'start' ? segment.start.x : segment.end.x) + inward.x, (atEnd === 'start' ? segment.start.y : segment.end.y) + inward.y);
+  const normal = svgUnitVector(base, normalA);
+  return { x: base.x + normal.x * offset, y: base.y + normal.y * offset };
+}
+
 function pictureFrameCoursePolygon(
   segment: DeckEdgeSegment,
   points: DeckPoint[],
@@ -283,26 +343,39 @@ function pictureFrameCoursePolygon(
   boardWidthPx: number,
   houseEdgeIndices: number[] = [],
 ) {
-  const a = toSvg(segment.start.x, segment.start.y);
-  const b = toSvg(segment.end.x, segment.end.y);
-  const dir = svgUnitVector(a, b);
-  const inward = inwardNormal(segment, points);
-  const normalA = toSvg(segment.start.x + inward.x, segment.start.y + inward.y);
-  const normal = svgUnitVector(a, normalA);
   const outer = course * boardWidthPx;
   const inner = (course + 1) * boardWidthPx;
-  const maxTrim = Math.max(0, dir.length / 2 - 1);
-  const startCorner = vertexTouchesHouseSide(points, segment.start, houseEdgeIndices) ? 'straight' : vertexCornerKind(points, segment.start);
-  const endCorner = vertexTouchesHouseSide(points, segment.end, houseEdgeIndices) ? 'straight' : vertexCornerKind(points, segment.end);
-  const trimFor = (offset: number, corner: 'outside' | 'inside' | 'straight') => {
-    if (corner === 'straight') return 0;
-    const trim = Math.min(maxTrim, offset);
-    return corner === 'outside' ? trim : -trim;
-  };
-  const p1 = offsetSvgPoint(a, dir, normal, trimFor(outer, startCorner), outer);
-  const p2 = offsetSvgPoint(b, dir, normal, -trimFor(outer, endCorner), outer);
-  const p3 = offsetSvgPoint(b, dir, normal, -trimFor(inner, endCorner), inner);
-  const p4 = offsetSvgPoint(a, dir, normal, trimFor(inner, startCorner), inner);
+  const currentOuter = offsetLineForPictureFrame(segment, points, toSvg, outer);
+  const currentInner = offsetLineForPictureFrame(segment, points, toSvg, inner);
+  const startIdx = findVertexIndex(points, segment.start);
+  const endIdx = findVertexIndex(points, segment.end);
+  const startIsHouse = vertexTouchesHouseSide(points, segment.start, houseEdgeIndices);
+  const endIsHouse = vertexTouchesHouseSide(points, segment.end, houseEdgeIndices);
+
+  // Use true offset-line intersections for picture-frame corners. This makes
+  // angled and odd-shape picture-frame boards meet tight instead of relying on
+  // an overlay or guessed 45-degree trims. If a board terminates at a house
+  // side, keep that end square because it butts into the house/ledger side.
+  let p1 = pointOnOffsetSegment(segment, points, toSvg, 'start', outer);
+  let p4 = pointOnOffsetSegment(segment, points, toSvg, 'start', inner);
+  if (!startIsHouse && startIdx >= 0) {
+    const prev = segmentFromPoints(points, startIdx - 1);
+    const prevOuter = offsetLineForPictureFrame(prev, points, toSvg, outer);
+    const prevInner = offsetLineForPictureFrame(prev, points, toSvg, inner);
+    p1 = lineIntersection(prevOuter, currentOuter) ?? p1;
+    p4 = lineIntersection(prevInner, currentInner) ?? p4;
+  }
+
+  let p2 = pointOnOffsetSegment(segment, points, toSvg, 'end', outer);
+  let p3 = pointOnOffsetSegment(segment, points, toSvg, 'end', inner);
+  if (!endIsHouse && endIdx >= 0) {
+    const next = segmentFromPoints(points, endIdx);
+    const nextOuter = offsetLineForPictureFrame(next, points, toSvg, outer);
+    const nextInner = offsetLineForPictureFrame(next, points, toSvg, inner);
+    p2 = lineIntersection(currentOuter, nextOuter) ?? p2;
+    p3 = lineIntersection(currentInner, nextInner) ?? p3;
+  }
+
   return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
 }
 
@@ -1139,12 +1212,6 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                 />
               ))
             ))}
-
-            {showBoards && !useSubfloorDecking && pictureFrameCount > 0 && cleanBandPointString && <g clipPath="url(#main-deck-clip)" pointerEvents="none">
-              {Array.from({ length: pictureFrameCount }, (_, course) => (
-                <polyline key={`pf-clean-${course}`} points={cleanBandPointString} className={`picture-frame-clean-path course-${course + 1}`} style={{ strokeWidth: Math.max(10, pictureFrameBoardWidthPx - course * 1.5) }} />
-              ))}
-            </g>}
 
 
             {showBoards && !useSubfloorDecking && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => {
