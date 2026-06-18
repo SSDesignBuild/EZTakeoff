@@ -296,6 +296,17 @@ th { color: var(--muted); font-size: 0.85rem; }
   stroke: color-mix(in srgb, var(--green-strong) 26%, transparent);
 }
 
+.active-house {
+  stroke: rgba(239, 68, 68, 0.42);
+  stroke-width: 18;
+}
+
+.house-side-label {
+  fill: #b91c1c;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
 .edge-midpoint {
   fill: var(--panel);
   stroke: var(--border);

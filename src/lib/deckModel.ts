@@ -52,6 +52,8 @@ export interface DeckInputs {
   lowerRailingType?: string | number | boolean;
   lowerStairRailingLeft?: string | number | boolean;
   lowerStairRailingRight?: string | number | boolean;
+  houseEdgeIndices?: string | number | boolean;
+  lowerHouseEdgeIndices?: string | number | boolean;
 }
 
 
@@ -158,6 +160,7 @@ export interface DeckModel {
   edgeSegments: DeckEdgeSegment[];
   exposedSegments: DeckEdgeSegment[];
   manualRailingEdges: number[];
+  houseEdgeIndices: number[];
   stairPlacement: StairPlacement;
   stairPlacements: StairPlacement[];
 }
@@ -433,11 +436,17 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const joistDirection = boardRun === 'width' ? 'vertical' : 'horizontal';
   const deckingDirection = boardRun === 'width' ? 'horizontal' : 'vertical';
   const segments = edgeSegments(points);
-  const houseSegments = !isFreestanding ? segments.filter((segment) => segment.orientation === 'horizontal' && Math.abs(segment.start.y - minY) < 1e-6 && Math.abs(segment.end.y - minY) < 1e-6) : [];
+  const explicitHouseEdges = parseIndexArray(inputs.houseEdgeIndices).filter((index) => index < segments.length);
+  const houseSegments = !isFreestanding
+    ? (explicitHouseEdges.length
+      ? segments.filter((segment) => explicitHouseEdges.includes(segment.index))
+      : segments.filter((segment) => segment.orientation === 'horizontal' && Math.abs(segment.start.y - minY) < 1e-6 && Math.abs(segment.end.y - minY) < 1e-6))
+    : [];
+  const houseEdgeIndices = houseSegments.map((segment) => segment.index);
   const houseContactLength = round2(houseSegments.reduce((sum, segment) => sum + segment.length, 0));
 
   const manualRailingEdges = parseIndexArray(inputs.manualRailingEdges).filter((index) => index < segments.length);
-  const defaultExposedSegments = isFreestanding ? segments : segments.filter((segment) => !(segment.orientation === 'horizontal' && Math.abs(segment.start.y - minY) < 1e-6 && Math.abs(segment.end.y - minY) < 1e-6));
+  const defaultExposedSegments = isFreestanding ? segments : segments.filter((segment) => !houseEdgeIndices.includes(segment.index));
   const railCoverage = (() => {
     // If the designer has written railCoverage/manualRailingEdges, trust it exactly.
     // This allows installers to remove every rail side without the model re-adding
@@ -696,7 +705,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const deckFastenerBoxes = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? Math.ceil(deckFastenerCount / 365) : Math.ceil(deckFastenerCount / 1750);
   const fastenerType = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'top screws' : 'hidden camo screws';
 
-  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, angledJoistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), stairPlacement, stairPlacements };
+  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, angledJoistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), houseEdgeIndices, stairPlacement, stairPlacements };
 }
 
 
@@ -733,6 +742,7 @@ export function buildLowerTierDeckModel(inputs: DeckInputs): DeckModel | null {
     stairRailingLeft: custom ? (inputs.lowerStairRailingLeft ?? inputs.stairRailingLeft) : inputs.stairRailingLeft,
     stairRailingRight: custom ? (inputs.lowerStairRailingRight ?? inputs.stairRailingRight) : inputs.stairRailingRight,
     manualRailingEdges: inputs.lowerManualRailingEdges || JSON.stringify([]),
+    houseEdgeIndices: inputs.lowerHouseEdgeIndices || inputs.houseEdgeIndices || JSON.stringify([]),
     customBeamYs: inputs.lowerCustomBeamYs || JSON.stringify([]),
     stairEdgeIndex: inputs.lowerStairEdgeIndex ?? -1,
     stairOffset: inputs.lowerStairOffset ?? 0,

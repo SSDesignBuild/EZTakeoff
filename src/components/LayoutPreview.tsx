@@ -263,12 +263,25 @@ function vertexCornerKind(points: DeckPoint[], vertex: DeckPoint): 'outside' | '
   return convex ? 'outside' : 'inside';
 }
 
+
+function vertexTouchesHouseSide(points: DeckPoint[], vertex: DeckPoint, houseEdgeIndices: number[] = []) {
+  if (!houseEdgeIndices.length) return false;
+  return points.some((point, index) => {
+    if (!houseEdgeIndices.includes(index)) return false;
+    const next = points[(index + 1) % points.length];
+    const touchesStart = Math.abs(point.x - vertex.x) < 0.01 && Math.abs(point.y - vertex.y) < 0.01;
+    const touchesEnd = Math.abs(next.x - vertex.x) < 0.01 && Math.abs(next.y - vertex.y) < 0.01;
+    return touchesStart || touchesEnd;
+  });
+}
+
 function pictureFrameCoursePolygon(
   segment: DeckEdgeSegment,
   points: DeckPoint[],
   toSvg: (x: number, y: number) => { x: number; y: number },
   course: number,
   boardWidthPx: number,
+  houseEdgeIndices: number[] = [],
 ) {
   const a = toSvg(segment.start.x, segment.start.y);
   const b = toSvg(segment.end.x, segment.end.y);
@@ -279,8 +292,8 @@ function pictureFrameCoursePolygon(
   const outer = course * boardWidthPx;
   const inner = (course + 1) * boardWidthPx;
   const maxTrim = Math.max(0, dir.length / 2 - 1);
-  const startCorner = vertexCornerKind(points, segment.start);
-  const endCorner = vertexCornerKind(points, segment.end);
+  const startCorner = vertexTouchesHouseSide(points, segment.start, houseEdgeIndices) ? 'straight' : vertexCornerKind(points, segment.start);
+  const endCorner = vertexTouchesHouseSide(points, segment.end, houseEdgeIndices) ? 'straight' : vertexCornerKind(points, segment.end);
   const trimFor = (offset: number, corner: 'outside' | 'inside' | 'straight') => {
     if (corner === 'straight') return 0;
     const trim = Math.min(maxTrim, offset);
@@ -299,6 +312,7 @@ function interlockedBandCoursePolygon(
   toSvg: (x: number, y: number) => { x: number; y: number },
   course: number,
   boardWidthPx: number,
+  houseEdgeIndices: number[] = [],
 ) {
   const a = toSvg(segment.start.x, segment.start.y);
   const b = toSvg(segment.end.x, segment.end.y);
@@ -317,8 +331,8 @@ function interlockedBandCoursePolygon(
   const maxTrim = Math.max(0, dir.length / 2 - 1);
   const lap = Math.min(Math.max(0, boardWidthPx), maxTrim);
   const insideLap = Math.min(Math.max(0, inner), maxTrim);
-  const startCorner = vertexCornerKind(points, segment.start);
-  const endCorner = vertexCornerKind(points, segment.end);
+  const startCorner = vertexTouchesHouseSide(points, segment.start, houseEdgeIndices) ? 'straight' : vertexCornerKind(points, segment.start);
+  const endCorner = vertexTouchesHouseSide(points, segment.end, houseEdgeIndices) ? 'straight' : vertexCornerKind(points, segment.end);
   const trimFor = (_offset: number, corner: 'outside' | 'inside' | 'straight') => {
     // Inside corners must be square interlocked butt joints, not 45-degree
     // miters. Keep each course rectangular by applying the same extension to
@@ -1066,6 +1080,8 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             {renderLowerTierDeck()}
             <polygon points={pointString} className="deck-polygon muted-fill" />
 
+            {deck.houseEdgeIndices.map((edgeIndex) => { const segment = deck.edgeSegments[edgeIndex]; if (!segment) return null; const mid = pointAlong(segment, segment.length / 2); const p = toSvg(mid.x, mid.y); return <text key={`house-side-${edgeIndex}`} x={p.x} y={p.y - 18} textAnchor="middle" className="dimension-label house-side-label">HOUSE SIDE</text>; })}
+
             {showBoards && useSubfloorDecking && <g clipPath="url(#main-deck-clip)">{subfloorSheets.map((sheet, idx) => { const a = toSvg(sheet.x, sheet.y); const b = toSvg(sheet.x + sheet.w, sheet.y + sheet.h); return <rect key={`subfloor-${idx}`} x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)} className="subfloor-sheet" />; })}</g>}
             {showBoards && !useSubfloorDecking && boardRuns.map((value, idx) => deck.boardRun === 'width'
               ? scanlineIntersections(deck.points, 'horizontal', value).map((pair, pairIdx) => {
@@ -1089,7 +1105,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               Array.from({ length: pictureFrameCount }, (_, course) => (
                 <polygon
                   key={`pf-${segment.index}-${course}`}
-                  points={pictureFrameCoursePolygon(segment, deck.points, toSvg, course, pictureFrameBoardWidthPx)}
+                  points={pictureFrameCoursePolygon(segment, deck.points, toSvg, course, pictureFrameBoardWidthPx, deck.houseEdgeIndices)}
                   className={`picture-frame-board course-${course + 1}`}
                   onClick={() => setInspect({ title: `Picture frame board ${course + 1}`, detail: `Picture-frame course with outside and inside corner miters around exposed deck perimeter.` })}
                 />
@@ -1177,14 +1193,14 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             {showFraming && joistRuns.map((value, idx) => deck.joistDirection === 'vertical'
               ? scanlineIntersections(deck.points, 'vertical', value).map((pair, pairIdx) => {
                   const x = toSvg(value, pair.start).x;
-                  const inset = Math.max(22, Math.min(32, Math.abs(toSvg(value, pair.start + 0.44).y - toSvg(value, pair.start).y) || 22));
+                  const inset = Math.max(22, Math.min(32, Math.abs(toSvg(value, pair.start + 0.72).y - toSvg(value, pair.start).y) || 22));
                   const y1 = toSvg(value, pair.start).y + inset;
                   const y2 = toSvg(value, pair.end).y - inset;
                   return <rect key={`joist-v-${idx}-${pairIdx}`} x={x - 3} y={Math.min(y1, y2)} width={6} height={Math.max(0, Math.abs(y2 - y1))} className="joist-rect" onClick={() => setInspect({ title: `Joist ${idx + 1}`, detail: `${deck.joistSize} joist at 12 in O.C.` })} />;
                 })
               : scanlineIntersections(deck.points, 'horizontal', value).map((pair, pairIdx) => {
                   const y = toSvg(pair.start, value).y;
-                  const inset = Math.max(22, Math.min(32, Math.abs(toSvg(pair.start + 0.44, value).x - toSvg(pair.start, value).x) || 22));
+                  const inset = Math.max(22, Math.min(32, Math.abs(toSvg(pair.start + 0.72, value).x - toSvg(pair.start, value).x) || 22));
                   const x1 = toSvg(pair.start, value).x + inset;
                   const x2 = toSvg(pair.end, value).x - inset;
                   return <rect key={`joist-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - 3} width={Math.max(0, Math.abs(x2 - x1))} height={6} className="joist-rect" onClick={() => setInspect({ title: `Joist ${idx + 1}`, detail: `${deck.joistSize} joist at 12 in O.C.` })} />;

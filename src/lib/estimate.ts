@@ -266,9 +266,10 @@ function classifyRailing(deck: ReturnType<typeof buildDeckModel>) {
     else cornerLevelPosts += 1;
   });
   inlineLevelPosts += topRuns.reduce((sum, run) => sum + interiorPostCount(run.length), 0);
-  // The top of the stair rail uses the existing deck-edge railing post at the stair opening.
-  // Do not add a separate top stair post; only count stair inline and bottom posts as new stair posts.
-  const stairsLevelToAngledCornerPosts = 0;
+  // If a stair rail starts from a deck edge that has no level railing/post, add
+  // a top stair post so the stair rail has something to attach to. When level
+  // rail already exists at that opening, the top post is shared.
+  const stairsLevelToAngledCornerPosts = stairRuns.length && topRuns.length === 0 ? deck.stairCount * deck.stairRailSideCount : 0;
   const stairsEndPosts = stairRuns.length ? deck.stairCount * deck.stairRailSideCount : 0;
   const stairsInlinePosts = stairRuns.reduce((sum, run) => sum + interiorPostCount(run.length), 0);
   return {
@@ -526,8 +527,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     ...(deck.attachment === 'brick' ? [toMaterial('1/2 in x 3 in lag shield anchors', 'Hardware', Math.max(1, Math.ceil(deck.houseContactLength)), 'ea', 'One shield anchor per lag', undefined, 'Required where lag screws attach to brick/masonry')] : []),
     toMaterial('Hex head LedgerLOK screws 5 in', 'Hardware', deck.sdsCorners, 'ea', '4 per corner', undefined, 'All band-board corners'),
     toMaterial('Joist tape', 'Hardware', deck.joistTapeLf, 'lf', 'Match roll coverage', undefined, 'Tape joists and band-board top edges'),
-    toMaterial(deck.fastenerType === 'top screws' ? '3-1/2 in exterior framing screws' : '2-3/8 in CAMO screws', 'Hardware', deck.deckFastenerBoxes, 'boxes', deck.fastenerType === 'top screws' ? '365 per box' : '1750 per box', undefined),
-    toMaterial('3-1/2 in exterior screws used for deck boards', 'Hardware', Math.max(1, Math.ceil((deck.area + (lowerDeck ? lowerDeck.area : 0)) / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For decking, breaker boards, and picture-frame areas that are face screwed'),
+    toMaterial('3-1/2 in exterior framing screws', 'Hardware', Math.max(1, Math.ceil(deck.deckFastenerCount / 365)), 'boxes', '365 per box', undefined, 'General exterior framing screws added for every deck surface type.'),
+    ...(deckingType === 'pressure-treated' ? [toMaterial('3-1/2 in exterior screws used for deck boards', 'Hardware', Math.max(1, Math.ceil((deck.area + (lowerDeck ? lowerDeck.area : 0)) / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For pressure-treated decking, breaker boards, and picture-frame areas that are face screwed')] : [toMaterial('2-3/8 in CAMO screws', 'Hardware', Math.max(1, Math.ceil(deck.deckFastenerCount / 1750)), 'boxes', '1750 per box', undefined, 'Hidden deck fasteners for composite/PVC decking')]),
     toMaterial('1-1/2 in nails', 'Hardware', connectorNails, 'nails', '10 per connector/tie', undefined, 'Used for joist hangers, post brackets, lateral load brackets, and hurricane ties; replaces separate 3 in nail takeoff for easier ordering'),
     toMaterial('21 degree 3 in x .120 exterior collated nails with ring shank', 'Hardware', Math.max(1, Math.ceil(totalDeckAreaForNails / 200)), 'boxes', '1000 nails per box', undefined, 'Add 1000 nails per 200 sq ft of decking'),
     ...(colorMatchedTrimFastenerPoints > 0 ? [
@@ -578,25 +579,27 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     const levelBalusters = Math.ceil(levelRailLf * 3.1);
     const stairBalusters = Math.max(0, balusterCount - levelBalusters);
     const woodRailStock = optimizeStockLength(totalWoodRailLf, [8, 12, 16, 20]);
-    if (railingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', Math.ceil(railingPosts / 2), 'boards', '8 ft 4x4 stock', 'Pressure treated', `${railingPosts} rail post cuts total · 2 rail posts per 8 ft 4x4`));
-    if (lowerRailingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Lower tier railing', Math.ceil(lowerRailingPosts / 2), 'boards', '8 ft 4x4 stock', 'Pressure treated', `Lower tier: ${lowerRailingPosts} rail post cuts total · 2 rail posts per 8 ft 4x4`));
-    materials.push(toMaterial('2x4 pressure-treated top rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
-    materials.push(toMaterial('2x4 pressure-treated bottom rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
+    if (totalWoodRailLf > 0 && railingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', Math.ceil(railingPosts / 2), 'boards', '8 ft 4x4 stock', 'Pressure treated', `${railingPosts} rail post cuts total · 2 rail posts per 8 ft 4x4`));
+    if (totalWoodRailLf > 0 && lowerRailingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Lower tier railing', Math.ceil(lowerRailingPosts / 2), 'boards', '8 ft 4x4 stock', 'Pressure treated', `Lower tier: ${lowerRailingPosts} rail post cuts total · 2 rail posts per 8 ft 4x4`));
+    if (totalWoodRailLf > 0) materials.push(toMaterial('2x4 pressure-treated top rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
+    if (totalWoodRailLf > 0) materials.push(toMaterial('2x4 pressure-treated bottom rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
     if (spindleType === 'wood') {
-      materials.push(toMaterial('1.5x1.5 wood balusters', 'Railing', balusterCount, 'ea', 'Wood spindle stock', undefined, 'Approx. 4 in max clear spacing'));
-      materials.push(toMaterial('Finish nails', 'Hardware', Math.ceil(balusterCount * 2 / 1200), 'boxes', 'Fasten wood balusters', undefined, `${balusterCount * 2} nail points estimated`));
+      if (totalWoodRailLf > 0) materials.push(toMaterial('1.5x1.5 wood balusters', 'Railing', balusterCount, 'ea', 'Wood spindle stock', undefined, 'Approx. 4 in max clear spacing'));
+      if (totalWoodRailLf > 0) materials.push(toMaterial('Finish nails', 'Hardware', Math.ceil(balusterCount * 2 / 1200), 'boxes', 'Fasten wood balusters', undefined, `${balusterCount * 2} nail points estimated`));
     } else if (spindleType === 'black-round') {
-      materials.push(toMaterial('Black round spindles', 'Railing', balusterCount, 'ea', 'Round aluminum balusters', 'black', 'Approx. 4 in max clear spacing'));
+      if (totalWoodRailLf > 0) materials.push(toMaterial('Black round spindles', 'Railing', balusterCount, 'ea', 'Round aluminum balusters', 'black', 'Approx. 4 in max clear spacing'));
       if (levelBalusters) materials.push(toMaterial('Level round-spindle adapter plugs', 'Railing', levelBalusters * 2, 'ea', 'Top and bottom plug per spindle end', 'black', 'For level wood railing runs'));
       if (stairBalusters) materials.push(toMaterial('Angled round-spindle adapter plugs', 'Railing', stairBalusters * 2, 'ea', 'Top and bottom angled plug per spindle end', 'black', 'For stair wood railing runs'));
     } else {
-      materials.push(toMaterial('Vinyl spindles for wood rail', 'Railing', balusterCount, 'ea', 'Vinyl balusters', undefined, 'Approx. 4 in max clear spacing'));
+      if (totalWoodRailLf > 0) materials.push(toMaterial('Vinyl spindles for wood rail', 'Railing', balusterCount, 'ea', 'Vinyl balusters', undefined, 'Approx. 4 in max clear spacing'));
     }
-    if (drinkRail) {
+    if (drinkRail && totalWoodRailLf > 0) {
       const drinkStock = optimizeStockLength(totalWoodRailLf, [8, 12, 16, 20]);
       materials.push(toMaterial('2x6 pressure-treated drink rail', 'Railing', drinkStock.count, 'boards', `${drinkStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf drink rail · optimized to reduce board count and handling`));
     }
   } else {
+    const vinylCompositeRailPosts = railingPosts + lowerRailingPosts;
+    if (railingType === 'vinyl-composite' && vinylCompositeRailPosts > 0) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', Math.ceil(vinylCompositeRailPosts / 2), 'boards', '8 ft 4x4 stock', 'Pressure treated', `${vinylCompositeRailPosts} rail post cuts total for vinyl/composite sleeves · 2 rail posts per 8 ft 4x4`));
     if (railingBreakdown.levelMix.eight) materials.push(toMaterial('8 ft vinyl/composite level railing sections', 'Railing', railingBreakdown.levelMix.eight, 'sections', '8 ft sections', undefined, 'Top-level straight runs'));
     if (railingBreakdown.levelMix.six) materials.push(toMaterial('6 ft vinyl/composite level railing sections', 'Railing', railingBreakdown.levelMix.six, 'sections', '6 ft sections', undefined, 'Top-level straight runs'));
     if (railingBreakdown.stairMix.eight) materials.push(toMaterial('8 ft vinyl/composite angled railing sections', 'Railing', railingBreakdown.stairMix.eight, 'sections', '8 ft sections', undefined, 'Stair-side or angled runs'));
