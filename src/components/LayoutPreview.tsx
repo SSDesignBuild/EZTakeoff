@@ -369,6 +369,35 @@ function bandSeamLine(
   return { a, b };
 }
 
+
+function closedPointString(
+  points: DeckPoint[],
+  toSvg: (x: number, y: number) => { x: number; y: number },
+) {
+  if (!points.length) return '';
+  const parts = points.map((point) => {
+    const p = toSvg(point.x, point.y);
+    return `${p.x},${p.y}`;
+  });
+  const first = toSvg(points[0].x, points[0].y);
+  parts.push(`${first.x},${first.y}`);
+  return parts.join(' ');
+}
+
+function houseSideLabelForSegment(
+  segment: DeckEdgeSegment,
+  points: DeckPoint[],
+  toSvg: (x: number, y: number) => { x: number; y: number },
+) {
+  const mid = pointAlong(segment, segment.length / 2);
+  const out = outwardNormal(segment, points);
+  const p = toSvg(mid.x + out.x * 0.68, mid.y + out.y * 0.68);
+  const a = toSvg(segment.start.x, segment.start.y);
+  const b = toSvg(segment.end.x, segment.end.y);
+  const angle = Math.abs(b.x - a.x) < Math.abs(b.y - a.y) ? -90 : 0;
+  return { x: p.x, y: p.y, angle };
+}
+
 function boardStripPolygonTrim(
   a: { x: number; y: number },
   b: { x: number; y: number },
@@ -722,6 +751,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const pictureFrameSegments = mergeCollinearDeckSegments(deck.exposedSegments);
   const pictureFrameBoardWidthPx = Math.max(10, scale * 0.44);
   const pictureFrameTrimPx = pictureFrameCount * pictureFrameBoardWidthPx;
+  const cleanBandPointString = useMemo(() => closedPointString(deck.points, toSvg), [deck.points, toSvg]);
   const pointTouchesPictureFrame = (point: DeckPoint) => pictureFrameCount > 0 && pictureFrameSegments.some((segment) => pointOnSegment(point, segment, 0.06));
   const fieldBoardLabelAnchors = useMemo(() => {
     if (!showBoardLabels) return [] as { label: string; x: number; y: number }[];
@@ -1080,8 +1110,6 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             {renderLowerTierDeck()}
             <polygon points={pointString} className="deck-polygon muted-fill" />
 
-            {deck.houseEdgeIndices.map((edgeIndex) => { const segment = deck.edgeSegments[edgeIndex]; if (!segment) return null; const mid = pointAlong(segment, segment.length / 2); const p = toSvg(mid.x, mid.y); return <text key={`house-side-${edgeIndex}`} x={p.x} y={p.y - 18} textAnchor="middle" className="dimension-label house-side-label">HOUSE SIDE</text>; })}
-
             {showBoards && useSubfloorDecking && <g clipPath="url(#main-deck-clip)">{subfloorSheets.map((sheet, idx) => { const a = toSvg(sheet.x, sheet.y); const b = toSvg(sheet.x + sheet.w, sheet.y + sheet.h); return <rect key={`subfloor-${idx}`} x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)} className="subfloor-sheet" />; })}</g>}
             {showBoards && !useSubfloorDecking && boardRuns.map((value, idx) => deck.boardRun === 'width'
               ? scanlineIntersections(deck.points, 'horizontal', value).map((pair, pairIdx) => {
@@ -1111,6 +1139,13 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                 />
               ))
             ))}
+
+            {showBoards && !useSubfloorDecking && pictureFrameCount > 0 && cleanBandPointString && <g clipPath="url(#main-deck-clip)" pointerEvents="none">
+              {Array.from({ length: pictureFrameCount }, (_, course) => (
+                <polyline key={`pf-clean-${course}`} points={cleanBandPointString} className={`picture-frame-clean-path course-${course + 1}`} style={{ strokeWidth: Math.max(10, pictureFrameBoardWidthPx - course * 1.5) }} />
+              ))}
+            </g>}
+
 
             {showBoards && !useSubfloorDecking && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => {
               const boardWidthFt = 0.47;
@@ -1189,6 +1224,11 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               </g>;
             })}
 
+
+            {showFraming && cleanBandPointString && <g className="clean-band-overlay" pointerEvents="none">
+              <polyline points={cleanBandPointString} className="clean-band-course clean-band-primary" />
+              <polyline points={cleanBandPointString} className="clean-band-course clean-band-secondary" />
+            </g>}
 
             {showFraming && joistRuns.map((value, idx) => deck.joistDirection === 'vertical'
               ? scanlineIntersections(deck.points, 'vertical', value).map((pair, pairIdx) => {
@@ -1406,6 +1446,16 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               return chunks;
             })()}
 
+            {deck.houseEdgeIndices.map((edgeIndex) => {
+              const segment = deck.edgeSegments[edgeIndex];
+              if (!segment) return null;
+              const label = houseSideLabelForSegment(segment, deck.points, toSvg);
+              return <g key={`house-side-${edgeIndex}`} transform={`translate(${label.x}, ${label.y}) rotate(${label.angle})`}>
+                <rect x="-45" y="-13" width="90" height="20" rx="4" className="house-side-label-bg" />
+                <text x="0" y="2" textAnchor="middle" className="dimension-label house-side-label">HOUSE SIDE</text>
+              </g>;
+            })}
+
             <g transform={`translate(60, ${planY + planH + 36})`} className="layout-legend-box deck-layout-legend">
               <rect x="0" y="0" width="430" height="134" rx="10" className="legend-box" />
               <text x="14" y="22" className="layout-legend-title">Layout legend</text>
@@ -1477,7 +1527,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               <text x="418" y="120" className="title-block-value">{deck.stairCount ? `${deck.stairRisers}R/${deck.stairTreadsPerRun}T` : 'none'}</text>
 
               <text x="12" y="156" className="title-block-label">Footings</text>
-              <text x="108" y="156" className="title-block-value">12&quot; deep x 18&quot; wide</text>
+              <text x="108" y="156" className="title-block-value footing-value">12&quot;D x 18&quot;W</text>
 
               <text x="12" y="186" className="title-block-note">Double band boards shown on all edges.</text>
               <text x="12" y="202" className="title-block-note">Doubled beam plies staggered with explicit splice markers.</text>
