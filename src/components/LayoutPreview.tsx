@@ -715,8 +715,14 @@ function buildRailingNodes(deck: ReturnType<typeof buildDeckModel>) {
     });
   });
   stairRuns.forEach((segment) => {
-    // The stair rail starts at the existing deck-edge post. Only draw/count
-    // posts that are actually on the stair run: bottom posts and any inline posts.
+    // Stair rails can start at an existing level-rail/deck-edge post, but when
+    // the deck edge itself has no level rail selected there still must be a
+    // dedicated top stair post for the stair rail to attach to.
+    const startKey = pointKey(segment.start);
+    const hasLevelPostAtTop = nodes.some((node) => pointKey(node.point) === startKey && node.kind !== 'stair-end' && node.kind !== 'stair-inline');
+    if (!hasLevelPostAtTop) {
+      nodes.push({ point: segment.start, kind: 'stair-end', detail: 'Top stair post' });
+    }
     nodes.push({ point: segment.end, kind: 'stair-end', detail: 'Bottom stair post' });
     symmetricPostOffsets(segment.length, 8).forEach((distance) => {
       const point = pointAlong({ start: segment.start, end: segment.end, length: segment.length, orientation: 'angled', index: -1 }, distance);
