@@ -202,12 +202,24 @@ function isOppositeDirection(a: { x: number; y: number }, b: { x: number; y: num
 
 function deriveTopRailRuns(deck: ReturnType<typeof buildDeckModel>) {
   const topRuns: { start: { x: number; y: number }; end: { x: number; y: number }; length: number }[] = [];
+  const stairPlacements = (deck.stairPlacements?.length ? deck.stairPlacements : [deck.stairPlacement])
+    .filter((item) => item.edgeIndex !== null && item.start && item.end);
   deck.railCoverage.forEach((coverage) => {
     const edge = deck.edgeSegments[coverage.edgeIndex];
     if (!edge) return;
-    const stairStart = deck.stairPlacement.edgeIndex === coverage.edgeIndex ? deck.stairPlacement.offset : null;
-    const stairEnd = deck.stairPlacement.edgeIndex === coverage.edgeIndex ? deck.stairPlacement.offset + deck.stairPlacement.width : null;
-    const ranges = stairStart === null ? [[coverage.start, coverage.end]] : [[coverage.start, Math.min(coverage.end, stairStart)], [Math.max(coverage.start, stairEnd ?? coverage.end), coverage.end]];
+    const cuts = stairPlacements
+      .filter((placement) => placement.edgeIndex === coverage.edgeIndex)
+      .map((placement) => ({ start: placement.offset, end: placement.offset + placement.width }))
+      .sort((a, b) => a.start - b.start);
+    let ranges = [[coverage.start, coverage.end]] as [number, number][];
+    cuts.forEach((cut) => {
+      ranges = ranges.flatMap(([start, end]) => {
+        const cutStart = Math.max(start, cut.start);
+        const cutEnd = Math.min(end, cut.end);
+        if (cutEnd <= start || cutStart >= end) return [[start, end]] as [number, number][];
+        return [[start, cutStart], [cutEnd, end]].filter(([a, b]) => b - a > 0.05) as [number, number][];
+      });
+    });
     ranges.forEach(([start, end]) => {
       if (end - start <= 0.05) return;
       const sRatio = start / edge.length;
@@ -227,8 +239,10 @@ function interiorPostCount(length: number, maxSpan = 8) {
 
 function classifyRailing(deck: ReturnType<typeof buildDeckModel>) {
   const topRuns = deriveTopRailRuns(deck);
-  const stairRuns = deck.stairCount > 0 && deck.stairRailSideCount > 0
-    ? Array.from({ length: deck.stairCount * deck.stairRailSideCount }, () => ({ length: deck.stairRunFt, kind: 'stair' as const }))
+  const stairPlacements = (deck.stairPlacements?.length ? deck.stairPlacements : [deck.stairPlacement])
+    .filter((item) => item.edgeIndex !== null && item.start && item.end);
+  const stairRuns = deck.stairRailSideCount > 0
+    ? stairPlacements.flatMap(() => Array.from({ length: deck.stairRailSideCount }, () => ({ length: deck.stairRunFt, kind: 'stair' as const })))
     : [];
   const levelMix = topRuns.reduce((sum, run) => { const opt = optimizeRail(run.length); return { six: sum.six + opt.six, eight: sum.eight + opt.eight }; }, { six: 0, eight: 0 });
   const stairMix = stairRuns.reduce((sum, run) => { const opt = optimizeRail(run.length); return { six: sum.six + opt.six, eight: sum.eight + opt.eight }; }, { six: 0, eight: 0 });
@@ -266,11 +280,25 @@ function classifyRailing(deck: ReturnType<typeof buildDeckModel>) {
     else cornerLevelPosts += 1;
   });
   inlineLevelPosts += topRuns.reduce((sum, run) => sum + interiorPostCount(run.length), 0);
-  // If a stair rail starts from a deck edge that has no level railing/post, add
-  // a top stair post so the stair rail has something to attach to. When level
-  // rail already exists at that opening, the top post is shared.
-  const stairsLevelToAngledCornerPosts = stairRuns.length && topRuns.length === 0 ? deck.stairCount * deck.stairRailSideCount : 0;
-  const stairsEndPosts = stairRuns.length ? deck.stairCount * deck.stairRailSideCount : 0;
+  // Count one top stair/transition post per stair rail side. If a level rail
+  // already ends at that stair opening, this is the shared level-to-angled post;
+  // otherwise it is the dedicated top stair post. Distance tolerance mirrors the
+  // layout so we do not double-count or miss a shared post because of snapped cuts.
+  const levelPostPoints = [...nodes.values()].map((entry) => entry.point);
+  topRuns.forEach((run) => {
+    Array.from({ length: interiorPostCount(run.length, 8) }, (_, index) => ((index + 1) * run.length) / (interiorPostCount(run.length, 8) + 1)).forEach((distance: number) => {
+      const ratio = distance / run.length;
+      levelPostPoints.push({ x: run.start.x + (run.end.x - run.start.x) * ratio, y: run.start.y + (run.end.y - run.start.y) * ratio });
+    });
+  });
+  const stairTopPoints = stairPlacements.flatMap((placement) => {
+    const points: { x: number; y: number }[] = [];
+    if (deck.stairRailingLeft && placement.start) points.push(placement.start);
+    if (deck.stairRailingRight && placement.end) points.push(placement.end);
+    return points;
+  });
+  const stairsLevelToAngledCornerPosts = stairTopPoints.length;
+  const stairsEndPosts = stairRuns.length;
   const stairsInlinePosts = stairRuns.reduce((sum, run) => sum + interiorPostCount(run.length), 0);
   return {
     levelMix,

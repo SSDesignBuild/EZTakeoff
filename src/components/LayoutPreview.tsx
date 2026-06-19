@@ -718,8 +718,14 @@ function buildRailingNodes(deck: ReturnType<typeof buildDeckModel>) {
     // Stair rails can start at an existing level-rail/deck-edge post, but when
     // the deck edge itself has no level rail selected there still must be a
     // dedicated top stair post for the stair rail to attach to.
-    const startKey = pointKey(segment.start);
-    const hasLevelPostAtTop = nodes.some((node) => pointKey(node.point) === startKey && node.kind !== 'stair-end' && node.kind !== 'stair-inline');
+    const hasLevelPostAtTop = nodes.some((node) => {
+      if (node.kind === 'stair-end' || node.kind === 'stair-inline') return false;
+      // Level rail posts are inset on the deck, while stair rail graphics are
+      // shifted slightly to show left/right stair sides. Use a real distance
+      // tolerance instead of an exact snapped key so a stair rail can tie into
+      // an existing top-level rail post without drawing a duplicate post.
+      return Math.hypot(node.point.x - segment.start.x, node.point.y - segment.start.y) <= 0.75;
+    });
     if (!hasLevelPostAtTop) {
       nodes.push({ point: segment.start, kind: 'stair-end', detail: 'Top stair post' });
     }
