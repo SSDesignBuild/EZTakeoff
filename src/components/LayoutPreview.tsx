@@ -943,6 +943,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
     </g>;
   };
 
+  const beamPoint = (beam: { y: number }, station: number) => deck.joistDirection === 'vertical' ? toSvg(station, beam.y) : toSvg(beam.y, station);
   const renderBeamPostDims = () => {
     if (!showFraming) return null;
     const dims: React.ReactNode[] = [];
@@ -953,16 +954,19 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
         for (let i = 1; i < marks.length; i += 1) {
           const len = marks[i] - marks[i - 1];
           if (len < 0.15) continue;
-          const a = toSvg(marks[i - 1], beam.y);
-          const b = toSvg(marks[i], beam.y);
-          dims.push(renderDim(a, b, feetAndInches(len), 0, 52 + beamIdx * 14, `beam-post-span-${beamIdx}-${segIdx}-${i}`));
+          const a = beamPoint(beam, marks[i - 1]);
+          const b = beamPoint(beam, marks[i]);
+          dims.push(renderDim(a, b, feetAndInches(len), deck.joistDirection === 'vertical' ? 0 : 52 + beamIdx * 14, deck.joistDirection === 'vertical' ? 52 + beamIdx * 14 : 0, `beam-post-span-${beamIdx}-${segIdx}-${i}`));
         }
-        // Show the joist/deck cantilever from the beam line out to the nearest outside edge.
-        const midX = posts.length ? posts[Math.floor(posts.length / 2)] : (segment.startX + segment.endX) / 2;
-        const frontEdgeY = beam.y > (deck.minY + deck.maxY) / 2 ? deck.maxY : deck.minY;
-        const cantilever = Math.abs(frontEdgeY - beam.y);
-        if (cantilever > 0.1) {
-          dims.push(renderDim(toSvg(midX, beam.y), toSvg(midX, frontEdgeY), feetAndInches(cantilever), 34 + segIdx * 12, 0, `beam-cantilever-${beamIdx}-${segIdx}`));
+        const midStation = posts.length ? posts[Math.floor(posts.length / 2)] : (segment.startX + segment.endX) / 2;
+        if (deck.joistDirection === 'vertical') {
+          const frontEdgeY = beam.y > (deck.minY + deck.maxY) / 2 ? deck.maxY : deck.minY;
+          const cantilever = Math.abs(frontEdgeY - beam.y);
+          if (cantilever > 0.1) dims.push(renderDim(toSvg(midStation, beam.y), toSvg(midStation, frontEdgeY), feetAndInches(cantilever), 34 + segIdx * 12, 0, `beam-cantilever-${beamIdx}-${segIdx}`));
+        } else {
+          const frontEdgeX = beam.y > (deck.minX + deck.maxX) / 2 ? deck.maxX : deck.minX;
+          const cantilever = Math.abs(frontEdgeX - beam.y);
+          if (cantilever > 0.1) dims.push(renderDim(toSvg(beam.y, midStation), toSvg(frontEdgeX, midStation), feetAndInches(cantilever), 0, 34 + segIdx * 12, `beam-cantilever-${beamIdx}-${segIdx}`));
         }
       });
     });
@@ -1131,11 +1135,13 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             return <rect key={`lower-board-v-${idx}-${pairIdx}`} x={x - Math.max(4, scale * 0.22)} y={Math.min(y1, y2)} width={Math.max(8, scale * 0.44)} height={Math.abs(y2 - y1)} className="deck-board-strip lower-tier-board" />;
           }))}
       {showFraming && lowerDeck.beamLines.map((beam, beamIdx) => <g key={`lower-beam-${beamIdx}`}>{beam.segments.map((segment, segIdx) => {
-        const y = toSvg(segment.startX, beam.y).y;
-        const x1 = toSvg(segment.startX, beam.y).x;
-        const x2 = toSvg(segment.endX, beam.y).x;
-        return <g key={`lower-beam-seg-${segIdx}`}><rect x={Math.min(x1, x2)} y={y - 11} width={Math.abs(x2 - x1)} height={8} className="beam-rect primary" /><rect x={Math.min(x1, x2)} y={y - 1} width={Math.abs(x2 - x1)} height={8} className="beam-rect secondary" /></g>;
-      })}{beam.postXs.map((postX, postIdx) => { const p = toSvg(postX, beam.y); return <rect key={`lower-post-${beamIdx}-${postIdx}`} x={p.x - 15} y={p.y - 15} width={30} height={30} className="post-node" />; })}</g>)}
+        const lowerVerticalBeam = lowerDeck.joistDirection === 'horizontal';
+        const p1 = lowerVerticalBeam ? toSvg(beam.y, segment.startX) : toSvg(segment.startX, beam.y);
+        const p2 = lowerVerticalBeam ? toSvg(beam.y, segment.endX) : toSvg(segment.endX, beam.y);
+        return lowerVerticalBeam
+          ? <g key={`lower-beam-seg-${segIdx}`}><rect x={p1.x - 11} y={Math.min(p1.y, p2.y)} width={8} height={Math.abs(p2.y - p1.y)} className="beam-rect primary" /><rect x={p1.x - 1} y={Math.min(p1.y, p2.y)} width={8} height={Math.abs(p2.y - p1.y)} className="beam-rect secondary" /></g>
+          : <g key={`lower-beam-seg-${segIdx}`}><rect x={Math.min(p1.x, p2.x)} y={p1.y - 11} width={Math.abs(p2.x - p1.x)} height={8} className="beam-rect primary" /><rect x={Math.min(p1.x, p2.x)} y={p1.y - 1} width={Math.abs(p2.x - p1.x)} height={8} className="beam-rect secondary" /></g>;
+      })}{beam.postXs.map((postX, postIdx) => { const p = lowerDeck.joistDirection === 'horizontal' ? toSvg(beam.y, postX) : toSvg(postX, beam.y); return <rect key={`lower-post-${beamIdx}-${postIdx}`} x={p.x - 15} y={p.y - 15} width={30} height={30} className="post-node" />; })}</g>)}
       {showFraming && lowerDeck.edgeSegments.map((segment) => <g key={`lower-band-${segment.index}`}><polygon points={interlockedBandCoursePolygon(segment, lowerDeck.points, toSvg, 0, 9)} className="double-band-rect interlocked" /><polygon points={interlockedBandCoursePolygon(segment, lowerDeck.points, toSvg, 1, 9)} className="double-band-rect secondary interlocked" /></g>)}
       {showFraming && lowerDeck.joistPositions.map((value, idx) => lowerDeck.joistDirection === 'vertical'
         ? scanlineIntersections(lowerDeck.points, 'vertical', value).map((pair, pairIdx) => { const x = toSvg(value, pair.start).x; const y1 = toSvg(value, pair.start).y + 22; const y2 = toSvg(value, pair.end).y - 22; return <rect key={`lower-joist-v-${idx}-${pairIdx}`} x={x - 3} y={Math.min(y1, y2)} width={6} height={Math.max(0, Math.abs(y2 - y1))} className="joist-rect" />; })
@@ -1257,25 +1263,30 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             {showFraming && deck.beamLines.map((beam, beamIdx) => (
               <g key={`beam-${beamIdx}`}>
                 {beam.segments.map((segment, segIdx) => {
-                  const y = toSvg(segment.startX, beam.y).y;
+                  const verticalBeam = deck.joistDirection === 'horizontal';
                   const primaryPieces = beamPlies(segment.length, 10);
                   const secondaryPieces = beamPlies(segment.length, 0);
                   return <g key={`beam-seg-${segIdx}`} onClick={() => setInspect({ title: `Beam ${beamIdx + 1}`, detail: `${feetAndInches(segment.length)} run at ${feetAndInches(beam.offsetFromHouse)} off house.` })}>
                     {primaryPieces.map((splice, idx) => {
-                      const x1 = toSvg(segment.startX + splice.start, beam.y).x;
-                      const x2 = toSvg(segment.startX + splice.end, beam.y).x;
-                      return <g key={`bp1-${idx}`}><rect x={Math.min(x1, x2)} y={y - 11} width={Math.abs(x2 - x1)} height={8} className={splice.infill ? 'beam-rect infill' : 'beam-rect primary'} />{splice.infill && splice.label && <text x={(x1+x2)/2 - 10} y={y - 14} className="splice-label">{splice.label}</text>}{idx>0 && <line x1={x1} y1={y - 16} x2={x1} y2={y + 5} className="splice-line" />}</g>;
+                      const p1 = beamPoint(beam, segment.startX + splice.start);
+                      const p2 = beamPoint(beam, segment.startX + splice.end);
+                      return verticalBeam
+                        ? <g key={`bp1-${idx}`}><rect x={p1.x - 11} y={Math.min(p1.y, p2.y)} width={8} height={Math.abs(p2.y - p1.y)} className={splice.infill ? 'beam-rect infill' : 'beam-rect primary'} />{splice.infill && splice.label && <text x={p1.x - 38} y={(p1.y+p2.y)/2} className="splice-label">{splice.label}</text>}{idx>0 && <line x1={p1.x - 16} y1={p1.y} x2={p1.x + 5} y2={p1.y} className="splice-line" />}</g>
+                        : <g key={`bp1-${idx}`}><rect x={Math.min(p1.x, p2.x)} y={p1.y - 11} width={Math.abs(p2.x - p1.x)} height={8} className={splice.infill ? 'beam-rect infill' : 'beam-rect primary'} />{splice.infill && splice.label && <text x={(p1.x+p2.x)/2 - 10} y={p1.y - 14} className="splice-label">{splice.label}</text>}{idx>0 && <line x1={p1.x} y1={p1.y - 16} x2={p1.x} y2={p1.y + 5} className="splice-line" />}</g>;
                     })}
                     {secondaryPieces.map((splice, idx) => {
-                      const x1 = toSvg(segment.startX + splice.start, beam.y).x;
-                      const x2 = toSvg(segment.startX + splice.end, beam.y).x;
-                      return <g key={`bp2-${idx}`}><rect x={Math.min(x1, x2)} y={y - 1} width={Math.abs(x2 - x1)} height={8} className={splice.infill ? 'beam-rect infill secondary' : 'beam-rect secondary'} />{splice.infill && splice.label && <text x={(x1+x2)/2 - 10} y={y + 18} className="splice-label">{splice.label}</text>}{idx>0 && <line x1={x1} y1={y - 5} x2={x1} y2={y + 16} className="splice-line" />}</g>;
+                      const p1 = beamPoint(beam, segment.startX + splice.start);
+                      const p2 = beamPoint(beam, segment.startX + splice.end);
+                      return verticalBeam
+                        ? <g key={`bp2-${idx}`}><rect x={p1.x - 1} y={Math.min(p1.y, p2.y)} width={8} height={Math.abs(p2.y - p1.y)} className={splice.infill ? 'beam-rect infill secondary' : 'beam-rect secondary'} />{splice.infill && splice.label && <text x={p1.x + 12} y={(p1.y+p2.y)/2} className="splice-label">{splice.label}</text>}{idx>0 && <line x1={p1.x - 5} y1={p1.y} x2={p1.x + 16} y2={p1.y} className="splice-line" />}</g>
+                        : <g key={`bp2-${idx}`}><rect x={Math.min(p1.x, p2.x)} y={p1.y - 1} width={Math.abs(p2.x - p1.x)} height={8} className={splice.infill ? 'beam-rect infill secondary' : 'beam-rect secondary'} />{splice.infill && splice.label && <text x={(p1.x+p2.x)/2 - 10} y={p1.y + 18} className="splice-label">{splice.label}</text>}{idx>0 && <line x1={p1.x} y1={p1.y - 5} x2={p1.x} y2={p1.y + 16} className="splice-line" />}</g>;
                     })}
                   </g>;
                 })}
                 {beam.postXs.map((postX, postIdx) => {
-                  const cx = toSvg(postX, beam.y).x;
-                  const cy = toSvg(postX, beam.y).y;
+                  const postPoint = beamPoint(beam, postX);
+                  const cx = postPoint.x;
+                  const cy = postPoint.y;
                   return <g key={`post-${beamIdx}-${postIdx}`} onClick={() => setInspect({ title: `Post ${postIdx + 1}`, detail: `Notched ${feetAndInches(deck.postLength)} post supporting doubled beam.` })}>
                     <rect x={cx - 15} y={cy - 15} width={30} height={30} className="post-node" />
                     <rect x={cx - 15} y={cy - 7} width={30} height={14} className="post-notch-seat" />

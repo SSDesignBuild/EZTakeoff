@@ -432,7 +432,12 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const lowerDeck = buildLowerTierDeckModel(inputs);
   const railingType = String(inputs.railingType ?? 'aluminum');
   const deckingType = String(inputs.deckingType ?? 'composite');
-  const deckingMaterial = String(inputs.deckingMaterial ?? (deckingType === 'pressure-treated' ? 'Pressure treated 5/4x6' : 'Composite / PVC decking'));
+  const isPressureTreatedDecking = /pressure/i.test(deckingType);
+  const frameFastenerChoice = String(inputs.frameFastenerChoice ?? 'framing-screws');
+  const trimFastenerChoice = String(inputs.trimFastenerChoice ?? 'cortex-fascia');
+  const framingWoodGrade = String(inputs.framingWoodGrade ?? '#2 Prime pressure treated');
+  const railingWoodGrade = String(inputs.railingWoodGrade ?? '#2 prime pressure treated');
+  const deckingMaterial = String(inputs.deckingMaterial ?? (isPressureTreatedDecking ? 'Pressure treated 5/4x6' : 'Composite / PVC decking'));
   const pictureFrameCount = Math.max(0, Math.round(Number(inputs.pictureFrameCount ?? 1)));
   const breakerBoardCount = Math.max(0, Math.round(Number(inputs.breakerBoardCount ?? 0)));
   const resolveBoardStyle = (value: unknown) => String(value ?? 'match') === 'match' ? deckingMaterial : String(value);
@@ -486,7 +491,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     }
   }
   }
-  addBoardGroups(materials, 'Stairs', 'Stair tread deck board', deck.stairTreadGroups, `${String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'Two tread boards per tread plus two deck-board riser boards per riser.' : 'Two tread boards per tread only; risers are not deck boards unless decking is pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
+  addBoardGroups(materials, 'Stairs', 'Stair tread deck board', deck.stairTreadGroups, `${isPressureTreatedDecking ? 'Two tread boards per tread plus two deck-board riser boards per riser.' : 'Two tread boards per tread only; risers are not deck boards unless decking is pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
   addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.', false, 'Pressure treated');
   addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', false, 'Pressure treated');
   addBoardGroups(materials, 'Framing', `${deck.joistSize} double band / rim board`, deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', false, 'Pressure treated');
@@ -501,7 +506,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
         materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, deckingStyleInfo.color, `Lower tier field decking. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
       });
     }
-    addBoardGroups(materials, 'Lower tier stairs', 'Lower tier stair tread deck board', lowerDeck.stairTreadGroups, `${String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'Lower tier treads and risers.' : 'Lower tier treads only; risers are not deck boards unless pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
+    addBoardGroups(materials, 'Lower tier stairs', 'Lower tier stair tread deck board', lowerDeck.stairTreadGroups, `${isPressureTreatedDecking ? 'Lower tier treads and risers.' : 'Lower tier treads only; risers are not deck boards unless pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
     addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} joist`, lowerDeck.joistLengthGroups, 'Lower tier joists at 12 in. O.C.', false, 'Pressure treated');
     addBoardGroups(materials, 'Framing', `${lowerDeck.beamMemberSize} beam ply`, lowerDeck.beamBoardGroups, 'Lower tier doubled beam members.', false, 'Pressure treated');
     addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} double band / rim board`, lowerDeck.doubleBandGroups, 'Lower tier double band applied to full perimeter.', false, 'Pressure treated');
@@ -509,7 +514,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     const lowerPostCutFt = Math.max(0.5, (lowerHeightFt * 12 - joistActualHeightInches(lowerDeck.joistSize)) / 12);
     const lowerPostStock = optimizeRepeatedCuts(lowerDeck.postCount, lowerPostCutFt, [8, 10, 12, 16]);
     materials.push(
-      toMaterial('6x6 wood posts', 'Structure', lowerPostStock.stockCount, 'boards', `${lowerPostStock.stockLength} ft stock`, 'Pressure treated', `Lower tier: ${lowerDeck.postCount} post(s) cut to about ${feetAndInches(lowerPostStock.cutLength)} each`),
+      toMaterial('6x6 wood posts', 'Structure', lowerPostStock.stockCount, 'boards', `${lowerPostStock.stockLength} ft stock`, framingWoodGrade, `Lower tier: ${lowerDeck.postCount} post(s) cut to about ${feetAndInches(lowerPostStock.cutLength)} each`),
       toMaterial('Concrete mix', 'Structure', lowerDeck.concreteBags, 'bags', '80 lb bags', undefined, 'Lower tier: 3 bags per post footing'),
       toMaterial('12 in x 48 in Sonotubes', 'Structure', Math.ceil(lowerDeck.postCount / 3), 'tubes', '1 tube per 3 footers', undefined, `Lower tier: ${lowerDeck.postCount} 6x6 post footer(s) total`),
       toMaterial('Post brackets', 'Hardware', lowerDeck.postBases, 'ea', '1 per post', undefined, 'Lower tier post base bracket at each footing'),
@@ -541,7 +546,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const structuralPostStock = optimizeRepeatedCuts(deck.postCount, structuralPostCutFt, [8, 10, 12, 16]);
 
   materials.push(
-    toMaterial('6x6 wood posts', 'Structure', structuralPostStock.stockCount, 'boards', `${structuralPostStock.stockLength} ft stock`, 'Pressure treated', `${deck.postCount} post(s) cut to about ${feetAndInches(structuralPostStock.cutLength)} each after subtracting ${deck.joistSize} joist height from ${feetAndInches(deckHeightFt)} deck height · ${structuralPostStock.perStock} cut(s) per stock board${deck.lockedPosts.length ? ` · ${deck.lockedPosts.length} post position(s) manually locked` : ''}`),
+    toMaterial('6x6 wood posts', 'Structure', structuralPostStock.stockCount, 'boards', `${structuralPostStock.stockLength} ft stock`, framingWoodGrade, `${deck.postCount} post(s) cut to about ${feetAndInches(structuralPostStock.cutLength)} each after subtracting ${deck.joistSize} joist height from ${feetAndInches(deckHeightFt)} deck height · ${structuralPostStock.perStock} cut(s) per stock board${deck.lockedPosts.length ? ` · ${deck.lockedPosts.length} post position(s) manually locked` : ''}`),
     toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', undefined, '3 bags per post footing'),
     toMaterial('12 in x 48 in Sonotubes', 'Structure', Math.ceil(deck.postCount / 3), 'tubes', '1 tube per 3 footers', undefined, `${deck.postCount} 6x6 post footer(s) total`),
     toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined, 'Post base bracket at each footing'),
@@ -555,22 +560,25 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     ...(deck.attachment === 'brick' ? [toMaterial('1/2 in x 3 in lag shield anchors', 'Hardware', Math.max(1, Math.ceil(deck.houseContactLength)), 'ea', 'One shield anchor per lag', undefined, 'Required where lag screws attach to brick/masonry')] : []),
     toMaterial('Hex head LedgerLOK screws 5 in', 'Hardware', deck.sdsCorners, 'ea', '4 per corner', undefined, 'All band-board corners'),
     toMaterial('Joist tape', 'Hardware', deck.joistTapeLf, 'lf', 'Match roll coverage', undefined, 'Tape joists and band-board top edges'),
-    toMaterial('3-1/2 in exterior framing screws', 'Hardware', Math.max(1, Math.ceil(deck.deckFastenerCount / 365)), 'boxes', '365 per box', undefined, 'General exterior framing screws added for every deck surface type.'),
-    ...(deckingType === 'pressure-treated' ? [toMaterial('3-1/2 in exterior screws used for deck boards', 'Hardware', Math.max(1, Math.ceil((deck.area + (lowerDeck ? lowerDeck.area : 0)) / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For pressure-treated decking, breaker boards, and picture-frame areas that are face screwed')] : [toMaterial('2-3/8 in CAMO screws', 'Hardware', Math.max(1, Math.ceil(deck.deckFastenerCount / 1750)), 'boxes', '1750 per box', undefined, 'Hidden deck fasteners for composite/PVC decking')]),
+    ...(frameFastenerChoice === 'framing-screws'
+      ? [toMaterial('3-1/2 in exterior framing screws', 'Hardware', Math.max(1, Math.ceil(deck.deckFastenerCount / 365)), 'boxes', '365 per box', undefined, 'Selected frame assembly fastener for deck framing.')]
+      : [toMaterial('21 degree 3 in x .120 exterior collated nails with ring shank', 'Hardware', Math.max(1, Math.ceil(totalDeckAreaForNails / 200)), 'boxes', '1000 nails per box', undefined, 'Selected frame assembly fastener. Add 1000 nails per 200 sq ft of decking.')]),
+    ...(isPressureTreatedDecking ? [toMaterial('3-1/2 in exterior screws used for deck boards', 'Hardware', Math.max(1, Math.ceil((deck.area + (lowerDeck ? lowerDeck.area : 0)) / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For pressure-treated decking, breaker boards, and picture-frame areas that are face screwed')] : [toMaterial('2-3/8 in CAMO screws', 'Hardware', Math.max(1, Math.ceil(deck.deckFastenerCount / 1750)), 'boxes', '1750 per box', undefined, 'Hidden deck fasteners for composite/PVC decking')]),
     toMaterial('1-1/2 in nails', 'Hardware', connectorNails, 'nails', '10 per connector/tie', undefined, 'Used for joist hangers, post brackets, lateral load brackets, and hurricane ties; replaces separate 3 in nail takeoff for easier ordering'),
-    toMaterial('21 degree 3 in x .120 exterior collated nails with ring shank', 'Hardware', Math.max(1, Math.ceil(totalDeckAreaForNails / 200)), 'boxes', '1000 nails per box', undefined, 'Add 1000 nails per 200 sq ft of decking'),
-    ...(colorMatchedTrimFastenerPoints > 0 ? [
+    ...(colorMatchedTrimFastenerPoints > 0 && trimFastenerChoice === 'cortex-fascia' ? [
       toMaterial('Cortex color match fascia screws', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '2 screws per lf', fasciaStyleInfo.color ?? deckingStyleInfo.color, `Small head screws, not big flat head screws. 2 screws every 1 ft of picture-frame board, stair board, and fascia board used. Picture frame ${pictureFrameBoardLf.toFixed(1)} lf + step boards ${stairDeckBoardLf.toFixed(1)} lf + fascia ${totalFasciaBoardLf.toFixed(1)} lf.`),
+    ] : []),
+    ...(colorMatchedTrimFastenerPoints > 0 && trimFastenerChoice === 'plug-system' ? [
       toMaterial('Color match screws for plugs', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '2 screws per lf', deckingStyleInfo.color ?? fasciaStyleInfo.color, `Same count logic as fascia screws: picture-frame boards, step boards, and fascia board runs.`),
       toMaterial('Color match plugs', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '1 plug per color-match screw', deckingStyleInfo.color ?? fasciaStyleInfo.color, `Same count logic as fascia screws: picture-frame boards, step boards, and fascia board runs.`),
     ] : []),
     ...(deck.fasciaPieces > 0 ? [toMaterial('Fascia board', 'Trim', deck.fasciaPieces, 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${deck.fasciaLf.toFixed(1)} lf on exposed deck perimeter plus stair risers/stringer sides only. Fascia style: ${fasciaMaterial}.`)] : []),
   );
   if (deck.stairStringers > 0) {
-    materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringerBoardCount, 'boards', `${deck.stairStringerLength} ft stock`, 'Pressure treated', `${deck.stairStringers} stringer cut(s) at about ${feetAndInches(deck.stairStringerCutLength)} each · 12 in. O.C. · ${deck.stairRisers} risers / ${deck.stairTreadsPerRun} treads per run`));
+    materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringerBoardCount, 'boards', `${deck.stairStringerLength} ft stock`, framingWoodGrade, `${deck.stairStringers} stringer cut(s) at about ${feetAndInches(deck.stairStringerCutLength)} each · 12 in. O.C. · ${deck.stairRisers} risers / ${deck.stairTreadsPerRun} treads per run`));
   }
   if (lowerDeck && lowerDeck.stairStringers > 0) {
-    materials.push(toMaterial('2x12 stringers', 'Lower tier stairs', lowerDeck.stairStringerBoardCount, 'boards', `${lowerDeck.stairStringerLength} ft stock`, 'Pressure treated', `Lower tier: ${lowerDeck.stairStringers} stringer cut(s) at about ${feetAndInches(lowerDeck.stairStringerCutLength)} each · 12 in. O.C. · ${lowerDeck.stairRisers} risers / ${lowerDeck.stairTreadsPerRun} treads per run`));
+    materials.push(toMaterial('2x12 stringers', 'Lower tier stairs', lowerDeck.stairStringerBoardCount, 'boards', `${lowerDeck.stairStringerLength} ft stock`, framingWoodGrade, `Lower tier: ${lowerDeck.stairStringers} stringer cut(s) at about ${feetAndInches(lowerDeck.stairStringerCutLength)} each · 12 in. O.C. · ${lowerDeck.stairRisers} risers / ${lowerDeck.stairTreadsPerRun} treads per run`));
   }
 
   const lowerRailingBreakdown = lowerDeck ? classifyRailing(lowerDeck) : null;
@@ -607,10 +615,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     const levelBalusters = Math.ceil(levelRailLf * 3.1);
     const stairBalusters = Math.max(0, balusterCount - levelBalusters);
     const woodRailStock = optimizeStockLength(totalWoodRailLf, [8, 12, 16, 20]);
-    if (totalWoodRailLf > 0 && railingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', Math.ceil(railingPosts / 2), 'boards', '8 ft 4x4 stock', 'Pressure treated', `${railingPosts} rail post cuts total · 2 rail posts per 8 ft 4x4`));
-    if (totalWoodRailLf > 0 && lowerRailingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Lower tier railing', Math.ceil(lowerRailingPosts / 2), 'boards', '8 ft 4x4 stock', 'Pressure treated', `Lower tier: ${lowerRailingPosts} rail post cuts total · 2 rail posts per 8 ft 4x4`));
-    if (totalWoodRailLf > 0) materials.push(toMaterial('2x4 pressure-treated top rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
-    if (totalWoodRailLf > 0) materials.push(toMaterial('2x4 pressure-treated bottom rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
+    if (totalWoodRailLf > 0 && railingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', Math.ceil(railingPosts / 2), 'boards', '8 ft 4x4 stock', framingWoodGrade, `${railingPosts} rail post cuts total · 2 rail posts per 8 ft 4x4`));
+    if (totalWoodRailLf > 0 && lowerRailingPosts) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Lower tier railing', Math.ceil(lowerRailingPosts / 2), 'boards', '8 ft 4x4 stock', framingWoodGrade, `Lower tier: ${lowerRailingPosts} rail post cuts total · 2 rail posts per 8 ft 4x4`));
+    if (totalWoodRailLf > 0) materials.push(toMaterial('2x4 pressure-treated top rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, railingWoodGrade, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
+    if (totalWoodRailLf > 0) materials.push(toMaterial('2x4 pressure-treated bottom rail', 'Railing', woodRailStock.count, 'boards', `${woodRailStock.stockLength} ft stock`, railingWoodGrade, `${totalWoodRailLf.toFixed(1)} lf rail run · optimized to reduce board count and handling`));
     if (spindleType === 'wood') {
       if (totalWoodRailLf > 0) materials.push(toMaterial('1.5x1.5 wood balusters', 'Railing', balusterCount, 'ea', 'Wood spindle stock', undefined, 'Approx. 4 in max clear spacing'));
       if (totalWoodRailLf > 0) materials.push(toMaterial('Finish nails', 'Hardware', Math.ceil(balusterCount * 2 / 1200), 'boxes', 'Fasten wood balusters', undefined, `${balusterCount * 2} nail points estimated`));
@@ -623,11 +631,11 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     }
     if (drinkRail && totalWoodRailLf > 0) {
       const drinkStock = optimizeStockLength(totalWoodRailLf, [8, 12, 16, 20]);
-      materials.push(toMaterial('2x6 pressure-treated drink rail', 'Railing', drinkStock.count, 'boards', `${drinkStock.stockLength} ft stock`, undefined, `${totalWoodRailLf.toFixed(1)} lf drink rail · optimized to reduce board count and handling`));
+      materials.push(toMaterial('2x6 pressure-treated drink rail', 'Railing', drinkStock.count, 'boards', `${drinkStock.stockLength} ft stock`, railingWoodGrade, `${totalWoodRailLf.toFixed(1)} lf drink rail · optimized to reduce board count and handling`));
     }
   } else {
     const vinylCompositeRailPosts = railingPosts + lowerRailingPosts;
-    if (railingType === 'vinyl-composite' && vinylCompositeRailPosts > 0) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', Math.ceil(vinylCompositeRailPosts / 2), 'boards', '8 ft 4x4 stock', 'Pressure treated', `${vinylCompositeRailPosts} rail post cuts total for vinyl/composite sleeves · 2 rail posts per 8 ft 4x4`));
+    if (railingType === 'vinyl-composite' && vinylCompositeRailPosts > 0) materials.push(toMaterial('4x4 pressure-treated railing posts', 'Railing', Math.ceil(vinylCompositeRailPosts / 2), 'boards', '8 ft 4x4 stock', framingWoodGrade, `${vinylCompositeRailPosts} rail post cuts total for vinyl/composite sleeves · 2 rail posts per 8 ft 4x4`));
     if (railingBreakdown.levelMix.eight) materials.push(toMaterial('8 ft vinyl/composite level railing sections', 'Railing', railingBreakdown.levelMix.eight, 'sections', '8 ft sections', undefined, 'Top-level straight runs'));
     if (railingBreakdown.levelMix.six) materials.push(toMaterial('6 ft vinyl/composite level railing sections', 'Railing', railingBreakdown.levelMix.six, 'sections', '6 ft sections', undefined, 'Top-level straight runs'));
     if (railingBreakdown.stairMix.eight) materials.push(toMaterial('8 ft vinyl/composite angled railing sections', 'Railing', railingBreakdown.stairMix.eight, 'sections', '8 ft sections', undefined, 'Stair-side or angled runs'));

@@ -158,6 +158,10 @@ export const SERVICES: ServiceDefinition[] = [
       lowerRailingType: 'aluminum',
       lowerStairRailingLeft: false,
       lowerStairRailingRight: false,
+      frameFastenerChoice: 'framing-screws',
+      trimFastenerChoice: 'cortex-fascia',
+      framingWoodGrade: '#2 Prime pressure treated',
+      railingWoodGrade: '#2 prime pressure treated',
     },
     fields: [
       { key: 'deckHeight', label: 'Deck height (ft)', type: 'number', min: 0, step: 0.1 },
@@ -285,6 +289,24 @@ export const SERVICES: ServiceDefinition[] = [
       { key: 'drinkRail', label: 'Add drink rail', type: 'boolean' },
       { key: 'drinkRailMaterial', label: 'Drink rail board style', type: 'select', options: DECK_BOARD_STYLE_WITH_MATCH_OPTIONS },
       { key: 'fasciaMaterial', label: 'Fascia board style', type: 'select', options: DECK_BOARD_STYLE_WITH_MATCH_OPTIONS },
+      { key: 'frameFastenerChoice', label: 'Frame assembly fastener', type: 'select', options: [
+        { label: '3-1/2 in exterior framing screws', value: 'framing-screws' },
+        { label: '21 degree 3 in x .120 exterior collated ring-shank nails', value: 'collated-nails' },
+      ] },
+      { key: 'trimFastenerChoice', label: 'Picture frame / fascia color-match fastener', type: 'select', options: [
+        { label: 'Cortex color match fascia screws', value: 'cortex-fascia' },
+        { label: 'Color match screws with plugs', value: 'plug-system' },
+      ] },
+      { key: 'framingWoodGrade', label: 'Framing/post/stringer treated material', type: 'select', options: [
+        { label: '#2 Prime pressure treated', value: '#2 Prime pressure treated' },
+        { label: '#1 Prime pressure treated', value: '#1 Prime pressure treated' },
+        { label: '#2 Prime critical treated', value: '#2 Prime critical treated' },
+        { label: '#1 Prime critical treated', value: '#1 Prime critical treated' },
+      ] },
+      { key: 'railingWoodGrade', label: 'Wood railing/drink rail material', type: 'select', options: [
+        { label: '#2 prime pressure treated', value: '#2 prime pressure treated' },
+        { label: 'KDAT c grade pressure treated', value: 'KDAT c grade pressure treated' },
+      ] },
     ],
     formulaNotes: [
       'Joists are calculated at 12 in. on center and sized from your span table: 2x8 to 12 ft, 2x10 to 14 ft, 2x12 to 16 ft.',

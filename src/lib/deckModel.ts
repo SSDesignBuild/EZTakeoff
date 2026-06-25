@@ -495,17 +495,20 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
         .filter((entry) => entry.insetDepth >= 2 || entry.segment.length <= 2)
     : [];
   const insetBeamOffsets = insetFrontSegments.map((entry) => entry.offsetFromHouse);
+  const beamSupportAxisLength = joistDirection === 'vertical' ? depth : width;
+  const beamSupportAxisMin = joistDirection === 'vertical' ? minY : minX;
+  const beamSupportAxisMax = joistDirection === 'vertical' ? maxY : maxX;
   const beamOffsets = uniqueSorted((rawCustomBeams.length > 0 ? uniqueSorted(rawCustomBeams) : (() => {
-    if (depth <= beamCantilever) return needsHouseSupportBeam ? uniqueSorted([0, depth]) : [depth];
+    if (beamSupportAxisLength <= beamCantilever) return needsHouseSupportBeam ? uniqueSorted([0, beamSupportAxisLength]) : [beamSupportAxisLength];
     const positions: number[] = [];
-    const frontBeam = Math.max(0, round2(depth - beamCantilever));
+    const frontBeam = Math.max(0, round2(beamSupportAxisLength - beamCantilever));
     positions.push(frontBeam);
     while (positions[positions.length - 1] > BEAM_TARGET_SPACING + (needsHouseSupportBeam ? 0 : 0.01)) positions.push(round2(positions[positions.length - 1] - BEAM_TARGET_SPACING));
     if (needsHouseSupportBeam) positions.push(0);
     return uniqueSorted(positions);
-  })()).filter((value) => !insetBeamOffsets.some((offset) => Math.abs(offset - value) < 0.01)).concat(insetBeamOffsets));
+  })()).filter((value) => joistDirection === 'vertical' ? !insetBeamOffsets.some((offset) => Math.abs(offset - value) < 0.01) : true).concat(joistDirection === 'vertical' ? insetBeamOffsets : []));
 
-  const supportAnchors = uniqueSorted([minY, ...beamOffsets.map((value) => value + minY), maxY]);
+  const supportAnchors = uniqueSorted([beamSupportAxisMin, ...beamOffsets.map((value) => value + beamSupportAxisMin), beamSupportAxisMax]);
   const supportSpans = supportAnchors.slice(1).map((value, index) => round2(value - supportAnchors[index]));
   const maxSpan = Math.max(...supportSpans, 0);
   const joistSize: DeckModel['joistSize'] = maxSpan <= JOIST_SPAN_LIMITS['2x8'] ? '2x8' : maxSpan <= JOIST_SPAN_LIMITS['2x10'] ? '2x10' : '2x12';
@@ -535,12 +538,14 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const beamEdits = parseBeamEdits(inputs.beamEdits);
 
   const beamLines: BeamLine[] = beamOffsets.map((offsetY, beamIndex) => {
-    const y = round2(offsetY + minY);
+    const y = round2(offsetY + beamSupportAxisMin);
     const beamEdit = beamEdits.find((item) => item.beamIndex === beamIndex) ?? { beamIndex, startTrim: 0, endTrim: 0 };
-    const insetEntry = insetFrontSegments.find((entry) => Math.abs(entry.offsetFromHouse - offsetY) < 0.01);
+    const insetEntry = joistDirection === 'vertical' ? insetFrontSegments.find((entry) => Math.abs(entry.offsetFromHouse - offsetY) < 0.01) : undefined;
     const sourcePairs = insetEntry
       ? [{ start: insetEntry.segment.start.x, end: insetEntry.segment.end.x }]
-      : scanlineIntersections(points, 'horizontal', y + 0.0001).map((pair) => ({ start: pair.start, end: pair.end }));
+      : (joistDirection === 'vertical'
+        ? scanlineIntersections(points, 'horizontal', y + 0.0001).map((pair) => ({ start: pair.start, end: pair.end }))
+        : scanlineIntersections(points, 'vertical', y + 0.0001).map((pair) => ({ start: pair.start, end: pair.end })));
     const segmentsAtBeam = sourcePairs.map((pair, index, list) => {
       const startX = round2(pair.start + (index === 0 ? beamEdit.startTrim : 0));
       const endX = round2(pair.end - (index === list.length - 1 ? beamEdit.endTrim : 0));
