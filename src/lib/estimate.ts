@@ -492,9 +492,9 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   }
   }
   addBoardGroups(materials, 'Stairs', 'Stair tread deck board', deck.stairTreadGroups, `${isPressureTreatedDecking ? 'Two tread boards per tread plus two deck-board riser boards per riser.' : 'Two tread boards per tread only; risers are not deck boards unless decking is pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
-  addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.', false, 'Pressure treated');
-  addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', false, 'Pressure treated');
-  addBoardGroups(materials, 'Framing', `${deck.joistSize} double band / rim board`, deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', false, 'Pressure treated');
+  addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.', false, framingWoodGrade);
+  addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', false, framingWoodGrade);
+  addBoardGroups(materials, 'Framing', `${deck.joistSize} double band / rim board`, deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', false, framingWoodGrade);
 
   if (lowerDeck) {
     const lowerDeckingPlan = deriveDeckingLabelPlan(lowerDeck);
@@ -507,9 +507,9 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       });
     }
     addBoardGroups(materials, 'Lower tier stairs', 'Lower tier stair tread deck board', lowerDeck.stairTreadGroups, `${isPressureTreatedDecking ? 'Lower tier treads and risers.' : 'Lower tier treads only; risers are not deck boards unless pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
-    addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} joist`, lowerDeck.joistLengthGroups, 'Lower tier joists at 12 in. O.C.', false, 'Pressure treated');
-    addBoardGroups(materials, 'Framing', `${lowerDeck.beamMemberSize} beam ply`, lowerDeck.beamBoardGroups, 'Lower tier doubled beam members.', false, 'Pressure treated');
-    addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} double band / rim board`, lowerDeck.doubleBandGroups, 'Lower tier double band applied to full perimeter.', false, 'Pressure treated');
+    addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} joist`, lowerDeck.joistLengthGroups, 'Lower tier joists at 12 in. O.C.', false, framingWoodGrade);
+    addBoardGroups(materials, 'Framing', `${lowerDeck.beamMemberSize} beam ply`, lowerDeck.beamBoardGroups, 'Lower tier doubled beam members.', false, framingWoodGrade);
+    addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} double band / rim board`, lowerDeck.doubleBandGroups, 'Lower tier double band applied to full perimeter.', false, framingWoodGrade);
     const lowerHeightFt = Math.max(0, Number(inputs.lowerDeckHeight ?? inputs.deckHeight ?? 0));
     const lowerPostCutFt = Math.max(0.5, (lowerHeightFt * 12 - joistActualHeightInches(lowerDeck.joistSize)) / 12);
     const lowerPostStock = optimizeRepeatedCuts(lowerDeck.postCount, lowerPostCutFt, [8, 10, 12, 16]);

@@ -276,10 +276,11 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
       };
     }
     if (/deck board/i.test(name) && /\b(?:ft|foot)\b/i.test(stockRecommendation)) {
-      const materialName = name.replace(/^(picture-frame|breaker|stair tread|lower tier stair tread)\s+/i, '').replace(/\s+\d+$/i, '').trim();
+      const normalizedColor = color.toLowerCase();
+      const displayColor = color && color !== '—' ? `${color} ` : '';
       return {
-        name: materialName,
-        key: [`deck-board:${materialName.toLowerCase()}`, unit, stockRecommendation.toLowerCase(), color.toLowerCase()].join('||'),
+        name: `${displayColor}deck boards`,
+        key: ['deck-board', unit.toLowerCase(), stockRecommendation.toLowerCase(), normalizedColor].join('||'),
       };
     }
     return { name, key: [name.toLowerCase(), unit, stockRecommendation.toLowerCase(), color.toLowerCase()].join('||') };

@@ -297,13 +297,13 @@ export const SERVICES: ServiceDefinition[] = [
         { label: 'Cortex color match fascia screws', value: 'cortex-fascia' },
         { label: 'Color match screws with plugs', value: 'plug-system' },
       ] },
-      { key: 'framingWoodGrade', label: 'Framing/post/stringer treated material', type: 'select', options: [
+      { key: 'framingWoodGrade', label: 'All framing lumber treated grade', type: 'select', helper: 'Applies to joists, beams, double bands/rim boards, stair stringers, 6x6 posts, and 4x4 rail posts.', options: [
         { label: '#2 Prime pressure treated', value: '#2 Prime pressure treated' },
         { label: '#1 Prime pressure treated', value: '#1 Prime pressure treated' },
         { label: '#2 Prime critical treated', value: '#2 Prime critical treated' },
         { label: '#1 Prime critical treated', value: '#1 Prime critical treated' },
       ] },
-      { key: 'railingWoodGrade', label: 'Wood railing/drink rail material', type: 'select', options: [
+      { key: 'railingWoodGrade', label: 'Wood railing/drink rail grade', type: 'select', helper: 'Applies only when pressure-treated wood railing or 2x6 wood drink rails are selected.', options: [
         { label: '#2 prime pressure treated', value: '#2 prime pressure treated' },
         { label: 'KDAT c grade pressure treated', value: 'KDAT c grade pressure treated' },
       ] },

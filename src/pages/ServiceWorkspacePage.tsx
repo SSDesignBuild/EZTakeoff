@@ -18,9 +18,26 @@ export function ServiceWorkspacePage() {
   const { values, setValues } = useLocalProjectState(service);
   const estimate = useMemo(() => calculateEstimate(service.slug, values), [service.slug, values]);
   const visibleFields = service.fields.filter((field) => {
-    if (service.slug === 'decks' && field.key.startsWith('lower') && field.key !== 'lowerDeckShape') {
+    if (service.slug === 'decks') {
       const lowerEnabled = values.multiTierEnabled === true || String(values.multiTierEnabled ?? 'false') === 'true';
-      if (!lowerEnabled) return false;
+      if (field.key.startsWith('lower') && field.key !== 'lowerDeckShape' && !lowerEnabled) return false;
+
+      const breakerCount = Math.max(0, Math.round(Number(values.breakerBoardCount ?? 0)));
+      if (field.key === 'breakerBoardMaterial' && breakerCount < 1) return false;
+      if (field.key === 'breakerBoardMaterial2' && breakerCount < 2) return false;
+      if (field.key === 'breakerBoardMaterial3' && breakerCount < 3) return false;
+
+      const pictureFrameCount = Math.max(0, Math.round(Number(values.pictureFrameCount ?? 0)));
+      if (field.key === 'pictureFrameMaterial' && pictureFrameCount < 1) return false;
+      if (field.key === 'pictureFrameMaterial2' && pictureFrameCount < 2) return false;
+      if (field.key === 'pictureFrameMaterial3' && pictureFrameCount < 3) return false;
+      if (field.key === 'borderSameBoard' && pictureFrameCount < 1) return false;
+
+      const stairCount = Math.max(0, Math.round(Number(values.stairCount ?? 0)));
+      if (['stairWidth', 'stairRise', 'stairRailingLeft', 'stairRailingRight'].includes(field.key) && stairCount < 1) return false;
+
+      const drinkRailEnabled = values.drinkRail === true || String(values.drinkRail ?? 'false') === 'true';
+      if (field.key === 'drinkRailMaterial' && !drinkRailEnabled) return false;
     }
     if (!field.showIf) return true;
     const actual = values[field.showIf.key];
