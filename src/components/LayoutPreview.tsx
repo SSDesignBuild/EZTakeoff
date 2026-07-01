@@ -1712,6 +1712,15 @@ function offsetTowardPoint(segment: GableWoodSegment, towardX: number, towardY: 
 }
 
 
+function pointOnGableSlope(x: number, left: number, apexX: number, right: number, baseY: number, apexY: number) {
+  if (x <= apexX) {
+    const t = (x - left) / Math.max(1, apexX - left);
+    return { x, y: baseY + (apexY - baseY) * t };
+  }
+  const t = (right - x) / Math.max(1, right - apexX);
+  return { x, y: baseY + (apexY - baseY) * t };
+}
+
 function insetGableTrianglePoints(a: {x: number; y: number}, b: {x: number; y: number}, c: {x: number; y: number}, inset: number) {
   const cx = (a.x + b.x + c.x) / 3;
   const cy = (a.y + b.y + c.y) / 3;
@@ -1719,7 +1728,7 @@ function insetGableTrianglePoints(a: {x: number; y: number}, b: {x: number; y: n
     const dx = cx - pt.x;
     const dy = cy - pt.y;
     const len = Math.hypot(dx, dy) || 1;
-    const amount = Math.min(inset, Math.max(2, len * 0.35));
+    const amount = Math.min(inset, Math.max(2, len * 0.22));
     return { x: pt.x + (dx / len) * amount, y: pt.y + (dy / len) * amount };
   });
 }
@@ -1731,22 +1740,40 @@ function gableRenaissanceTrianglePolylines(style: string, left: number, apexX: n
   const leftBase = { x: left, y: baseY };
   const rightBase = { x: right, y: baseY };
   const triangles: Array<Array<{x: number; y: number}>> = [];
-  if (style === 'queen-king-post' || style === 'tied-king-post' || style === 'braced-king-post') {
-    const leftBreak = { x: left + w * 0.33, y: baseY };
-    const rightBreak = { x: right - w * 0.33, y: baseY };
-    const leftTop = { x: left + w * 0.33, y: baseY + (apexY - baseY) * 0.33 };
-    const rightTop = { x: right - w * 0.33, y: baseY + (apexY - baseY) * 0.33 };
-    triangles.push(insetGableTrianglePoints(leftBase, leftBreak, leftTop, 10));
-    triangles.push(insetGableTrianglePoints(leftBreak, apex, centerBase, 10));
-    triangles.push(insetGableTrianglePoints(centerBase, apex, rightBreak, 10));
-    triangles.push(insetGableTrianglePoints(rightTop, rightBreak, rightBase, 10));
+  const inset = 9;
+
+  // Renaissance gable screen material should read as clean, closed red 1x2 7/8 triangles
+  // inside the black wood structure bays. Keep these triangles independent from the
+  // wood style framing so the layout stays professional and easy to understand.
+  if (style === 'queen-king-post') {
+    const leftPostX = left + w * 0.25;
+    const rightPostX = right - w * 0.25;
+    const leftPostBase = { x: leftPostX, y: baseY };
+    const rightPostBase = { x: rightPostX, y: baseY };
+    const leftPostTop = pointOnGableSlope(leftPostX, left, apexX, right, baseY, apexY);
+    const rightPostTop = pointOnGableSlope(rightPostX, left, apexX, right, baseY, apexY);
+    triangles.push(insetGableTrianglePoints(leftBase, leftPostBase, leftPostTop, inset));
+    triangles.push(insetGableTrianglePoints(leftPostBase, apex, centerBase, inset));
+    triangles.push(insetGableTrianglePoints(centerBase, apex, rightPostBase, inset));
+    triangles.push(insetGableTrianglePoints(rightPostTop, rightPostBase, rightBase, inset));
+  } else if (style === 'tied-king-post' || style === 'braced-king-post') {
+    const leftBreakX = left + w * 0.33;
+    const rightBreakX = right - w * 0.33;
+    const leftBreak = { x: leftBreakX, y: baseY };
+    const rightBreak = { x: rightBreakX, y: baseY };
+    const leftTop = pointOnGableSlope(leftBreakX, left, apexX, right, baseY, apexY);
+    const rightTop = pointOnGableSlope(rightBreakX, left, apexX, right, baseY, apexY);
+    triangles.push(insetGableTrianglePoints(leftBase, leftBreak, leftTop, inset));
+    triangles.push(insetGableTrianglePoints(leftBreak, apex, centerBase, inset));
+    triangles.push(insetGableTrianglePoints(centerBase, apex, rightBreak, inset));
+    triangles.push(insetGableTrianglePoints(rightTop, rightBreak, rightBase, inset));
   } else if (style === 'king-post') {
-    triangles.push(insetGableTrianglePoints(leftBase, apex, centerBase, 10));
-    triangles.push(insetGableTrianglePoints(centerBase, apex, rightBase, 10));
+    triangles.push(insetGableTrianglePoints(leftBase, apex, centerBase, inset));
+    triangles.push(insetGableTrianglePoints(centerBase, apex, rightBase, inset));
   } else {
-    triangles.push(insetGableTrianglePoints(leftBase, apex, rightBase, 10));
+    triangles.push(insetGableTrianglePoints(leftBase, apex, rightBase, inset));
   }
-  return triangles;
+  return triangles.map((pts) => [...pts, pts[0]]);
 }
 
 function gableFrameCuts(width: number, height: number, style: string, uprights = 0) {
