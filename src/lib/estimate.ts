@@ -187,7 +187,8 @@ const consolidateMaterials = (materials: MaterialItem[]) => {
 };
 
 function sectionDoorWidth(section: SectionConfig) {
-  return section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
+  if (section.doorType === 'none') return 0;
+  return Math.min(section.doorType === 'french' ? 6 : section.doorWidth, section.width);
 }
 
 

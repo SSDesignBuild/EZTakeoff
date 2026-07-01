@@ -137,9 +137,14 @@ function subfloorSheetsForDeck(deck: ReturnType<typeof buildDeckModel>) {
   return sheets.filter((sheet) => sheet.w > 0.05 && sheet.h > 0.05);
 }
 
+function sectionDoorLayoutWidth(section: SectionConfig) {
+  if (section.doorType === 'none') return 0;
+  return Math.min(section.doorType === 'french' ? 6 : section.doorWidth, section.width);
+}
+
 function sectionDoorLeft(section: SectionConfig) {
   const sectionWidthIn = section.width * 12;
-  const doorWidthIn = Math.min(section.doorWidth * 12, sectionWidthIn);
+  const doorWidthIn = Math.min(sectionDoorLayoutWidth(section) * 12, sectionWidthIn);
   if (section.doorType === 'none') return 0;
   if (section.doorPlacement === 'left') return 0;
   if (section.doorPlacement === 'right') return Math.max(0, sectionWidthIn - doorWidthIn);
@@ -580,7 +585,7 @@ function railSummary(length: number) {
 }
 
 function sectionSpansExcludingDoor(section: SectionConfig) {
-  const doorWidth = section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
+  const doorWidth = sectionDoorLayoutWidth(section);
   const doorLeftFt = sectionDoorLeft(section) / 12;
   const doorRightFt = doorLeftFt + doorWidth;
   if (doorWidth <= 0) return [{ start: 0, end: section.width }];
@@ -1683,6 +1688,16 @@ function gableStyleWoodSegments(style: string, left: number, apexX: number, righ
   return segments;
 }
 
+function shortenSegment(segment: GableWoodSegment, trim: number) {
+  const dx = segment.x2 - segment.x1;
+  const dy = segment.y2 - segment.y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const amount = Math.min(trim, Math.max(0, len / 2 - 1));
+  const ux = dx / len;
+  const uy = dy / len;
+  return { ...segment, x1: segment.x1 + ux * amount, y1: segment.y1 + uy * amount, x2: segment.x2 - ux * amount, y2: segment.y2 - uy * amount };
+}
+
 function offsetTowardPoint(segment: GableWoodSegment, towardX: number, towardY: number, offset: number) {
   const dx = segment.x2 - segment.x1;
   const dy = segment.y2 - segment.y1;
@@ -1819,30 +1834,33 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           return (
             <g key={gable.id} data-export-section="true">
               {woodSegments.map((seg, idx) => {
-                const inward = offsetTowardPoint(seg, centroidX, centroidY, materialOffset);
+                const drawSeg = shortenSegment(seg, renaissance ? 7 : 2);
+                const inward = offsetTowardPoint(drawSeg, centroidX, centroidY, materialOffset);
                 const outward = { x: -inward.x, y: -inward.y };
                 const inwardSecondary = { x: inward.x + (renaissance ? 0 : (secondaryOffset * inward.x) / materialOffset), y: inward.y + (renaissance ? 0 : (secondaryOffset * inward.y) / materialOffset) };
                 const outwardSecondary = { x: outward.x + (renaissance ? 0 : (secondaryOffset * outward.x) / materialOffset), y: outward.y + (renaissance ? 0 : (secondaryOffset * outward.y) / materialOffset) };
+                if (renaissance) {
+                  const cls = seg.kind === 'boundary' ? 'reno-1x2-line' : 'reno-2x2-line';
+                  const offset = seg.kind === 'boundary' ? inward : { x: 0, y: 0 };
+                  return <line key={`mat-${idx}`} x1={drawSeg.x1 + offset.x} y1={drawSeg.y1 + offset.y} x2={drawSeg.x2 + offset.x} y2={drawSeg.y2 + offset.y} className={cls} />;
+                }
                 if (seg.kind === 'upright') {
-                  const cls = renaissance ? 'reno-2x2-line' : 'twobytwo-line';
-                  return <line key={`mat-${idx}`} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} className={cls} />;
+                  return <line key={`mat-${idx}`} x1={drawSeg.x1} y1={drawSeg.y1} x2={drawSeg.x2} y2={drawSeg.y2} className="twobytwo-line" />;
                 }
                 if (seg.kind === 'boundary') {
                   return (
                     <g key={`mat-${idx}`}>
-                      {!renaissance && <line x1={seg.x1 + inward.x} y1={seg.y1 + inward.y} x2={seg.x2 + inward.x} y2={seg.y2 + inward.y} className="receiver-line" />}
-                      <line x1={seg.x1 + inwardSecondary.x} y1={seg.y1 + inwardSecondary.y} x2={seg.x2 + inwardSecondary.x} y2={seg.y2 + inwardSecondary.y} className={boundaryFrameClass} />
+                      <line x1={drawSeg.x1 + inward.x} y1={drawSeg.y1 + inward.y} x2={drawSeg.x2 + inward.x} y2={drawSeg.y2 + inward.y} className="receiver-line" />
+                      <line x1={drawSeg.x1 + inwardSecondary.x} y1={drawSeg.y1 + inwardSecondary.y} x2={drawSeg.x2 + inwardSecondary.x} y2={drawSeg.y2 + inwardSecondary.y} className={boundaryFrameClass} />
                     </g>
                   );
                 }
                 return (
                   <g key={`mat-${idx}`}>
-                    {!renaissance && <>
-                      <line x1={seg.x1 + inward.x} y1={seg.y1 + inward.y} x2={seg.x2 + inward.x} y2={seg.y2 + inward.y} className="receiver-line" />
-                      <line x1={seg.x1 + outward.x} y1={seg.y1 + outward.y} x2={seg.x2 + outward.x} y2={seg.y2 + outward.y} className="receiver-line" />
-                    </>}
-                    <line x1={seg.x1 + inwardSecondary.x} y1={seg.y1 + inwardSecondary.y} x2={seg.x2 + inwardSecondary.x} y2={seg.y2 + inwardSecondary.y} className={boundaryFrameClass} />
-                    <line x1={seg.x1 + outwardSecondary.x} y1={seg.y1 + outwardSecondary.y} x2={seg.x2 + outwardSecondary.x} y2={seg.y2 + outwardSecondary.y} className={boundaryFrameClass} />
+                    <line x1={drawSeg.x1 + inward.x} y1={drawSeg.y1 + inward.y} x2={drawSeg.x2 + inward.x} y2={drawSeg.y2 + inward.y} className="receiver-line" />
+                    <line x1={drawSeg.x1 + outward.x} y1={drawSeg.y1 + outward.y} x2={drawSeg.x2 + outward.x} y2={drawSeg.y2 + outward.y} className="receiver-line" />
+                    <line x1={drawSeg.x1 + inwardSecondary.x} y1={drawSeg.y1 + inwardSecondary.y} x2={drawSeg.x2 + inwardSecondary.x} y2={drawSeg.y2 + inwardSecondary.y} className={boundaryFrameClass} />
+                    <line x1={drawSeg.x1 + outwardSecondary.x} y1={drawSeg.y1 + outwardSecondary.y} x2={drawSeg.x2 + outwardSecondary.x} y2={drawSeg.y2 + outwardSecondary.y} className={boundaryFrameClass} />
                   </g>
                 );
               })}
@@ -1862,7 +1880,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const top = runningY;
           const bottom = top + sectionH;
           runningY += sectionH + gutter;
-          const doorWidth = section.doorType === 'none' ? 0 : Math.min(section.doorWidth, section.width);
+          const doorWidth = sectionDoorLayoutWidth(section);
           const doorLeftFt = sectionDoorLeft(section) / 12;
           const doorRightFt = doorLeftFt + doorWidth;
           const doorLeft = left + doorLeftFt * scale;
@@ -1919,7 +1937,7 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
               {section.pickets && spans.map((span, idx) => <g key={`p-${idx}`}><line x1={left + span.start * scale + frameInset} y1={picketTop} x2={left + span.end * scale - frameInset} y2={picketTop} className={renaissance ? 'reno-picket-line' : 'picket-rail-line'} />{idx === 0 && <text x={left + span.start * scale + frameInset + 4} y={picketTop - 7} className="svg-note">{`pickets ${feetAndInches((picketBottom - picketTop) / scale)}`}</text>}{Array.from({ length: Math.max(0, Math.ceil(((span.end - span.start) * 12) / 4)) }, (_, picketIndex) => { const px = left + span.start * scale + frameInset + (((span.end - span.start) * scale - frameInset * 2) * (picketIndex + 0.5)) / Math.max(Math.ceil(((span.end - span.start) * 12) / 4), 1); return <line key={picketIndex} x1={px} y1={picketTop + 4} x2={px} y2={picketBottom} className="picket-line" />; })}</g>)}
               {chairRailYs.flatMap((chairY, railIdx) => spans.map((span, idx) => <g key={`chair-${railIdx}-${idx}`}><line x1={left + span.start * scale + frameInset} y1={chairY} x2={left + span.end * scale - frameInset} y2={chairY} className={chairRailClass} />{idx === 0 && <text x={left + span.start * scale + frameInset + 4} y={chairY - 7} className="svg-note">{`chair rail ${feetAndInches((bottom - chairY) / scale)}`}</text>}</g>))}
               {uprightXs.map((x, idx) => <g key={`upr-${idx}`}><line x1={left + x * scale} y1={top + frameInset} x2={left + x * scale} y2={bottom - frameInset} className={uprightClass} /><text x={left + x * scale + 4} y={top + 30} className="svg-note">{`upright ${feetAndInches(section.height)}`}</text></g>)}
-              {section.doorType !== 'none' && <><rect x={doorLeft + frameInset - 8} y={doorTop} width={Math.max(0, doorRight - doorLeft - frameInset * 2 + 16)} height={Math.max(0, bottom - doorTop - 18)} className="door-fill" rx="8" /><line x1={doorLeft + frameInset} y1={doorJambTop} x2={doorLeft + frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorRight - frameInset} y1={doorJambTop} x2={doorRight - frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorLeft + frameInset} y1={doorTop} x2={doorRight - frameInset} y2={doorTop} className={doorFrameClass} /><text x={doorLeft + frameInset} y={doorTop - 8} className="svg-note">{`door ${feetAndInches(doorWidth / scale)}w × ${feetAndInches(sectionDoorHeight(section))}h`}</text>{section.doorType === 'french' && <line x1={(doorLeft + doorRight) / 2} y1={doorTop + 6} x2={(doorLeft + doorRight) / 2} y2={bottom - frameInset - 4} className={doorFrameClass} />}</>}
+              {section.doorType !== 'none' && <><rect x={doorLeft + frameInset - 8} y={doorTop} width={Math.max(0, doorRight - doorLeft - frameInset * 2 + 16)} height={Math.max(0, bottom - doorTop - 18)} className="door-fill" rx="8" /><line x1={doorLeft + frameInset} y1={doorJambTop} x2={doorLeft + frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorRight - frameInset} y1={doorJambTop} x2={doorRight - frameInset} y2={bottom - frameInset} className={doorFrameClass} /><line x1={doorLeft + frameInset} y1={doorTop} x2={doorRight - frameInset} y2={doorTop} className={doorFrameClass} /><line x1={doorLeft + frameInset} y1={doorTop - 18} x2={doorRight - frameInset} y2={doorTop - 18} className="dimension-line" /><text x={(doorLeft + doorRight) / 2} y={doorTop - 24} className="svg-note" textAnchor="middle">{`${section.doorType === 'french' ? 'French doors' : 'door'} ${feetAndInches(doorWidth)}w × ${feetAndInches(sectionDoorHeight(section))}h`}</text></>}
             </g>
           );
         })})()}
