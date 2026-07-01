@@ -163,7 +163,8 @@ const addCustomCutGroups = (materials: MaterialItem[], name: string, category: s
     map.set(rounded, (map.get(rounded) ?? 0) + 1);
   });
   [...map.entries()].sort((a, b) => a[0] - b[0]).forEach(([length, count]) => {
-    materials.push(toMaterial(`${name} ${feetAndInches(length)}`, category, count, 'ea', 'Custom cut', undefined, note));
+    // Keep the material name clean and place the required cut length where installers/order staff expect it.
+    materials.push(toMaterial(name, category, count, 'ea', `${feetAndInches(length)} custom cut`, undefined, note));
   });
 };
 
@@ -923,7 +924,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     }
 
     if (section.doorType !== 'none') {
-      const doorSize = `${feetAndInches(section.doorWidth)} x ${feetAndInches(sectionDoorHeight(section))}`;
+      const doorSize = `${feetAndInches(section.doorType === 'french' ? 6 : section.doorWidth)} x ${feetAndInches(sectionDoorHeight(section))}`;
       if (section.dogDoor !== 'none') {
         dogDoorGroups[section.dogDoor].count += 1;
         dogDoorGroups[section.dogDoor].sizes.push(doorSize);
@@ -1032,15 +1033,15 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
     addCustomCutGroups(materials, '2x2 7/8 no-channel', 'Frame', twoByTwoCustomNoGroove, 'uprights, chair rail only, and door framing');
     addCustomCutGroups(materials, '2x2 7/8 with channel', 'Frame', twoByTwoCustomGroove, 'pickets and insulated kick panel');
     materials.push(
-      toMaterial('Decorative brackets with caps', 'Hardware', bracketCount, 'ea', 'Bracket system', undefined, undefined),
-      toMaterial('Flush mount screws', 'Hardware', flushMountScrews, 'ea', '4 per bracket', undefined, undefined),
+      toMaterial('Dolce connection clips with covers', 'Hardware', bracketCount, 'ea', 'Bracket system', undefined, undefined),
+      toMaterial('Counter sunk self-tapping screws', 'Hardware', flushMountScrews, 'ea', '4 per bracket', undefined, undefined),
       toMaterial('Pickets 36 in', 'Railing', picketCount, 'ea', 'Precut 36 in', undefined, undefined),
       toMaterial('Insulated panel sheets', 'Panel', Math.ceil(panelSqFt / 40), 'sheets', '4x10 sheets', panelColor, `${panelSqFt.toFixed(1)} sq ft total`),
       toMaterial(screenRollName(screenType), 'Screen', screenRolls, 'rolls', '10 ft x 100 ft', screenColor, `${screenSf.toFixed(1)} sq ft net screen`),
       toMaterial(spline, 'Screen', screenRolls, 'rolls', '1 per screen roll', 'black', undefined),
       toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 lf of receiver', undefined, `${receiverFastenerTubesLf.toFixed(1)} lf receiver perimeter`),
       toMaterial('Single doors', 'Doors', singleDoors, 'ea', singleDoorSizes[0] || `Default ${feetAndInches(3)} x ${feetAndInches(6 + 8 / 12)}`, framingColor, singleDoorSizes.join(', ') || undefined),
-      toMaterial('French doors', 'Doors', frenchDoors, 'sets', frenchDoorSizes[0] || `Double leaf · default ${feetAndInches(3)} x ${feetAndInches(6 + 8 / 12)}`, framingColor, frenchDoorSizes.map((size) => `opening ${size}`).join(', ') || undefined),
+      toMaterial('French doors', 'Doors', frenchDoors, 'sets', frenchDoorSizes[0] || `Double leaf · opening ${feetAndInches(6)} x ${feetAndInches(6 + 8 / 12)}`, framingColor, frenchDoorSizes.map((size) => `opening ${size}`).join(', ') || undefined),
       ...dogDoorRows,
       toMaterial('Inswing kits', 'Doors', inswingKits, 'ea', 'Hydraulic jack kit', undefined, undefined),
       toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined, undefined),
@@ -1064,7 +1065,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       toMaterial(spline, 'Screen', screenRolls, 'rolls', '1 per screen roll', 'black', undefined),
       toMaterial('NovaFlex', 'Hardware', sealantTubes, 'tubes', '1 tube per 24 ft receiver', undefined, `${receiverFastenerTubesLf.toFixed(1)} lf receiver perimeter`),
       toMaterial('Single doors', 'Doors', singleDoors, 'ea', singleDoorSizes[0] || `Default ${feetAndInches(3)} x ${feetAndInches(6 + 8 / 12)}`, framingColor, singleDoorSizes.join(', ') || undefined),
-      toMaterial('French doors', 'Doors', frenchDoors, 'sets', frenchDoorSizes[0] || `Double leaf · default ${feetAndInches(3)} x ${feetAndInches(6 + 8 / 12)}`, framingColor, frenchDoorSizes.map((size) => `opening ${size}`).join(', ') || undefined),
+      toMaterial('French doors', 'Doors', frenchDoors, 'sets', frenchDoorSizes[0] || `Double leaf · opening ${feetAndInches(6)} x ${feetAndInches(6 + 8 / 12)}`, framingColor, frenchDoorSizes.map((size) => `opening ${size}`).join(', ') || undefined),
       ...dogDoorRows,
       toMaterial('Inswing kits', 'Doors', inswingKits, 'ea', 'Hydraulic jack kit', undefined, undefined),
       toMaterial('Astragals', 'Doors', astragals, 'ea', 'French door center', undefined, undefined),
@@ -1092,7 +1093,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
 
   materials.forEach((item) => {
     if (!item.color) item.color = framingColor;
-    assignColor(item, ['receiver', '1x2', '2x2', 'gable receiver', 'gable 1x2', 'gable 2x2', 'u-channel', 'capri', 'tek screw', 'flush mount screw', 'decorative bracket', 'wood screw', 'concrete screw', 'single door', 'french door', 'astragal', 'dog door'], framingColor);
+    assignColor(item, ['receiver', '1x2', '2x2', 'gable receiver', 'gable 1x2', 'gable 2x2', 'u-channel', 'capri', 'tek screw', 'counter sunk self-tapping screw', 'dolce connection clip', 'wood screw', 'concrete screw', 'single door', 'french door', 'astragal', 'dog door'], framingColor);
     assignColor(item, ['insulated panel sheets', 'trim coil'], panelColor);
     assignColor(item, ['screen roll'], screenColor);
     assignColor(item, ['spline'], 'black');

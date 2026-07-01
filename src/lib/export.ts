@@ -134,22 +134,24 @@ function inlineComputedStyles(source: Element, target: Element) {
 }
 
 function wrapTitleLines(title: string, pageWidth: number, fontSize = 18) {
-  const clean = title.replace(/\s+/g, ' ').trim();
-  if (!clean) return [] as string[];
+  const rawLines = String(title || '').split(/\n+/).map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  if (!rawLines.length) return [] as string[];
   const maxChars = Math.max(24, Math.floor((pageWidth - 56) / (fontSize * 0.54)));
-  const words = clean.split(' ');
   const lines: string[] = [];
-  let line = '';
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (next.length <= maxChars || !line) {
-      line = next;
-      continue;
+  rawLines.forEach((clean) => {
+    const words = clean.split(' ');
+    let line = '';
+    for (const word of words) {
+      const next = line ? `${line} ${word}` : word;
+      if (next.length <= maxChars || !line) {
+        line = next;
+        continue;
+      }
+      lines.push(line);
+      line = word;
     }
-    lines.push(line);
-    line = word;
-  }
-  if (line) lines.push(line);
+    if (line) lines.push(line);
+  });
   return lines;
 }
 

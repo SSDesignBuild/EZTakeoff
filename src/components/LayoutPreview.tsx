@@ -51,14 +51,15 @@ const projectExportTitle = (baseTitle: string, values: Record<string, string | n
   const phone = String(values.customerPhone ?? '').trim();
   const balance = String(values.balanceDueCompletion ?? '').trim();
   const financed = String(values.financedYesNo ?? '').trim();
-  return [
-    baseTitle,
-    job,
+  const lines = [
+    job || baseTitle,
     address,
     phone ? `Phone: ${phone}` : '',
     balance ? `Balance due at completion: ${balance}` : '',
     financed ? `Financed: ${financed}` : '',
-  ].filter(Boolean).join(' · ');
+    job ? baseTitle : '',
+  ].filter(Boolean);
+  return lines.join('\n');
 };
 
 

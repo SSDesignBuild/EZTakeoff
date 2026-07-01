@@ -40,14 +40,15 @@ function projectExportTitle(baseTitle: string, values: Record<string, string | n
   const phone = String(values.customerPhone ?? '').trim();
   const balance = String(values.balanceDueCompletion ?? '').trim();
   const financed = String(values.financedYesNo ?? '').trim();
-  return [
-    baseTitle,
-    job,
+  const lines = [
+    job || baseTitle,
     address,
     phone ? `Phone: ${phone}` : '',
     balance ? `Balance due at completion: ${balance}` : '',
     financed ? `Financed: ${financed}` : '',
-  ].filter(Boolean).join(' · ');
+    job ? baseTitle : '',
+  ].filter(Boolean);
+  return lines.join('\n');
 }
 
 function sanitizeFilePart(value: string) {
@@ -78,9 +79,9 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
   const margin = 28;
   const rowBaseHeight = 28;
   const gutter = 10;
-  const minWidths = [52, 150, 44, 44, 104, 130, 180];
-  const maxWidths = [60, 210, 58, 58, 150, 220, 320];
-  const headers = ['Label', 'Material', 'Qty', 'Unit', 'Stock recommendation', 'Color', 'Notes'];
+  const minWidths = [52, 150, 128, 44, 44, 130, 180];
+  const maxWidths = [60, 210, 260, 58, 58, 220, 320];
+  const headers = ['Label', 'Material', 'Stock recommendation', 'Qty', 'Unit', 'Color', 'Notes'];
   const canvas = document.createElement('canvas');
   const probe = canvas.getContext('2d');
   if (!probe) throw new Error('Canvas unavailable');
@@ -89,7 +90,7 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     let width = probe.measureText(header).width + 16;
     Object.values(grouped).forEach((rows) => {
       rows.forEach((row) => {
-        const value = [row.layoutLabel ?? '', row.name, String(row.quantity), row.unit, row.stockRecommendation ?? '', row.color ?? '—', row.notes ?? '—'][idx];
+        const value = [row.layoutLabel ?? '', row.name, row.stockRecommendation ?? '', String(row.quantity), row.unit, row.color ?? '—', row.notes ?? '—'][idx];
         const measured = probe.measureText(String(value)).width + 16;
         width = Math.max(width, measured);
       });
@@ -99,7 +100,7 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
   const tableWidth = colWidths.reduce((sum, width) => sum + width, 0) + gutter * (colWidths.length - 1);
   const pageWidth = Math.max(940, tableWidth + margin * 2);
   const rowHeightsByCategory = Object.fromEntries(Object.entries(grouped).map(([category, rows]) => [category, rows.map((row) => {
-    const stockLines = wrapText(probe, row.stockRecommendation ?? '—', colWidths[4] - 16).length;
+    const stockLines = wrapText(probe, row.stockRecommendation ?? '—', colWidths[2] - 16).length;
     const colorLines = wrapText(probe, row.color ?? '—', colWidths[5] - 16).length;
     const noteLines = wrapText(probe, row.notes ?? '—', colWidths[6] - 16).length;
     return Math.max(rowBaseHeight, 18 + Math.max(stockLines, colorLines, noteLines) * 14);
@@ -174,14 +175,16 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
       ctx.strokeStyle = '#d1d5db';
       ctx.strokeRect(margin, rowY, tableWidth, rowHeight);
       ctx.fillStyle = '#111111';
-      const rowValues = [row.layoutLabel ?? '', row.name, String(row.quantity), row.unit];
+      const rowValues = [row.layoutLabel ?? '', row.name];
       rowValues.forEach((value, colIdx) => {
         const x = cols[colIdx] + 8;
         const maxWidth = colWidths[colIdx] - 16;
         ctx.fillText(fitText(ctx, String(value), maxWidth), x, rowY + 18);
       });
-      const stockLines = wrapText(ctx, row.stockRecommendation ?? '—', colWidths[4] - 16);
-      stockLines.forEach((line, lineIdx) => ctx.fillText(line, cols[4] + 8, rowY + 18 + lineIdx * 14));
+      const stockLines = wrapText(ctx, row.stockRecommendation ?? '—', colWidths[2] - 16);
+      stockLines.forEach((line, lineIdx) => ctx.fillText(line, cols[2] + 8, rowY + 18 + lineIdx * 14));
+      ctx.fillText(fitText(ctx, String(row.quantity), colWidths[3] - 16), cols[3] + 8, rowY + 18);
+      ctx.fillText(fitText(ctx, String(row.unit), colWidths[4] - 16), cols[4] + 8, rowY + 18);
       const colorLines = wrapText(ctx, row.color ?? '—', colWidths[5] - 16);
       colorLines.forEach((line, lineIdx) => ctx.fillText(line, cols[5] + 8, rowY + 18 + lineIdx * 14));
       const noteLines = wrapText(ctx, row.notes ?? '—', colWidths[6] - 16);
@@ -246,7 +249,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
   }, [values.materialQuantityOverrides]);
 
   const displayItems = useMemo<DisplayMaterialItem[]>(() => {
-    const estimateItems = items.map((item, index) => ({ ...item, rowKey: `estimate:${item.category}::${item.name}::${index}`, source: 'estimate' as const }));
+    const estimateItems = items.map((item) => ({ ...item, rowKey: `estimate:${item.category}::${item.name}::${item.stockRecommendation ?? ''}::${item.unit}::${item.color ?? ''}::${item.layoutLabel ?? ''}`, source: 'estimate' as const }));
     const appendedCustom = customItems.map((item) => ({ ...item, rowKey: `custom:${item.id}`, source: 'custom' as const }));
     return [...estimateItems, ...appendedCustom]
       .map((item) => ({
@@ -300,8 +303,18 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
       const useNote = item.category + (item.name !== existing.name ? ` - ${item.name}` : '') + label;
       existing.notes = Array.from(new Set([existing.notes, useNote].filter(Boolean).join(' · ').split(' · ').filter(Boolean))).join(' · ');
     });
-    return Array.from(merged.values()).sort((a, b) => String(a.name).localeCompare(String(b.name)) || String(a.stockRecommendation).localeCompare(String(b.stockRecommendation)));
-  }, [displayItems]);
+    return Array.from(merged.values())
+      .map((item) => ({
+        ...item,
+        name: nameOverrides[item.rowKey] ?? item.name,
+        quantity: quantityOverrides[item.rowKey] ?? item.quantity,
+        unit: unitOverrides[item.rowKey] ?? item.unit,
+        stockRecommendation: stockOverrides[item.rowKey] ?? item.stockRecommendation,
+        color: colorOverrides[item.rowKey] ?? item.color,
+        notes: noteOverrides[item.rowKey] ?? item.notes,
+      }))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)) || String(a.stockRecommendation).localeCompare(String(b.stockRecommendation)));
+  }, [displayItems, nameOverrides, quantityOverrides, unitOverrides, stockOverrides, colorOverrides, noteOverrides]);
 
   const activeItems = stockView ? stockOrderItems : displayItems;
   const grouped = useMemo(() => activeItems.reduce<Record<string, DisplayMaterialItem[]>>((acc, item) => {
@@ -473,9 +486,9 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
                   <tr>
                     <th>Label</th>
                     <th>Material</th>
+                    <th>Stock recommendation</th>
                     <th>Qty</th>
                     <th>Unit</th>
-                    <th>Stock recommendation</th>
                     <th>Color</th>
                     <th>Notes</th>
                     <th data-export-ignore="true">Action</th>
@@ -486,9 +499,9 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
                     <tr key={item.rowKey}>
                       <td>{item.layoutLabel ?? ''}</td>
                       <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.name} onChange={(event) => setEditingDraft((current) => ({ ...current, name: event.target.value }))} style={{ width: '100%' }} /> : item.name}</td>
+                      <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.stockRecommendation} onChange={(event) => setEditingDraft((current) => ({ ...current, stockRecommendation: event.target.value }))} style={{ width: '100%' }} /> : item.stockRecommendation}</td>
                       <td>{editingKey === item.rowKey ? <input type="number" min="0" step="0.01" value={editingDraft.quantity} onChange={(event) => setEditingDraft((current) => ({ ...current, quantity: event.target.value }))} style={{ width: '82px' }} /> : item.quantity}</td>
                       <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.unit} onChange={(event) => setEditingDraft((current) => ({ ...current, unit: event.target.value }))} style={{ width: '72px' }} /> : item.unit}</td>
-                      <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.stockRecommendation} onChange={(event) => setEditingDraft((current) => ({ ...current, stockRecommendation: event.target.value }))} style={{ width: '100%' }} /> : item.stockRecommendation}</td>
                       <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.color} onChange={(event) => setEditingDraft((current) => ({ ...current, color: event.target.value }))} style={{ width: '100%' }} /> : item.color ?? '—'}</td>
                       <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.notes} onChange={(event) => setEditingDraft((current) => ({ ...current, notes: event.target.value }))} style={{ width: '100%' }} /> : item.notes ?? '—'}</td>
                       <td data-export-ignore="true">
