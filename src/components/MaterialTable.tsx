@@ -328,12 +328,6 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
   const updateValue = (key: string, value: string) => onValuesChange((current) => ({ ...current, [key]: value }));
   const persistCustomItems = (nextItems: CustomMaterialItem[]) => onValuesChange((current) => ({ ...current, customMaterialItems: JSON.stringify(nextItems) }));
   const persistDeletedKeys = (nextKeys: Set<string>) => onValuesChange((current) => ({ ...current, deletedMaterialKeys: JSON.stringify(Array.from(nextKeys)) }));
-  const persistQuantityOverrides = (nextOverrides: Record<string, number>) => onValuesChange((current) => ({ ...current, materialQuantityOverrides: JSON.stringify(nextOverrides) }));
-  const persistNoteOverrides = (nextOverrides: Record<string, string>) => onValuesChange((current) => ({ ...current, materialNoteOverrides: JSON.stringify(nextOverrides) }));
-  const persistNameOverrides = (nextOverrides: Record<string, string>) => onValuesChange((current) => ({ ...current, materialNameOverrides: JSON.stringify(nextOverrides) }));
-  const persistUnitOverrides = (nextOverrides: Record<string, string>) => onValuesChange((current) => ({ ...current, materialUnitOverrides: JSON.stringify(nextOverrides) }));
-  const persistStockOverrides = (nextOverrides: Record<string, string>) => onValuesChange((current) => ({ ...current, materialStockOverrides: JSON.stringify(nextOverrides) }));
-  const persistColorOverrides = (nextOverrides: Record<string, string>) => onValuesChange((current) => ({ ...current, materialColorOverrides: JSON.stringify(nextOverrides) }));
 
   const addCustomItem = () => {
     if (!customDraft.name.trim()) return;
@@ -362,6 +356,21 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
     persistDeletedKeys(nextKeys);
   };
 
+  const refreshToStandard = () => {
+    onValuesChange((current) => ({
+      ...current,
+      customMaterialItems: JSON.stringify([]),
+      deletedMaterialKeys: JSON.stringify([]),
+      materialNameOverrides: JSON.stringify({}),
+      materialQuantityOverrides: JSON.stringify({}),
+      materialUnitOverrides: JSON.stringify({}),
+      materialStockOverrides: JSON.stringify({}),
+      materialColorOverrides: JSON.stringify({}),
+      materialNoteOverrides: JSON.stringify({}),
+    }));
+    setEditingKey(null);
+    setEditingDraft({ name: '', quantity: '', unit: '', stockRecommendation: '', color: '', notes: '' });
+  };
   const restoreAllHidden = () => persistDeletedKeys(new Set());
   const startEdit = (item: DisplayMaterialItem) => {
     setEditingKey(item.rowKey);
@@ -388,12 +397,21 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
         notes: editingDraft.notes.trim() || undefined,
       } : entry));
     } else {
-      persistNameOverrides({ ...nameOverrides, [item.rowKey]: editingDraft.name.trim() || item.name });
-      persistQuantityOverrides({ ...quantityOverrides, [item.rowKey]: normalized });
-      persistUnitOverrides({ ...unitOverrides, [item.rowKey]: editingDraft.unit.trim() || item.unit });
-      persistStockOverrides({ ...stockOverrides, [item.rowKey]: editingDraft.stockRecommendation.trim() || item.stockRecommendation });
-      persistColorOverrides({ ...colorOverrides, [item.rowKey]: editingDraft.color.trim() });
-      persistNoteOverrides({ ...noteOverrides, [item.rowKey]: editingDraft.notes.trim() });
+      const nextNameOverrides = { ...nameOverrides, [item.rowKey]: editingDraft.name.trim() || item.name };
+      const nextQuantityOverrides = { ...quantityOverrides, [item.rowKey]: normalized };
+      const nextUnitOverrides = { ...unitOverrides, [item.rowKey]: editingDraft.unit.trim() || item.unit };
+      const nextStockOverrides = { ...stockOverrides, [item.rowKey]: editingDraft.stockRecommendation.trim() || item.stockRecommendation };
+      const nextColorOverrides = { ...colorOverrides, [item.rowKey]: editingDraft.color.trim() };
+      const nextNoteOverrides = { ...noteOverrides, [item.rowKey]: editingDraft.notes.trim() };
+      onValuesChange((current) => ({
+        ...current,
+        materialNameOverrides: JSON.stringify(nextNameOverrides),
+        materialQuantityOverrides: JSON.stringify(nextQuantityOverrides),
+        materialUnitOverrides: JSON.stringify(nextUnitOverrides),
+        materialStockOverrides: JSON.stringify(nextStockOverrides),
+        materialColorOverrides: JSON.stringify(nextColorOverrides),
+        materialNoteOverrides: JSON.stringify(nextNoteOverrides),
+      }));
     }
     setEditingKey(null);
     setEditingDraft({ name: '', quantity: '', unit: '', stockRecommendation: '', color: '', notes: '' });
@@ -469,6 +487,7 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
           <div style={{ display: 'flex', alignItems: 'end', gap: '0.75rem' }}>
             <button type="button" className="secondary-btn" onClick={addCustomItem}>Add custom item</button>
             {hiddenItemCount > 0 && <button type="button" className="ghost-btn" onClick={restoreAllHidden}>Restore deleted items ({hiddenItemCount})</button>}
+            <button type="button" className="ghost-btn" onClick={refreshToStandard}>Refresh to standard</button>
           </div>
         </div>
       </div>

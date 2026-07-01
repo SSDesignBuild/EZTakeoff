@@ -780,7 +780,7 @@ function clipCountForSection(section: SectionConfig, doorJambHeight: number) {
   const interiorUprightIntersections = interiorUprightCount * (2 + horizontal2x2Runs);
   const doorJambIntersections = hasDoor ? 4 : 0;
   const doorMidRailIntersections = hasDoor && doorJambHeight < section.height - 0.05 ? 2 : 0;
-  const doorLeafDividerIntersections = section.doorType === 'french' ? 1 : 0;
+  const doorLeafDividerIntersections = 0;
   const centeredWideDoorExtra = hasDoor && wallWidthExcludingDoor > 0.01 ? 0 : 0;
   return sideFrameIntersections + interiorUprightIntersections + doorJambIntersections + doorMidRailIntersections + doorLeafDividerIntersections + centeredWideDoorExtra;
 }
@@ -879,7 +879,7 @@ function estimateScreenRoom(inputs: EstimateInputs, renaissance: boolean): Estim
       if (section.kickPanel !== 'none' && !chairRailClassUsesGroove) twoByTwoCustomNoGroove.push(...kickTopCuts);
       if (hasDoor) {
         twoByTwoCustomNoGroove.push(doorJambHeight, doorJambHeight, doorWidth);
-        if (section.doorType === 'french') twoByTwoCustomNoGroove.push(doorHeight);
+        // French doors use an astragal between leaves, not a center 2x2 post.
       }
 
       // Match visible 2x2 7/8 with-channel lines in the layout.
