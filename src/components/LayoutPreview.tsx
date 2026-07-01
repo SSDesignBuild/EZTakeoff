@@ -1711,6 +1711,44 @@ function offsetTowardPoint(segment: GableWoodSegment, towardX: number, towardY: 
   return plusDist <= minusDist ? { x: nx * offset, y: ny * offset } : { x: -nx * offset, y: -ny * offset };
 }
 
+
+function insetGableTrianglePoints(a: {x: number; y: number}, b: {x: number; y: number}, c: {x: number; y: number}, inset: number) {
+  const cx = (a.x + b.x + c.x) / 3;
+  const cy = (a.y + b.y + c.y) / 3;
+  return [a, b, c].map((pt) => {
+    const dx = cx - pt.x;
+    const dy = cy - pt.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const amount = Math.min(inset, Math.max(2, len * 0.35));
+    return { x: pt.x + (dx / len) * amount, y: pt.y + (dy / len) * amount };
+  });
+}
+
+function gableRenaissanceTrianglePolylines(style: string, left: number, apexX: number, right: number, baseY: number, apexY: number) {
+  const w = right - left;
+  const centerBase = { x: apexX, y: baseY };
+  const apex = { x: apexX, y: apexY };
+  const leftBase = { x: left, y: baseY };
+  const rightBase = { x: right, y: baseY };
+  const triangles: Array<Array<{x: number; y: number}>> = [];
+  if (style === 'queen-king-post' || style === 'tied-king-post' || style === 'braced-king-post') {
+    const leftBreak = { x: left + w * 0.33, y: baseY };
+    const rightBreak = { x: right - w * 0.33, y: baseY };
+    const leftTop = { x: left + w * 0.33, y: baseY + (apexY - baseY) * 0.33 };
+    const rightTop = { x: right - w * 0.33, y: baseY + (apexY - baseY) * 0.33 };
+    triangles.push(insetGableTrianglePoints(leftBase, leftBreak, leftTop, 10));
+    triangles.push(insetGableTrianglePoints(leftBreak, apex, centerBase, 10));
+    triangles.push(insetGableTrianglePoints(centerBase, apex, rightBreak, 10));
+    triangles.push(insetGableTrianglePoints(rightTop, rightBreak, rightBase, 10));
+  } else if (style === 'king-post') {
+    triangles.push(insetGableTrianglePoints(leftBase, apex, centerBase, 10));
+    triangles.push(insetGableTrianglePoints(centerBase, apex, rightBase, 10));
+  } else {
+    triangles.push(insetGableTrianglePoints(leftBase, apex, rightBase, 10));
+  }
+  return triangles;
+}
+
 function gableFrameCuts(width: number, height: number, style: string, uprights = 0) {
   const half = width / 2;
   const rafter = Math.sqrt(half ** 2 + height ** 2);
@@ -1833,24 +1871,16 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
           const boundaryFrameClass = renaissance ? 'reno-1x2-line' : 'onebytwo-line';
           return (
             <g key={gable.id} data-export-section="true">
-              {woodSegments.map((seg, idx) => {
-                const drawSeg = shortenSegment(seg, renaissance ? 7 : 2);
+              {renaissance
+                ? gableRenaissanceTrianglePolylines(gable.style, baseLeft, apexX, baseRight, baseY, apexY).map((pts, idx) => (
+                  <polyline key={`reno-tri-${idx}`} points={pts.map((pt) => `${pt.x},${pt.y}`).join(' ')} className="reno-1x2-line" fill="none" />
+                ))
+                : woodSegments.map((seg, idx) => {
+                const drawSeg = shortenSegment(seg, 2);
                 const inward = offsetTowardPoint(drawSeg, centroidX, centroidY, materialOffset);
                 const outward = { x: -inward.x, y: -inward.y };
-                const inwardSecondary = { x: inward.x + (renaissance ? 0 : (secondaryOffset * inward.x) / materialOffset), y: inward.y + (renaissance ? 0 : (secondaryOffset * inward.y) / materialOffset) };
-                const outwardSecondary = { x: outward.x + (renaissance ? 0 : (secondaryOffset * outward.x) / materialOffset), y: outward.y + (renaissance ? 0 : (secondaryOffset * outward.y) / materialOffset) };
-                if (renaissance) {
-                  // Renaissance gable framing uses 1x2 7/8 material, which is the red legend item.
-                  // Keep the material diagram clean by drawing a single inset red line for each
-                  // actual gable member instead of paired offset blue lines around the style post.
-                  if (seg.kind === 'boundary') {
-                    const cleanBoundary = shortenSegment(seg, 20);
-                    const cleanInward = offsetTowardPoint(cleanBoundary, centroidX, centroidY, 9);
-                    return <line key={`mat-${idx}`} x1={cleanBoundary.x1 + cleanInward.x} y1={cleanBoundary.y1 + cleanInward.y} x2={cleanBoundary.x2 + cleanInward.x} y2={cleanBoundary.y2 + cleanInward.y} className="reno-1x2-line" />;
-                  }
-                  const styleSeg = shortenSegment(seg, seg.kind === 'upright' ? 12 : 16);
-                  return <line key={`mat-${idx}`} x1={styleSeg.x1} y1={styleSeg.y1} x2={styleSeg.x2} y2={styleSeg.y2} className="reno-1x2-line" />;
-                }
+                const inwardSecondary = { x: inward.x + (secondaryOffset * inward.x) / materialOffset, y: inward.y + (secondaryOffset * inward.y) / materialOffset };
+                const outwardSecondary = { x: outward.x + (secondaryOffset * outward.x) / materialOffset, y: outward.y + (secondaryOffset * outward.y) / materialOffset };
                 if (seg.kind === 'upright') {
                   return <line key={`mat-${idx}`} x1={drawSeg.x1} y1={drawSeg.y1} x2={drawSeg.x2} y2={drawSeg.y2} className="twobytwo-line" />;
                 }
