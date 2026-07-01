@@ -1840,22 +1840,16 @@ function ScreenPreview({ values, renaissance }: { values: Record<string, string 
                 const inwardSecondary = { x: inward.x + (renaissance ? 0 : (secondaryOffset * inward.x) / materialOffset), y: inward.y + (renaissance ? 0 : (secondaryOffset * inward.y) / materialOffset) };
                 const outwardSecondary = { x: outward.x + (renaissance ? 0 : (secondaryOffset * outward.x) / materialOffset), y: outward.y + (renaissance ? 0 : (secondaryOffset * outward.y) / materialOffset) };
                 if (renaissance) {
+                  // Renaissance gable framing uses 1x2 7/8 material, which is the red legend item.
+                  // Keep the material diagram clean by drawing a single inset red line for each
+                  // actual gable member instead of paired offset blue lines around the style post.
                   if (seg.kind === 'boundary') {
-                    const cleanBoundary = shortenSegment(seg, 12);
-                    return <line key={`mat-${idx}`} x1={cleanBoundary.x1 + inward.x} y1={cleanBoundary.y1 + inward.y} x2={cleanBoundary.x2 + inward.x} y2={cleanBoundary.y2 + inward.y} className="reno-1x2-line" />;
+                    const cleanBoundary = shortenSegment(seg, 20);
+                    const cleanInward = offsetTowardPoint(cleanBoundary, centroidX, centroidY, 9);
+                    return <line key={`mat-${idx}`} x1={cleanBoundary.x1 + cleanInward.x} y1={cleanBoundary.y1 + cleanInward.y} x2={cleanBoundary.x2 + cleanInward.x} y2={cleanBoundary.y2 + cleanInward.y} className="reno-1x2-line" />;
                   }
-                  const styleSeg = shortenSegment(seg, 10);
-                  const dx = styleSeg.x2 - styleSeg.x1;
-                  const dy = styleSeg.y2 - styleSeg.y1;
-                  const len = Math.hypot(dx, dy) || 1;
-                  const nx = (-dy / len) * 5;
-                  const ny = (dx / len) * 5;
-                  return (
-                    <g key={`mat-${idx}`}>
-                      <line x1={styleSeg.x1 + nx} y1={styleSeg.y1 + ny} x2={styleSeg.x2 + nx} y2={styleSeg.y2 + ny} className="reno-2x2-line" />
-                      <line x1={styleSeg.x1 - nx} y1={styleSeg.y1 - ny} x2={styleSeg.x2 - nx} y2={styleSeg.y2 - ny} className="reno-2x2-line" />
-                    </g>
-                  );
+                  const styleSeg = shortenSegment(seg, seg.kind === 'upright' ? 12 : 16);
+                  return <line key={`mat-${idx}`} x1={styleSeg.x1} y1={styleSeg.y1} x2={styleSeg.x2} y2={styleSeg.y2} className="reno-1x2-line" />;
                 }
                 if (seg.kind === 'upright') {
                   return <line key={`mat-${idx}`} x1={drawSeg.x1} y1={drawSeg.y1} x2={drawSeg.x2} y2={drawSeg.y2} className="twobytwo-line" />;
