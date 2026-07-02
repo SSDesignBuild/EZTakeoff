@@ -1654,8 +1654,9 @@ function gableStyleWoodSegments(style: string, left: number, apexX: number, righ
   const quarterRight = right - (right - left) * 0.25;
   const nearApexLeft = left + (right - left) * 0.34;
   const nearApexRight = right - (right - left) * 0.34;
-  const braceY = (baseY + apexY) * 0.56;
-  const queenTopY = midY + 10;
+  const braceY = baseY + (apexY - baseY) * 0.42;
+  const queenLeftTop = pointOnGableSlope(quarterLeft, left, apexX, right, baseY, apexY);
+  const queenRightTop = pointOnGableSlope(quarterRight, left, apexX, right, baseY, apexY);
   const segments: GableWoodSegment[] = [
     { x1: left, y1: baseY, x2: apexX, y2: apexY, boundary: true, kind: 'boundary' },
     { x1: apexX, y1: apexY, x2: right, y2: baseY, boundary: true, kind: 'boundary' },
@@ -1669,12 +1670,14 @@ function gableStyleWoodSegments(style: string, left: number, apexX: number, righ
     segments.push({ x1: quarterRight, y1: midY, x2: apexX, y2: baseY, kind: 'style' });
   }
   if (style === 'braced-king-post') {
-    segments.push({ x1: nearApexLeft, y1: midY, x2: apexX, y2: braceY, kind: 'style' });
-    segments.push({ x1: apexX, y1: braceY, x2: nearApexRight, y2: midY, kind: 'style' });
+    const leftBraceTop = pointOnGableSlope(nearApexLeft, left, apexX, right, baseY, apexY);
+    const rightBraceTop = pointOnGableSlope(nearApexRight, left, apexX, right, baseY, apexY);
+    segments.push({ x1: leftBraceTop.x, y1: leftBraceTop.y, x2: apexX, y2: braceY, kind: 'style' });
+    segments.push({ x1: apexX, y1: braceY, x2: rightBraceTop.x, y2: rightBraceTop.y, kind: 'style' });
   }
   if (style === 'queen-king-post') {
-    segments.push({ x1: quarterLeft, y1: baseY, x2: quarterLeft, y2: queenTopY, kind: 'style' });
-    segments.push({ x1: quarterRight, y1: baseY, x2: quarterRight, y2: queenTopY, kind: 'style' });
+    segments.push({ x1: quarterLeft, y1: baseY, x2: quarterLeft, y2: queenLeftTop.y, kind: 'style' });
+    segments.push({ x1: quarterRight, y1: baseY, x2: quarterRight, y2: queenRightTop.y, kind: 'style' });
   }
   const uprightCount = Math.max(0, Math.floor(uprights));
   for (let i = 1; i <= uprightCount; i += 1) {
@@ -1746,6 +1749,19 @@ function insetGableBayPolygon(points: Array<{ x: number; y: number }>, inset: nu
   });
 }
 
+function insetGableTriangle(points: Array<{ x: number; y: number }>, inset: number) {
+  if (points.length !== 3) return insetGableBayPolygon(points, inset);
+  const cx = (points[0].x + points[1].x + points[2].x) / 3;
+  const cy = (points[0].y + points[1].y + points[2].y) / 3;
+  return points.map((pt) => {
+    const dx = cx - pt.x;
+    const dy = cy - pt.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const move = Math.min(inset, dist * 0.38);
+    return { x: pt.x + (dx / dist) * move, y: pt.y + (dy / dist) * move };
+  });
+}
+
 function gableRenaissanceTrianglePolylines(style: string, left: number, apexX: number, right: number, baseY: number, apexY: number) {
   const w = right - left;
   const centerBase = { x: apexX, y: baseY };
@@ -1753,11 +1769,11 @@ function gableRenaissanceTrianglePolylines(style: string, left: number, apexX: n
   const leftBase = { x: left, y: baseY };
   const rightBase = { x: right, y: baseY };
   const bays: Array<Array<{ x: number; y: number }>> = [];
-  const inset = Math.max(5, Math.min(8, w * 0.018));
+  const inset = Math.max(8, Math.min(12, w * 0.024));
 
-  // Draw the Renaissance 1x2 7/8 material as one clean inset triangle per framed bay.
-  // The triangle edges are true parallel insets from the black wood bay edges, which
-  // keeps the red frame professional and prevents the crooked/overlapping center lines.
+  // Renaissance gable screen members should read as one clean red triangle inside
+  // every black-framed bay. Build the red triangles from the same break points as
+  // the black style framing instead of drawing independent decorative lines.
   if (style === 'queen-king-post') {
     const leftPostX = left + w * 0.25;
     const rightPostX = right - w * 0.25;
@@ -1769,17 +1785,25 @@ function gableRenaissanceTrianglePolylines(style: string, left: number, apexX: n
     bays.push([leftPostBase, centerBase, apex]);
     bays.push([centerBase, rightPostBase, apex]);
     bays.push([rightPostBase, rightBase, rightPostTop]);
-  } else if (style === 'tied-king-post' || style === 'braced-king-post') {
-    const leftBreakX = left + w * 0.33;
-    const rightBreakX = right - w * 0.33;
-    const leftBreak = { x: leftBreakX, y: baseY };
-    const rightBreak = { x: rightBreakX, y: baseY };
-    const leftTop = pointOnGableSlope(leftBreakX, left, apexX, right, baseY, apexY);
-    const rightTop = pointOnGableSlope(rightBreakX, left, apexX, right, baseY, apexY);
-    bays.push([leftBase, leftBreak, leftTop]);
-    bays.push([leftBreak, centerBase, apex]);
-    bays.push([centerBase, rightBreak, apex]);
-    bays.push([rightBreak, rightBase, rightTop]);
+  } else if (style === 'tied-king-post') {
+    const leftTieX = left + w * 0.25;
+    const rightTieX = right - w * 0.25;
+    const leftTieTop = pointOnGableSlope(leftTieX, left, apexX, right, baseY, apexY);
+    const rightTieTop = pointOnGableSlope(rightTieX, left, apexX, right, baseY, apexY);
+    bays.push([leftBase, centerBase, leftTieTop]);
+    bays.push([leftTieTop, centerBase, apex]);
+    bays.push([centerBase, rightTieTop, apex]);
+    bays.push([centerBase, rightBase, rightTieTop]);
+  } else if (style === 'braced-king-post') {
+    const leftBraceX = left + w * 0.34;
+    const rightBraceX = right - w * 0.34;
+    const braceNode = { x: apexX, y: baseY + (apexY - baseY) * 0.42 };
+    const leftBraceTop = pointOnGableSlope(leftBraceX, left, apexX, right, baseY, apexY);
+    const rightBraceTop = pointOnGableSlope(rightBraceX, left, apexX, right, baseY, apexY);
+    bays.push([leftBase, centerBase, leftBraceTop]);
+    bays.push([leftBraceTop, braceNode, apex]);
+    bays.push([braceNode, rightBraceTop, apex]);
+    bays.push([centerBase, rightBase, rightBraceTop]);
   } else if (style === 'king-post') {
     bays.push([leftBase, centerBase, apex]);
     bays.push([centerBase, rightBase, apex]);
@@ -1788,7 +1812,7 @@ function gableRenaissanceTrianglePolylines(style: string, left: number, apexX: n
   }
 
   return bays.map((bay) => {
-    const pts = insetGableBayPolygon(bay, inset);
+    const pts = insetGableTriangle(bay, inset);
     return [...pts, pts[0]];
   });
 }
