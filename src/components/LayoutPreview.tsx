@@ -1776,21 +1776,23 @@ function gableRenaissanceTrianglePolylines(style: string, left: number, apexX: n
     bays.push([centerBase, rightTieTop, apex]);
     bays.push([centerBase, rightBase, rightTieTop]);
   } else if (style === 'braced-king-post') {
-    // Braces break the gable into four recognizable framed bays. The red
-    // triangles use the same braced bay edges instead of floating across them.
+    // Braced king-post bays must follow the actual black brace members. The
+    // lower left/right openings are quadrilaterals that terminate at the brace
+    // node, not at the bottom center, while the two upper openings are triangles.
     const leftBraceX = left + w * 0.34;
     const rightBraceX = right - w * 0.34;
     const leftBraceTop = pointOnGableSlope(leftBraceX, left, apexX, right, baseY, apexY);
     const rightBraceTop = pointOnGableSlope(rightBraceX, left, apexX, right, baseY, apexY);
     const braceNode = { x: apexX, y: baseY + (apexY - baseY) * 0.42 };
-    bays.push([leftBase, centerBase, leftBraceTop]);
+    bays.push([leftBase, centerBase, braceNode, leftBraceTop]);
     bays.push([leftBraceTop, braceNode, apex]);
     bays.push([braceNode, rightBraceTop, apex]);
-    bays.push([centerBase, rightBase, rightBraceTop]);
+    bays.push([braceNode, centerBase, rightBase, rightBraceTop]);
   } else if (style === 'queen-king-post') {
-    // Queen + king post has vertical queen posts plus the king post. The middle
-    // bays are framed as clean triangles, and the outer bays stay inside each
-    // queen-post bay.
+    // Queen + king post bays follow the queen posts and center king post. The
+    // outside bays are queen-post triangles; the inner left/right bays are
+    // quadrilaterals bounded by the queen post, bottom rail, king post, and roof
+    // slope. Do not force these into generic triangles.
     const leftPostX = left + w * 0.25;
     const rightPostX = right - w * 0.25;
     const leftPostBase = { x: leftPostX, y: baseY };
@@ -1798,8 +1800,8 @@ function gableRenaissanceTrianglePolylines(style: string, left: number, apexX: n
     const leftPostTop = pointOnGableSlope(leftPostX, left, apexX, right, baseY, apexY);
     const rightPostTop = pointOnGableSlope(rightPostX, left, apexX, right, baseY, apexY);
     bays.push([leftBase, leftPostBase, leftPostTop]);
-    bays.push([leftPostBase, centerBase, apex]);
-    bays.push([centerBase, rightPostBase, apex]);
+    bays.push([leftPostBase, centerBase, apex, leftPostTop]);
+    bays.push([centerBase, rightPostBase, rightPostTop, apex]);
     bays.push([rightPostBase, rightBase, rightPostTop]);
   } else {
     bays.push([leftBase, rightBase, apex]);
