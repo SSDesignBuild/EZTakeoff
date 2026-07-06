@@ -1302,6 +1302,18 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               </g>
             ))}
 
+            {showFraming && deck.angledBeamLines?.map((beam, beamIdx) => {
+              const a = toSvg(beam.start.x, beam.start.y);
+              const b = toSvg(beam.end.x, beam.end.y);
+              const dir = svgUnitVector(a, b);
+              const n = { x: -dir.y, y: dir.x };
+              return <g key={`angled-beam-${beamIdx}`} onClick={() => setInspect({ title: `Angled beam ${beamIdx + 1}`, detail: `${feetAndInches(beam.length)} doubled beam added to support angled deck edge.` })}>
+                <polygon points={boardStripPolygonTrim({ x: a.x + n.x * 5, y: a.y + n.y * 5 }, { x: b.x + n.x * 5, y: b.y + n.y * 5 }, 8, 0, 0)} className="beam-rect primary" />
+                <polygon points={boardStripPolygonTrim({ x: a.x - n.x * 5, y: a.y - n.y * 5 }, { x: b.x - n.x * 5, y: b.y - n.y * 5 }, 8, 0, 0)} className="beam-rect secondary" />
+                {beam.postPoints.map((post, postIdx) => { const p = toSvg(post.x, post.y); return <g key={`angled-post-${postIdx}`}><rect x={p.x - 15} y={p.y - 15} width={30} height={30} className="post-node" /><line x1={p.x} y1={p.y - 23} x2={p.x} y2={p.y + 23} className="post-centerline" /></g>; })}
+              </g>;
+            })}
+
             {showFraming && deck.edgeSegments.map((segment) => {
               const band = 9;
               const primarySegs = staggeredSegments(segment.length, 20, 0);
