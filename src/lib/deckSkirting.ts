@@ -121,8 +121,21 @@ export function buildDeckSkirting(
       const arr=material==='finish'?finishCuts:framingCuts;
       arr.push({id:'SK'+(edgeIndex+1)+'-'+material.toUpperCase()+'-'+(arr.length+1),edgeIndex,material,lengthFt:p3(lengthFt),location});
     };
-    topRails.forEach((r)=>addCut('2x4',r.end-r.start,'side '+(edgeIndex+1)+' top rail'));
-    bottomRails.forEach((r)=>addCut('2x4',r.end-r.start,'side '+(edgeIndex+1)+' ground-contact bottom rail'));
+    // Split long continuous framing over 24-inch stud stations. A framing
+    // joint is supported by a stud; a finish board is never silently spliced.
+    const cutContinuousRail=(start:number,end:number,label:string)=>{
+      let from=start;
+      while(end-from>0.001){
+        const maxLength=16; // leave room for trimming and saw kerf from 20 ft stock
+        if(end-from<=maxLength){ addCut('2x4',end-from,label+' from '+p3(from)+' to '+p3(end)+' ft');break; }
+        const stud=rawStuds.filter((x)=>x>from+1&&x<=Math.min(end,from+maxLength)).sort((a,b)=>b-a)[0];
+        if(stud===undefined){issues.push('Side '+(edgeIndex+1)+': no stud supports a long horizontal 2x4 joint.');break;}
+        addCut('2x4',stud-from,label+' from '+p3(from)+' to '+p3(stud)+' ft (splice over stud)');
+        from=stud;
+      }
+    };
+    topRails.forEach((r)=>cutContinuousRail(r.start,r.end,'side '+(edgeIndex+1)+' top rail'));
+    bottomRails.forEach((r)=>cutContinuousRail(r.start,r.end,'side '+(edgeIndex+1)+' ground-contact bottom rail'));
     verticals.forEach((p)=>addCut('2x4',p.heightFt,'side '+(edgeIndex+1)+' vertical '+p.role+' at '+p3(p.station)+' ft'));
     if(orientation==='vertical'){
       for(const span of spans){
@@ -190,7 +203,7 @@ export function buildDeckSkirting(
   }
   const joinCount=sides.reduce((sum,s)=>sum+s.verticals.length*2+s.bottomRails.length*2+s.topRails.length*2,0);
   if(joinCount>0)materials.push({name:'Skirting 2x4 exterior structural connectors/fastener locations',category:'Deck skirting hardware',quantity:joinCount,unit:'connection points',stockRecommendation:'Specify approved fastener per connection',notes:'Count derives from top/bottom framing endpoints and vertical 2x4 connections. Match treatment and substrate.'});
-  const faceFasteners=orientation==='vertical'?finish.length:sides.reduce((sum,s)=>sum+s.courses.length,0);
+  const faceFasteners=orientation==='vertical'?sides.reduce((sum,s)=>sum+s.finish.length,0):sides.reduce((sum,s)=>sum+s.courses.length,0);
   if(faceFasteners>0)materials.push({name:'Skirting finish fastener locations',category:'Deck skirting hardware',quantity:faceFasteners*2,unit:'fastener locations',stockRecommendation:'Manufacturer-approved exterior fasteners',notes:'Two preliminary fastening points per finish cut. Verify fastening schedule and panel ventilation against product instructions.'});
   return {enabled,sides,materials,cuts:[...finishCuts,...frameCuts],finishStock:finishPack.stock,frameStock:framePack.stock,issues,notes,options:opts};
 }
