@@ -440,6 +440,13 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const framingWoodGrade = String(inputs.framingWoodGrade ?? '#2 Prime pressure treated');
   const railingWoodGrade = String(inputs.railingWoodGrade ?? '#2 prime pressure treated');
   const deckingMaterial = String(inputs.deckingMaterial ?? (isPressureTreatedDecking ? 'Pressure treated 5/4x6' : 'Composite / PVC decking'));
+  // Purchase availability is based on the actual selected product, not cut length alone.
+  const deckStockLength = (cutLength: number, style: string) => {
+    const isPT = /pressure\s*treated/i.test(style) || (isPressureTreatedDecking && !/^(trex|timbertech)\b/i.test(style));
+    const lengths = isPT ? [8, 12, 16, 20] : [16, 20];
+    const selection = lengths.find((length) => length >= cutLength - 1e-6);
+    return selection ? `${selection} ft stock` : `UNAVAILABLE: continuous ${cutLength.toFixed(2)} ft cut exceeds 20 ft stock`;
+  };
   const pictureFrameCount = Math.max(0, Math.round(Number(inputs.pictureFrameCount ?? 1)));
   const breakerBoardCount = Math.max(0, Math.round(Number(inputs.breakerBoardCount ?? 0)));
   const resolveBoardStyle = (value: unknown) => String(value ?? 'match') === 'match' ? deckingMaterial : String(value);
@@ -469,16 +476,16 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   } else {
   deckingPlan.groups.filter((group) => group.kind === 'field').forEach((group) => {
     const notes = `${deck.boardRun === 'width' ? 'Field decking. Boards run parallel to the house.' : 'Field decking. Boards run perpendicular to the house.'} Board style: ${deckingMaterial}. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`;
-    const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
-    materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, deckingStyleInfo.color, notes, group.label));
+    const stockLength = deckStockLength(group.cutLength, deckingMaterial);
+    materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', stockLength, deckingStyleInfo.color, notes, group.label));
   });
   if (!useSubfloorDecking && pictureFrameCount > 0) {
     for (let i = 0; i < pictureFrameCount; i += 1) {
       const style = pictureFrameMaterials[i] || deckingMaterial;
       const styleInfo = splitDeckStyle(style);
       deckingPlan.groups.filter((group) => group.kind === 'picture-frame' && group.course === i).forEach((group) => {
-        const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
-        materials.push(toMaterial(`Picture-frame deck board ${i + 1}`, 'Decking', group.count, 'boards', `${stockLength} ft stock`, styleInfo.color, `Picture-frame course ${i + 1} on exposed deck perimeter only. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)} including 1 in overhang allowance at each end.`, group.label));
+        const stockLength = deckStockLength(group.cutLength, style);
+        materials.push(toMaterial(`Picture-frame deck board ${i + 1}`, 'Decking', group.count, 'boards', stockLength, styleInfo.color, `Picture-frame course ${i + 1} on exposed deck perimeter only. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)} including 1 in overhang allowance at each end.`, group.label));
       });
     }
   }
@@ -487,8 +494,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       const style = breakerBoardMaterials[i] || deckingMaterial;
       const styleInfo = splitDeckStyle(style);
       deckingPlan.groups.filter((group) => group.kind === 'breaker' && group.course === i).forEach((group) => {
-        const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
-        materials.push(toMaterial(`Breaker deck board ${i + 1}`, 'Decking', group.count, 'boards', `${stockLength} ft stock`, styleInfo.color, `Breaker board row ${i + 1} splitting field decking. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)}.`, group.label));
+        const stockLength = deckStockLength(group.cutLength, style);
+        materials.push(toMaterial(`Breaker deck board ${i + 1}`, 'Decking', group.count, 'boards', stockLength, styleInfo.color, `Breaker board row ${i + 1} splitting field decking. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)}.`, group.label));
       });
     }
   }
@@ -504,8 +511,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       materials.push(toMaterial('4 ft x 8 ft x 3/4 in subfloor sheets', 'Lower tier decking', subfloorSheetCount(lowerDeck.area), 'sheets', '4 ft x 8 ft x 3/4 in', 'Exterior rated', `${lowerDeck.area.toFixed(1)} sq ft lower tier area laid out in a staggered brick pattern; includes 5% waste allowance.`));
     } else {
       lowerDeckingPlan.groups.filter((group) => group.kind === 'field').forEach((group) => {
-        const stockLength = [8, 12, 16, 20].find((item) => item >= group.cutLength - 1e-6) ?? 20;
-        materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', `${stockLength} ft stock`, deckingStyleInfo.color, `Lower tier field decking. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
+        const stockLength = deckStockLength(group.cutLength, deckingMaterial);
+        materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', stockLength, deckingStyleInfo.color, `Lower tier field decking. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
       });
     }
     addBoardGroups(materials, 'Lower tier stairs', 'Lower tier stair tread deck board', lowerDeck.stairTreadGroups, `${isPressureTreatedDecking ? 'Lower tier treads and risers.' : 'Lower tier treads only; risers are not deck boards unless pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
