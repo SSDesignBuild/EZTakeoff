@@ -62,6 +62,17 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
   const grades=parseArray<SkirtGrade>(values[k('skirtingGrades')]);
   const openings=parseArray<SkirtOpening>(values[k('skirtingOpenings')]);
   const update=(key:string,val:string|number|boolean)=>onValuesChange((old)=>({...old,[k(key)]:val,...((key==='skirtingGrades'||key==='skirtingOpenings'||key==='skirtingEdges')?{[k('skirtingGradeConfirmed')]:false}:{})}));
+  const cutToStock=new Map<string,string>();
+  for(const [type,group] of [['Finish',plan?.finishStock??[]],['2x4',plan?.frameStock??[]]] as const)
+    group.forEach((stock,index)=>stock.cuts.forEach((cut)=>cutToStock.set(cut.id,type+' #'+(index+1)+' / '+stock.stockLengthFt+' ft')));
+  const exportCutCsv=()=>{
+    if(!plan)return;
+    const rows=[['Cut reference','Stock assignment','Material','Finished length (ft)','Installation location'],
+      ...plan.cuts.map((cut)=>[cut.id,cutToStock.get(cut.id)??'UNALLOCATED',cut.material,String(cut.lengthFt),cut.location])];
+    const csv=rows.map((row)=>row.map((value)=>'"'+String(value).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+    const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+    const a=document.createElement('a');a.href=url;a.download=(lower?'lower-':'')+'deck-skirting-installer-cuts.csv';a.click();URL.revokeObjectURL(url);
+  };
   const updateGrade=(edgeIndex:number,which:'startFt'|'endFt',height:number)=>{
     const existing=grades.find((g)=>g.edgeIndex===edgeIndex)||{edgeIndex,startFt:gradeBase,endFt:gradeBase};
     const next=[...grades.filter((g)=>g.edgeIndex!==edgeIndex),{...existing,[which]:height}];
@@ -132,6 +143,17 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
       <p className="muted">2×4 framing stock: {plan.frameStock.map((s,i)=>'F'+(i+1)+' '+s.stockLengthFt+'ft → '+s.cuts.map((cut)=>cut.id).join('+')).join('; ')||'None'}.</p>
       <p className="muted">Saw kerf and stock trimming are included. Removable access panel hinge/latch details and ground contact specifications require field approval.</p>
     </div>
+    <details style={{marginTop:15}}>
+      <summary style={{fontWeight:700,cursor:'pointer'}}>Installer cut list — {plan.cuts.length} exact pieces</summary>
+      <button type="button" className="secondary-btn small-btn" onClick={exportCutCsv} style={{margin:'12px 0'}}>Download installer cut CSV</button>
+      <div className="table-wrap" style={{maxHeight:360,overflow:'auto'}}>
+        <table><thead><tr><th>Reference</th><th>Purchase stock</th><th>Material</th><th>Finished cut</th><th>Install location</th></tr></thead>
+          <tbody>{plan.cuts.map((cut)=><tr key={cut.id}><td>{cut.id}</td>
+            <td>{cutToStock.get(cut.id)??'Not allocated'}</td><td>{cut.material==='2x4'?'2×4 support':'Finish board'}</td>
+            <td>{ft(cut.lengthFt)}</td><td>{cut.location}</td></tr>)}</tbody>
+        </table>
+      </div>
+    </details>
   </section>;
 }
 export function DeckSkirtingEditor({values,onValuesChange}: {values:Values;onValuesChange:OnChange}){
