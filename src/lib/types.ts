@@ -13,6 +13,7 @@ export interface EstimateResult {
   summary: { label: string; value: string }[];
   materials: MaterialItem[];
   orderNotes: string[];
+  validationIssues?: string[];
 }
 
 export interface DeckPoint {
