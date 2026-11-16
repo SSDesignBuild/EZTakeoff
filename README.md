@@ -91,3 +91,9 @@ Those two files are the fastest place to begin swapping in real business logic.
 ## v103 deck material visibility fix
 - Stair takeoff now requires an actual placed staircase on a valid deck edge. Stale stair count/input values no longer add stair or stair-railing materials when no stairs are visible on the plan.
 - Cross-checked no-stair/no-rail and stale-stair-input cases.
+
+## November 2026 purchasing guardrails
+
+The production release enforces configured 16 ft and 20 ft composite/PVC decking stock lengths, preserves overlength continuous board requirements as explicit unavailable items, and prevents exporting a material order containing unavailable board lengths. Pressure-treated decking retains its separately configured 8/12/16/20 ft stock catalog.
+
+Run `npm test` and `npm run build` before release. Advanced cut optimization, manual post editing, skirting and full drawing-to-material reconciliation remain in the development backlog and are not represented as complete by this release.
