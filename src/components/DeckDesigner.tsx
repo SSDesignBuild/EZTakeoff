@@ -694,8 +694,32 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
               return <g key={`edge-${segment.index}`}><line x1={start.x} y1={start.y} x2={end.x} y2={end.y} className={edgeClass} onClick={() => { if (mode === 'points') insertPointAtEdge(segment.index); if (mode === 'house') toggleHouseEdge(segment.index); if (mode === 'railing') toggleRailingEdge(segment.index); if (mode === 'stairs') selectStairEdge(segment.index); }} /><circle cx={mid.x} cy={mid.y} r={6} className="edge-midpoint" />{isHouse && <text x={mid.x} y={mid.y - 12} textAnchor="middle" className="deck-point-label">HOUSE</text>}</g>;
             })}
             {!drawingSequence && model.beamLines.map((beam, index) => {
-              const y = PADDING + (beam.y - limits.minY) * scale;
-              return <g key={`beam-${index}`}>{beam.segments.map((segment) => <g key={`${segment.startX}-${segment.endX}`}><line x1={PADDING + (segment.startX - limits.minX) * scale} y1={y - 3} x2={PADDING + (segment.endX - limits.minX) * scale} y2={y - 3} className="beam-line beam-line-editable" onPointerDown={(event) => onBeamPointerDown(event, index)} /><line x1={PADDING + (segment.startX - limits.minX) * scale} y1={y + 3} x2={PADDING + (segment.endX - limits.minX) * scale} y2={y + 3} className="beam-line beam-line-secondary" onPointerDown={(event) => onBeamPointerDown(event, index)} /></g>)}{beam.segments[0] && <circle cx={PADDING + (beam.segments[0].startX - limits.minX) * scale + 12} cy={y} r={8} className="beam-handle" />}{beam.postXs.map((postX) => <rect key={`${index}-${postX}`} x={PADDING + (postX - limits.minX) * scale - 4} y={y - 4} width={8} height={8} className={beam.lockedPostXs.includes(postX) ? 'post-lock locked' : 'post-lock'} onClick={() => mode === 'posts' && toggleLockedPost(index, postX)} />)}</g>;
+              const pointOnBeam = (station: number) => model.joistDirection === 'vertical'
+                ? toSvgPoint({ x: station, y: beam.y })
+                : toSvgPoint({ x: beam.y, y: station });
+              return (
+                <g key={'beam-' + index}>
+                  {beam.segments.map((segment, run) => {
+                    const from = pointOnBeam(segment.startX), to = pointOnBeam(segment.endX);
+                    return <g key={'beam-run-' + index + '-' + run}>
+                      <line x1={from.x} y1={from.y - 3} x2={to.x} y2={to.y - 3} className="beam-line beam-line-editable" onPointerDown={(e) => onBeamPointerDown(e, index)}/>
+                      <line x1={from.x} y1={from.y + 3} x2={to.x} y2={to.y + 3} className="beam-line beam-line-secondary" onPointerDown={(e) => onBeamPointerDown(e, index)}/>
+                    </g>;
+                  })}
+                  {beam.postSpecs.map((post, postIndex) => {
+                    const p = pointOnBeam(post.x);
+                    const active = selectedPost?.beamIndex === index && selectedPost.id === post.id;
+                    return <g key={post.id}>
+                      <rect x={p.x - 7} y={p.y - 7} width={14} height={14} rx={2}
+                        className={'post-lock ' + (post.locked ? 'locked ' : '') + (active ? 'post-selected' : '')}
+                        style={{ cursor: post.locked ? 'pointer' : 'grab', strokeWidth: active ? 3 : 1.5 }}
+                        onPointerDown={(e) => onPostPointerDown(e, index, post.id)}
+                        onClick={(e) => { e.stopPropagation(); setSelectedPost({ beamIndex: index, id: post.id }); }}/>
+                      <text x={p.x + 10} y={p.y - 10} className="deck-point-label">{'B' + (index + 1) + '-P' + (postIndex + 1)}</text>
+                    </g>;
+                  })}
+                </g>
+              );
             })}
             {!drawingSequence && model.angledBeamLines?.map((beam, index) => {
               const a = toSvgPoint(beam.start);
@@ -712,6 +736,39 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           <div className="callout-box compact-card"><h4>Tier drawing</h4><p className="muted">Draw the main/upper deck first. Turn on Add lower deck tier to draw and edit a separate lower deck with its own stairs, railing, beams, and posts.</p><div className="tag-row"><span className="tag">Main: {mainPoints.length >= 3 ? `${feetAndInches(polygonArea(mainPoints))} sf` : 'not closed'}</span>{lowerTierEnabled && <span className="tag">Lower: {lowerPoints.length >= 3 ? `${feetAndInches(polygonArea(lowerPoints))} sf` : 'not closed'}</span>}</div></div>
           <div className="callout-box compact-card"><h4>Quick rectangle</h4><div className="form-grid compact-grid"><label className="form-field"><span>Width (ft)</span><input type="number" step={1} min={1} value={Number(values.quickWidth ?? 16)} onChange={(event) => commitChange((current) => ({ ...current, quickWidth: Number(event.target.value) }))} /></label><label className="form-field"><span>Projection (ft)</span><input type="number" step={1} min={1} value={Number(values.quickProjection ?? 12)} onChange={(event) => commitChange((current) => ({ ...current, quickProjection: Number(event.target.value) }))} /></label><button type="button" className="ghost-btn block-btn" onClick={applyRectangle}>Apply rectangle</button></div></div>
           <div className="callout-box compact-card"><h4>Staircases</h4><p className="muted">Use Place stairs, choose which staircase is active, then click/drag an edge for that staircase.</p><div className="stack-list"><button type="button" className={activeStairIndex === 0 ? 'secondary-btn block-btn' : 'ghost-btn block-btn'} onClick={() => { setActiveStairIndex(0); setMode('stairs'); }}>Edit staircase 1</button>{extraStairs.map((stair, index) => <div key={`extra-stair-${index}`} className="beam-editor-row beam-edit-grid"><button type="button" className={activeStairIndex === index + 1 ? 'secondary-btn small-btn' : 'ghost-btn small-btn'} onClick={() => { setActiveStairIndex(index + 1); setMode('stairs'); }}>Stair {index + 2}</button><label className="inline-mini-field"><span>Width</span><input type="number" step={GRID_SIZE} value={stair.width} onChange={(event) => { const next = [...extraStairs]; next[index] = { ...stair, width: Number(event.target.value) }; updateExtraStairs(next); }} /></label><label className="inline-mini-field"><span>Offset</span><input type="number" step={GRID_SIZE} value={stair.offset} onChange={(event) => { const next = [...extraStairs]; next[index] = { ...stair, offset: snap(Number(event.target.value)) }; updateExtraStairs(next); }} /></label><button type="button" className="ghost-btn small-btn" onClick={() => removeExtraStair(index)}>Remove</button></div>)}<button type="button" className="ghost-btn block-btn" onClick={addExtraStair}>Add another staircase</button></div></div>
+          <div className="callout-box compact-card">
+            <h4>Exact support-post layouts</h4>
+            <p className="muted">Select <strong>Edit posts</strong> to drag a square on the drawing, or enter exact station values below. Manual supports REPLACE automatic supports, and all post-dependent quantities update. Positions are not engineering approvals.</p>
+            {postFeedback && <p className="muted" role="status">{postFeedback}</p>}
+            {model.postLayoutIssues.map((issue, i) => <p key={'post-issue-' + i} role="alert" style={{ color: '#b91c1c' }}>{issue}</p>)}
+            {model.postEngineeringNotes.map((note, i) => <p key={'post-note-' + i} style={{ color: '#92400e' }}>{note}</p>)}
+            <div className="stack-list">
+              {model.beamLines.map((beam, beamIndex) => <div key={'post-beam-' + beamIndex} style={{ border: '1px solid var(--border, #d1d5db)', borderRadius: 10, padding: 12, marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                  <strong>{'Beam ' + (beamIndex + 1)}</strong>
+                  <span className="muted">{beam.postMode === 'manual' ? 'Manual / exact' : 'Automatic'} · {beam.postSpecs.length} posts</span>
+                </div>
+                <div className="form-grid compact-grid">
+                  <label className="form-field"><span>Post count</span><input type="number" min={Math.max(2, beam.segments.length * 2)} max={100} step={1} value={beam.postSpecs.length}
+                    onChange={(e) => { const next=Number(e.target.value); if (Number.isInteger(next) && next >= 2) evenlySpaceBeamPosts(beamIndex, next); }}/></label>
+                  <button type="button" className="secondary-btn small-btn" onClick={() => evenlySpaceBeamPosts(beamIndex, beam.postSpecs.length)}>Space evenly</button>
+                  <button type="button" className="ghost-btn small-btn" onClick={() => addBeamPost(beamIndex)}>Add post</button>
+                  <button type="button" className="ghost-btn small-btn" disabled={beam.postMode === 'automatic'} onClick={() => resetBeamPosts(beamIndex)}>Reset to auto</button>
+                </div>
+                <div className="stack-list">
+                  {beam.postSpecs.map((post, postIndex) => <div key={post.id} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', margin: '8px 0' }}>
+                    <span style={{ minWidth: 54 }}>{'B' + (beamIndex + 1) + '-P' + (postIndex + 1)}</span>
+                    <label className="inline-mini-field"><span>Station (ft)</span>
+                      <input type="number" min={0} step={1/12} disabled={post.locked} value={Number(post.x.toFixed(4))}
+                        onChange={(e) => updateBeamPost(beamIndex, post.id, { x: Number(e.target.value) })}/></label>
+                    <span className="muted">{feetAndInches(post.x)}</span>
+                    <button type="button" className="ghost-btn small-btn" onClick={() => updateBeamPost(beamIndex, post.id, { locked: !post.locked })}>{post.locked ? 'Unlock' : 'Lock'}</button>
+                    <button type="button" className="ghost-btn small-btn" disabled={post.locked} onClick={() => removeBeamPost(beamIndex, post.id)}>Remove</button>
+                  </div>)}
+                </div>
+              </div>)}
+            </div>
+          </div>
           <div className="callout-box compact-card"><h4>Manual framing controls</h4><div className="form-grid compact-grid"><label className="form-field"><span>Stair offset along selected edge</span><input type="number" step={GRID_SIZE} value={Number(activeDeckValues.stairOffset ?? 0)} onChange={(event) => commitChange((current) => ({ ...current, [tierKey('stairOffset')]: snap(Number(event.target.value)) }))} /></label><label className="form-field"><span>Locked posts</span><input type="text" value={lockedPosts.length ? lockedPosts.map((item) => `B${item.beamIndex + 1}@${feetAndInches(item.x)}`).join(', ') : 'none'} readOnly /></label><button type="button" className="ghost-btn block-btn" onClick={addBeamLine}>Add straight beam line</button><button type="button" className="ghost-btn block-btn" onClick={() => updateNumberArray(tierKey('customBeamYs'), [])}>Reset auto beam lines</button></div>{model.angledBeamLines?.length ? <p className="muted">Angled perimeter support beams are added automatically where angled deck edges need support.</p> : null}<div className="stack-list beam-editor-list">{model.beamLines.map((beam, index) => <div key={`beam-edit-${index}`} className="beam-editor-row beam-edit-grid"><span>Beam {index + 1}</span><strong>{feetAndInches(beam.offsetFromHouse)}</strong><label className="inline-mini-field"><span>Start trim</span><input type="number" step={GRID_SIZE} value={beam.startTrim} onChange={(event) => updateBeamEdit(index, 'startTrim', Number(event.target.value))} /></label><label className="inline-mini-field"><span>End trim</span><input type="number" step={GRID_SIZE} value={beam.endTrim} onChange={(event) => updateBeamEdit(index, 'endTrim', Number(event.target.value))} /></label><button type="button" className="ghost-btn small-btn" onClick={() => removeBeamLine(index)}>Remove</button></div>)}</div></div>
           <div className="callout-box compact-card"><h4>Reset</h4><button type="button" className="ghost-btn block-btn" onClick={resetShape}>Reset shape and manual overrides</button></div>
           <div className="callout-box compact-card workflow-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Viewport</span><strong>{feetAndInches(viewFeet)} × {feetAndInches(viewFeet)}</strong></div><div><span>Origin</span><strong>{feetAndInches(limits.minX)} , {feetAndInches(limits.minY)}</strong></div></div></div>
