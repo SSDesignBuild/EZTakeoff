@@ -667,12 +667,12 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
 
   beamLines.sort((a, b) => a.y - b.y);
   parsedPostLayouts.layouts.forEach((layout) => { if (layout.beamIndex >= beamLines.length) postLayoutIssues.push('Manual post layout refers to removed beam ' + (layout.beamIndex + 1)); });
-  const maxBeamSpan = Math.max(0, ...beamLines.flatMap((line) => {
-    if (line.postXs.length < 2) return [0];
-    const spans: number[] = [];
-    for (let index = 1; index < line.postXs.length; index += 1) spans.push(round2(line.postXs[index] - line.postXs[index - 1]));
-    return spans;
-  }));
+  // Only measure bays within actual continuous beam runs. A gap in an L-shaped
+  // beam must not become a phantom structural span or trigger a false PSL size.
+  const maxBeamSpan = Math.max(0, ...beamLines.flatMap((line) => line.segments.flatMap((run) => {
+    const stations = line.postXs.filter((x) => x >= run.startX - 0.005 && x <= run.endX + 0.005).sort((a,b)=>a-b);
+    return stations.slice(1).map((x,i) => round2(x-stations[i]));
+  })));
   const angledBeamLines = exposedSegments
     .filter((segment) => segment.orientation === 'angled' && !houseEdgeIndices.includes(segment.index))
     .map((segment) => insetAngledBeamForSegment(segment, points, Math.max(4, maxPostSpacingForDouble2x10(maxSpan || segment.length))))
