@@ -418,17 +418,22 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
   };
   const cancelEdit = () => { setEditingKey(null); setEditingDraft({ name: '', quantity: '', unit: '', stockRecommendation: '', color: '', notes: '' }); };
 
+  const hasInvalidStock = items.some((row) => String(row.stockRecommendation ?? '').startsWith('UNAVAILABLE:'));
+
   const exportPdf = async () => {
+    if (hasInvalidStock) return;
     const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
     await exportCanvasAsPdf(canvas, 'S&S Design Build · Material order list', `${exportBaseName}.pdf`);
   };
 
   const exportPng = async () => {
+    if (hasInvalidStock) return;
     const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
     await exportCanvasAsPng(canvas, `${exportBaseName}.png`);
   };
 
   const exportCombinedPdf = async () => {
+    if (hasInvalidStock) return;
     const root = document.getElementById('service-export-root');
     const svg = root?.querySelector('svg') as SVGSVGElement | null;
     if (!svg) return;
@@ -449,9 +454,9 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
         </div>
         <div className="preview-toolbar">
           <button type="button" className={stockView ? 'secondary-btn small-btn' : 'ghost-btn small-btn'} onClick={() => setStockView((current) => !current)}>{stockView ? 'Installer view' : 'Stock order view'}</button>
-          <button type="button" className="ghost-btn small-btn" onClick={exportPdf}>Export PDF</button>
-          <button type="button" className="ghost-btn small-btn" onClick={exportPng}>Export image</button>
-          <button type="button" className="ghost-btn small-btn" onClick={exportCombinedPdf}>Export layout + materials</button>
+          <button type="button" className="ghost-btn small-btn" disabled={hasInvalidStock} title={hasInvalidStock ? 'Resolve unavailable continuous decking cuts before exporting' : undefined} onClick={exportPdf}>Export PDF</button>
+          <button type="button" className="ghost-btn small-btn" disabled={hasInvalidStock} title={hasInvalidStock ? 'Resolve unavailable continuous decking cuts before exporting' : undefined} onClick={exportPng}>Export image</button>
+          <button type="button" className="ghost-btn small-btn" disabled={hasInvalidStock} title={hasInvalidStock ? 'Resolve unavailable continuous decking cuts before exporting' : undefined} onClick={exportCombinedPdf}>Export layout + materials</button>
         </div>
       </div>
 
