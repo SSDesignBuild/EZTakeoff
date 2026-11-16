@@ -334,7 +334,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     setDrawingSequence(true);
     setSelectedIndex(null);
     setPreviewPoint(null);
-    onValuesChange((current) => ({ ...current, [activeShapeKey]: JSON.stringify(defaultShape), ...(activeTier === 'main' ? { manualRailingEdges: JSON.stringify([]), houseEdgeIndices: JSON.stringify([]), customBeamYs: JSON.stringify([]), lockedPosts: JSON.stringify([]), beamEdits: JSON.stringify([]), stairEdgeIndex: -1, stairOffset: 0, stairCount: 0, additionalStairs: JSON.stringify([]) } : { lowerManualRailingEdges: JSON.stringify([]), lowerHouseEdgeIndices: JSON.stringify([]), lowerCustomBeamYs: JSON.stringify([]), lowerLockedPosts: JSON.stringify([]), lowerBeamEdits: JSON.stringify([]), lowerStairEdgeIndex: -1, lowerStairOffset: 0, lowerAdditionalStairs: JSON.stringify([]) }) }));
+    onValuesChange((current) => ({ ...current, [activeShapeKey]: JSON.stringify(defaultShape), ...(activeTier === 'main' ? { manualRailingEdges: JSON.stringify([]), houseEdgeIndices: JSON.stringify([]), customBeamYs: JSON.stringify([]), lockedPosts: JSON.stringify([]), postLayouts: JSON.stringify([]), beamEdits: JSON.stringify([]), stairEdgeIndex: -1, stairOffset: 0, stairCount: 0, additionalStairs: JSON.stringify([]) } : { lowerManualRailingEdges: JSON.stringify([]), lowerHouseEdgeIndices: JSON.stringify([]), lowerCustomBeamYs: JSON.stringify([]), lowerLockedPosts: JSON.stringify([]), lowerPostLayouts: JSON.stringify([]), lowerBeamEdits: JSON.stringify([]), lowerStairEdgeIndex: -1, lowerStairOffset: 0, lowerAdditionalStairs: JSON.stringify([]) }) }));
   };
 
   const toggleRailingEdge = (edgeIndex: number) => {
@@ -369,11 +369,27 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     updateExtraStairs(extraStairs.filter((_, currentIndex) => currentIndex !== index));
     setActiveStairIndex(0);
   };
-  const addBeamLine = () => updateNumberArray(tierKey('customBeamYs'), [...beamOffsets, Math.max(0.5, snap(model.depth / 2))].sort((a, b) => a - b));
+  const addBeamLine = () => {
+    const along = model.joistDirection === 'vertical' ? model.depth : model.width;
+    const midpoint = Math.max(0.5, snap(along / 2));
+    if (beamOffsets.some((offset) => Math.abs(offset - midpoint) < 0.25)) {
+      setPostFeedback('A beam already exists near the center. Move an existing beam first.'); return;
+    }
+    const index = beamOffsets.filter((offset) => offset < midpoint).length;
+    commitChange((current) => ({
+      ...current,
+      [tierKey('customBeamYs')]: JSON.stringify([...beamOffsets, midpoint].sort((a,b)=>a-b)),
+      [tierKey('postLayouts')]: JSON.stringify(shiftPostLayoutIndices(manualPostLayouts, index, 'insert')),
+      [tierKey('lockedPosts')]: JSON.stringify(lockedPosts.map((p) => ({ ...p, beamIndex: p.beamIndex >= index ? p.beamIndex + 1 : p.beamIndex }))),
+      [tierKey('beamEdits')]: JSON.stringify(beamEdits.map((b) => ({ ...b, beamIndex: b.beamIndex >= index ? b.beamIndex + 1 : b.beamIndex }))),
+    }));
+  };
   const removeBeamLine = (index: number) => commitChange((current) => ({
     ...current,
     [tierKey('customBeamYs')]: JSON.stringify(beamOffsets.filter((_, currentIndex) => currentIndex !== index)),
     [tierKey('beamEdits')]: JSON.stringify(beamEdits.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))),
+    [tierKey('lockedPosts')]: JSON.stringify(lockedPosts.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))),
+    [tierKey('postLayouts')]: JSON.stringify(shiftPostLayoutIndices(manualPostLayouts, index, 'remove')),
   }));
   const updateBeamEdit = (index: number, key: 'startTrim' | 'endTrim', value: number) => commitChange((current) => {
     const next = [...beamEdits];
@@ -477,11 +493,37 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   };
 
   const onBeamPointerDown = (event: PointerEvent<SVGLineElement>, index: number) => {
+    if (mode === 'posts') return;
     event.preventDefault();
+    if (model.beamLines[index].postSpecs.some((post) => post.locked) && model.beamLines[index].postMode === 'manual') {
+      setPostFeedback('Unlock manually locked supports before moving beam ' + (index + 1) + '.'); return;
+    }
     setMode('beams');
     pushHistory();
     setFuture([]);
     setDraggingBeamIndex(index);
+  };
+
+  const onPostPointerDown = (event: PointerEvent<SVGRectElement>, beamIndex: number, id: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setMode('posts');
+    setSelectedPost({ beamIndex, id });
+    pushHistory();
+    setFuture([]);
+    const beam = manualizePostBeam(beamIndex);
+    if (!manualPostLayouts.some((layout) => layout.beamIndex === beamIndex)) {
+      onValuesChange((current) => ({
+        ...current,
+        [tierKey('postLayouts')]: JSON.stringify([...manualPostLayouts, beam]),
+        [tierKey('customBeamYs')]: JSON.stringify(beamOffsets),
+        [tierKey('lockedPosts')]: JSON.stringify(lockedPosts.filter((post) => post.beamIndex !== beamIndex)),
+      }));
+    }
+    if (!beam.posts.some((post) => post.id === id && post.locked)) {
+      setDraggingPost({ beamIndex, id });
+      event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+    }
   };
 
   const onStairPointerDown = (event: PointerEvent<SVGLineElement>) => {
@@ -500,13 +542,35 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       setPreviewPoint({ x: clamp(preview.x, limits.minX, limits.maxX), y: clamp(preview.y, limits.minY, limits.maxY) });
       return;
     }
+    if (draggingPost !== null) {
+      const { beamIndex, id } = draggingPost;
+      const beam = model.beamLines[beamIndex];
+      const target = beam?.postSpecs.find((post) => post.id === id);
+      const run = beam?.segments.find((segment) => target && target.x >= segment.startX - 0.005 && target.x <= segment.endX + 0.005);
+      if (!target || !run || target.locked) return;
+      const station = snap(model.joistDirection === 'vertical' ? point.x : point.y);
+      const nextX = clamp(station, run.startX, run.endX);
+      if (beam.postSpecs.some((post) => post.id !== id && Math.abs(post.x - nextX) < 1/12 - 0.00001)) return;
+      onValuesChange((current) => {
+        const parsed = parseExactPostLayouts(current[tierKey('postLayouts')]);
+        if (parsed.issues.length) return current;
+        return { ...current, [tierKey('postLayouts')]: JSON.stringify(parsed.layouts.map((entry) =>
+          entry.beamIndex === beamIndex ? { ...entry, posts: entry.posts.map((post) => post.id === id ? { ...post, x: nextX } : post) } : entry
+        )) };
+      });
+      return;
+    }
     if (draggingIndex !== null) {
       const next = points.map((current, index) => index === draggingIndex ? constrainedPoint(index, point) : current);
       onValuesChange((current) => ({ ...current, [activeShapeKey]: JSON.stringify(next) }));
       return;
     }
     if (draggingBeamIndex !== null) {
-      onValuesChange((current) => ({ ...current, [tierKey('customBeamYs')]: JSON.stringify(beamOffsets.map((value, currentIndex) => currentIndex === draggingBeamIndex ? snap(point.y - model.minY) : value).sort((a, b) => a - b)) }));
+      const along = model.joistDirection === 'vertical' ? point.y - model.minY : point.x - model.minX;
+      const previous = draggingBeamIndex > 0 ? beamOffsets[draggingBeamIndex - 1] + 0.25 : 0;
+      const next = draggingBeamIndex < beamOffsets.length - 1 ? beamOffsets[draggingBeamIndex + 1] - 0.25 : (model.joistDirection === 'vertical' ? model.depth : model.width);
+      const station = clamp(snap(along), previous, Math.max(previous, next));
+      onValuesChange((current) => ({ ...current, [tierKey('customBeamYs')]: JSON.stringify(beamOffsets.map((value, index) => index === draggingBeamIndex ? station : value)) }));
       return;
     }
     if (draggingStair && model.stairPlacement.edgeIndex !== null) {
@@ -527,6 +591,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     const release = () => {
       setDraggingIndex(null);
       setDraggingBeamIndex(null);
+      setDraggingPost(null);
       setDraggingStair(false);
     };
     window.addEventListener('pointerup', release);
@@ -559,7 +624,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
         {lowerTierEnabled && <button type="button" className={activeTier === 'lower' ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => { setActiveTier('lower'); setMode('points'); setSelectedIndex(null); setDrawingSequence(lowerPoints.length === 0); }}>Lower tier shape</button>}
         {(['points', 'house', 'railing', 'stairs', 'beams', 'posts'] as EditMode[]).map((item) => (
           <button key={item} type="button" className={mode === item ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => setMode(item)}>
-            {item === 'points' ? (drawingSequence ? 'Draw footprint' : 'Edit points') : item === 'house' ? 'Pick house sides' : item === 'railing' ? 'Pick railing edges' : item === 'stairs' ? 'Place stairs' : item === 'beams' ? 'Move beam lines' : 'Lock posts'}
+            {item === 'points' ? (drawingSequence ? 'Draw footprint' : 'Edit points') : item === 'house' ? 'Pick house sides' : item === 'railing' ? 'Pick railing edges' : item === 'stairs' ? 'Place stairs' : item === 'beams' ? 'Move beam lines' : 'Edit posts'}
           </button>
         ))}
         <button type="button" className="ghost-btn mode-btn" onClick={undo} disabled={!history.length}>Undo</button>
