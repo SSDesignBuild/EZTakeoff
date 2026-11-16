@@ -56,6 +56,8 @@ export function buildDeckSkirting(
   rimDepthIn: number, inputs: Inputs, prefix = ''
 ): SkirtPlan {
   const key=(name:string)=>prefix+name;
+  const tierId=prefix?'L':'M';
+  const category=prefix?'Lower deck skirting':'Deck skirting';
   const enabled=inputs[key('skirtingEnabled')]===true || String(inputs[key('skirtingEnabled')])==='true';
   const material=String(inputs[key('skirtingMaterial')] ?? 'kdat');
   const orientation=inputs[key('skirtingOrientation')]==='horizontal' ? 'horizontal' : 'vertical';
@@ -102,7 +104,7 @@ export function buildDeckSkirting(
       const o=openings[i];
       if(!Number.isFinite(o.offset)||!Number.isFinite(o.width)||o.width<=0||o.offset<0||o.offset+o.width>length+0.00001 || (i>0&&o.offset<openings[i-1].offset+openings[i-1].width-0.00001))
         issues.push('Side '+(edgeIndex+1)+': access openings overlap or leave the side.');
-      if(o.kind==='removable') notes.push('Side '+(edgeIndex+1)+': removable panel attachment, access hardware and ventilation are pending field specification.');
+      if(o.kind==='removable') issues.push('Side '+(edgeIndex+1)+': removable panel framing, finish, hinges and latch must be specified before ordering.');
     }
     const clippedOpenings=openings.filter((o)=>Number.isFinite(o.offset)&&Number.isFinite(o.width)&&o.width>0&&o.offset>=0&&o.offset+o.width<=length+0.00001);
     const exclude=clippedOpenings; // Both access openings and removable doors have separate finish/framing assemblies.
@@ -119,7 +121,7 @@ export function buildDeckSkirting(
     const addCut=(material:'finish'|'2x4',lengthFt:number,location:string)=>{
       if(lengthFt<=0.001)return;
       const arr=material==='finish'?finishCuts:framingCuts;
-      arr.push({id:'SK'+(edgeIndex+1)+'-'+material.toUpperCase()+'-'+(arr.length+1),edgeIndex,material,lengthFt:p3(lengthFt),location});
+      arr.push({id:tierId+'SK'+(edgeIndex+1)+'-'+material.toUpperCase()+'-'+(arr.length+1),edgeIndex,material,lengthFt:p3(lengthFt),location});
     };
     // Split long continuous framing over 24-inch stud stations. A framing
     // joint is supported by a stud; a finish board is never silently spliced.
@@ -195,15 +197,20 @@ export function buildDeckSkirting(
     for(const length of [...new Set(group.stock.map((item)=>item.stockLengthFt))]){
       const rows=group.stock.filter((item)=>item.stockLengthFt===length);
       const refs=rows.flatMap((r)=>r.cuts.map((cut)=>cut.id));
-      materials.push({name:group.name,category:'Deck skirting',quantity:rows.length,unit:'boards',stockRecommendation:length+' ft stock',color:group.color,
+      materials.push({name:group.name,category,quantity:rows.length,unit:'boards',stockRecommendation:length+' ft stock',color:group.color,
         notes:group.kind==='finish' ? orientation+' · '+faceIn+' in face · '+gapIn+' in gap · '+refs.length+' cuts, '+kerfIn+' in saw kerf · '+trimIn+' in trim per stock'
           : 'Top/bottom/24 in O.C. framing and access jambs · '+refs.length+' cuts · verify ground contact',
         layoutLabel:refs.length<=12?refs.join(', '):refs.slice(0,12).join(', ')+', +'+(refs.length-12)+' more'});
     }
   }
   const joinCount=sides.reduce((sum,s)=>sum+s.verticals.length*2+s.bottomRails.length*2+s.topRails.length*2,0);
-  if(joinCount>0)materials.push({name:'Skirting 2x4 exterior structural connectors/fastener locations',category:'Deck skirting hardware',quantity:joinCount,unit:'connection points',stockRecommendation:'Specify approved fastener per connection',notes:'Count derives from top/bottom framing endpoints and vertical 2x4 connections. Match treatment and substrate.'});
-  const faceFasteners=orientation==='vertical'?sides.reduce((sum,s)=>sum+s.finish.length,0):sides.reduce((sum,s)=>sum+s.courses.length,0);
-  if(faceFasteners>0)materials.push({name:'Skirting finish fastener locations',category:'Deck skirting hardware',quantity:faceFasteners*2,unit:'fastener locations',stockRecommendation:'Manufacturer-approved exterior fasteners',notes:'Two preliminary fastening points per finish cut. Verify fastening schedule and panel ventilation against product instructions.'});
+  if(joinCount>0)materials.push({name:'Skirting 2x4 exterior structural connectors/fastener locations',category:category+' hardware',quantity:joinCount,unit:'connection points',stockRecommendation:'Specify approved fastener per connection',notes:'Count derives from top/bottom framing endpoints and vertical 2x4 connections. Match treatment and substrate.'});
+  // An installed vertical board needs two attachments at each horizontal rail.
+  // For horizontal courses, count two attachments at every intersecting 24in stud.
+  const faceFasteners=orientation==='vertical'
+    ? sides.reduce((sum,s)=>sum+s.finish.length*4,0)
+    : sides.reduce((sum,s)=>sum+s.courses.reduce((courseSum,course)=>
+        courseSum+2*Math.max(2,s.verticals.filter((v)=>v.station>=course.start-0.001&&v.station<=course.end+0.001).length),0),0);
+  if(faceFasteners>0)materials.push({name:'Skirting finish fastener locations',category:category+' hardware',quantity:faceFasteners,unit:'fastener locations',stockRecommendation:'Manufacturer-approved exterior fasteners',notes:'Vertical: two screws at each top/bottom rail per board. Horizontal: two screws at each vertical 2x4 support per course. Verify manufacturer fastening schedule.'});
   return {enabled,sides,materials,cuts:[...finishCuts,...frameCuts],finishStock:finishPack.stock,frameStock:framePack.stock,issues,notes,options:opts};
 }
