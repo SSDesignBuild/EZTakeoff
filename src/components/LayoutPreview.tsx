@@ -1147,7 +1147,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
         return lowerVerticalBeam
           ? <g key={`lower-beam-seg-${segIdx}`}><rect x={p1.x - 11} y={Math.min(p1.y, p2.y)} width={8} height={Math.abs(p2.y - p1.y)} className="beam-rect primary" /><rect x={p1.x - 1} y={Math.min(p1.y, p2.y)} width={8} height={Math.abs(p2.y - p1.y)} className="beam-rect secondary" /></g>
           : <g key={`lower-beam-seg-${segIdx}`}><rect x={Math.min(p1.x, p2.x)} y={p1.y - 11} width={Math.abs(p2.x - p1.x)} height={8} className="beam-rect primary" /><rect x={Math.min(p1.x, p2.x)} y={p1.y - 1} width={Math.abs(p2.x - p1.x)} height={8} className="beam-rect secondary" /></g>;
-      })}{beam.postXs.map((postX, postIdx) => { const p = lowerDeck.joistDirection === 'horizontal' ? toSvg(beam.y, postX) : toSvg(postX, beam.y); return <rect key={`lower-post-${beamIdx}-${postIdx}`} x={p.x - 15} y={p.y - 15} width={30} height={30} className="post-node" />; })}</g>)}
+      })}{beam.postXs.map((postX, postIdx) => { const p = lowerDeck.joistDirection === 'horizontal' ? toSvg(beam.y, postX) : toSvg(postX, beam.y); return <g key={`lower-post-${beamIdx}-${postIdx}`}><rect x={p.x - 15} y={p.y - 15} width={30} height={30} className="post-node" /><text x={p.x + 17} y={p.y - 15} className="svg-note">{'B' + (beamIdx + 1) + '-P' + (postIdx + 1)}</text></g>; })}</g>)}
       {showFraming && lowerDeck.edgeSegments.map((segment) => <g key={`lower-band-${segment.index}`}><polygon points={interlockedBandCoursePolygon(segment, lowerDeck.points, toSvg, 0, 9)} className="double-band-rect interlocked" /><polygon points={interlockedBandCoursePolygon(segment, lowerDeck.points, toSvg, 1, 9)} className="double-band-rect secondary interlocked" /></g>)}
       {showFraming && lowerDeck.joistPositions.map((value, idx) => lowerDeck.joistDirection === 'vertical'
         ? scanlineIntersections(lowerDeck.points, 'vertical', value).map((pair, pairIdx) => { const x = toSvg(value, pair.start).x; const y1 = toSvg(value, pair.start).y + 22; const y2 = toSvg(value, pair.end).y - 22; return <rect key={`lower-joist-v-${idx}-${pairIdx}`} x={x - 3} y={Math.min(y1, y2)} width={6} height={Math.max(0, Math.abs(y2 - y1))} className="joist-rect" />; })
@@ -1297,6 +1297,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                     <rect x={cx - 15} y={cy - 15} width={30} height={30} className="post-node" />
                     <rect x={cx - 15} y={cy - 7} width={30} height={14} className="post-notch-seat" />
                     <line x1={cx} y1={cy - 23} x2={cx} y2={cy + 23} className="post-centerline" />
+                    <text x={cx + 17} y={cy - 16} className="svg-note">{'B' + (beamIdx + 1) + '-P' + (postIdx + 1)}</text>
                   </g>;
                 })}
               </g>

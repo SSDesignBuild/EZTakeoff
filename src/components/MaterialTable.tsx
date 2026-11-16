@@ -4,6 +4,7 @@ import { MaterialItem } from '../lib/types';
 
 interface MaterialTableProps {
   items: MaterialItem[];
+  validationIssues?: string[];
   values: Record<string, string | number | boolean>;
   onValuesChange: (updater: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => void;
 }
@@ -207,7 +208,7 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
   return canvas;
 }
 
-export function MaterialTable({ items, values, onValuesChange }: MaterialTableProps) {
+export function MaterialTable({ items, values, onValuesChange, validationIssues = [] }: MaterialTableProps) {
   const tableRef = useRef<HTMLDivElement | null>(null);
   const [customDraft, setCustomDraft] = useState(customDefaults);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -399,22 +400,23 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
   };
   const cancelEdit = () => { setEditingKey(null); setEditingDraft({ name: '', quantity: '', unit: '', stockRecommendation: '', color: '', notes: '' }); };
 
-  const hasInvalidStock = items.some((row) => String(row.stockRecommendation ?? '').startsWith('UNAVAILABLE:'));
+  const hasBlockingIssues = validationIssues.length > 0 || items.some((row) => String(row.stockRecommendation ?? '').startsWith('UNAVAILABLE:'));
+  const blockingMessage = validationIssues.length ? validationIssues.join(' / ') : 'Resolve unavailable continuous decking cuts before exporting';
 
   const exportPdf = async () => {
-    if (hasInvalidStock) return;
+    if (hasBlockingIssues) return;
     const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
     await exportCanvasAsPdf(canvas, 'S&S Design Build · Material order list', `${exportBaseName}.pdf`);
   };
 
   const exportPng = async () => {
-    if (hasInvalidStock) return;
+    if (hasBlockingIssues) return;
     const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
     await exportCanvasAsPng(canvas, `${exportBaseName}.png`);
   };
 
   const exportCombinedPdf = async () => {
-    if (hasInvalidStock) return;
+    if (hasBlockingIssues) return;
     const root = document.getElementById('service-export-root');
     const svg = root?.querySelector('svg') as SVGSVGElement | null;
     if (!svg) return;
@@ -435,12 +437,16 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
         </div>
         <div className="preview-toolbar">
           <button type="button" className={stockView ? 'secondary-btn small-btn' : 'ghost-btn small-btn'} onClick={() => setStockView((current) => !current)}>{stockView ? 'Installer view' : 'Stock order view'}</button>
-          <button type="button" className="ghost-btn small-btn" disabled={hasInvalidStock} title={hasInvalidStock ? 'Resolve unavailable continuous decking cuts before exporting' : undefined} onClick={exportPdf}>Export PDF</button>
-          <button type="button" className="ghost-btn small-btn" disabled={hasInvalidStock} title={hasInvalidStock ? 'Resolve unavailable continuous decking cuts before exporting' : undefined} onClick={exportPng}>Export image</button>
-          <button type="button" className="ghost-btn small-btn" disabled={hasInvalidStock} title={hasInvalidStock ? 'Resolve unavailable continuous decking cuts before exporting' : undefined} onClick={exportCombinedPdf}>Export layout + materials</button>
+          <button type="button" className="ghost-btn small-btn" disabled={hasBlockingIssues} title={hasBlockingIssues ? blockingMessage : undefined} onClick={exportPdf}>Export PDF</button>
+          <button type="button" className="ghost-btn small-btn" disabled={hasBlockingIssues} title={hasBlockingIssues ? blockingMessage : undefined} onClick={exportPng}>Export image</button>
+          <button type="button" className="ghost-btn small-btn" disabled={hasBlockingIssues} title={hasBlockingIssues ? blockingMessage : undefined} onClick={exportCombinedPdf}>Export layout + materials</button>
         </div>
       </div>
 
+      {validationIssues.length > 0 && <div role="alert" style={{ border: '1px solid #dc2626', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+        <strong>Material export blocked — correct drawing errors</strong>
+        {validationIssues.map((issue, index) => <p key={index}>{issue}</p>)}
+      </div>}
       <div className="material-header-grid compact-grid-4">
         {infoFields.map((field) => field.type === 'select' ? (
           <label key={field.key} className="form-field compact-form-field">

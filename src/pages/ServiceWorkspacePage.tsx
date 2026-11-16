@@ -74,7 +74,7 @@ export function ServiceWorkspacePage() {
           <div className="metrics-grid">
             {estimate.summary.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} />)}
           </div>
-          <MaterialTable items={estimate.materials} values={values} onValuesChange={setValues} />
+          <MaterialTable items={estimate.materials} values={values} onValuesChange={setValues} validationIssues={estimate.validationIssues ?? []} />
           {estimate.orderNotes.length > 0 && (
             <article className="content-card order-notes-card">
               <div className="section-heading">

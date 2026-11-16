@@ -1,4 +1,5 @@
 import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, LockedPostPoint } from './types';
+import { ExactSupportPost, parseExactPostLayouts, validateExactPostLayout } from './exactPostLayouts';
 
 export interface DeckInputs {
   deckShape?: string | number | boolean;
@@ -29,6 +30,7 @@ export interface DeckInputs {
   manualRailingEdges?: string | number | boolean;
   railCoverage?: string | number | boolean;
   lockedPosts?: string | number | boolean;
+  postLayouts?: string | number | boolean;
   beamEdits?: string | number | boolean;
   beamCantilever?: string | number | boolean;
   multiTierEnabled?: string | number | boolean;
@@ -45,6 +47,7 @@ export interface DeckInputs {
   lowerStairOffset?: string | number | boolean;
   lowerAdditionalStairs?: string | number | boolean;
   lowerLockedPosts?: string | number | boolean;
+  lowerPostLayouts?: string | number | boolean;
   lowerBeamEdits?: string | number | boolean;
   lowerUseCustomSettings?: string | number | boolean;
   lowerDeckingType?: string | number | boolean;
@@ -65,6 +68,8 @@ export interface BeamLine {
   segments: { startX: number; endX: number; length: number }[];
   postXs: number[];
   lockedPostXs: number[];
+  postMode: 'automatic' | 'manual';
+  postSpecs: ExactSupportPost[];
   startTrim: number;
   endTrim: number;
 }
@@ -120,6 +125,9 @@ export interface DeckModel {
   beamBoardGroups: BoardGroup[];
   beamSegmentsCount: number;
   postCount: number;
+  postLocations: { id: string; reference: string; beamIndex: number | null; x: number; y: number; locked: boolean }[];
+  postLayoutIssues: string[];
+  postEngineeringNotes: string[];
   lockedPosts: LockedPostPoint[];
   beamEdits: BeamEdit[];
   postLength: number;
@@ -595,6 +603,9 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const joistStockLength = chooseStockLength(Math.min(Math.max(...joistLengthsRaw, maxSpan), JOIST_SPAN_LIMITS[joistSize]));
   const lockedPosts = parseLockedPosts(inputs.lockedPosts);
   const beamEdits = parseBeamEdits(inputs.beamEdits);
+  const parsedPostLayouts = parseExactPostLayouts(inputs.postLayouts);
+  const postLayoutIssues = [...parsedPostLayouts.issues];
+  const postEngineeringNotes: string[] = [];
 
   const beamLines: BeamLine[] = beamOffsets.map((offsetY, beamIndex) => {
     const y = round2(offsetY + beamSupportAxisMin);
@@ -612,9 +623,10 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     }).filter((segment) => segment.length > 0.25);
     const postXs: number[] = [];
     segmentsAtBeam.forEach((segment) => {
-      const usableLength = Math.max(0, segment.length - (beamCantilever * 2));
-      const postStart = segment.startX + beamCantilever;
-      const postEnd = segment.endX - beamCantilever;
+      const endInset = Math.min(beamCantilever, segment.length / 4);
+      const usableLength = Math.max(0, segment.length - (endInset * 2));
+      const postStart = segment.startX + endInset;
+      const postEnd = segment.endX - endInset;
       const maxAllowedSpacing = Math.min(maxPostSpacingForDouble2x10(maxSpan), Math.max(POST_MAX_SPACING, maxPostSpacingForDouble2x10(maxSpan)));
       const targetSpacing = maxAllowedSpacing;
       const preferredCount = Math.max(2, Math.ceil(Math.max(usableLength, 0.01) / targetSpacing) + 1);
@@ -624,28 +636,59 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
         const x = round2(postStart + (Math.max(postEnd - postStart, 0) * index) / Math.max(1, adjustedCount - 1));
         if (!postXs.some((value) => Math.abs(value - x) < 0.1)) postXs.push(x);
       }
-      if (attachment === 'brick' && segment.length > 14 && !postXs.some((value) => Math.abs(value - (segment.startX + segment.length / 2)) < 0.1)) {
-        postXs.push(round2(segment.startX + segment.length / 2));
-      }
+      // Do not inject an extra asymmetric center post for brick attachment.
     });
     const lockedForBeam = lockedPosts.filter((item) => item.beamIndex === beamIndex && segmentsAtBeam.some((segment) => item.x >= segment.startX - 0.01 && item.x <= segment.endX + 0.01)).map((item) => item.x);
+    const manual = parsedPostLayouts.layouts.find((layout) => layout.beamIndex === beamIndex);
+    if (manual) {
+      postLayoutIssues.push(...validateExactPostLayout(manual, segmentsAtBeam));
+      const postSpecs = [...manual.posts].sort((a, b) => a.x - b.x);
+      const referenceLimit = maxPostSpacingForDouble2x10(maxSpan);
+      for (const segment of segmentsAtBeam) {
+        const stations = postSpecs.map((post) => post.x).filter((x) => x >= segment.startX - 0.005 && x <= segment.endX + 0.005);
+        for (let i = 1; i < stations.length; i++) {
+          if (stations[i] - stations[i - 1] > referenceLimit + 0.01)
+            postEngineeringNotes.push('Beam ' + (beamIndex + 1) + ': manual post spacing ' + round2(stations[i] - stations[i - 1]) + ' ft exceeds preliminary ' + round2(referenceLimit) + ' ft guide; request engineering approval.');
+        }
+        if (stations.length >= 2 && Math.max(stations[0] - segment.startX, segment.endX - stations[stations.length - 1]) > beamCantilever + 0.01)
+          postEngineeringNotes.push('Beam ' + (beamIndex + 1) + ': end cantilever exceeds configured guide; request engineering approval.');
+      }
+      return { y, offsetFromHouse: round2(offsetY), segments: segmentsAtBeam,
+        postXs: postSpecs.map((post) => post.x), lockedPostXs: postSpecs.filter((post) => post.locked).map((post) => post.x),
+        postMode: 'manual' as const, postSpecs, startTrim: beamEdit.startTrim, endTrim: beamEdit.endTrim };
+    }
     lockedForBeam.forEach((x) => { if (!postXs.some((value) => Math.abs(value - x) < 0.1)) postXs.push(x); });
-    return { y, offsetFromHouse: round2(offsetY), segments: segmentsAtBeam, postXs: postXs.sort((a, b) => a - b), lockedPostXs: lockedForBeam.sort((a, b) => a - b), startTrim: beamEdit.startTrim, endTrim: beamEdit.endTrim };
+    postXs.sort((a, b) => a - b);
+    const postSpecs = postXs.map((x, i) => ({ id: 'auto-' + beamIndex + '-' + i, x, locked: lockedForBeam.some((lockedX) => Math.abs(lockedX - x) < 0.1) }));
+    return { y, offsetFromHouse: round2(offsetY), segments: segmentsAtBeam, postXs,
+      lockedPostXs: lockedForBeam.sort((a, b) => a - b), postMode: 'automatic' as const, postSpecs,
+      startTrim: beamEdit.startTrim, endTrim: beamEdit.endTrim };
   });
 
   beamLines.sort((a, b) => a.y - b.y);
-  const maxBeamSpan = Math.max(0, ...beamLines.flatMap((line) => {
-    if (line.postXs.length < 2) return [0];
-    const spans: number[] = [];
-    for (let index = 1; index < line.postXs.length; index += 1) spans.push(round2(line.postXs[index] - line.postXs[index - 1]));
-    return spans;
-  }));
+  parsedPostLayouts.layouts.forEach((layout) => { if (layout.beamIndex >= beamLines.length) postLayoutIssues.push('Manual post layout refers to removed beam ' + (layout.beamIndex + 1)); });
+  // Only measure bays within actual continuous beam runs. A gap in an L-shaped
+  // beam must not become a phantom structural span or trigger a false PSL size.
+  const maxBeamSpan = Math.max(0, ...beamLines.flatMap((line) => line.segments.flatMap((run) => {
+    const stations = line.postXs.filter((x) => x >= run.startX - 0.005 && x <= run.endX + 0.005).sort((a,b)=>a-b);
+    return stations.slice(1).map((x,i) => round2(x-stations[i]));
+  })));
   const angledBeamLines = exposedSegments
     .filter((segment) => segment.orientation === 'angled' && !houseEdgeIndices.includes(segment.index))
     .map((segment) => insetAngledBeamForSegment(segment, points, Math.max(4, maxPostSpacingForDouble2x10(maxSpan || segment.length))))
     .filter(Boolean) as AngledBeamLine[];
-  const angledPostCount = angledBeamLines.reduce((sum, line) => sum + line.postPoints.length, 0);
-  const postCount = beamLines.reduce((sum, line) => sum + line.postXs.length, 0) + angledPostCount;
+  const postLocations = [
+    ...beamLines.flatMap((beam, beamIndex) => beam.postSpecs.map((post, index) => ({
+      id: post.id, reference: 'B' + (beamIndex + 1) + '-P' + (index + 1), beamIndex,
+      x: joistDirection === 'vertical' ? post.x : beam.y,
+      y: joistDirection === 'vertical' ? beam.y : post.x, locked: post.locked,
+    }))),
+    ...angledBeamLines.flatMap((line) => line.postPoints.map((point, index) => ({
+      id: 'angled-' + line.edgeIndex + '-' + index, reference: 'A' + (line.edgeIndex + 1) + '-P' + (index + 1),
+      beamIndex: null, x: point.x, y: point.y, locked: false,
+    }))),
+  ];
+  const postCount = postLocations.length;
   const beamMemberSize: DeckModel['beamMemberSize'] = maxBeamSpan <= BEAM_SPAN_LIMITS['2x10'] ? '2x10' : maxBeamSpan <= BEAM_SPAN_LIMITS['2x12'] ? '2x12' : 'PSL';
   const beamBoardGroupsMerged = mergeGroups(
     ...beamLines.map((line) => mergeGroups(...line.segments.map((segment) => accumulateGroups([segment.length, segment.length])))),
@@ -777,7 +820,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const deckFastenerBoxes = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? Math.ceil(deckFastenerCount / 365) : Math.ceil(deckFastenerCount / 1750);
   const fastenerType = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'top screws' : 'hidden camo screws';
 
-  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, angledBeamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, angledJoistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), houseEdgeIndices, stairPlacement, stairPlacements };
+  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, angledBeamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, postLocations, postLayoutIssues, postEngineeringNotes, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, angledJoistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), houseEdgeIndices, stairPlacement, stairPlacements };
 }
 
 
@@ -820,6 +863,7 @@ export function buildLowerTierDeckModel(inputs: DeckInputs): DeckModel | null {
     stairOffset: inputs.lowerStairOffset ?? 0,
     additionalStairs: inputs.lowerAdditionalStairs || JSON.stringify([]),
     lockedPosts: inputs.lowerLockedPosts || JSON.stringify([]),
+    postLayouts: inputs.lowerPostLayouts || JSON.stringify([]),
     beamEdits: inputs.lowerBeamEdits || JSON.stringify([]),
   });
 }
