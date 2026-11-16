@@ -68,10 +68,7 @@ function boardStockSegments(totalLength: number, availableBreaks: number[] = [])
   const segments: number[] = [];
   for (let i = 1; i < marks.length; i += 1) {
     let span = marks[i] - marks[i - 1];
-    while (span > 20.01) {
-      segments.push(20);
-      span -= 20;
-    }
+    // Preserve continuous geometry. A run exceeding purchasable stock is an order-blocking issue, not an invented splice.
     if (span > 0.05) segments.push(span);
   }
   return segments.map((length) => roundLen(length));

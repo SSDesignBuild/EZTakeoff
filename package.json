@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "node ./node_modules/typescript/bin/tsc -b && node ./node_modules/vite/bin/vite.js build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node scripts/test-stock-availability.cjs"
   },
   "dependencies": {
     "react": "^18.3.1",
