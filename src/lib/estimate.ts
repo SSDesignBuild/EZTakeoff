@@ -684,13 +684,17 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       { label: 'Railing mix', value: `Level ${railingBreakdown.levelMix.six}x6' + ${railingBreakdown.levelMix.eight}x8' · Angled ${railingBreakdown.stairMix.six}x6' + ${railingBreakdown.stairMix.eight}x8'` },
     ],
     materials: consolidateMaterials(materials).filter((item) => item.quantity > 0),
+    validationIssues: [...deck.postLayoutIssues.map((issue) => 'Main deck: ' + issue), ...(lowerDeck ? lowerDeck.postLayoutIssues.map((issue) => 'Lower deck: ' + issue) : [])],
     orderNotes: [
       deck.attachment === 'brick' ? 'Brick attachment is treated as freestanding, so the house side still needs beam and post support, including beam segments at any inside corner/jut-out.' : 'Siding attachment keeps ledger logic active unless the deck is marked freestanding.',
       deck.stairPlacement.edgeIndex !== null ? `Stairs sit on edge ${deck.stairPlacement.edgeIndex + 1}. Preview now shows tread count, stringer layout, and ${deck.stairRailSideCount === 0 ? 'no stair-side railing' : `${deck.stairRailSideCount} stair-side railing run(s)`} based on the left/right stair railing inputs.` : 'No stair edge is assigned yet in the drawing tool.',
       'Railing optimizer solves each straight run separately, subtracts stair openings from the deck edge, and adds stair-side railing runs when the left/right stair railing inputs are selected.',
       deck.requiredFieldBoardBreaks.length > 0 ? 'Field board run exceeds 20 ft. Add a breaker board to avoid staggered decking; the app no longer shows staggered board seams.' : 'Field decking uses available 8, 12, 16, and 20 ft board lengths with breaker boards where selected.',
       lowerDeck ? `Multi-tier deck mode: lower tier is drawn and included in layout/materials at ${feetAndInches(Number(inputs.lowerDeckHeight ?? 0))} high with ${lowerDeck.area.toFixed(1)} sq ft.` : 'Single tier deck mode.',
-      deck.lockedPosts.length > 0 ? 'Locked posts stay in the take-off even after beam edits so you can preserve preferred field locations.' : 'Use post lock mode when you want to hold a post location while still letting the app auto-space the rest.',
+      deck.beamLines.some((beam) => beam.postMode === 'manual') ? 'Manual post coordinates are authoritative for drawing, footing, post-base, anchor and structural bolt counts; engineer review required.' : 'Automatic post spacing is a preliminary layout only.',
+      'Main deck support references: ' + deck.postLocations.map((post) => post.reference + ' at X ' + feetAndInches(post.x) + ', Y ' + feetAndInches(post.y)).join('; '),
+      ...deck.postEngineeringNotes,
+      ...(lowerDeck ? ['Lower deck support references: ' + lowerDeck.postLocations.map((post) => post.reference + ' at X ' + feetAndInches(post.x) + ', Y ' + feetAndInches(post.y)).join('; '), ...lowerDeck.postEngineeringNotes] : []),
     ],
   };
 }
