@@ -264,29 +264,17 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
       .filter((item) => !deletedKeys.has(item.rowKey));
   }, [items, customItems, deletedKeys, nameOverrides, quantityOverrides, unitOverrides, stockOverrides, colorOverrides, noteOverrides]);
 
+  // Keep every purchasing specification intact. Size-only grouping silently mixes
+  // different components such as 2x8 joists, beams, and rim boards.
   const stockOrderIdentity = (item: DisplayMaterialItem) => {
     const name = String(item.name ?? '').trim();
     const stockRecommendation = String(item.stockRecommendation ?? '').trim();
     const color = String(item.color ?? '').trim();
     const unit = String(item.unit ?? '').trim();
-    const combined = `${name} ${stockRecommendation}`;
-    const lumberMatch = combined.match(/\b(\d+x\d+)\b/i);
-    if (lumberMatch && /\b(?:ft|foot)\b/i.test(stockRecommendation)) {
-      const size = lumberMatch[1].toLowerCase().replace('x', 'x');
-      return {
-        name: `${size} lumber`,
-        key: [`lumber:${size}`, unit, stockRecommendation.toLowerCase(), color.toLowerCase()].join('||'),
-      };
-    }
-    if (/deck board/i.test(name) && /\b(?:ft|foot)\b/i.test(stockRecommendation)) {
-      const normalizedColor = color.toLowerCase();
-      const displayColor = color && color !== '—' ? `${color} ` : '';
-      return {
-        name: `${displayColor}deck boards`,
-        key: ['deck-board', unit.toLowerCase(), stockRecommendation.toLowerCase(), normalizedColor].join('||'),
-      };
-    }
-    return { name, key: [name.toLowerCase(), unit, stockRecommendation.toLowerCase(), color.toLowerCase()].join('||') };
+    return {
+      name,
+      key: [name.toLowerCase(), unit.toLowerCase(), stockRecommendation.toLowerCase(), color.toLowerCase()].join('||'),
+    };
   };
 
   const stockOrderItems = useMemo<DisplayMaterialItem[]>(() => {
@@ -303,18 +291,11 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
       const useNote = item.category + (item.name !== existing.name ? ` - ${item.name}` : '') + label;
       existing.notes = Array.from(new Set([existing.notes, useNote].filter(Boolean).join(' · ').split(' · ').filter(Boolean))).join(' · ');
     });
+    // The grouped view is derived only from installer records. It must never
+    // apply independent saved edits that would change the actual supplier order.
     return Array.from(merged.values())
-      .map((item) => ({
-        ...item,
-        name: nameOverrides[item.rowKey] ?? item.name,
-        quantity: quantityOverrides[item.rowKey] ?? item.quantity,
-        unit: unitOverrides[item.rowKey] ?? item.unit,
-        stockRecommendation: stockOverrides[item.rowKey] ?? item.stockRecommendation,
-        color: colorOverrides[item.rowKey] ?? item.color,
-        notes: noteOverrides[item.rowKey] ?? item.notes,
-      }))
       .sort((a, b) => String(a.name).localeCompare(String(b.name)) || String(a.stockRecommendation).localeCompare(String(b.stockRecommendation)));
-  }, [displayItems, nameOverrides, quantityOverrides, unitOverrides, stockOverrides, colorOverrides, noteOverrides]);
+  }, [displayItems]);
 
   const activeItems = stockView ? stockOrderItems : displayItems;
   const grouped = useMemo(() => activeItems.reduce<Record<string, DisplayMaterialItem[]>>((acc, item) => {
@@ -535,10 +516,12 @@ export function MaterialTable({ items, values, onValuesChange }: MaterialTablePr
                             <button type="button" className="ghost-btn small-btn" onClick={cancelEdit}>Cancel</button>
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                            <button type="button" className="ghost-btn small-btn" onClick={() => startEdit(item)}>Edit</button>
-                            <button type="button" className="ghost-btn small-btn" onClick={() => deleteRow(item)}>Delete</button>
-                          </div>
+                          stockView ? <span title="To change a material, switch to Installer view so both views stay synchronized.">View only</span> : (
+                            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                              <button type="button" className="ghost-btn small-btn" onClick={() => startEdit(item)}>Edit</button>
+                              <button type="button" className="ghost-btn small-btn" onClick={() => deleteRow(item)}>Delete</button>
+                            </div>
+                          )
                         )}
                       </td>
                     </tr>
