@@ -47,7 +47,7 @@ const horiz=buildDeckSkirting(deck.edgeSegments,deck.exposedSegments,7,7.25,{...
 assert.ok(horiz.sides[0].courses.length>0);
 const cut={edgeIndex:edge.index,offset:0.5,width:2,kind:'opening'};
 const withOpening=buildDeckSkirting(deck.edgeSegments,deck.exposedSegments,7,7.25,{...config,skirtingOpenings:JSON.stringify([cut])});
-assert.ok(withOpening.sides[0].bottomRails.length===1);
+assert.equal(withOpening.sides[0].bottomRails.length,2);
 assert.ok(withOpening.sides[0].verticals.some((p)=>p.role==='jamb'));
 assert.ok(withOpening.sides[0].finishCuts.length<skirt.sides[0].finishCuts.length);
 const invalid=buildDeckSkirting(deck.edgeSegments,deck.exposedSegments,7,7.25,{...config,skirtingOpenings:JSON.stringify([{...cut,offset:edge.length-0.2}])});
