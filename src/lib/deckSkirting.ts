@@ -16,6 +16,7 @@ export type CutStock = { stockLengthFt: number; cuts: SkirtCut[]; remainderIn: n
 export type SkirtPlan = {
   enabled: boolean; sides: SkirtSide[]; materials: MaterialItem[]; cuts: SkirtCut[];
   finishStock: CutStock[]; frameStock: CutStock[]; issues: string[]; notes: string[];
+  frameScrews: number; finishNails: number; finishScrews: number;
   options: { material: string; finishColor: string; orientation: 'vertical' | 'horizontal'; revealIn: number; gapIn: number; faceIn: number; kerfIn: number; trimIn: number };
 };
 
@@ -105,7 +106,7 @@ export function buildDeckSkirting(
   const kerfIn=num(inputs[key('skirtingKerfIn')],0.125);
   const trimIn=num(inputs[key('skirtingTrimIn')],0.25);
   const opts={material,orientation,finishColor,revealIn,gapIn,faceIn,kerfIn,trimIn};
-  const empty:SkirtPlan={enabled,sides:[],materials:[],cuts:[],finishStock:[],frameStock:[],issues:[],notes:[],options:opts};
+  const empty:SkirtPlan={enabled,sides:[],materials:[],cuts:[],finishStock:[],frameStock:[],issues:[],notes:[],frameScrews:0,finishNails:0,finishScrews:0,options:opts};
   if(!enabled) return empty;
   const issues:string[]=[],notes:string[]=[];
   if(!['kdat','composite','pvc'].includes(material)) issues.push('Choose a supported skirting material.');
@@ -241,13 +242,19 @@ export function buildDeckSkirting(
     }
   }
   const joinCount=sides.reduce((sum,s)=>sum+s.verticals.length*2+s.bottomRails.length*2+s.topRails.length*2,0);
-  if(joinCount>0)materials.push({name:'Skirting 2x4 exterior structural connectors/fastener locations',category:category+' hardware',quantity:joinCount,unit:'connection points',stockRecommendation:'Specify approved fastener per connection',notes:'Count derives from top/bottom framing endpoints and vertical 2x4 connections. Match treatment and substrate.'});
+  // Two exterior 3-inch structural framing screws per 2x4 connection.
+  // The estimator combines this with the main framing screw box order,
+  // rather than treating a connection location as a purchasable product.
+  const frameScrews=joinCount*2;
   // An installed vertical board needs two attachments at each horizontal rail.
   // For horizontal courses, count two attachments at every intersecting 24in stud.
   const faceFasteners=orientation==='vertical'
     ? sides.reduce((sum,s)=>sum+s.finish.length*4,0)
     : sides.reduce((sum,s)=>sum+s.courses.reduce((courseSum,course)=>
         courseSum+2*Math.max(2,s.verticals.filter((v)=>v.station>=course.start-0.001&&v.station<=course.end+0.001).length),0),0);
-  if(faceFasteners>0)materials.push({name:'Skirting finish fastener locations',category:category+' hardware',quantity:faceFasteners,unit:'fastener locations',stockRecommendation:'Manufacturer-approved exterior fasteners',notes:'Vertical: two screws at each top/bottom rail per board. Horizontal: two screws at each vertical 2x4 support per course. Verify manufacturer fastening schedule.'});
-  return {enabled,sides,materials,cuts:[...finishCuts,...frameCuts],finishStock:finishPack.stock,frameStock:framePack.stock,issues,notes,options:opts};
+  // 1x5 KDAT finish gets exterior 2-inch finish nails. Synthetic skirting
+  // remains on manufacturer-approved screws instead of an unsuitable nail.
+  const finishNails=material==='kdat'?faceFasteners:0;
+  const finishScrews=material==='kdat'?0:faceFasteners;
+  return {enabled,sides,materials,cuts:[...finishCuts,...frameCuts],finishStock:finishPack.stock,frameStock:framePack.stock,issues,notes,frameScrews,finishNails,finishScrews,options:opts};
 }
