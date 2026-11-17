@@ -3,6 +3,7 @@ import { FieldRenderer } from './FieldRenderer';
 import { DeckDesigner } from './DeckDesigner';
 import { DeckSkirtingEditor } from './DeckSkirtingEditor';
 import { DeckRailingElevation } from './DeckRailingElevation';
+import { DeckGateEditor } from './DeckGateEditor';
 import { LayoutPreview } from './LayoutPreview';
 import { MaterialTable } from './MaterialTable';
 import { MetricCard } from './MetricCard';
@@ -43,12 +44,12 @@ const sections: Record<Exclude<StepId, 'layout' | 'review'>, { title: string; no
       keys: ['pictureFrameCount', 'pictureFrameHouseSide', 'pictureFrameMaterial', 'pictureFrameMaterial2', 'pictureFrameMaterial3', 'borderSameBoard', 'lowerPictureFrameCount', 'lowerPictureFrameHouseSide', 'breakerBoardCount', 'breakerBoardMaterial', 'breakerBoardMaterial2', 'breakerBoardMaterial3'] },
     { title: '3 · Fascia, trim & skirting', note: 'Select fascia finish and fastening method; configure skirting side elevations below.',
       keys: ['fasciaMaterial', 'trimFastenerChoice',
-        'skirtingEnabled', 'skirtingMaterial', 'skirtingColor', 'skirtingOrientation', 'skirtingFaceIn', 'skirtingGapIn', 'skirtingKerfIn', 'skirtingTrimIn', 'skirtingGradeConfirmed',
-        'lowerSkirtingEnabled', 'lowerSkirtingMaterial', 'lowerSkirtingColor', 'lowerSkirtingOrientation', 'lowerSkirtingFaceIn', 'lowerSkirtingGapIn', 'lowerSkirtingGradeConfirmed'] },
+        'skirtingEnabled', 'skirtingStairsEnabled', 'skirtingMaterial', 'skirtingColor', 'skirtingOrientation', 'skirtingFaceIn', 'skirtingGapIn', 'skirtingKerfIn', 'skirtingTrimIn', 'skirtingGradeConfirmed',
+        'lowerSkirtingEnabled', 'lowerSkirtingStairsEnabled', 'lowerSkirtingMaterial', 'lowerSkirtingColor', 'lowerSkirtingOrientation', 'lowerSkirtingFaceIn', 'lowerSkirtingGapIn', 'lowerSkirtingGradeConfirmed'] },
   ],
   'stairs-railing': [
     { title: '1 · Stair geometry and railing', note: 'Place stairs in the drawing step, then set widths, rises and left/right railing.',
-      keys: ['stairCount', 'stairWidth', 'stairRise', 'stairRailingLeft', 'stairRailingRight', 'lowerStairRailingLeft', 'lowerStairRailingRight'] },
+      keys: ['stairCount', 'stairWidth', 'stairRise', 'stairTreadStyle', 'stairRiserStyle', 'stairRailingLeft', 'stairRailingRight', 'lowerStairRailingLeft', 'lowerStairRailingRight'] },
     { title: '2 · Railing system', note: 'Choose standard or TimberTech and configure compatible profiles, infill and posts.',
       keys: ['railingType', 'lowerRailingType', 'spindleType', 'railingSystem', 'railingTopProfile', 'railingColor', 'railingInfill', 'railingHeightIn', 'railingPostSize', 'railingPostTermination', 'railingPostCap', 'railingManufacturerConfirmed'] },
     { title: '3 · Drink rail and railing lumber', note: 'Pressure-treated wood drink rails can use 5/4×6, 2×6, 2×8, 2×10 or 2×12 stock.',
@@ -67,7 +68,14 @@ export function DeckWorkspaceFlow({ values, onValuesChange, estimate, visibleFie
   const active = steps[stepIndex];
   const available = new Map(visibleFields.map((field) => [field.key, field]));
   const select = (id: StepId) => { setStep(id); goTop(); };
-  const update = (key: string, value: string | number | boolean) => onValuesChange((current) => ({ ...current, [key]: value }));
+  const update = (key: string, value: string | number | boolean) => onValuesChange((current) => ({
+    ...current,
+    [key]: value,
+    ...(key === 'railingPostTermination'
+      ? { railingPostCap: value === 'flush-top' || value === 'flush-drink'
+          ? 'none' : current.railingPostCap === 'none' ? 'standard' : current.railingPostCap }
+      : {}),
+  }));
   const renderInputs = (keys: string[]) => keys.map((key) => available.get(key))
     .filter((field): field is ServiceField => Boolean(field))
     .map((field) => <FieldRenderer key={field.key} field={field} value={values[field.key]} onChange={update}/>);
@@ -128,7 +136,10 @@ export function DeckWorkspaceFlow({ values, onValuesChange, estimate, visibleFie
         </article>;
       })}
       {step === 'finishes' && hasSkirting && <DeckSkirtingEditor values={values} onValuesChange={onValuesChange}/>}
-      {step === 'stairs-railing' && <DeckRailingElevation values={values}/>}
+      {step === 'stairs-railing' && <>
+        <DeckRailingElevation values={values}/>
+        <DeckGateEditor values={values} onValuesChange={onValuesChange}/>
+      </>}
 
       {step === 'review' && <div className="deck-workflow-review" id="service-export-root">
         {otherFields.length > 0 && <article className="content-card deck-workflow-form-section">
