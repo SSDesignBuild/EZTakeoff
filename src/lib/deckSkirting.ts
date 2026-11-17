@@ -92,7 +92,7 @@ export function buildDeckSkirting(
   edges: DeckEdgeSegment[], exposed: DeckEdgeSegment[], deckHeightFt: number,
   rimDepthIn: number, inputs: Inputs, prefix = ''
 ): SkirtPlan {
-  const key=(name:string)=>prefix+name;
+  const key=(name:string)=>prefix ? prefix+name.charAt(0).toUpperCase()+name.slice(1) : name;
   const tierId=prefix?'L':'M';
   const category=prefix?'Lower deck skirting':'Deck skirting';
   const enabled=inputs[key('skirtingEnabled')]===true || String(inputs[key('skirtingEnabled')])==='true';
