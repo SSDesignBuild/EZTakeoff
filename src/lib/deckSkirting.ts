@@ -6,6 +6,7 @@ export type SkirtGrade = { edgeIndex: number; startFt: number; endFt: number };
 export type SkirtVertical = { station: number; heightFt: number; role: 'stud' | 'jamb' | 'finish' };
 export type SkirtCourse = { row: number; start: number; end: number; depthFt: number };
 export type SkirtSide = {
+  kind?: 'deck' | 'stair'; label?: string;
   edgeIndex: number; lengthFt: number; startHeightFt: number; endHeightFt: number;
   openings: SkirtOpening[]; verticals: SkirtVertical[]; finish: SkirtVertical[];
   courses: SkirtCourse[]; topRails: { start: number; end: number }[];
