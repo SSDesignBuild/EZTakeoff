@@ -826,6 +826,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const showFraming = layer === 'overview' || layer === 'framing';
   const showRailing = layer === 'overview' || layer === 'railing';
   const showStairs = layer === 'overview' || layer === 'stairs';
+  const showStairFraming = showFraming || showStairs;
   const deckingLabelPlan = useMemo(() => deriveDeckingLabelPlan(deck), [deck]);
 
   const printPlan = () => { void exportSvgAsPdf(svgRef.current, projectExportTitle('Deck framing plan', values), 'sns-deck-plan.pdf'); };
@@ -839,7 +840,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const pictureFrameCount = Math.max(0, Math.round(Number(values.pictureFrameCount ?? deck.pictureFrameCount ?? 0)));
   const breakerBoardCount = Math.max(0, Math.round(Number(values.breakerBoardCount ?? deck.breakerBoardCount ?? 0)));
   const breakerPositions = deck.breakerBoardPositions;
-  const pictureFrameSegments = mergeCollinearDeckSegments(deck.exposedSegments);
+  const pictureFrameSegments = mergeCollinearDeckSegments(deck.pictureFrameSegments);
   const pictureFrameBoardWidthPx = Math.max(10, scale * 0.44);
   const pictureFrameTrimPx = pictureFrameCount * pictureFrameBoardWidthPx;
   const cleanBandPointString = useMemo(() => closedPointString(deck.points, toSvg), [deck.points, toSvg]);
@@ -1140,6 +1141,16 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             const y2 = toSvg(value, pair.end).y;
             return <rect key={`lower-board-v-${idx}-${pairIdx}`} x={x - Math.max(4, scale * 0.22)} y={Math.min(y1, y2)} width={Math.max(8, scale * 0.44)} height={Math.abs(y2 - y1)} className="deck-board-strip lower-tier-board" />;
           }))}
+      {showBoards && !useSubfloorDecking && lowerDeck.pictureFrameCount > 0 && lowerDeck.pictureFrameSegments.flatMap((segment) =>
+        Array.from({ length: lowerDeck.pictureFrameCount }, (_, course) => (
+          <polygon key={`lower-pf-${segment.index}-${course}`}
+            points={pictureFrameCoursePolygon(segment, lowerDeck.points, toSvg, course, pictureFrameBoardWidthPx,
+              lowerDeck.pictureFrameHouseSide ? [] : lowerDeck.houseEdgeIndices)}
+            className={`picture-frame-board lower-tier-board course-${course + 1}`}
+            onClick={() => setInspect({ title: `Lower-tier picture frame course ${course + 1}`,
+              detail: `Side ${segment.index + 1}: ${feetAndInches(segment.length)} perimeter run. House-facing side ${lowerDeck.pictureFrameHouseSide ? 'included' : 'excluded'}.` })} />
+        ))
+      )}
       {showFraming && lowerDeck.beamLines.map((beam, beamIdx) => <g key={`lower-beam-${beamIdx}`}>{beam.segments.map((segment, segIdx) => {
         const lowerVerticalBeam = lowerDeck.joistDirection === 'horizontal';
         const p1 = lowerVerticalBeam ? toSvg(beam.y, segment.startX) : toSvg(segment.startX, beam.y);
@@ -1159,7 +1170,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
         const cls = node.kind === 'stair-end' || node.kind === 'stair-inline' ? 'stair-post-node' : 'railing-post-node';
         return <rect key={`lower-rail-node-${idx}`} x={p.x - 12} y={p.y - 12} width={24} height={24} className={cls} />;
       })}
-      {showStairs && (lowerDeck.stairPlacements?.length ? lowerDeck.stairPlacements : [lowerDeck.stairPlacement]).map((placement, stairIdx) => {
+      {showStairFraming && (lowerDeck.stairPlacements?.length ? lowerDeck.stairPlacements : [lowerDeck.stairPlacement]).map((placement, stairIdx) => {
         if (!placement.start || !placement.end || placement.edgeIndex === null) return null;
         const edge = lowerDeck.edgeSegments[placement.edgeIndex];
         const normal = edge ? outwardNormal(edge, lowerDeck.points) : { x: 0, y: 1 };
@@ -1230,7 +1241,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               Array.from({ length: pictureFrameCount }, (_, course) => (
                 <polygon
                   key={`pf-${segment.index}-${course}`}
-                  points={pictureFrameCoursePolygon(segment, deck.points, toSvg, course, pictureFrameBoardWidthPx, deck.houseEdgeIndices)}
+                  points={pictureFrameCoursePolygon(segment, deck.points, toSvg, course, pictureFrameBoardWidthPx, deck.pictureFrameHouseSide ? [] : deck.houseEdgeIndices)}
                   className={`picture-frame-board course-${course + 1}`}
                   onClick={() => setInspect({ title: `Picture frame board ${course + 1}`, detail: `Picture-frame course with outside and inside corner miters around exposed deck perimeter.` })}
                 />
@@ -1483,7 +1494,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               </g>;
             })}
 
-            {showStairs && (deck.stairPlacements?.length ? deck.stairPlacements : [deck.stairPlacement]).map((placement, stairIdx) => {
+            {showStairFraming && (deck.stairPlacements?.length ? deck.stairPlacements : [deck.stairPlacement]).map((placement, stairIdx) => {
               if (!placement.start || !placement.end || placement.edgeIndex === null) return null;
               const stairSegmentLocal = deck.edgeSegments[placement.edgeIndex];
               const stairNormalLocal = stairSegmentLocal ? outwardNormal(stairSegmentLocal, deck.points) : { x: 0, y: 1 };
@@ -1498,7 +1509,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               const stringerWidth = Math.max(6, Math.min(10, scale * 0.12));
               return <g key={`stair-framing-${stairIdx}`} className="stair-framing-group">
                 <polygon points={`${a.x},${a.y} ${b.x},${b.y} ${b.x + nx},${b.y + ny} ${a.x + nx},${a.y + ny}`} className="stair-outline-fill" />
-                {Array.from({ length: treadCount }, (_, idx) => {
+                {showStairs && Array.from({ length: treadCount }, (_, idx) => {
                   const baseRatio = (idx + 0.5) / treadCount;
                   return [ -0.18, 0.18 ].map((offset, boardIdx) => {
                     const ratio = Math.max(0.03, Math.min(0.97, baseRatio + offset / treadCount));
