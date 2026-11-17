@@ -656,7 +656,11 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       setDraggingStair(false);
     };
     window.addEventListener('pointerup', release);
-    return () => window.removeEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
   }, []);
 
   const lastPoint = points[points.length - 1] ?? null;
@@ -762,9 +766,26 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
                 <g key={'beam-' + index}>
                   {beam.segments.map((segment, run) => {
                     const from = pointOnBeam(segment.startX), to = pointOnBeam(segment.endX);
+                    const vertical = model.joistDirection === 'horizontal';
+                    const mid = pointOnBeam((segment.startX + segment.endX) / 2);
                     return <g key={'beam-run-' + index + '-' + run}>
-                      <line x1={from.x} y1={from.y - 3} x2={to.x} y2={to.y - 3} className="beam-line beam-line-editable" onPointerDown={(e) => onBeamPointerDown(e, index)}/>
-                      <line x1={from.x} y1={from.y + 3} x2={to.x} y2={to.y + 3} className="beam-line beam-line-secondary" onPointerDown={(e) => onBeamPointerDown(e, index)}/>
+                      <line x1={from.x + (vertical ? -3 : 0)} y1={from.y + (vertical ? 0 : -3)}
+                        x2={to.x + (vertical ? -3 : 0)} y2={to.y + (vertical ? 0 : -3)}
+                        className="beam-line beam-line-editable" />
+                      <line x1={from.x + (vertical ? 3 : 0)} y1={from.y + (vertical ? 0 : 3)}
+                        x2={to.x + (vertical ? 3 : 0)} y2={to.y + (vertical ? 0 : 3)}
+                        className="beam-line beam-line-secondary"/>
+                      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                        className="beam-drag-hit" stroke="transparent" strokeWidth={24} pointerEvents="stroke"
+                        onPointerDown={(event) => onBeamPointerDown(event, index)} />
+                      <circle cx={mid.x + (vertical ? 17 : 0)} cy={mid.y + (vertical ? 0 : -17)} r={11}
+                        className={'beam-drag-handle' + (selectedBeamIndex === index && mode === 'beams' ? ' is-selected' : '')}
+                        onPointerDown={(event) => onBeamPointerDown(event, index)}>
+                        <title>{'Move beam ' + (index + 1)}</title>
+                      </circle>
+                      <text x={mid.x + (vertical ? 24 : 14)} y={mid.y + (vertical ? -17 : -14)} className="beam-number-label">
+                        {'B' + (index + 1)}
+                      </text>
                     </g>;
                   })}
                   {beam.postSpecs.map((post, postIndex) => {
