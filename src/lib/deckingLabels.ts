@@ -113,7 +113,7 @@ export function deriveDeckingLabelPlan(deck: DeckModel): DeckingLabelPlan {
     groups.push({ kind: 'field', course: 0, cutLength, count, label });
   });
 
-  const pictureLengths = groupedLengths(deck.exposedSegments.map((segment) => segment.length + PICTURE_FRAME_OVERHANG_ALLOWANCE_FT));
+  const pictureLengths = groupedLengths(deck.pictureFrameSegments.map((segment) => segment.length + PICTURE_FRAME_OVERHANG_ALLOWANCE_FT));
   for (let course = 0; course < deck.pictureFrameCount; course += 1) {
     pictureLengths.forEach(({ cutLength, count }) => {
       const label = alphaLabel(cursor++);

@@ -20,6 +20,7 @@ export interface DeckInputs {
   breakerBoardMaterial2?: string | number | boolean;
   breakerBoardMaterial3?: string | number | boolean;
   pictureFrameCount?: string | number | boolean;
+  pictureFrameHouseSide?: string | number | boolean;
   pictureFrameMaterial?: string | number | boolean;
   pictureFrameMaterial2?: string | number | boolean;
   pictureFrameMaterial3?: string | number | boolean;
@@ -52,6 +53,7 @@ export interface DeckInputs {
   lowerUseCustomSettings?: string | number | boolean;
   lowerDeckingType?: string | number | boolean;
   lowerPictureFrameCount?: string | number | boolean;
+  lowerPictureFrameHouseSide?: string | number | boolean;
   lowerRailingType?: string | number | boolean;
   lowerStairRailingLeft?: string | number | boolean;
   lowerStairRailingRight?: string | number | boolean;
@@ -138,6 +140,8 @@ export interface DeckModel {
   blockingLf: number;
   blockingBoardCount: number;
   pictureFrameCount: number;
+  pictureFrameHouseSide: boolean;
+  pictureFrameSegments: DeckEdgeSegment[];
   breakerBoardCount: number;
   breakerBoardPositions: number[];
   requiredFieldBoardBreaks: number[];
@@ -529,6 +533,9 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const exposedPerimeter = round2(exposedSegments.reduce((sum, segment) => sum + segment.length, 0));
 
   const pictureFrameCount = Math.max(0, Math.round(Number(inputs.pictureFrameCount ?? 1)));
+  const pictureFrameHouseSide = inputs.pictureFrameHouseSide === true || String(inputs.pictureFrameHouseSide ?? 'false') === 'true';
+  // One source of truth for drawing, labels, fasteners and framing blocking.
+  const pictureFrameSegments = pictureFrameHouseSide ? segments : exposedSegments;
   const breakerBoardCount = Math.max(0, Math.round(Number(inputs.breakerBoardCount ?? 0)));
   const fieldRunLength = boardRun === 'width' ? width : depth;
   const requiredFieldBoardBreaks = fieldRunLength > 20.01 && breakerBoardCount === 0 ? [fieldRunLength / 2] : [];
@@ -542,7 +549,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     for (let x = minX + EFFECTIVE_COVERAGE / 2; x < maxX; x += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'vertical', x).forEach((pair) => boardStockSegments(pair.length, breakerBoardPositions.map((y) => y - pair.start)).forEach((len) => boardLengths.push(len)));
   }
   const boardGroups = accumulateGroups(boardLengths);
-  const borderGroups = inputs.borderSameBoard ? accumulateGroups(exposedSegments.map((segment) => segment.length)) : [];
+  const borderGroups = inputs.borderSameBoard ? accumulateGroups(pictureFrameSegments.map((segment) => segment.length)) : [];
 
   const rawCustomBeams = parseNumberArray(inputs.customBeamYs)
     .map((value) => clamp(value, 0, depth))
@@ -699,7 +706,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const bandSegments = accumulateGroups([...segments.map((segment) => segment.length), ...segments.map((segment) => segment.length)]);
   const doubleBandLf = round2(polygonPerimeter(points) * 2);
   const blockingRows = Math.max(0, pictureFrameCount) + Math.max(0, breakerBoardCount);
-  const pictureFrameSupportSegments = exposedSegments.filter((segment) => (joistDirection === 'vertical' ? segment.orientation === 'vertical' : segment.orientation === 'horizontal')); // picture-frame boards running parallel with joists need 1 ft O.C. support blocking
+  const pictureFrameSupportSegments = pictureFrameSegments.filter((segment) => (joistDirection === 'vertical' ? segment.orientation === 'vertical' : segment.orientation === 'horizontal')); // picture-frame boards running parallel with joists need 1 ft O.C. support blocking
   const pictureFrameBlockingLf = round2(pictureFrameSupportSegments.reduce((sum, segment) => sum + Math.max(0, Math.floor(segment.length)) * JOIST_SPACING, 0) * Math.max(0, pictureFrameCount));
   const breakerBlockingLf = round2(breakerBoardPositions.reduce((sum, pos) => sum + (boardRun === 'width'
     ? scanlineIntersections(points, 'vertical', pos).reduce((acc, pair) => acc + Math.max(0, Math.floor(pair.end - pair.start)) * JOIST_SPACING, 0)
@@ -820,7 +827,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const deckFastenerBoxes = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? Math.ceil(deckFastenerCount / 365) : Math.ceil(deckFastenerCount / 1750);
   const fastenerType = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'top screws' : 'hidden camo screws';
 
-  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, angledBeamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, postLocations, postLayoutIssues, postEngineeringNotes, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, angledJoistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), houseEdgeIndices, stairPlacement, stairPlacements };
+  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, joistStockLength, joistLengthGroups, beamLines, angledBeamLines, beamMemberSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, postLocations, postLayoutIssues, postEngineeringNotes, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, pictureFrameHouseSide, pictureFrameSegments, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, angledJoistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), houseEdgeIndices, stairPlacement, stairPlacements };
 }
 
 
@@ -853,6 +860,7 @@ export function buildLowerTierDeckModel(inputs: DeckInputs): DeckModel | null {
     deckHeight: inputs.lowerDeckHeight || inputs.deckHeight,
     deckingType: custom ? (inputs.lowerDeckingType || inputs.deckingType) : inputs.deckingType,
     pictureFrameCount: custom ? (inputs.lowerPictureFrameCount ?? inputs.pictureFrameCount) : inputs.pictureFrameCount,
+    pictureFrameHouseSide: inputs.lowerPictureFrameHouseSide ?? inputs.pictureFrameHouseSide,
     railingType: custom ? (inputs.lowerRailingType || inputs.railingType) : inputs.railingType,
     stairRailingLeft: custom ? (inputs.lowerStairRailingLeft ?? inputs.stairRailingLeft) : inputs.stairRailingLeft,
     stairRailingRight: custom ? (inputs.lowerStairRailingRight ?? inputs.stairRailingRight) : inputs.stairRailingRight,

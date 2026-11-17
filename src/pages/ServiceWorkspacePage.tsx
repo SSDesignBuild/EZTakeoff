@@ -40,6 +40,8 @@ export function ServiceWorkspacePage() {
 
       const drinkRailEnabled = values.drinkRail === true || String(values.drinkRail ?? 'false') === 'true';
       if (field.key === 'drinkRailMaterial' && !drinkRailEnabled) return false;
+      if (field.key === 'woodDrinkRailSize' && (!drinkRailEnabled || String(values.railingSystem ?? 'standard') !== 'standard' || String(values.railingType ?? 'aluminum') !== 'wood')) return false;
+      if (field.key === 'pictureFrameHouseSide' && Number(values.pictureFrameCount ?? 0) <= 0) return false;
     }
     if (!field.showIf) return true;
     const actual = values[field.showIf.key];

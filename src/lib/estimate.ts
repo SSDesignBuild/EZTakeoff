@@ -3,7 +3,7 @@ import { buildDeckModel, buildLowerTierDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem, SectionConfig } from './types';
 import { buildPatioPanelLayout } from './patioLayout';
 import { deriveDeckingLabelPlan } from './deckingLabels';
-import { buildDeckSkirting } from './deckSkirting';
+import { buildDeckSkirting, packSkirtCuts, type SkirtCut } from './deckSkirting';
 import { buildTimberTechIRE } from './deckRailing';
 
 export type EstimateInputs = Record<string, string | number | boolean>;
@@ -464,6 +464,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const drinkRail = inputs.drinkRail === true || String(inputs.drinkRail ?? 'false') === 'true';
   const drinkRailMaterial = resolveBoardStyle(inputs.drinkRailMaterial);
   const drinkStyleInfo = splitDeckStyle(drinkRailMaterial);
+  const woodDrinkRailIssues: string[] = [];
   const materials: MaterialItem[] = [];
   const deckingPlan = deriveDeckingLabelPlan(deck);
   const lowerDeckingPlanForTotals = lowerDeck ? deriveDeckingLabelPlan(lowerDeck) : null;
@@ -493,7 +494,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       const styleInfo = splitDeckStyle(style);
       deckingPlan.groups.filter((group) => group.kind === 'picture-frame' && group.course === i).forEach((group) => {
         const stockLength = deckStockLength(group.cutLength, style);
-        materials.push(toMaterial(`Picture-frame deck board ${i + 1}`, 'Decking', group.count, 'boards', stockLength, styleInfo.color, `Picture-frame course ${i + 1} on exposed deck perimeter only. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)} including 1 in overhang allowance at each end.`, group.label));
+        materials.push(toMaterial(`Picture-frame deck board ${i + 1}`, 'Decking', group.count, 'boards', stockLength, styleInfo.color, `Picture-frame course ${i + 1} on ${deck.pictureFrameHouseSide ? 'all deck perimeter edges including house-facing' : 'exposed perimeter edges only'}. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)} including 1 in overhang allowance at each end.`, group.label));
       });
     }
   }
@@ -522,6 +523,17 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
         const stockLength = deckStockLength(group.cutLength, deckingMaterial);
         materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', stockLength, deckingStyleInfo.color, `Lower tier field decking. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
       });
+    }
+    if (!useSubfloorDecking && lowerDeck.pictureFrameCount > 0) {
+      for (let course = 0; course < lowerDeck.pictureFrameCount; course += 1) {
+        const style = pictureFrameMaterials[course] || deckingMaterial;
+        const styleInfo = splitDeckStyle(style);
+        lowerDeckingPlan.groups.filter((group) => group.kind === 'picture-frame' && group.course === course).forEach((group) => {
+          materials.push(toMaterial(`Lower-tier picture-frame deck board ${course + 1}`, 'Lower tier decking', group.count,
+            'boards', deckStockLength(group.cutLength, style), styleInfo.color,
+            `Lower border course ${course + 1} on ${lowerDeck.pictureFrameHouseSide ? 'all edges, including house-facing' : 'exposed edges only'}. ${feetAndInches(group.cutLength)} cut with overhang; style: ${style}.`, group.label));
+        });
+      }
     }
     addBoardGroups(materials, 'Lower tier stairs', 'Lower tier stair tread deck board', lowerDeck.stairTreadGroups, `${isPressureTreatedDecking ? 'Lower tier treads and risers.' : 'Lower tier treads only; risers are not deck boards unless pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
     addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} joist`, lowerDeck.joistLengthGroups, 'Lower tier joists at 12 in. O.C.', false, framingWoodGrade);
@@ -656,8 +668,30 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       if (totalWoodRailLf > 0) materials.push(toMaterial('Vinyl spindles for wood rail', 'Railing', balusterCount, 'ea', 'Vinyl balusters', undefined, 'Approx. 4 in max clear spacing'));
     }
     if (drinkRail && totalWoodRailLf > 0) {
-      const drinkStock = optimizeStockLength(totalWoodRailLf, [8, 12, 16, 20]);
-      materials.push(toMaterial('2x6 pressure-treated drink rail', 'Railing', drinkStock.count, 'boards', `${drinkStock.stockLength} ft stock`, railingWoodGrade, `${totalWoodRailLf.toFixed(1)} lf drink rail · optimized to reduce board count and handling`));
+      const requestedSize = String(inputs.woodDrinkRailSize ?? '2x6');
+      const railSize = ['5/4x6', '2x6', '2x8', '2x10', '2x12'].includes(requestedSize) ? requestedSize : '2x6';
+      if (railSize !== requestedSize) woodDrinkRailIssues.push('Choose a supported pressure-treated drink-rail size.');
+      // Preserve actual continuous runs. Do not pretend an unsupported splice
+      // exists simply to force a purchase under 20 ft.
+      const cuts: SkirtCut[] = [];
+      deriveTopRailRuns(deck).forEach((run, i) => cuts.push({
+        id: 'WR-LEVEL-' + (i + 1), edgeIndex: -1, material: 'finish',
+        lengthFt: run.length, location: 'Level wood drink rail run ' + (i + 1),
+      }));
+      for (let i = 0; i < deck.stairCount * deck.stairRailSideCount; i++) cuts.push({
+        id: 'WR-STAIR-' + (i + 1), edgeIndex: -1, material: 'finish',
+        lengthFt: deck.stairRunFt, location: 'Angled wood drink rail run ' + (i + 1),
+      });
+      const packed = packSkirtCuts(cuts, [8, 12, 16, 20], 0.125, 0.25);
+      woodDrinkRailIssues.push(...packed.issues.map((issue) =>
+        'Wood drink rail: ' + issue + '. Provide an engineered supported joint or revise the rail run.'));
+      [...new Set(packed.stock.map((stock) => stock.stockLengthFt))].forEach((length) => {
+        const stock = packed.stock.filter((item) => item.stockLengthFt === length);
+        const refs = stock.flatMap((item) => item.cuts.map((cut) => cut.id));
+        materials.push(toMaterial(`${railSize} pressure-treated wood drink rail`, 'Railing', stock.length,
+          'boards', `${length} ft stock`, railingWoodGrade,
+          `Actual cuts: ${refs.join(', ')}. Kerf 1/8 inch and end trimming 1/4 inch per stock included; verify rail support, overhang and attachment.`, refs.join(', ')));
+      });
     }
   } else {
     const vinylCompositeRailPosts = railingPosts + lowerRailingPosts;
@@ -712,6 +746,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     materials: consolidateMaterials(materials).filter((item) => item.quantity > 0),
     validationIssues: [
       ...deck.postLayoutIssues.map((issue) => 'Main deck: ' + issue),
+      ...woodDrinkRailIssues,
       ...(lowerDeck ? lowerDeck.postLayoutIssues.map((issue) => 'Lower deck: ' + issue) : []),
       ...skirtingPlan.issues.map((issue) => 'Main deck skirting: ' + issue),
       ...(lowerSkirtingPlan ? lowerSkirtingPlan.issues.map((issue) => 'Lower skirting: ' + issue) : []),
