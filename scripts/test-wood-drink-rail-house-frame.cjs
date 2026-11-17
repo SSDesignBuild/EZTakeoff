@@ -25,7 +25,7 @@ assert.equal(full.pictureFrameSegments.length,full.edgeSegments.length);
 assert.equal(full.pictureFrameCount,2);
 const noHouseLabels=deriveDeckingLabelPlan(exposed).groups.filter((g)=>g.kind==='picture-frame');
 const allSideLabels=deriveDeckingLabelPlan(full).groups.filter((g)=>g.kind==='picture-frame');
-const count=(list)=>list.reduce((sum,row)=>sum+row.count,0);
+const count=(list)=>list.reduce((sum,row)=>sum+Number(row.count ?? row.quantity ?? 0),0);
 assert.equal(count(allSideLabels)-count(noHouseLabels),2*exposed.houseEdgeIndices.length);
 assert.ok(full.blockingLf>=exposed.blockingLf);
 const frameOff=calculateEstimate('decks',settings);
