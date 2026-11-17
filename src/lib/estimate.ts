@@ -484,8 +484,15 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const useSubfloorDecking = String(inputs.deckingSurface ?? 'deck-boards') === 'subfloor';
   const subfloorSheetCount = (area: number) => Math.max(0, Math.ceil((area / 32) * 1.05));
   const pictureFrameBoardLf = useSubfloorDecking ? 0 : sumGroupLf(deckingPlan.groups.filter((group) => group.kind === 'picture-frame')) + (lowerDeckingPlanForTotals ? sumGroupLf(lowerDeckingPlanForTotals.groups.filter((group) => group.kind === 'picture-frame')) : 0);
-  const stairDeckBoardLf = sumGroupLf(deck.stairTreadGroups) + (lowerDeck ? sumGroupLf(lowerDeck.stairTreadGroups) : 0);
-  const totalFasciaBoardLf = Math.max(0, Number(deck.fasciaLf || 0)) + (lowerDeck ? Math.max(0, Number(lowerDeck.fasciaLf || 0)) : 0);
+  const stairBoardRunLf=(tier:typeof deck)=>tier.stairPlacements.reduce((total,placement)=>total+placement.width,0);
+  const stairDeckBoardLf = stairBoardRunLf(deck)*(deck.stairTreadsPerRun*2+(!stairRiserUsesFascia?deck.stairRisers*2:0))
+    +(lowerDeck?stairBoardRunLf(lowerDeck)*(lowerDeck.stairTreadsPerRun*2+(!stairRiserUsesFascia?lowerDeck.stairRisers*2:0)):0);
+  // Standard composite deck fascia traditionally includes stair risers.
+  // Remove those faces when a separately specified riser deck board is ordered.
+  const deckFasciaLfForOrder=Math.max(0,deck.fasciaLf-(!stairRiserUsesFascia&&!isPressureTreatedDecking?stairBoardRunLf(deck)*deck.stairRisers:0));
+  const lowerFasciaLfForOrder=lowerDeck?Math.max(0,lowerDeck.fasciaLf-
+    (!stairRiserUsesFascia&&!isPressureTreatedDecking?stairBoardRunLf(lowerDeck)*lowerDeck.stairRisers:0)):0;
+  const totalFasciaBoardLf=deckFasciaLfForOrder+lowerFasciaLfForOrder;
   const colorMatchedTrimFastenerPoints = Math.ceil((pictureFrameBoardLf + stairDeckBoardLf + totalFasciaBoardLf) * 2);
   const totalDeckAreaForNails = Math.max(0, Number(deck.area || 0)) + (lowerDeck ? Math.max(0, Number(lowerDeck.area || 0)) : 0);
   const connectorNails = (deck.joistHangers + deck.postBases + deck.lateralLoadBrackets + deck.rafterTies) * 10 + (lowerDeck ? (lowerDeck.joistHangers + lowerDeck.postBases + lowerDeck.lateralLoadBrackets + lowerDeck.rafterTies) * 10 : 0);
@@ -670,7 +677,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       toMaterial('Color match screws for plugs', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '2 screws per lf', deckingStyleInfo.color ?? fasciaStyleInfo.color, `Same count logic as fascia screws: picture-frame boards, step boards, and fascia board runs.`),
       toMaterial('Color match plugs', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '1 plug per color-match screw', deckingStyleInfo.color ?? fasciaStyleInfo.color, `Same count logic as fascia screws: picture-frame boards, step boards, and fascia board runs.`),
     ] : []),
-    ...(deck.fasciaPieces > 0 ? [toMaterial('Fascia board', 'Trim', deck.fasciaPieces, 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${deck.fasciaLf.toFixed(1)} lf on exposed deck perimeter plus stair risers/stringer sides only. Fascia style: ${fasciaMaterial}.`)] : []),
+    ...(deckFasciaLfForOrder > 0 ? [toMaterial('Fascia board', 'Trim', Math.ceil(deckFasciaLfForOrder/12), 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${deckFasciaLfForOrder.toFixed(1)} lf for deck perimeter/stringer sides ${stairRiserUsesFascia ? 'including standard stair fascia risers' : '(separate riser boards are listed under Stairs)'}. Fascia style: ${fasciaMaterial}.`)] : []),
+    ...(lowerFasciaLfForOrder > 0 ? [toMaterial('Lower-tier fascia board', 'Lower tier trim', Math.ceil(lowerFasciaLfForOrder/12), 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${lowerFasciaLfForOrder.toFixed(1)} lf lower deck fascia; separate riser boards where chosen. Style: ${fasciaMaterial}.`)] : []),
   );
   if (deck.stairStringers > 0) {
     materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringerBoardCount, 'boards', `${deck.stairStringerLength} ft stock`, framingWoodGrade, `${deck.stairStringers} stringer cut(s) at about ${feetAndInches(deck.stairStringerCutLength)} each · 12 in. O.C. · ${deck.stairRisers} risers / ${deck.stairTreadsPerRun} treads per run`));
