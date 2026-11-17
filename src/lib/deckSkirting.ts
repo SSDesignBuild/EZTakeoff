@@ -34,23 +34,60 @@ const subtractIntervals = (end: number, openings: { offset: number; width: numbe
 };
 export function packSkirtCuts(cuts: SkirtCut[], lengthsFt: number[], kerfIn = 0.125, trimIn = 0.25) {
   const issues: string[] = [];
-  const valid = [...new Set(lengthsFt)].filter((length)=>length>0).sort((a,b)=>a-b);
-  const packed: CutStock[] = [];
-  for (const cut of [...cuts].sort((a,b)=>b.lengthFt-a.lengthFt)) {
-    if (!(cut.lengthFt>0) || !Number.isFinite(cut.lengthFt)) { issues.push('Invalid cut length: '+cut.id); continue; }
-    const required = cut.lengthFt * 12 + kerfIn;
-    let bin = packed.filter((item)=>item.remainderIn>=required-0.00001)
-      .sort((a,b)=>a.remainderIn-b.remainderIn)[0];
-    if (!bin) {
-      const available=valid.find((length)=>length*12-trimIn>=required-0.00001);
-      if (!available) { issues.push('No available continuous stock length for '+cut.id+' ('+p3(cut.lengthFt)+' ft)'); continue; }
-      bin={stockLengthFt:available,cuts:[],remainderIn:available*12-trimIn};
-      packed.push(bin);
-    }
-    bin.cuts.push(cut); bin.remainderIn=p3(bin.remainderIn-required);
+  const valid=[...new Set(lengthsFt)].filter((length)=>Number.isFinite(length)&&length>0).sort((a,b)=>a-b);
+  const sorted=[...cuts].sort((a,b)=>b.lengthFt-a.lengthFt);
+  for(const cut of sorted){
+    if(!(cut.lengthFt>0)||!Number.isFinite(cut.lengthFt))issues.push('Invalid cut length: '+cut.id);
+    else if(!valid.some((length)=>length*12-trimIn+0.000001 >= cut.lengthFt*12+kerfIn))
+      issues.push('No available continuous stock length for '+cut.id+' ('+p3(cut.lengthFt)+' ft)');
   }
-  return { stock: packed, issues };
+  if(issues.length)return {stock:[] as CutStock[],issues};
+  if(!sorted.length)return {stock:[] as CutStock[],issues};
+  const consume=(bin:CutStock,cut:SkirtCut)=>{
+    bin.cuts.push(cut);
+    bin.remainderIn=p3(bin.remainderIn-cut.lengthFt*12-kerfIn);
+  };
+  const plans: CutStock[][]=[];
+  // Evaluate every available single-length purchasing option. This prevents
+  // local greedy choices from buying 2 x 8 ft when a single 10 ft satisfies 3 x 3 ft cuts.
+  for(const length of valid){
+    if(sorted.some((cut)=>cut.lengthFt*12+kerfIn>length*12-trimIn+0.000001))continue;
+    const plan:CutStock[]=[];
+    for(const cut of sorted){
+      let bin=plan.filter((candidate)=>candidate.remainderIn+0.000001>=cut.lengthFt*12+kerfIn)
+        .sort((a,b)=>a.remainderIn-b.remainderIn)[0];
+      if(!bin){bin={stockLengthFt:length,cuts:[],remainderIn:length*12-trimIn};plan.push(bin);}
+      consume(bin,cut);
+    }
+    plans.push(plan);
+  }
+  // Also evaluate a mixed-length first-fit baseline. Uniform stock isn't
+  // always optimal; compatible cuts can share longer offcuts.
+  const mixed:CutStock[]=[];
+  for(const cut of sorted){
+    const needed=cut.lengthFt*12+kerfIn;
+    let bin=mixed.filter((candidate)=>candidate.remainderIn+0.000001>=needed)
+      .sort((a,b)=>a.remainderIn-b.remainderIn)[0];
+    if(!bin){
+      const length=valid.find((l)=>l*12-trimIn+0.000001>=needed)!;
+      bin={stockLengthFt:length,cuts:[],remainderIn:length*12-trimIn};
+      mixed.push(bin);
+    }
+    consume(bin,cut);
+  }
+  plans.push(mixed);
+  // Objective: minimum total purchased linear length, then fewest stock pieces,
+  // then least wasted offcut. This is deterministic; full global bin-packing
+  // optimality for arbitrary large mixed lengths is not claimed.
+  plans.sort((left,right)=>{
+    const footage=(items:CutStock[])=>items.reduce((sum,item)=>sum+item.stockLengthFt,0);
+    const diff=footage(left)-footage(right);
+    return Math.abs(diff)>0.0001?diff:left.length-right.length ||
+      left.reduce((sum,item)=>sum+item.remainderIn,0)-right.reduce((sum,item)=>sum+item.remainderIn,0);
+  });
+  return {stock:plans[0],issues};
 }
+
 export function buildDeckSkirting(
   edges: DeckEdgeSegment[], exposed: DeckEdgeSegment[], deckHeightFt: number,
   rimDepthIn: number, inputs: Inputs, prefix = ''
