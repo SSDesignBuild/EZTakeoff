@@ -128,6 +128,8 @@ export const SERVICES: ServiceDefinition[] = [
       pictureFrameMaterial2: 'match',
       pictureFrameMaterial3: 'match',
       borderSameBoard: true,
+      pictureFrameHouseSide: false,
+      lowerPictureFrameHouseSide: false,
       stairWidth: 4,
       stairRise: 0,
       stairCount: 0,
@@ -137,6 +139,7 @@ export const SERVICES: ServiceDefinition[] = [
       spindleType: 'black-round',
       drinkRail: false,
       drinkRailMaterial: 'match',
+      woodDrinkRailSize: '2x6',
       railingSystem: 'standard',
       railingTopProfile: 'classic',
       railingColor: 'black',
@@ -208,6 +211,7 @@ export const SERVICES: ServiceDefinition[] = [
         { label: 'Pressure treated wood', value: 'pressure-treated' },
         { label: 'Composite / PVC', value: 'composite' },
       ] },
+      { key: 'lowerPictureFrameHouseSide', label: 'Lower tier picture frame along house-facing edges', type: 'boolean', showIf: { key: 'multiTierEnabled', equals: true }, helper: 'Independent lower-tier choice; applies when lower-tier picture-frame courses are enabled.' },
       { key: 'lowerPictureFrameCount', label: 'Lower tier picture frame border', type: 'select', showIf: { key: 'lowerUseCustomSettings', equals: true }, options: [
         { label: 'None', value: '0' },
         { label: 'Single picture frame', value: '1' },
@@ -300,6 +304,7 @@ export const SERVICES: ServiceDefinition[] = [
       { key: 'pictureFrameMaterial2', label: 'Picture frame 2 style', type: 'select', options: DECK_BOARD_STYLE_WITH_MATCH_OPTIONS },
       { key: 'pictureFrameMaterial3', label: 'Picture frame 3 style', type: 'select', options: DECK_BOARD_STYLE_WITH_MATCH_OPTIONS },
       { key: 'borderSameBoard', label: 'Border boards use same decking style/color', type: 'boolean' },
+      { key: 'pictureFrameHouseSide', label: 'Include picture framing on house-facing edges', type: 'boolean', helper: 'Off: existing exposed-side picture framing, square ends against the house. On: add picture-frame boards on every perimeter edge, including the house side, with joined/mitered corners and added support/fasteners.' },
       {
         key: 'railingType',
         label: 'Railing type',
@@ -361,6 +366,13 @@ export const SERVICES: ServiceDefinition[] = [
       { key: 'railingManufacturerConfirmed', label: 'Manufacturer/distributor railing kit and span compatibility verified for ordering', type: 'boolean', showIf: { key: 'railingSystem', equals: 'timbertech-ire' }, helper: 'Required before exporting the supplier order. Review actual panel lengths, compatible caps/lighting, and post conditions.' },
       { key: 'drinkRail', label: 'Add drink rail (standard systems)', type: 'boolean', showIf: { key: 'railingSystem', equals: 'standard' } },
       { key: 'drinkRailMaterial', label: 'Drink rail board style', type: 'select', options: DECK_BOARD_STYLE_WITH_MATCH_OPTIONS },
+      { key: 'woodDrinkRailSize', label: 'Pressure-treated wood drink rail board size', type: 'select', showIf: { key: 'railingType', equals: 'wood' }, helper: 'Applies when Add drink rail is enabled for standard wood railing. Uses 8/12/16/20 ft pressure-treated stock and computes actual individual cuts.', options: [
+        { label: '5/4×6 pressure-treated decking board', value: '5/4x6' },
+        { label: '2×6 pressure-treated', value: '2x6' },
+        { label: '2×8 pressure-treated', value: '2x8' },
+        { label: '2×10 pressure-treated', value: '2x10' },
+        { label: '2×12 pressure-treated', value: '2x12' },
+      ] },
       { key: 'lowerSkirtingEnabled', label: 'Add lower deck tier skirting', type: 'boolean', showIf: { key: 'multiTierEnabled', equals: true }, helper: 'Each tier has independent sides, grade and access openings.' },
       { key: 'lowerSkirtingMaterial', label: 'Lower tier skirting material', type: 'select', showIf: { key: 'lowerSkirtingEnabled', equals: true }, options: [
         { label: '1x5 KDAT (8/12/16/20)', value: 'kdat' },
