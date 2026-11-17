@@ -99,7 +99,7 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
     const offset=Math.max(0,(edge.length-width)/2);
     update('skirtingOpenings',JSON.stringify([...openings,{edgeIndex,offset,width,kind:'opening'}]));
   };
-  return <section className="content-card full-width-card" style={{marginBottom:16}}>
+  return <section className="content-card full-width-card" data-export-skirt-tier={lower?'Lower deck':'Main deck'} style={{marginBottom:16}}>
     <div className="section-heading">
       <p className="eyebrow">{lower?'Lower tier':'Main deck'} / finish and supports</p>
       <h3>Deck skirting — elevations and material cut plan</h3>
@@ -120,7 +120,7 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
       </div>
     </div>
     {plan.issues.map((issue,i)=><p key={'issue-'+i} role="alert" style={{color:'#b91c1c'}}>{issue}</p>)}
-    {plan.sides.map((side)=><article key={'side-'+side.edgeIndex} style={{border:'1px solid #d1d5db',borderRadius:10,padding:12,marginBottom:14}}>
+    {plan.sides.map((side)=><article key={'side-'+side.edgeIndex} data-export-skirt-card="true" style={{border:'1px solid #d1d5db',borderRadius:10,padding:12,marginBottom:14}}>
       <SkirtingElevation side={side} framing={framing} orientation={plan.options.orientation} gapIn={plan.options.gapIn} faceIn={plan.options.faceIn}/>
       <div className="skirting-export-counterpart" aria-hidden="true">
         <SkirtingElevation side={side} framing={!framing} orientation={plan.options.orientation} gapIn={plan.options.gapIn} faceIn={plan.options.faceIn}/>
@@ -154,7 +154,7 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
       <h4>Stair skirting — both sloping sides of every flight</h4>
       <p className="muted">Includes sloped upper rails, ground-level 2×4 framing and vertical supports at 24 inches on center. Confirm the toe clearance and field slope.</p>
       {stairPlan.issues.map((issue,i)=><p role="alert" key={i} style={{color:'#b91c1c'}}>{issue}</p>)}
-      {stairPlan.sides.map((side)=><article className="stair-skirting-elevation" key={side.edgeIndex}>
+      {stairPlan.sides.map((side)=><article className="stair-skirting-elevation" data-export-skirt-card="true" key={side.edgeIndex}>
         <h5>{side.label}</h5>
         <SkirtingElevation side={side} orientation={stairPlan.options.orientation} framing={framing}
           gapIn={stairPlan.options.gapIn} faceIn={stairPlan.options.faceIn}/>
