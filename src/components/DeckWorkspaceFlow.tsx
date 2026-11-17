@@ -139,12 +139,16 @@ export function DeckWorkspaceFlow({ values, onValuesChange, estimate, visibleFie
           <div className="deck-workflow-form-grid">{renderInputs(otherFields.map((field) => field.key))}</div>
         </article>}
         <div className="deck-workflow-metrics metrics-grid">{estimate.summary.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value}/>)}</div>
+        <div className="deck-workflow-review-intro">
+          <h4>Customer, extra materials & supplier order</h4>
+          <p className="muted">Complete the client information and any additional items, then review the printable plan and elevations beneath the material list.</p>
+        </div>
+        <MaterialTable items={estimate.materials} values={values} onValuesChange={onValuesChange} validationIssues={estimate.validationIssues ?? []}/>
         <LayoutPreview serviceSlug="decks" values={values} onValuesChange={onValuesChange}/>
         <div className="deck-workflow-export-elevations">
           {hasSkirting && <DeckSkirtingEditor values={values} onValuesChange={onValuesChange}/>}
           <DeckRailingElevation values={values}/>
         </div>
-        <MaterialTable items={estimate.materials} values={values} onValuesChange={onValuesChange} validationIssues={estimate.validationIssues ?? []}/>
         {!!estimate.orderNotes.length && <article className="content-card order-notes-card">
           <div className="section-heading"><p className="eyebrow">Scope output</p><h3>Assumptions and engineer notes</h3></div>
           <ul className="order-notes-list">{estimate.orderNotes.map((note, index) => <li key={index}>{note}</li>)}</ul>
