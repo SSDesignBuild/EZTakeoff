@@ -53,7 +53,7 @@ function SkirtingElevation({side,orientation,framing,gapIn,faceIn}:{
 function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValuesChange:OnChange;lower?:boolean}) {
   const [framing,setFraming]=useState(false);
   const prefix=lower?'lower':'';
-  const k=(name:string)=>prefix+name;
+  const k=(name:string)=>prefix ? prefix+name.charAt(0).toUpperCase()+name.slice(1) : name;
   const model=useMemo(()=>lower?buildLowerTierDeckModel(values):buildDeckModel(values),[lower,values]);
   const deckHeightFt=Number(lower?values.lowerDeckHeight:values.deckHeight)||0;
   const gradeBase=Math.max(0.1,deckHeightFt-(model?rimIn(model.joistSize)+1:8.25)/12);
