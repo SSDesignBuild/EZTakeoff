@@ -4,8 +4,8 @@ import { DeckPoint, LockedPostPoint } from '../lib/types';
 import { ExactBeamPostLayout, ExactSupportPost, evenlySpacedPosts, parseExactPostLayouts, shiftPostLayoutIndices } from '../lib/exactPostLayouts';
 
 const GRID_SIZE = 1 / 12;
-const VIEW_SIZE = 1800;
-const PADDING = 72;
+const VIEW_SIZE = 1100;
+const PADDING = 50;
 const BASE_VIEW_FEET = 25;
 const MAX_DRAW_VIEW_FEET = 60;
 const TEN_FOOT_GRID = 10;
@@ -137,6 +137,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const [mode, setMode] = useState<EditMode>('points');
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [draggingBeamIndex, setDraggingBeamIndex] = useState<number | null>(null);
+  const [selectedBeamIndex, setSelectedBeamIndex] = useState(0);
   const [draggingPost, setDraggingPost] = useState<{ beamIndex: number; id: string } | null>(null);
   const [selectedPost, setSelectedPost] = useState<{ beamIndex: number; id: string } | null>(null);
   const [postFeedback, setPostFeedback] = useState('');
@@ -166,6 +167,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     const parsed = parseNumberArray(activeDeckValues.customBeamYs);
     return parsed.length > 0 ? parsed : model.beamLines.map((line) => line.offsetFromHouse);
   }, [model.beamLines, activeDeckValues.customBeamYs]);
+  const inspectedBeamIndex = clamp(selectedBeamIndex, 0, Math.max(0, model.beamLines.length - 1));
   const lockedPosts = useMemo(() => parseLockedPosts(activeDeckValues.lockedPosts), [activeDeckValues.lockedPosts]);
   const manualPostLayouts = useMemo(() => parseExactPostLayouts(activeDeckValues.postLayouts).layouts, [activeDeckValues.postLayouts]);
   const beamEdits = useMemo(() => parseBeamEdits(activeDeckValues.beamEdits), [activeDeckValues.beamEdits]);
@@ -369,28 +371,85 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     updateExtraStairs(extraStairs.filter((_, currentIndex) => currentIndex !== index));
     setActiveStairIndex(0);
   };
-  const addBeamLine = () => {
-    const along = model.joistDirection === 'vertical' ? model.depth : model.width;
-    const midpoint = Math.max(0.5, snap(along / 2));
-    if (beamOffsets.some((offset) => Math.abs(offset - midpoint) < 0.25)) {
-      setPostFeedback('A beam already exists near the center. Move an existing beam first.'); return;
+  // Every straight support line has exactly one editable station. Moving a
+  // line writes the FULL ordered plan, ensuring the old automatic notch-beam
+  // generator cannot silently reinsert a phantom segment.
+  const moveBeamStation = (index: number, proposed: number, dragging = false) => {
+    const line = model.beamLines[index];
+    if (!line || !Number.isFinite(proposed)) {
+      setPostFeedback('Enter a valid beam station in feet.'); return;
     }
-    const index = beamOffsets.filter((offset) => offset < midpoint).length;
+    if (line.postMode === 'manual' && line.postSpecs.some((post) => post.locked)) {
+      setPostFeedback('Beam ' + (index + 1) + ' contains locked support posts. Unlock those posts before moving the beam.'); return;
+    }
+    const length = model.joistDirection === 'vertical' ? model.depth : model.width;
+    const canTouchEdge = model.attachment === 'freestanding' || model.attachment === 'brick';
+    const low = index === 0 ? (canTouchEdge ? 0 : 0.25) : beamOffsets[index - 1] + 0.25;
+    const high = index === beamOffsets.length - 1 ? (canTouchEdge ? length : length - 0.25) : beamOffsets[index + 1] - 0.25;
+    if (low > high) {
+      setPostFeedback('Beam stations are too close together. Remove or separate neighboring beams first.'); return;
+    }
+    if (!dragging && (proposed < low - 0.0001 || proposed > high + 0.0001)) {
+      setPostFeedback('Beam ' + (index + 1) + ' must remain between ' + feetAndInches(low) + ' and ' + feetAndInches(high) + '.'); return;
+    }
+    const station = snap(clamp(proposed, low, high));
+    if (Math.abs(station - beamOffsets[index]) < 0.001) return;
+    const apply = (current: Record<string, string | number | boolean>) => ({
+      ...current,
+      [tierKey('customBeamYs')]: JSON.stringify(beamOffsets.map((value, i) => i === index ? station : value)),
+    });
+    if (dragging) onValuesChange(apply);
+    else commitChange(apply);
+    setPostFeedback('');
+    setSelectedBeamIndex(index);
+  };
+  const addBeamLine = () => {
+    const length = model.joistDirection === 'vertical' ? model.depth : model.width;
+    const limits = [0, ...beamOffsets, length].sort((a, b) => a - b);
+    const gaps = limits.slice(1).map((end, i) => ({ start: limits[i], end, width: end - limits[i] }))
+      .filter((gap) => gap.width > 0.75).sort((a, b) => b.width - a.width);
+    if (!gaps.length) { setPostFeedback('No open beam bay is wide enough for another line.'); return; }
+    const gap = gaps[0];
+    const station = snap((gap.start + gap.end) / 2);
+    if (beamOffsets.some((offset) => Math.abs(offset - station) < 0.25)) {
+      setPostFeedback('New beam would overlap an existing beam.'); return;
+    }
+    const index = beamOffsets.filter((offset) => offset < station).length;
     commitChange((current) => ({
       ...current,
-      [tierKey('customBeamYs')]: JSON.stringify([...beamOffsets, midpoint].sort((a,b)=>a-b)),
+      [tierKey('customBeamYs')]: JSON.stringify([...beamOffsets, station].sort((a,b)=>a-b)),
       [tierKey('postLayouts')]: JSON.stringify(shiftPostLayoutIndices(manualPostLayouts, index, 'insert')),
       [tierKey('lockedPosts')]: JSON.stringify(lockedPosts.map((p) => ({ ...p, beamIndex: p.beamIndex >= index ? p.beamIndex + 1 : p.beamIndex }))),
       [tierKey('beamEdits')]: JSON.stringify(beamEdits.map((b) => ({ ...b, beamIndex: b.beamIndex >= index ? b.beamIndex + 1 : b.beamIndex }))),
     }));
+    setSelectedBeamIndex(index);
+    setPostFeedback('');
   };
-  const removeBeamLine = (index: number) => commitChange((current) => ({
-    ...current,
-    [tierKey('customBeamYs')]: JSON.stringify(beamOffsets.filter((_, currentIndex) => currentIndex !== index)),
-    [tierKey('beamEdits')]: JSON.stringify(beamEdits.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))),
-    [tierKey('lockedPosts')]: JSON.stringify(lockedPosts.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))),
-    [tierKey('postLayouts')]: JSON.stringify(shiftPostLayoutIndices(manualPostLayouts, index, 'remove')),
-  }));
+  const removeBeamLine = (index: number) => {
+    if (beamOffsets.length <= 1) {
+      setPostFeedback('At least one beam line must remain. Use Reset beams & supports to restore automatic layout.'); return;
+    }
+    commitChange((current) => ({
+      ...current,
+      [tierKey('customBeamYs')]: JSON.stringify(beamOffsets.filter((_, currentIndex) => currentIndex !== index)),
+      [tierKey('beamEdits')]: JSON.stringify(beamEdits.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))),
+      [tierKey('lockedPosts')]: JSON.stringify(lockedPosts.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))),
+      [tierKey('postLayouts')]: JSON.stringify(shiftPostLayoutIndices(manualPostLayouts, index, 'remove')),
+    }));
+    setSelectedBeamIndex(Math.max(0, Math.min(index, beamOffsets.length - 2)));
+  };
+  const resetBeamLayout = () => {
+    commitChange((current) => ({
+      ...current,
+      [tierKey('customBeamYs')]: JSON.stringify([]),
+      [tierKey('postLayouts')]: JSON.stringify([]),
+      [tierKey('lockedPosts')]: JSON.stringify([]),
+      [tierKey('beamEdits')]: JSON.stringify([]),
+    }));
+    setSelectedBeamIndex(0);
+    setPostFeedback('Automatic beams and support posts restored. Undo is available if needed.');
+  };
+
   const updateBeamEdit = (index: number, key: 'startTrim' | 'endTrim', value: number) => commitChange((current) => {
     const next = [...beamEdits];
     const match = next.findIndex((item) => item.beamIndex === index);
@@ -492,23 +551,28 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     setDraggingIndex(index);
   };
 
-  const onBeamPointerDown = (event: PointerEvent<SVGLineElement>, index: number) => {
+  const onBeamPointerDown = (event: PointerEvent<SVGElement>, index: number) => {
     if (mode === 'posts') return;
     event.preventDefault();
-    if (model.beamLines[index].postSpecs.some((post) => post.locked) && model.beamLines[index].postMode === 'manual') {
-      setPostFeedback('Unlock manually locked supports before moving beam ' + (index + 1) + '.'); return;
-    }
+    event.stopPropagation();
+    setSelectedBeamIndex(index);
     setMode('beams');
+    if (model.beamLines[index].postSpecs.some((post) => post.locked) && model.beamLines[index].postMode === 'manual') {
+      setPostFeedback('Unlock locked posts in Beam ' + (index + 1) + ' before moving it.'); return;
+    }
     pushHistory();
     setFuture([]);
     setDraggingBeamIndex(index);
+    try { svgRef.current?.setPointerCapture(event.pointerId); } catch { /* browser did not capture pointer */ }
   };
 
   const onPostPointerDown = (event: PointerEvent<SVGRectElement>, beamIndex: number, id: string) => {
+    if (mode === 'beams') { onBeamPointerDown(event, beamIndex); return; }
     event.preventDefault();
     event.stopPropagation();
     setMode('posts');
     setSelectedPost({ beamIndex, id });
+    setSelectedBeamIndex(beamIndex);
     pushHistory();
     setFuture([]);
     const beam = manualizePostBeam(beamIndex);
@@ -567,10 +631,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     }
     if (draggingBeamIndex !== null) {
       const along = model.joistDirection === 'vertical' ? point.y - model.minY : point.x - model.minX;
-      const previous = draggingBeamIndex > 0 ? beamOffsets[draggingBeamIndex - 1] + 0.25 : 0;
-      const next = draggingBeamIndex < beamOffsets.length - 1 ? beamOffsets[draggingBeamIndex + 1] - 0.25 : (model.joistDirection === 'vertical' ? model.depth : model.width);
-      const station = clamp(snap(along), previous, Math.max(previous, next));
-      onValuesChange((current) => ({ ...current, [tierKey('customBeamYs')]: JSON.stringify(beamOffsets.map((value, index) => index === draggingBeamIndex ? station : value)) }));
+      moveBeamStation(draggingBeamIndex, along, true);
       return;
     }
     if (draggingStair && model.stairPlacement.edgeIndex !== null) {
@@ -622,9 +683,9 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       <div className="designer-mode-row tidy-mode-row">
         <button type="button" className={activeTier === 'main' ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => { setActiveTier('main'); setMode('points'); setSelectedIndex(null); setDrawingSequence(mainPoints.length === 0); }}>Main deck shape</button>
         {lowerTierEnabled && <button type="button" className={activeTier === 'lower' ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => { setActiveTier('lower'); setMode('points'); setSelectedIndex(null); setDrawingSequence(lowerPoints.length === 0); }}>Lower tier shape</button>}
-        {(['points', 'house', 'railing', 'stairs', 'beams', 'posts'] as EditMode[]).map((item) => (
+        {(['points', 'house', 'beams', 'posts', 'railing', 'stairs'] as EditMode[]).map((item) => (
           <button key={item} type="button" className={mode === item ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => setMode(item)}>
-            {item === 'points' ? (drawingSequence ? 'Draw footprint' : 'Edit points') : item === 'house' ? 'Pick house sides' : item === 'railing' ? 'Pick railing edges' : item === 'stairs' ? 'Place stairs' : item === 'beams' ? 'Move beam lines' : 'Edit posts'}
+            {item === 'points' ? (drawingSequence ? 'Draw footprint' : 'Edit points') : item === 'house' ? 'Pick house sides' : item === 'railing' ? 'Pick railing edges' : item === 'stairs' ? 'Place stairs' : item === 'beams' ? 'Move beams' : 'Edit posts'}
           </button>
         ))}
         <button type="button" className="ghost-btn mode-btn" onClick={undo} disabled={!history.length}>Undo</button>
