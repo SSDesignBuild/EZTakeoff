@@ -444,6 +444,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const deckingType = String(inputs.deckingType ?? 'composite');
   const isPressureTreatedDecking = /pressure/i.test(deckingType);
   const frameFastenerChoice = String(inputs.frameFastenerChoice ?? 'framing-screws');
+  const connectorFastenerChoice = String(inputs.connectorFastenerChoice ?? 'hanger-nails');
   const trimFastenerChoice = String(inputs.trimFastenerChoice ?? 'cortex-fascia');
   const framingWoodGrade = String(inputs.framingWoodGrade ?? '#2 Prime pressure treated');
   const railingWoodGrade = String(inputs.railingWoodGrade ?? '#2 prime pressure treated');
@@ -543,10 +544,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     const lowerPostCutFt = Math.max(0.5, (lowerHeightFt * 12 - joistActualHeightInches(lowerDeck.joistSize)) / 12);
     const lowerPostStock = optimizeRepeatedCuts(lowerDeck.postCount, lowerPostCutFt, [8, 10, 12, 16]);
     materials.push(
-      toMaterial('6x6 wood posts', 'Structure', lowerPostStock.stockCount, 'boards', `${lowerPostStock.stockLength} ft stock`, framingWoodGrade, `Lower tier: ${lowerDeck.postCount} post(s) cut to about ${feetAndInches(lowerPostStock.cutLength)} each`),
-      toMaterial('Concrete mix', 'Structure', lowerDeck.concreteBags, 'bags', '80 lb bags', undefined, 'Lower tier: 3 bags per post footing'),
-      toMaterial('12 in x 48 in Sonotubes', 'Structure', Math.ceil(lowerDeck.postCount / 3), 'tubes', '1 tube per 3 footers', undefined, `Lower tier: ${lowerDeck.postCount} 6x6 post footer(s) total`),
-      toMaterial('Post brackets', 'Hardware', lowerDeck.postBases, 'ea', '1 per post', undefined, 'Lower tier post base bracket at each footing'),
+      toMaterial(`${lowerDeck.postSize} wood posts`, 'Structure', lowerPostStock.stockCount, 'boards', `${lowerPostStock.stockLength} ft stock`, framingWoodGrade, `Lower tier: ${lowerDeck.postCount} post(s) cut to about ${feetAndInches(lowerPostStock.cutLength)} each`),
+      toMaterial('Concrete mix', 'Structure', lowerDeck.concreteBags, 'bags', '80 lb bags', undefined, `Lower tier: ${lowerDeck.footingBagsPerPost} bags per ${lowerDeck.footingDiameterIn} in diameter × ${lowerDeck.footingDepthIn} in deep round footing, approximately 0.6 cu ft yield per bag; site verification required`),
+      toMaterial(`${lowerDeck.footingDiameterIn} in x ${lowerDeck.footingTubeStockIn} in Sonotubes`, 'Structure', lowerDeck.footingTubeCount, 'tubes', `${Math.max(1, Math.floor(lowerDeck.footingTubeStockIn / lowerDeck.footingDepthIn))} footing cuts per tube`, undefined, `Lower tier: ${lowerDeck.postCount} round footing(s), ${lowerDeck.footingDepthIn} in concrete depth; confirm tube use and embedment`),
+      toMaterial('Post brackets', 'Hardware', lowerDeck.postBases, 'ea', `Compatible with ${lowerDeck.postSize} posts`, undefined, 'Lower tier approved post base at each footing'),
       toMaterial('Concrete submersible J Anchors', 'Hardware', lowerDeck.concreteAnchors, 'ea', '1 per post bracket', undefined, 'Lower tier concrete anchor for post base bracket'),
       toMaterial('Joist hangers', 'Hardware', lowerDeck.joistHangers, 'ea', 'Match joist size', undefined, 'Lower tier: one hanger at each end of every joist'),
       ...(lowerDeck.angledJoistHangers > 0 ? [toMaterial('Angled joist hangers', 'Hardware', lowerDeck.angledJoistHangers, 'ea', 'Match joist size', undefined, 'Lower tier joists landing against angled deck edges')] : []),
@@ -575,10 +576,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const structuralPostStock = optimizeRepeatedCuts(deck.postCount, structuralPostCutFt, [8, 10, 12, 16]);
 
   materials.push(
-    toMaterial('6x6 wood posts', 'Structure', structuralPostStock.stockCount, 'boards', `${structuralPostStock.stockLength} ft stock`, framingWoodGrade, `${deck.postCount} post(s) cut to about ${feetAndInches(structuralPostStock.cutLength)} each after subtracting ${deck.joistSize} joist height from ${feetAndInches(deckHeightFt)} deck height · ${structuralPostStock.perStock} cut(s) per stock board${deck.lockedPosts.length ? ` · ${deck.lockedPosts.length} post position(s) manually locked` : ''}`),
-    toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', undefined, '3 bags per post footing'),
-    toMaterial('12 in x 48 in Sonotubes', 'Structure', Math.ceil(deck.postCount / 3), 'tubes', '1 tube per 3 footers', undefined, `${deck.postCount} 6x6 post footer(s) total`),
-    toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', '1 per post', undefined, 'Post base bracket at each footing'),
+    toMaterial(`${deck.postSize} wood posts`, 'Structure', structuralPostStock.stockCount, 'boards', `${structuralPostStock.stockLength} ft stock`, framingWoodGrade, `${deck.postCount} post(s) cut to about ${feetAndInches(structuralPostStock.cutLength)} each after subtracting ${deck.joistSize} joist height from ${feetAndInches(deckHeightFt)} deck height · ${structuralPostStock.perStock} cut(s) per stock board${deck.lockedPosts.length ? ` · ${deck.lockedPosts.length} post position(s) manually locked` : ''}`),
+    toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', undefined, `${deck.footingBagsPerPost} bags per ${deck.footingDiameterIn} in diameter × ${deck.footingDepthIn} in deep round footing, approximately 0.6 cu ft yield per bag; verify soil and frost depth`),
+    toMaterial(`${deck.footingDiameterIn} in x ${deck.footingTubeStockIn} in Sonotubes`, 'Structure', deck.footingTubeCount, 'tubes', `${Math.max(1, Math.floor(deck.footingTubeStockIn / deck.footingDepthIn))} footing cuts per tube`, undefined, `${deck.postCount} round footing(s) at ${deck.footingDepthIn} in concrete depth; verify tube use and embedment`),
+    toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', `Compatible with ${deck.postSize} posts`, undefined, 'Approved post base bracket at each footing'),
     toMaterial('Concrete submersible J Anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined, 'Concrete anchor for post base bracket'),
     toMaterial('Joist hangers', 'Hardware', deck.joistHangers, 'ea', 'Match joist size', undefined, 'One hanger at each end of every joist'),
     ...(deck.angledJoistHangers > 0 ? [toMaterial('Angled joist hangers', 'Hardware', deck.angledJoistHangers, 'ea', 'Match joist size', undefined, 'Joists landing against angled deck edges') ] : []),
@@ -593,7 +594,9 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       ? [toMaterial('3-1/2 in exterior framing screws', 'Hardware', Math.max(1, Math.ceil(deck.deckFastenerCount / 365)), 'boxes', '365 per box', undefined, 'Selected frame assembly fastener for deck framing.')]
       : [toMaterial('21 degree 3 in x .120 exterior collated nails with ring shank', 'Hardware', Math.max(1, Math.ceil(totalDeckAreaForNails / 200)), 'boxes', '1000 nails per box', undefined, 'Selected frame assembly fastener. Add 1000 nails per 200 sq ft of decking.')]),
     ...(isPressureTreatedDecking ? [toMaterial('3-1/2 in exterior screws used for deck boards', 'Hardware', Math.max(1, Math.ceil((deck.area + (lowerDeck ? lowerDeck.area : 0)) / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For pressure-treated decking, breaker boards, and picture-frame areas that are face screwed')] : [toMaterial('2-3/8 in CAMO screws', 'Hardware', Math.max(1, Math.ceil(deck.deckFastenerCount / 1750)), 'boxes', '1750 per box', undefined, 'Hidden deck fasteners for composite/PVC decking')]),
-    toMaterial('1-1/2 in nails', 'Hardware', connectorNails, 'nails', '10 per connector/tie', undefined, 'Used for joist hangers, post brackets, lateral load brackets, and hurricane ties; replaces separate 3 in nail takeoff for easier ordering'),
+    ...(connectorFastenerChoice === 'approved-screws'
+      ? [toMaterial('Connector-rated structural fastener screws', 'Hardware', connectorNails, 'ea', 'Manufacturer-approved hanger/connector screw model required', undefined, 'Do not substitute standard deck/framing screws; verify exact hanger manufacturer and schedule before purchasing.')]
+      : [toMaterial('Structural joist-hanger connector nails', 'Hardware', connectorNails, 'nails', 'Manufacturer-approved hanger/connector nails', undefined, 'Connector fastener quantities derived from hangers, bases, lateral brackets and ties; verify approved length and diameter.')]),
     ...(colorMatchedTrimFastenerPoints > 0 && trimFastenerChoice === 'cortex-fascia' ? [
       toMaterial('Cortex color match fascia screws', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '2 screws per lf', fasciaStyleInfo.color ?? deckingStyleInfo.color, `Small head screws, not big flat head screws. 2 screws every 1 ft of picture-frame board, stair board, and fascia board used. Picture frame ${pictureFrameBoardLf.toFixed(1)} lf + step boards ${stairDeckBoardLf.toFixed(1)} lf + fascia ${totalFasciaBoardLf.toFixed(1)} lf.`),
     ] : []),
@@ -738,6 +741,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     summary: [
       { label: 'Skirting', value: [skirtingPlan, lowerSkirtingPlan].filter((p) => p?.enabled).map((p) => p!.sides.length+' sides / '+p!.finishStock.length+' finish stock boards').join('; ') || 'None' },
       ...(timberTechPlan ? [{label: 'TimberTech railing',value: timberTechPlan.profile+' / '+timberTechPlan.color+' / '+timberTechPlan.panels.length+' panel kits'}] : []),
+      { label: 'Framing & footings', value: `${deck.joistSize} joists · ${deck.beamMemberSize} beams · ${deck.postSize} posts · ${deck.footingDiameterIn} in × ${deck.footingDepthIn} in footings` },
       { label: 'Deck area', value: lowerDeck ? `${(deck.area + lowerDeck.area).toFixed(1)} sq ft total` : `${deck.area.toFixed(1)} sq ft` },
       { label: 'Surface', value: useSubfloorDecking ? '4x8x3/4 subfloor sheets, staggered brick pattern' : (deck.boardRun === 'width' ? 'Deck boards parallel to house / stock tracks width' : 'Deck boards perpendicular to house / stock tracks projection') },
       { label: 'Stairs', value: deck.stairCount ? `${deck.stairRisers} risers · ${deck.stairTreadsPerRun} treads · ${deck.stairStringers} stringers` : 'No stairs' },
@@ -762,6 +766,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       deck.beamLines.some((beam) => beam.postMode === 'manual') ? 'Manual post coordinates are authoritative for drawing, footing, post-base, anchor and structural bolt counts; engineer review required.' : 'Automatic post spacing is a preliminary layout only.',
       'Main deck support references: ' + deck.postLocations.map((post) => post.reference + ' at X ' + feetAndInches(post.x) + ', Y ' + feetAndInches(post.y)).join('; '),
       ...deck.postEngineeringNotes,
+      `Concrete volume assumes full-depth round piers and 0.6 cu ft per 80 lb bag; final footing design, soil bearing and frost depth require field/engineer approval.`,
       ...(skirtingPlan.enabled ? skirtingPlan.notes : []),
       ...(lowerSkirtingPlan?.enabled ? lowerSkirtingPlan.notes.map((note) => 'Lower tier: '+note) : []),
       ...(timberTechPlan ? timberTechPlan.notes : []),
