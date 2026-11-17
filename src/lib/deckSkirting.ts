@@ -97,7 +97,7 @@ export function buildDeckSkirting(
   const category=prefix?'Lower deck skirting':'Deck skirting';
   const enabled=inputs[key('skirtingEnabled')]===true || String(inputs[key('skirtingEnabled')])==='true';
   const material=String(inputs[key('skirtingMaterial')] ?? 'kdat');
-  const orientation=inputs[key('skirtingOrientation')]==='horizontal' ? 'horizontal' : 'vertical';
+  const orientation: 'horizontal' | 'vertical'=inputs[key('skirtingOrientation')]==='horizontal' ? 'horizontal' : 'vertical';
   const finishColor=String(inputs[key('skirtingColor')] ?? 'Natural / stain-ready');
   const faceIn=num(inputs[key('skirtingFaceIn')],material==='kdat'?4.5:5.5);
   const revealIn=num(inputs[key('skirtingRevealIn')],1);
