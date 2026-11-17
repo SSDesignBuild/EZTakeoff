@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { exportCanvasAsPdf, exportCanvasAsPng, exportCanvasesAsPdf, svgElementToExportCanvases } from '../lib/export';
+import { exportCanvasAsPdf, exportCanvasAsPng, exportCanvasesAsPdf, svgElementToExportCanvases, svgElementToCanvas } from '../lib/export';
 import { MaterialItem } from '../lib/types';
 
 interface MaterialTableProps {
@@ -205,6 +205,60 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     ctx.fillStyle = '#374151';
     wrapText(ctx, jobNotes, pageWidth - margin * 2).forEach((line, idx) => ctx.fillText(line, margin, y + idx * 14));
   }
+  return canvas;
+}
+
+
+async function renderCombinedSkirtingSheet(cards: Element[]) {
+  if (!cards.length) return null;
+  // Each side/flight gets BOTH finish and framing elevations grouped in one
+  // card. One landscape sheet prevents an N-side project from producing N PDF
+  // sheets with tiny, unlabeled sections.
+  const groups = await Promise.all(cards.map(async (card) => {
+    const svgs = Array.from(card.querySelectorAll<SVGSVGElement>('svg[data-export-skirting="true"]'));
+    const views = await Promise.all(svgs.map((svg) => svgElementToCanvas(svg)));
+    const tier = card.closest('[data-export-skirt-tier]')?.getAttribute('data-export-skirt-tier') ?? 'Deck';
+    const name = svgs[0]?.getAttribute('data-export-skirt-label') ?? 'Skirting side';
+    const layers = svgs.map((svg) => svg.getAttribute('data-export-skirt-layer') ?? 'finish');
+    return {label:tier+' · '+name,views,layers};
+  }));
+  const width=2400,height=1650;
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+  const ctx=canvas.getContext('2d');if(!ctx)return null;
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,width,height);
+  ctx.fillStyle='#171717';ctx.font='bold 52px Arial';
+  ctx.fillText('S&S DESIGN BUILD  /  DECK & STAIR SKIRTING',64,83);
+  ctx.fillStyle='#475569';ctx.font='28px Arial';
+  ctx.fillText('FINISH + 2x4 SUPPORT ELEVATIONS  ·  ALL SIDES ON ONE SHEET',64,127);
+  const count=groups.length;
+  const cols=count<=3?1:count<=9?2:3;
+  const rows=Math.ceil(count/cols);
+  const gap=20,left=54,top=167,bottom=70;
+  const tileW=(width-left*2-gap*(cols-1))/cols;
+  const tileH=(height-top-bottom-gap*(rows-1))/rows;
+  for(let i=0;i<groups.length;i++){
+    const item=groups[i],x=left+(i%cols)*(tileW+gap),y=top+Math.floor(i/cols)*(tileH+gap);
+    ctx.fillStyle=i%2===0?'#f8fafc':'#edf2f7';
+    ctx.fillRect(x,y,tileW,tileH);
+    ctx.strokeStyle='#cbd5e1';ctx.lineWidth=2;ctx.strokeRect(x,y,tileW,tileH);
+    ctx.fillStyle='#0f172a';ctx.font='bold 26px Arial';
+    ctx.fillText(item.label.slice(0,52),x+20,y+35,tileW-40);
+    const innerTop=y+49,innerHeight=tileH-60;
+    const layerHeight=innerHeight/Math.max(1,item.views.length);
+    item.views.forEach((view,j)=>{
+      if(!view)return;
+      const xPad=16,yPad=7;
+      const availableW=tileW-2*xPad,availableH=layerHeight-2*yPad;
+      const factor=Math.min(availableW/view.width,availableH/view.height);
+      const drawW=view.width*factor,drawH=view.height*factor;
+      const dx=x+(tileW-drawW)/2,dy=innerTop+j*layerHeight+(layerHeight-drawH)/2;
+      ctx.drawImage(view,dx,dy,drawW,drawH);
+      ctx.fillStyle='#334155';ctx.font='bold 17px Arial';
+      ctx.fillText((item.layers[j]??'').toUpperCase(),x+14,innerTop+j*layerHeight+20);
+    });
+  }
+  ctx.fillStyle='#475569';ctx.font='22px Arial';
+  ctx.fillText('Field verify sloping stair details, ground contact, finished grades and manufacturer clearances before fabrication.',64,height-25);
   return canvas;
 }
 
@@ -420,13 +474,16 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     const root = document.getElementById('service-export-root');
     // Include the deck plan and every configured skirting/railing elevation.
     // All these SVGs are driven by the same geometry as the supplier cuts.
-    const drawings = Array.from(root?.querySelectorAll('svg') ?? []) as SVGSVGElement[];
-    if (!drawings.length) return;
+    const drawings = Array.from(root?.querySelectorAll('svg:not([data-export-skirting])') ?? []) as SVGSVGElement[];
+    const skirtingCards = Array.from(root?.querySelectorAll('[data-export-skirt-card="true"]') ?? []);
+    if (!drawings.length && !skirtingCards.length) return;
     const layoutTitle = projectExportTitle('S&S Design Build · Layout', values);
     const layoutCanvases = [] as HTMLCanvasElement[];
     for (const svg of drawings) {
       layoutCanvases.push(...await svgElementToExportCanvases(svg, layoutTitle));
     }
+    const skirtingSheet = await renderCombinedSkirtingSheet(skirtingCards);
+    if (skirtingSheet) layoutCanvases.push(skirtingSheet);
     if (!layoutCanvases.length) return;
     const materialCanvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
     const forcePortraitByIndex = { [layoutCanvases.length]: true } as Record<number, boolean>;
