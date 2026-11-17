@@ -24,6 +24,7 @@ function SkirtingElevation({side,orientation,framing,gapIn,faceIn}:{
   const ground=(x:number)=>stair?top+side.startHeightFt*scale:top+at(x)*scale;
   const w=700,h=Math.max(190,Math.max(ground(0),ground(side.lengthFt))+35);
   return <svg role="img" data-export-skirting="true" data-export-skirt-label={side.label ?? ('Deck side '+(side.edgeIndex+1))}
+    data-export-skirt-layer={framing?'framing':'finish'}
     aria-label={(side.label ?? 'Side '+(side.edgeIndex+1))+' elevation showing '+(framing?'2x4 support framing':'skirting finish')} viewBox={'0 0 '+w+' '+h}
     style={{display:'block',width:'100%',maxHeight:260,background:'#f9fafb',border:'1px solid #d1d5db',borderRadius:8}}>
     <line x1={px(0)} y1={topAt(0)-7} x2={px(side.lengthFt)} y2={topAt(side.lengthFt)-7} stroke="#374151" strokeWidth={8}/>
@@ -121,6 +122,9 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
     {plan.issues.map((issue,i)=><p key={'issue-'+i} role="alert" style={{color:'#b91c1c'}}>{issue}</p>)}
     {plan.sides.map((side)=><article key={'side-'+side.edgeIndex} style={{border:'1px solid #d1d5db',borderRadius:10,padding:12,marginBottom:14}}>
       <SkirtingElevation side={side} framing={framing} orientation={plan.options.orientation} gapIn={plan.options.gapIn} faceIn={plan.options.faceIn}/>
+      <div className="skirting-export-counterpart" aria-hidden="true">
+        <SkirtingElevation side={side} framing={!framing} orientation={plan.options.orientation} gapIn={plan.options.gapIn} faceIn={plan.options.faceIn}/>
+      </div>
       <div className="form-grid organized-config-grid" style={{marginTop:12}}>
         <label className="form-field"><span>Side {side.edgeIndex+1}: starting ground height (ft)</span>
           <input type="number" min={0.1} step={1/12} style={fieldStyle} value={(grades.find((x)=>x.edgeIndex===side.edgeIndex)?.startFt??gradeBase).toFixed(3)}
@@ -154,6 +158,10 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
         <h5>{side.label}</h5>
         <SkirtingElevation side={side} orientation={stairPlan.options.orientation} framing={framing}
           gapIn={stairPlan.options.gapIn} faceIn={stairPlan.options.faceIn}/>
+        <div className="skirting-export-counterpart" aria-hidden="true">
+          <SkirtingElevation side={side} orientation={stairPlan.options.orientation} framing={!framing}
+            gapIn={stairPlan.options.gapIn} faceIn={stairPlan.options.faceIn}/>
+        </div>
         <small className="muted">{side.finishCuts.length} finish cuts · {side.framingCuts.length} support cuts</small>
       </article>)}
     </div>}
