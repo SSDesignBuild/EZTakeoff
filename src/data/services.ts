@@ -104,10 +104,16 @@ export const SERVICES: ServiceDefinition[] = [
   {
     slug: 'decks',
     label: 'Decks',
-    intro: 'Draw the deck footprint, lock posts where you want to keep them, move beam lines, and build grouped take-offs that follow how S&S frames decks in the field.',
+    intro: 'Start with structure and site, draw the deck, position beams and supports, then select finishes, railing and stairs before preparing the customer takeoff.',
     highlights: ['Drag points', 'Undo / redo', 'Snap cleaner corners', 'Lock post locations'],
     defaults: {
       deckHeight: 8,
+      joistSizeChoice: 'auto',
+      beamSizeChoice: 'auto',
+      postSizeChoice: '6x6',
+      footingDiameterIn: 12,
+      footingDepthIn: 24,
+      connectorFastenerChoice: 'hanger-nails',
       multiTierEnabled: false,
       lowerDeckHeight: 3,
       lowerDeckWidth: 8,
@@ -201,7 +207,29 @@ export const SERVICES: ServiceDefinition[] = [
       railingWoodGrade: '#2 prime pressure treated',
     },
     fields: [
-      { key: 'deckHeight', label: 'Deck height (ft)', type: 'number', min: 0, step: 0.1 },
+      { key: 'deckHeight', label: 'Deck elevation (ft)', type: 'number', min: 0, step: 0.1, helper: 'Measured from grade to finished deck surface. Verify site grade and beam clearance.' },
+      { key: 'joistSizeChoice', label: 'Joist dimension', type: 'select', options: [
+        { label: 'Auto-size (preliminary span guide)', value: 'auto' },
+        { label: '2 × 8', value: '2x8' },
+        { label: '2 × 10', value: '2x10' },
+        { label: '2 × 12', value: '2x12' },
+      ], helper: 'Manual sizes update joists and rim-board takeoffs; verify structural span and loading.' },
+      { key: 'beamSizeChoice', label: 'Double-beam member size', type: 'select', options: [
+        { label: 'Auto-size (preliminary span guide)', value: 'auto' },
+        { label: 'Double 2 × 10', value: '2x10' },
+        { label: 'Double 2 × 12', value: '2x12' },
+        { label: 'Engineered PSL (section/spec required)', value: 'PSL' },
+      ], helper: 'Manual size updates beam takeoff; PSL requires an engineered depth/grade.' },
+      { key: 'postSizeChoice', label: 'Deck support post size', type: 'select', options: [
+        { label: '6 × 6 pressure treated — S&S standard', value: '6x6' },
+        { label: '8 × 8 pressure treated', value: '8x8' },
+      ], helper: 'Sets actual stock/post base size. 4 × 4 deck support posts are not offered.' },
+      { key: 'footingDiameterIn', label: 'Concrete footing / tube diameter (in)', type: 'number', min: 8, step: 2, helper: 'Round pier diameter. Engineered bearing and frost-depth approval remain required.' },
+      { key: 'footingDepthIn', label: 'Concrete footing depth (in)', type: 'number', min: 12, step: 6, helper: 'Full concrete pier depth used for volume and tube stock calculations; confirm local minimum and soil conditions.' },
+      { key: 'connectorFastenerChoice', label: 'Joist hanger / connector fasteners', type: 'select', options: [
+        { label: 'Manufacturer-approved connector nails', value: 'hanger-nails' },
+        { label: 'Manufacturer-rated structural connector screws', value: 'approved-screws' },
+      ], helper: 'Do not substitute ordinary wood screws into structural hangers.' },
       { key: 'multiTierEnabled', label: 'Add lower deck tier', type: 'boolean', helper: 'When enabled, the deck designer shows lower-tier drawing/editing controls.' },
       { key: 'lowerDeckHeight', label: 'Lower tier height (ft)', type: 'number', min: 0, step: 0.1, showIf: { key: 'multiTierEnabled', equals: true } },
       { key: 'lowerDeckWidth', label: 'Lower tier width (ft)', type: 'number', min: 0, step: 0.5, showIf: { key: 'multiTierEnabled', equals: true } },
