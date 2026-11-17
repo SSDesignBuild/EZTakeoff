@@ -680,7 +680,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       ...(deck.stairCount > 0 && deck.stairRailSideCount > 0 ? Array.from({ length: deck.stairCount * deck.stairRailSideCount }).flatMap(() => splitRailRunIntoStockCuts(deck.stairRunFt)) : []),
     ];
     const drinkRailLf = drinkRailCuts.reduce((sum, length) => sum + length, 0);
-    const drinkStock = optimizeStockCuts(drinkRailCuts, [8, 12, 16, 20]);
+    const drinkStock = optimizeStockCuts(drinkRailCuts, /pressure\s*treated/i.test(drinkRailMaterial) ? [8, 12, 16, 20] : [16, 20]);
     if (drinkStock.count > 0) {
       materials.push(toMaterial(
         `${drinkRailMaterial} drink rail boards`,
@@ -689,7 +689,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
         'boards',
         `${drinkStock.stockLength} ft stock`,
         drinkRailMaterial === deckingMaterial ? deckingStyleInfo.color : drinkStyleInfo.color,
-        `${drinkRailLf.toFixed(1)} lf drink rail across ${drinkRailCuts.length} level/angled railing section cut(s) · optimized from available 8, 12, 16, and 20 ft decking stock`,
+        `${drinkRailLf.toFixed(1)} lf drink rail across ${drinkRailCuts.length} level/angled railing section cut(s) · optimized from actual product availability (16/20 ft for composite/PVC)`,
       ));
     }
   }
