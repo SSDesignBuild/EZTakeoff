@@ -54,10 +54,12 @@ function RailingTierElevation({values,lower=false}: {values:Inputs;lower?:boolea
           : <rect x={left-8} y={topY-topExtension} width={railWidth+16} height={topExtension+8} rx={profile==='classic'?5:2} stroke={col} strokeWidth={2} fill={col}/>}
         {[left,right].map((x,i)=><g key={i}>
           <rect x={x-12} y={leftCapTop} width={24} height={188-leftCapTop} fill={col}/>
-          {plan.postCap==='standard'
-            ? <rect x={x-15} y={leftCapTop-5} width={30} height={6} rx={2} fill={col}/>
-            : <g><rect x={x-16} y={leftCapTop-11} width={32} height={11} rx={3} fill={col}/>
-              {plan.postCap!=='decorative'&&<circle cx={x} cy={leftCapTop-6} r={5} fill="#fbbf24" stroke="#92400e" strokeWidth={2}/>}</g>}
+          {plan.postCap==='none'
+            ? null
+            : plan.postCap==='standard'
+              ? <rect x={x-15} y={leftCapTop-5} width={30} height={6} rx={2} fill={col}/>
+              : <g><rect x={x-16} y={leftCapTop-11} width={32} height={11} rx={3} fill={col}/>
+                {plan.postCap!=='decorative'&&<circle cx={x} cy={leftCapTop-6} r={5} fill="#fbbf24" stroke="#92400e" strokeWidth={2}/>}</g>}
           <text x={x} y={211} fontSize={12} fill="#374151" textAnchor="middle">{i===0?'START POST':'END POST'}</text>
         </g>)}
         <text x={350} y={225} fontSize={11} fill="#4b5563" textAnchor="middle">{selected.label+' · '+selected.stockFt+' ft nominal panel, '+h+' in finished height'}</text>
