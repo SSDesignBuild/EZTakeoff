@@ -11,6 +11,18 @@ interface MaterialTableProps {
 
 interface CustomMaterialItem extends MaterialItem { id: string; }
 interface DisplayMaterialItem extends MaterialItem { rowKey: string; source: 'estimate' | 'custom'; }
+interface RemovedMaterialRecord extends DisplayMaterialItem {
+  reason: 'unspecified' | 'on-hand' | 'supplier-unavailable' | 'not-needed' | 'other';
+  memo: string;
+  removedAt: string;
+}
+const REMOVAL_REASONS:Record<RemovedMaterialRecord['reason'],string>={
+  'unspecified':'Reason not yet selected',
+  'on-hand':'Already on hand',
+  'supplier-unavailable':'Supplier unavailable / substitute',
+  'not-needed':'Not needed for this job',
+  'other':'Other reason',
+};
 
 const infoFields = [
   { key: 'poJobName', label: 'P.O / Job name', type: 'text' as const },
@@ -271,6 +283,25 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
 
   const customItems = useMemo(() => parseJsonArray<CustomMaterialItem>(values.customMaterialItems, []), [values.customMaterialItems]);
   const deletedKeys = useMemo(() => new Set(parseJsonArray<string>(values.deletedMaterialKeys, [])), [values.deletedMaterialKeys]);
+  const removedLog = useMemo(() => parseJsonArray<RemovedMaterialRecord>(values.removedMaterialLog, []), [values.removedMaterialLog]);
+  const removedRecords = useMemo<RemovedMaterialRecord[]>(() => {
+    const records=new Map(removedLog.map((item)=>[item.rowKey,item]));
+    // Older jobs saved only keys. Reconstruct those rows where they still match
+    // the current estimate; keep the key even if the estimate has changed.
+    deletedKeys.forEach((rowKey)=>{
+      if(records.has(rowKey))return;
+      const original=items.find((item)=>'estimate:'+item.category+'::'+item.name+'::'+
+        (item.stockRecommendation??'')+'::'+item.unit+'::'+(item.color??'')+'::'+(item.layoutLabel??'')===rowKey);
+      records.set(rowKey,{
+        rowKey,source:'estimate',name:original?.name??rowKey.split('::')[1]??'Previously excluded line',
+        category:original?.category??'Previously excluded',quantity:original?.quantity??0,unit:original?.unit??'ea',
+        stockRecommendation:original?.stockRecommendation??'Current item no longer matches saved key',
+        color:original?.color,notes:original?.notes,layoutLabel:original?.layoutLabel,
+        reason:'unspecified',memo:'',removedAt:'',
+      });
+    });
+    return [...records.values()];
+  },[removedLog,deletedKeys,items]);
   const noteOverrides = useMemo(() => {
     const raw = values.materialNoteOverrides;
     if (typeof raw !== 'string' || raw.trim() === '') return {} as Record<string, string>;
@@ -359,11 +390,21 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     return acc;
   }, {}), [activeItems]);
 
-  const hiddenItemCount = deletedKeys.size;
+  const hiddenItemCount = removedRecords.length;
+  const printGrouped = useMemo(()=>{
+    const out={...grouped};
+    if(removedRecords.length){
+      out['REMOVED / DO NOT ORDER (reference only)']=removedRecords.map((row)=>({
+        ...row, category:'REMOVED / DO NOT ORDER (reference only)',
+        name:'EXCLUDED: '+row.name,
+        notes:REMOVAL_REASONS[row.reason]+' · '+(row.memo||'No additional note')+' · '+(row.notes??''),
+      }));
+    }
+    return out;
+  },[grouped,removedRecords]);
   const exportBaseName = sanitizeFilePart(String(values.poJobName ?? 'sns-material-order-list'));
   const updateValue = (key: string, value: string) => onValuesChange((current) => ({ ...current, [key]: value }));
   const persistCustomItems = (nextItems: CustomMaterialItem[]) => onValuesChange((current) => ({ ...current, customMaterialItems: JSON.stringify(nextItems) }));
-  const persistDeletedKeys = (nextKeys: Set<string>) => onValuesChange((current) => ({ ...current, deletedMaterialKeys: JSON.stringify(Array.from(nextKeys)) }));
 
   const addCustomItem = () => {
     if (!customDraft.name.trim()) return;
@@ -383,13 +424,36 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
   };
 
   const deleteRow = (item: DisplayMaterialItem) => {
-    if (item.source === 'custom') {
-      persistCustomItems(customItems.filter((entry) => entry.id !== item.rowKey.replace('custom:', '')));
-      return;
-    }
-    const nextKeys = new Set(deletedKeys);
-    nextKeys.add(item.rowKey);
-    persistDeletedKeys(nextKeys);
+    const record:RemovedMaterialRecord={...item,reason:'unspecified',memo:'',removedAt:new Date().toISOString()};
+    onValuesChange((current)=>({
+      ...current,
+      removedMaterialLog:JSON.stringify([...removedRecords.filter((row)=>row.rowKey!==item.rowKey),record]),
+      ...(item.source==='custom'
+        ? {customMaterialItems:JSON.stringify(customItems.filter((entry)=>entry.id!==item.rowKey.replace('custom:','')))}
+        : {deletedMaterialKeys:JSON.stringify([...new Set([...deletedKeys,item.rowKey])])}),
+    }));
+  };
+  const editRemoval=(rowKey:string,changes:Partial<RemovedMaterialRecord>)=>{
+    onValuesChange((current)=>({
+      ...current, removedMaterialLog:JSON.stringify(removedRecords.map((record)=>
+        record.rowKey===rowKey?{...record,...changes}:record)),
+    }));
+  };
+  const restoreRow=(row:RemovedMaterialRecord)=>{
+    onValuesChange((current)=>{
+      const nextRemoved=removedRecords.filter((record)=>record.rowKey!==row.rowKey);
+      const nextDeleted=new Set(deletedKeys);nextDeleted.delete(row.rowKey);
+      const existingCustom=parseJsonArray<CustomMaterialItem>(current.customMaterialItems,[]);
+      const id=row.rowKey.replace('custom:','');
+      return {...current,
+        removedMaterialLog:JSON.stringify(nextRemoved),
+        deletedMaterialKeys:JSON.stringify([...nextDeleted]),
+        ...(row.source==='custom'&&!existingCustom.some((item)=>item.id===id)
+          ? {customMaterialItems:JSON.stringify([...existingCustom,{id,category:row.category,name:row.name,quantity:row.quantity,
+              unit:row.unit,stockRecommendation:row.stockRecommendation,color:row.color,notes:row.notes,layoutLabel:row.layoutLabel}])}
+          : {}),
+      };
+    });
   };
 
   const refreshToStandard = () => {
@@ -397,6 +461,7 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
       ...current,
       customMaterialItems: JSON.stringify([]),
       deletedMaterialKeys: JSON.stringify([]),
+      removedMaterialLog: JSON.stringify([]),
       materialNameOverrides: JSON.stringify({}),
       materialQuantityOverrides: JSON.stringify({}),
       materialUnitOverrides: JSON.stringify({}),
@@ -407,7 +472,18 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     setEditingKey(null);
     setEditingDraft({ name: '', quantity: '', unit: '', stockRecommendation: '', color: '', notes: '' });
   };
-  const restoreAllHidden = () => persistDeletedKeys(new Set());
+  const restoreAllHidden = () => {
+    const restoreCustom=removedRecords.filter((row)=>row.source==='custom').map((row)=>({
+      id:row.rowKey.replace('custom:',''),category:row.category,name:row.name,quantity:row.quantity,
+      unit:row.unit,stockRecommendation:row.stockRecommendation,color:row.color,notes:row.notes,layoutLabel:row.layoutLabel,
+    }));
+    onValuesChange((current)=>{
+      const custom=parseJsonArray<CustomMaterialItem>(current.customMaterialItems,[]);
+      const seen=new Set(custom.map((item)=>item.id));
+      return {...current,deletedMaterialKeys:JSON.stringify([]),removedMaterialLog:JSON.stringify([]),
+        customMaterialItems:JSON.stringify([...custom,...restoreCustom.filter((item)=>!seen.has(item.id))])};
+    });
+  };
   const startEdit = (item: DisplayMaterialItem) => {
     setEditingKey(item.rowKey);
     setEditingDraft({
