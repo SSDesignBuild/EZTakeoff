@@ -137,6 +137,12 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const [mode, setMode] = useState<EditMode>('points');
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [draggingBeamIndex, setDraggingBeamIndex] = useState<number | null>(null);
+  // Pointer refs are synchronous across React batching and model rebuilds.
+  // This fixes missed drags when starting a pointer gesture also persists a
+  // manual support layout and re-renders the SVG on the same frame.
+  const draggingBeamRef = useRef<number | null>(null);
+  const draggingPostRef = useRef<{ beamIndex: number; id: string } | null>(null);
+  const movedDuringGestureRef = useRef(false);
   const [selectedBeamIndex, setSelectedBeamIndex] = useState(0);
   const [draggingPost, setDraggingPost] = useState<{ beamIndex: number; id: string } | null>(null);
   const [selectedPost, setSelectedPost] = useState<{ beamIndex: number; id: string } | null>(null);
@@ -296,12 +302,31 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   };
 
   const handleCanvasClick = (event: MouseEvent<SVGSVGElement>) => {
-    if (mode !== 'points') return;
     const point = fromClientToModelPoint(event.clientX, event.clientY);
     if (!point) return;
-    if (drawingSequence) {
-      appendPoint({ x: clamp(point.x, limits.minX, limits.maxX), y: clamp(point.y, limits.minY, limits.maxY) });
+    if (mode === 'points') {
+      if (drawingSequence) appendPoint({ x: clamp(point.x, limits.minX, limits.maxX), y: clamp(point.y, limits.minY, limits.maxY) });
       return;
+    }
+    // An alternative to drag, useful on touchscreens and in browsers that
+    // drop pointer capture during React updates. Select a beam/post then click
+    // an unoccupied location on the grid to place it precisely.
+    if (movedDuringGestureRef.current) {
+      movedDuringGestureRef.current = false;
+      return;
+    }
+    if ((event.target as Element).closest?.('.beam-drag-hit,.beam-drag-handle,.post-lock,.deck-point,.stair-handle')) return;
+    if (mode === 'beams') {
+      const station = model.joistDirection === 'vertical' ? point.y - model.minY : point.x - model.minX;
+      moveBeamStation(inspectedBeamIndex, station);
+    }
+    if (mode === 'posts') {
+      const beamIndex = selectedPost?.beamIndex ?? inspectedBeamIndex;
+      const post = selectedPost ? model.beamLines[beamIndex]?.postSpecs.find((p) => p.id === selectedPost.id)
+        : model.beamLines[beamIndex]?.postSpecs[0];
+      if (!post) return;
+      const station = model.joistDirection === 'vertical' ? point.x : point.y;
+      movePostToStation(beamIndex, post.id, station);
     }
   };
 
@@ -551,6 +576,42 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     setDraggingIndex(index);
   };
 
+  // Reusable station update for both dragging and click-to-place; the first
+  // edit converts automatic supports to a saved manual layout without losing
+  // the point reference across renders.
+  const movePostToStation = (beamIndex: number, id: string, wanted: number, dragging = false) => {
+    const beam = model.beamLines[beamIndex];
+    const post = beam?.postSpecs.find((item) => item.id === id);
+    if (!beam || !post || !Number.isFinite(wanted)) return;
+    if (post.locked) {
+      setPostFeedback('Unlock ' + id + ' before repositioning this support.');
+      return;
+    }
+    const run = beam.segments.find((seg) => post.x >= seg.startX - .005 && post.x <= seg.endX + .005);
+    if (!run) {
+      setPostFeedback('The support no longer lies within a continuous beam run; reset it or update its station.');
+      return;
+    }
+    const station = snap(clamp(wanted, run.startX, run.endX));
+    if (beam.postSpecs.some((other) => other.id !== id && Math.abs(other.x - station) < 1 / 12 - .00001)) {
+      setPostFeedback('Support posts must have at least 1 inch of distinct station spacing.');
+      return;
+    }
+    const layouts = manualPostLayouts.some((l) => l.beamIndex === beamIndex)
+      ? manualPostLayouts : [...manualPostLayouts, manualizePostBeam(beamIndex)];
+    const apply = (current: Record<string, string | number | boolean>) => ({
+      ...current,
+      [tierKey('customBeamYs')]: JSON.stringify(beamOffsets),
+      [tierKey('postLayouts')]: JSON.stringify(layouts.map((l) =>
+        l.beamIndex === beamIndex ? {...l, posts: l.posts.map((p) => p.id === id ? {...p, x: station} : p)} : l)),
+      [tierKey('lockedPosts')]: JSON.stringify(lockedPosts.filter((item) => item.beamIndex !== beamIndex)),
+    });
+    if (dragging) onValuesChange(apply);
+    else commitChange(apply);
+    setPostFeedback('');
+    setSelectedPost({beamIndex,id});
+    setSelectedBeamIndex(beamIndex);
+  };
   const onBeamPointerDown = (event: PointerEvent<SVGElement>, index: number) => {
     if (mode === 'posts') return;
     event.preventDefault();
@@ -562,6 +623,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     }
     pushHistory();
     setFuture([]);
+    movedDuringGestureRef.current = false;
+    draggingBeamRef.current = index;
     setDraggingBeamIndex(index);
     try { svgRef.current?.setPointerCapture(event.pointerId); } catch { /* browser did not capture pointer */ }
   };
@@ -585,8 +648,10 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       }));
     }
     if (!beam.posts.some((post) => post.id === id && post.locked)) {
+      movedDuringGestureRef.current = false;
+      draggingPostRef.current = { beamIndex, id };
       setDraggingPost({ beamIndex, id });
-      event.currentTarget.ownerSVGElement?.setPointerCapture(event.pointerId);
+      try { svgRef.current?.setPointerCapture(event.pointerId); } catch { /* click-to-position still available */ }
     }
   };
 
@@ -606,22 +671,12 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       setPreviewPoint({ x: clamp(preview.x, limits.minX, limits.maxX), y: clamp(preview.y, limits.minY, limits.maxY) });
       return;
     }
-    if (draggingPost !== null) {
-      const { beamIndex, id } = draggingPost;
-      const beam = model.beamLines[beamIndex];
-      const target = beam?.postSpecs.find((post) => post.id === id);
-      const run = beam?.segments.find((segment) => target && target.x >= segment.startX - 0.005 && target.x <= segment.endX + 0.005);
-      if (!target || !run || target.locked) return;
-      const station = snap(model.joistDirection === 'vertical' ? point.x : point.y);
-      const nextX = clamp(station, run.startX, run.endX);
-      if (beam.postSpecs.some((post) => post.id !== id && Math.abs(post.x - nextX) < 1/12 - 0.00001)) return;
-      onValuesChange((current) => {
-        const parsed = parseExactPostLayouts(current[tierKey('postLayouts')]);
-        if (parsed.issues.length) return current;
-        return { ...current, [tierKey('postLayouts')]: JSON.stringify(parsed.layouts.map((entry) =>
-          entry.beamIndex === beamIndex ? { ...entry, posts: entry.posts.map((post) => post.id === id ? { ...post, x: nextX } : post) } : entry
-        )) };
-      });
+    const activePostDrag = draggingPostRef.current ?? draggingPost;
+    if (activePostDrag !== null) {
+      movedDuringGestureRef.current = true;
+      const {beamIndex,id}=activePostDrag;
+      const station = model.joistDirection === 'vertical' ? point.x : point.y;
+      movePostToStation(beamIndex,id,station,true);
       return;
     }
     if (draggingIndex !== null) {
@@ -629,9 +684,11 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       onValuesChange((current) => ({ ...current, [activeShapeKey]: JSON.stringify(next) }));
       return;
     }
-    if (draggingBeamIndex !== null) {
+    const activeBeamDrag = draggingBeamRef.current ?? draggingBeamIndex;
+    if (activeBeamDrag !== null) {
+      movedDuringGestureRef.current = true;
       const along = model.joistDirection === 'vertical' ? point.y - model.minY : point.x - model.minX;
-      moveBeamStation(draggingBeamIndex, along, true);
+      moveBeamStation(activeBeamDrag, along, true);
       return;
     }
     if (draggingStair && model.stairPlacement.edgeIndex !== null) {
@@ -650,6 +707,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
 
   useEffect(() => {
     const release = () => {
+      draggingBeamRef.current = null;
+      draggingPostRef.current = null;
       setDraggingIndex(null);
       setDraggingBeamIndex(null);
       setDraggingPost(null);
@@ -835,7 +894,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
                 aria-pressed={inspectedBeamIndex === index} className={inspectedBeamIndex === index ? 'secondary-btn small-btn' : 'ghost-btn small-btn'}
                 onClick={() => setSelectedBeamIndex(index)}>{'Beam ' + (index + 1) + ' · ' + beam.postXs.length + ' posts'}</button>)}
             </div>
-            <p className="muted">Select <strong>Edit posts</strong> to drag a square on the drawing, or enter exact station values below. Manual supports REPLACE automatic supports, and all post-dependent quantities update. Positions are not engineering approvals.</p>
+            <p className="muted">Click a support square to select it, then click a new place along its beam, drag the square, or type an exact station below. An automatic layout becomes editable on the first change. Unlock a locked post before moving it; structural engineering remains required.</p>
             {postFeedback && <p className="muted" role="status">{postFeedback}</p>}
             {model.postLayoutIssues.map((issue, i) => <p key={'post-issue-' + i} role="alert" style={{ color: '#b91c1c' }}>{issue}</p>)}
             {model.postEngineeringNotes.map((note, i) => <p key={'post-note-' + i} style={{ color: '#92400e' }}>{note}</p>)}
@@ -868,7 +927,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           </div>}
           {mode === 'beams' && <div className="callout-box compact-card beam-inspector">
             <h4>Beam placement</h4>
-            <p className="muted">Drag the blue beam handle or set an exact station. Every straight beam is editable, including those on stepped decks. Stations are measured from the rear/left bounding edge and snapped to 1 inch.</p>
+            <p className="muted">Choose a beam, then <strong>click an open spot on the grid to position it</strong>, drag its blue handle, or type a station. Use the ±1″ controls for precision. Locked support posts must be unlocked before moving their beam.</p>
             {postFeedback && <p role="status" className="deck-designer-feedback">{postFeedback}</p>}
             <div className="beam-selector-row" role="group" aria-label="Select beam to edit">
               {model.beamLines.map((_, index) => <button type="button" key={index}
