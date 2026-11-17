@@ -567,7 +567,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   };
 
   const onPostPointerDown = (event: PointerEvent<SVGRectElement>, beamIndex: number, id: string) => {
-    if (mode === 'beams') { onBeamPointerDown(event, beamIndex); return; }
+    if (mode !== 'posts') return;
     event.preventDefault();
     event.stopPropagation();
     setMode('posts');
@@ -776,10 +776,11 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
                         x2={to.x + (vertical ? 3 : 0)} y2={to.y + (vertical ? 0 : 3)}
                         className="beam-line beam-line-secondary"/>
                       <line x1={from.x} y1={from.y} x2={to.x} y2={to.y}
-                        className="beam-drag-hit" stroke="transparent" strokeWidth={24} pointerEvents="stroke"
+                        className="beam-drag-hit" stroke="transparent" strokeWidth={24} pointerEvents={mode === 'beams' ? 'stroke' : 'none'}
                         onPointerDown={(event) => onBeamPointerDown(event, index)} />
                       <circle cx={mid.x + (vertical ? 17 : 0)} cy={mid.y + (vertical ? 0 : -17)} r={11}
                         className={'beam-drag-handle' + (selectedBeamIndex === index && mode === 'beams' ? ' is-selected' : '')}
+                        pointerEvents={mode === 'beams' ? 'auto' : 'none'}
                         onPointerDown={(event) => onBeamPointerDown(event, index)}>
                         <title>{'Move beam ' + (index + 1)}</title>
                       </circle>
@@ -794,7 +795,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
                     return <g key={post.id}>
                       <rect x={p.x - 7} y={p.y - 7} width={14} height={14} rx={2}
                         className={'post-lock ' + (post.locked ? 'locked ' : '') + (active ? 'post-selected' : '')}
-                        style={{ cursor: post.locked ? 'pointer' : 'grab', strokeWidth: active ? 3 : 1.5 }}
+                        style={{ cursor: mode === 'posts' ? (post.locked ? 'pointer' : 'grab') : 'default', strokeWidth: active ? 3 : 1.5 }}
+                        pointerEvents={mode === 'posts' ? 'auto' : 'none'}
                         onPointerDown={(e) => onPostPointerDown(e, index, post.id)}
                         onClick={(e) => { e.stopPropagation(); setSelectedPost({ beamIndex: index, id: post.id }); }}/>
                       <text x={p.x + 10} y={p.y - 10} className="deck-point-label">{'B' + (index + 1) + '-P' + (postIndex + 1)}</text>
@@ -808,8 +810,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
               const b = toSvgPoint(beam.end);
               return <g key={`angled-beam-${index}`}><line x1={a.x} y1={a.y - 3} x2={b.x} y2={b.y - 3} className="beam-line beam-line-editable" /><line x1={a.x} y1={a.y + 3} x2={b.x} y2={b.y + 3} className="beam-line beam-line-secondary" />{beam.postPoints.map((post, postIndex) => { const p = toSvgPoint(post); return <rect key={`angled-post-${index}-${postIndex}`} x={p.x - 4} y={p.y - 4} width={8} height={8} className="post-lock" />; })}</g>;
             })}
-            {points.map((point, index) => { const svgPoint = toSvgPoint(point); const isClosePoint = drawingSequence && index === 0 && points.length >= 3; return <g key={`${point.x}-${point.y}-${index}`}><circle cx={svgPoint.x} cy={svgPoint.y} r={selectedIndex === index ? 9 : 7} className={selectedIndex === index ? 'deck-point active' : isClosePoint ? 'deck-point close-target' : 'deck-point'} onPointerDown={(event) => onPointPointerDown(event, index)} onClick={(event) => { event.stopPropagation(); if (drawingSequence && !isClosePoint) return; if (isClosePoint) { finishDrawing(); return; } setSelectedIndex(index); }} /><text x={svgPoint.x + 10} y={svgPoint.y - 10} className="deck-point-label">P{index + 1}{isClosePoint ? ' · close' : ''}</text></g>; })}
-            {(model.stairPlacements ?? [model.stairPlacement]).map((placement, stairIdx) => placement.start && placement.end ? <g key={`stair-placement-${stairIdx}`} onClick={() => setActiveStairIndex(stairIdx)}><line x1={toSvgPoint(placement.start).x} y1={toSvgPoint(placement.start).y} x2={toSvgPoint(placement.end).x} y2={toSvgPoint(placement.end).y} className={activeStairIndex === stairIdx ? "stair-edge-highlight active-stair" : "stair-edge-highlight"} onPointerDown={onStairPointerDown} /><circle cx={(toSvgPoint(placement.start).x + toSvgPoint(placement.end).x) / 2} cy={(toSvgPoint(placement.start).y + toSvgPoint(placement.end).y) / 2} r={activeStairIndex === stairIdx ? 10 : 7} className="stair-handle" /><text x={(toSvgPoint(placement.start).x + toSvgPoint(placement.end).x) / 2 + 10} y={(toSvgPoint(placement.start).y + toSvgPoint(placement.end).y) / 2 - 10} className="deck-point-label">Stair {stairIdx + 1}</text></g> : null)}
+            {points.map((point, index) => { const svgPoint = toSvgPoint(point); const isClosePoint = drawingSequence && index === 0 && points.length >= 3; return <g key={`${point.x}-${point.y}-${index}`}><circle cx={svgPoint.x} cy={svgPoint.y} r={selectedIndex === index ? 9 : 7} className={selectedIndex === index ? 'deck-point active' : isClosePoint ? 'deck-point close-target' : 'deck-point'} pointerEvents={mode === 'points' ? 'auto' : 'none'} onPointerDown={(event) => onPointPointerDown(event, index)} onClick={(event) => { event.stopPropagation(); if (drawingSequence && !isClosePoint) return; if (isClosePoint) { finishDrawing(); return; } setSelectedIndex(index); }} /><text x={svgPoint.x + 10} y={svgPoint.y - 10} className="deck-point-label">P{index + 1}{isClosePoint ? ' · close' : ''}</text></g>; })}
+            {(model.stairPlacements ?? [model.stairPlacement]).map((placement, stairIdx) => placement.start && placement.end ? <g key={`stair-placement-${stairIdx}`} onClick={() => setActiveStairIndex(stairIdx)}><line x1={toSvgPoint(placement.start).x} y1={toSvgPoint(placement.start).y} x2={toSvgPoint(placement.end).x} y2={toSvgPoint(placement.end).y} className={activeStairIndex === stairIdx ? "stair-edge-highlight active-stair" : "stair-edge-highlight"} pointerEvents={mode === 'stairs' ? 'auto' : 'none'} onPointerDown={onStairPointerDown} /><circle cx={(toSvgPoint(placement.start).x + toSvgPoint(placement.end).x) / 2} cy={(toSvgPoint(placement.start).y + toSvgPoint(placement.end).y) / 2} r={activeStairIndex === stairIdx ? 10 : 7} className="stair-handle" /><text x={(toSvgPoint(placement.start).x + toSvgPoint(placement.end).x) / 2 + 10} y={(toSvgPoint(placement.start).y + toSvgPoint(placement.end).y) / 2 - 10} className="deck-point-label">Stair {stairIdx + 1}</text></g> : null)}
           </svg>
           </div>
         </div>
@@ -869,7 +871,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
             <p className="muted">Drag the blue beam handle or set an exact station. Every straight beam is editable, including those on stepped decks. Stations are measured from the rear/left bounding edge and snapped to 1 inch.</p>
             {postFeedback && <p role="status" className="deck-designer-feedback">{postFeedback}</p>}
             <div className="beam-selector-row" role="group" aria-label="Select beam to edit">
-              {model.beamLines.map((beam, index) => <button type="button" key={index}
+              {model.beamLines.map((_, index) => <button type="button" key={index}
                 aria-pressed={inspectedBeamIndex === index}
                 className={inspectedBeamIndex === index ? 'secondary-btn small-btn' : 'ghost-btn small-btn'}
                 onClick={() => setSelectedBeamIndex(index)}>{'Beam ' + (index + 1)}</button>)}
