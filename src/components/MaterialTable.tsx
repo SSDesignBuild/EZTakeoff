@@ -183,7 +183,7 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     rows.forEach((row, idx) => {
       const rowHeight = (rowHeightsByCategory[category] as number[])[idx];
       const rowY = y;
-      ctx.fillStyle = idx % 2 ? '#fafafa' : '#ffffff';
+      ctx.fillStyle = idx % 2 ? '#dce7f3' : '#ffffff';
       ctx.fillRect(margin, rowY, tableWidth, rowHeight);
       ctx.strokeStyle = '#d1d5db';
       ctx.strokeRect(margin, rowY, tableWidth, rowHeight);
@@ -535,13 +535,13 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
 
   const exportPdf = async () => {
     if (hasBlockingIssues) return;
-    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
+    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, printGrouped);
     await exportCanvasAsPdf(canvas, 'S&S Design Build · Material order list', `${exportBaseName}.pdf`);
   };
 
   const exportPng = async () => {
     if (hasBlockingIssues) return;
-    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
+    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, printGrouped);
     await exportCanvasAsPng(canvas, `${exportBaseName}.png`);
   };
 
@@ -561,7 +561,7 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     const skirtingSheet = await renderCombinedSkirtingSheet(skirtingCards);
     if (skirtingSheet) layoutCanvases.push(skirtingSheet);
     if (!layoutCanvases.length) return;
-    const materialCanvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
+    const materialCanvas = renderMaterialCanvas('S&S Design Build · Material order list', values, printGrouped);
     const forcePortraitByIndex = { [layoutCanvases.length]: true } as Record<number, boolean>;
     await exportCanvasesAsPdf([...layoutCanvases, materialCanvas], 'S&S Design Build · Layout and material order list', `${exportBaseName}-layout-materials.pdf`, { forcePortraitByIndex });
   };
@@ -676,6 +676,35 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
           </div>
         ))}
       </div>
+      {hiddenItemCount>0 && <details className="removed-materials-panel">
+        <summary>
+          <strong>Excluded / removed materials ({hiddenItemCount})</strong>
+          <span>Reference only — NOT on supplier order. Expand to show quantities, why they were removed, and restore individual lines.</span>
+        </summary>
+        <div className="removed-materials-notice">The items below are intentionally omitted from the active purchase order. They remain visible here and under “REMOVED / DO NOT ORDER” in exported PDFs for the crew.</div>
+        <div className="table-wrap">
+          <table className="removed-materials-table">
+            <thead><tr><th>Material</th><th>Original quantity</th><th>Stock / specification</th><th>Removal reason</th><th>Crew / supplier note</th><th>Action</th></tr></thead>
+            <tbody>
+              {removedRecords.map((row)=><tr key={row.rowKey}>
+                <td><strong>{row.name}</strong><small>{row.category}</small></td>
+                <td>{row.quantity} {row.unit}</td>
+                <td>{row.stockRecommendation}</td>
+                <td>
+                  <select value={row.reason} aria-label={'Removal reason for '+row.name} onChange={(event)=>
+                    editRemoval(row.rowKey,{reason:event.target.value as RemovedMaterialRecord['reason']})}>
+                    {Object.entries(REMOVAL_REASONS).map(([key,label])=><option value={key} key={key}>{label}</option>)}
+                  </select>
+                </td>
+                <td><input type="text" value={row.memo??''} placeholder="On-hand location / supplier / substitute"
+                  aria-label={'Crew note for '+row.name}
+                  onChange={(event)=>editRemoval(row.rowKey,{memo:event.target.value})}/></td>
+                <td><button type="button" className="secondary-btn small-btn" onClick={()=>restoreRow(row)}>Restore</button></td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+      </details>}
     </div>
   );
 }
