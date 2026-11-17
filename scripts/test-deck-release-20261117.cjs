@@ -83,7 +83,7 @@ const ptScrews=calculateEstimate('decks',{...basic,deckingType:'pressure-treated
 assert.ok(ptScrews.materials.some((m)=>m.name==='2 in exterior pressure-treated deck board screws'));
 const designer=fs.readFileSync(path.resolve(__dirname,'../src/components/DeckDesigner.tsx'),'utf8');
 assert.ok(designer.includes('draggingBeamRef.current')&&designer.includes('draggingPostRef.current'));
-assert.ok(designer.includes('movePostToStation')&&designer.includes('mode === \\'posts\\''),'post clicking fallback required');
+assert.ok(designer.includes('movePostToStation') && designer.includes("mode === 'posts'"),'post clicking fallback required');
 const editor=fs.readFileSync(path.resolve(__dirname,'../src/components/DeckSkirtingEditor.tsx'),'utf8');
 const materialUI=fs.readFileSync(path.resolve(__dirname,'../src/components/MaterialTable.tsx'),'utf8');
 assert.ok(editor.includes('data-export-skirt-card')&&editor.includes('SkirtingElevation side={side}'));
