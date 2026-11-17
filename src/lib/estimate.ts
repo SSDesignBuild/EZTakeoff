@@ -3,6 +3,8 @@ import { buildDeckModel, buildLowerTierDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem, SectionConfig } from './types';
 import { buildPatioPanelLayout } from './patioLayout';
 import { deriveDeckingLabelPlan } from './deckingLabels';
+import { buildDeckSkirting } from './deckSkirting';
+import { buildTimberTechIRE } from './deckRailing';
 
 export type EstimateInputs = Record<string, string | number | boolean>;
 
@@ -429,6 +431,12 @@ function estimateFlatPans(inputs: EstimateInputs): EstimateResult {
   };
 }
 
+function valuesLowerRailingType(inputs: EstimateInputs) {
+  return inputs.lowerUseCustomSettings === true || String(inputs.lowerUseCustomSettings ?? 'false') === 'true'
+    ? (inputs.lowerRailingType ?? inputs.railingType ?? 'aluminum')
+    : (inputs.railingType ?? 'aluminum');
+}
+
 function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const deck = buildDeckModel(inputs);
   const lowerDeck = buildLowerTierDeckModel(inputs);
@@ -590,10 +598,19 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     materials.push(toMaterial('2x12 stringers', 'Lower tier stairs', lowerDeck.stairStringerBoardCount, 'boards', `${lowerDeck.stairStringerLength} ft stock`, framingWoodGrade, `Lower tier: ${lowerDeck.stairStringers} stringer cut(s) at about ${feetAndInches(lowerDeck.stairStringerCutLength)} each · 12 in. O.C. · ${lowerDeck.stairRisers} risers / ${lowerDeck.stairTreadsPerRun} treads per run`));
   }
 
+  // Manufacturer-specific rail kits are assembled from the same rail geometry
+  // used for the drawing. Generic rail BOMs remain unchanged for other systems.
+  const timberTechPlan = inputs.railingSystem === 'timbertech-ire' ? buildTimberTechIRE(deck, inputs) : null;
+  const lowerTimberTechPlan = lowerDeck && timberTechPlan ? buildTimberTechIRE(lowerDeck, {
+    ...inputs, railingType: valuesLowerRailingType(inputs),
+  }, 'Lower deck') : null;
   const lowerRailingBreakdown = lowerDeck ? classifyRailing(lowerDeck) : null;
   const lowerRailingPosts = lowerRailingBreakdown ? lowerRailingBreakdown.endLevelPosts + lowerRailingBreakdown.inlineLevelPosts + lowerRailingBreakdown.cornerLevelPosts + lowerRailingBreakdown.stairsLevelToAngledCornerPosts + lowerRailingBreakdown.stairsInlinePosts + lowerRailingBreakdown.stairsEndPosts : 0;
 
-  if (railingType === 'aluminum') {
+  if (timberTechPlan) {
+    materials.push(...timberTechPlan.materials);
+    if (lowerTimberTechPlan) materials.push(...lowerTimberTechPlan.materials);
+  } else if (railingType === 'aluminum') {
     if (railingBreakdown.levelMix.eight) materials.push(toMaterial('8 ft level railing sections', 'Railing', railingBreakdown.levelMix.eight, 'sections', '8 ft sections', 'Top-level straight runs'));
     if (railingBreakdown.levelMix.six) materials.push(toMaterial('6 ft level railing sections', 'Railing', railingBreakdown.levelMix.six, 'sections', '6 ft sections', 'Top-level straight runs'));
     if (railingBreakdown.stairMix.eight) materials.push(toMaterial('8 ft angled railing sections', 'Railing', railingBreakdown.stairMix.eight, 'sections', '8 ft sections', 'Stair-side or angled runs'));
@@ -650,7 +667,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     if (railingBreakdown.stairMix.eight) materials.push(toMaterial('8 ft vinyl/composite angled railing sections', 'Railing', railingBreakdown.stairMix.eight, 'sections', '8 ft sections', undefined, 'Stair-side or angled runs'));
     if (railingBreakdown.stairMix.six) materials.push(toMaterial('6 ft vinyl/composite angled railing sections', 'Railing', railingBreakdown.stairMix.six, 'sections', '6 ft sections', undefined, 'Stair-side or angled runs'));
   }
-  if (drinkRail && railingType !== 'wood') {
+  if (drinkRail && railingType !== 'wood' && !timberTechPlan) {
     const splitRailRunIntoStockCuts = (length: number) => {
       const mix = optimizeRail(length);
       return [
@@ -663,7 +680,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       ...(deck.stairCount > 0 && deck.stairRailSideCount > 0 ? Array.from({ length: deck.stairCount * deck.stairRailSideCount }).flatMap(() => splitRailRunIntoStockCuts(deck.stairRunFt)) : []),
     ];
     const drinkRailLf = drinkRailCuts.reduce((sum, length) => sum + length, 0);
-    const drinkStock = optimizeStockCuts(drinkRailCuts, [8, 12, 16, 20]);
+    const drinkStock = optimizeStockCuts(drinkRailCuts, /pressure\s*treated/i.test(drinkRailMaterial) ? [8, 12, 16, 20] : [16, 20]);
     if (drinkStock.count > 0) {
       materials.push(toMaterial(
         `${drinkRailMaterial} drink rail boards`,
@@ -672,19 +689,35 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
         'boards',
         `${drinkStock.stockLength} ft stock`,
         drinkRailMaterial === deckingMaterial ? deckingStyleInfo.color : drinkStyleInfo.color,
-        `${drinkRailLf.toFixed(1)} lf drink rail across ${drinkRailCuts.length} level/angled railing section cut(s) · optimized from available 8, 12, 16, and 20 ft decking stock`,
+        `${drinkRailLf.toFixed(1)} lf drink rail across ${drinkRailCuts.length} level/angled railing section cut(s) · optimized from actual product availability (16/20 ft for composite/PVC)`,
       ));
     }
   }
+  const skirtingPlan = buildDeckSkirting(deck.edgeSegments, deck.exposedSegments, deckHeightFt,
+    joistActualHeightInches(deck.joistSize), inputs);
+  const lowerSkirtingPlan = lowerDeck ? buildDeckSkirting(lowerDeck.edgeSegments, lowerDeck.exposedSegments,
+    Math.max(0, Number(inputs.lowerDeckHeight ?? inputs.deckHeight ?? 0)), joistActualHeightInches(lowerDeck.joistSize),
+    inputs, 'lower') : null;
+  materials.push(...skirtingPlan.materials);
+  if (lowerSkirtingPlan) materials.push(...lowerSkirtingPlan.materials);
   return {
     summary: [
+      { label: 'Skirting', value: [skirtingPlan, lowerSkirtingPlan].filter((p) => p?.enabled).map((p) => p!.sides.length+' sides / '+p!.finishStock.length+' finish stock boards').join('; ') || 'None' },
+      ...(timberTechPlan ? [{label: 'TimberTech railing',value: timberTechPlan.profile+' / '+timberTechPlan.color+' / '+timberTechPlan.panels.length+' panel kits'}] : []),
       { label: 'Deck area', value: lowerDeck ? `${(deck.area + lowerDeck.area).toFixed(1)} sq ft total` : `${deck.area.toFixed(1)} sq ft` },
       { label: 'Surface', value: useSubfloorDecking ? '4x8x3/4 subfloor sheets, staggered brick pattern' : (deck.boardRun === 'width' ? 'Deck boards parallel to house / stock tracks width' : 'Deck boards perpendicular to house / stock tracks projection') },
       { label: 'Stairs', value: deck.stairCount ? `${deck.stairRisers} risers · ${deck.stairTreadsPerRun} treads · ${deck.stairStringers} stringers` : 'No stairs' },
       { label: 'Railing mix', value: `Level ${railingBreakdown.levelMix.six}x6' + ${railingBreakdown.levelMix.eight}x8' · Angled ${railingBreakdown.stairMix.six}x6' + ${railingBreakdown.stairMix.eight}x8'` },
     ],
     materials: consolidateMaterials(materials).filter((item) => item.quantity > 0),
-    validationIssues: [...deck.postLayoutIssues.map((issue) => 'Main deck: ' + issue), ...(lowerDeck ? lowerDeck.postLayoutIssues.map((issue) => 'Lower deck: ' + issue) : [])],
+    validationIssues: [
+      ...deck.postLayoutIssues.map((issue) => 'Main deck: ' + issue),
+      ...(lowerDeck ? lowerDeck.postLayoutIssues.map((issue) => 'Lower deck: ' + issue) : []),
+      ...skirtingPlan.issues.map((issue) => 'Main deck skirting: ' + issue),
+      ...(lowerSkirtingPlan ? lowerSkirtingPlan.issues.map((issue) => 'Lower skirting: ' + issue) : []),
+      ...(timberTechPlan ? timberTechPlan.issues.map((issue) => 'Main railing: ' + issue) : []),
+      ...(lowerTimberTechPlan ? lowerTimberTechPlan.issues.map((issue) => 'Lower railing: ' + issue) : []),
+    ],
     orderNotes: [
       deck.attachment === 'brick' ? 'Brick attachment is treated as freestanding, so the house side still needs beam and post support, including beam segments at any inside corner/jut-out.' : 'Siding attachment keeps ledger logic active unless the deck is marked freestanding.',
       deck.stairPlacement.edgeIndex !== null ? `Stairs sit on edge ${deck.stairPlacement.edgeIndex + 1}. Preview now shows tread count, stringer layout, and ${deck.stairRailSideCount === 0 ? 'no stair-side railing' : `${deck.stairRailSideCount} stair-side railing run(s)`} based on the left/right stair railing inputs.` : 'No stair edge is assigned yet in the drawing tool.',
@@ -694,6 +727,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       deck.beamLines.some((beam) => beam.postMode === 'manual') ? 'Manual post coordinates are authoritative for drawing, footing, post-base, anchor and structural bolt counts; engineer review required.' : 'Automatic post spacing is a preliminary layout only.',
       'Main deck support references: ' + deck.postLocations.map((post) => post.reference + ' at X ' + feetAndInches(post.x) + ', Y ' + feetAndInches(post.y)).join('; '),
       ...deck.postEngineeringNotes,
+      ...(skirtingPlan.enabled ? skirtingPlan.notes : []),
+      ...(lowerSkirtingPlan?.enabled ? lowerSkirtingPlan.notes.map((note) => 'Lower tier: '+note) : []),
+      ...(timberTechPlan ? timberTechPlan.notes : []),
+      ...(lowerTimberTechPlan ? lowerTimberTechPlan.notes.map((note) => 'Lower tier: '+note) : []),
       ...(lowerDeck ? ['Lower deck support references: ' + lowerDeck.postLocations.map((post) => post.reference + ' at X ' + feetAndInches(post.x) + ', Y ' + feetAndInches(post.y)).join('; '), ...lowerDeck.postEngineeringNotes] : []),
     ],
   };

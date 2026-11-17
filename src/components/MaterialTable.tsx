@@ -418,10 +418,15 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
   const exportCombinedPdf = async () => {
     if (hasBlockingIssues) return;
     const root = document.getElementById('service-export-root');
-    const svg = root?.querySelector('svg') as SVGSVGElement | null;
-    if (!svg) return;
+    // Include the deck plan and every configured skirting/railing elevation.
+    // All these SVGs are driven by the same geometry as the supplier cuts.
+    const drawings = Array.from(root?.querySelectorAll('svg') ?? []) as SVGSVGElement[];
+    if (!drawings.length) return;
     const layoutTitle = projectExportTitle('S&S Design Build · Layout', values);
-    const layoutCanvases = await svgElementToExportCanvases(svg, layoutTitle);
+    const layoutCanvases = [] as HTMLCanvasElement[];
+    for (const svg of drawings) {
+      layoutCanvases.push(...await svgElementToExportCanvases(svg, layoutTitle));
+    }
     if (!layoutCanvases.length) return;
     const materialCanvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
     const forcePortraitByIndex = { [layoutCanvases.length]: true } as Record<number, boolean>;
