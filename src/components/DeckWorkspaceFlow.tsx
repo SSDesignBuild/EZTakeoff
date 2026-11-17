@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import { FieldRenderer } from './FieldRenderer';
 import { DeckDesigner } from './DeckDesigner';
 import { DeckSkirtingEditor } from './DeckSkirtingEditor';
@@ -10,7 +10,7 @@ import type { ServiceField } from '../data/services';
 import type { EstimateResult } from '../lib/types';
 
 type Values = Record<string, string | number | boolean>;
-type ChangeValues = (updater: (current: Values) => Values) => void;
+type ChangeValues = Dispatch<SetStateAction<Values>>;
 type StepId = 'structure' | 'layout' | 'finishes' | 'stairs-railing' | 'review';
 interface Props {
   values: Values;
