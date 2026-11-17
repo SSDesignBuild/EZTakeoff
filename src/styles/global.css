@@ -1826,3 +1826,120 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
   .deck-workflow-shell .deck-canvas-wrap { padding: .25rem !important; }
   .deck-workflow-shell .deck-designer-controls .form-grid.compact-grid { grid-template-columns: minmax(0,1fr); }
 }
+
+
+/* Material order readability and excluded-item audit trail */
+.material-table-card .material-groups .material-group tbody tr:nth-child(odd) {
+  background: #dce7f3 !important;
+}
+.material-table-card .material-groups .material-group tbody tr:nth-child(even) {
+  background: #ffffff !important;
+}
+.material-table-card .material-groups .material-group tbody tr td {
+  color: #172434 !important;
+  border-bottom: 1px solid #aebfd0;
+  vertical-align: top;
+}
+.material-table-card .material-groups .material-group tbody tr:hover {
+  background: #c9d9ec !important;
+}
+.material-table-card .material-groups .material-group table {
+  border-collapse: collapse;
+}
+.material-table-card .material-group-header {
+  background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  border-bottom: 2px solid var(--border);
+}
+.removed-materials-panel {
+  border: 1px solid #9ca3af;
+  border-radius: 13px;
+  overflow: hidden;
+  margin-top: 1.15rem;
+  background: #f8fafc;
+  color: #172434;
+}
+.removed-materials-panel > summary {
+  cursor: pointer;
+  padding: 1rem 1.2rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .55rem 1rem;
+  background: #e2e8f0;
+  border-bottom: 1px solid #cbd5e1;
+}
+.removed-materials-panel > summary span { color: #475569; font-size: .82rem; }
+.removed-materials-notice { padding: .75rem 1rem; color: #334155; font-size: .86rem; }
+.removed-materials-panel table { width: 100%; border-collapse: collapse; }
+.removed-materials-panel thead th {
+  background: #26384f;
+  color: #ffffff;
+  padding: .7rem;
+  text-align: left;
+}
+.removed-materials-panel tbody tr:nth-child(odd) { background: #dbe5f1; }
+.removed-materials-panel tbody tr:nth-child(even) { background: #ffffff; }
+.removed-materials-panel tbody td { padding: .6rem; color: #172434; border-bottom: 1px solid #bec9d5; }
+.removed-materials-panel tbody td small { display: block; font-size: .75rem; color: #64748b; margin-top: .2rem; }
+.removed-materials-panel input,.removed-materials-panel select {
+  border: 1px solid #94a3b8;
+  color: #172434;
+  background: #ffffff;
+  border-radius: 7px;
+  padding: .5rem;
+  width: 100%;
+  min-width: 160px;
+}
+.removed-materials-panel .small-btn { white-space: nowrap; }
+
+/* Off-canvas export copies retain SVG computed styles while avoiding duplicate
+   diagrams on screen. The combined print renderer collects both elevations. */
+.skirting-export-counterpart {
+  position: absolute;
+  left: -12000px;
+  top: 0;
+  width: 700px;
+  height: auto;
+  pointer-events: none;
+}
+.stair-skirting-sections {
+  padding: 1rem;
+  border-radius: 13px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  display: grid;
+  gap: 1rem;
+}
+.stair-skirting-elevation {
+  position: relative;
+  padding: .8rem;
+  border-radius: 10px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #172434;
+}
+.stair-skirting-elevation h5 { margin: 0 0 .5rem; font-size: 1rem; }
+.deck-gate-editor { display: grid; gap: .9rem; padding: 1.1rem 1.25rem; }
+.gate-editor-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .7rem; }
+.gate-editor-row {
+  display: grid;
+  grid-template-columns: minmax(180px,2fr) minmax(110px,1fr) minmax(110px,1fr) minmax(170px,1.2fr) auto;
+  gap: .7rem;
+  align-items: end;
+  padding: .9rem;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--panel);
+}
+.gate-editor-row .form-field { min-width: 0; }
+.gate-editor-row input { min-width: 0; width: 100%; }
+.gate-editor-hardware { display: grid; gap: .2rem; }
+.gate-editor-hardware small { color: var(--muted); }
+@media (max-width: 980px) {
+  .gate-editor-row { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .gate-editor-row > button { align-self: end; }
+}
+@media (max-width: 600px) {
+  .gate-editor-row { grid-template-columns: minmax(0,1fr); }
+  .removed-materials-panel > summary { align-items: flex-start; }
+}

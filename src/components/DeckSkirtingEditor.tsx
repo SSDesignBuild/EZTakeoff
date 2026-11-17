@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { buildDeckModel, buildLowerTierDeckModel } from '../lib/deckModel';
 import { buildDeckSkirting, type SkirtGrade, type SkirtOpening, type SkirtSide } from '../lib/deckSkirting';
+import { buildDeckStairSkirting } from '../lib/deckStairSkirting';
 
 type Values = Record<string, string | number | boolean>;
 type OnChange = (updater: (values: Values) => Values) => void;
@@ -16,24 +17,30 @@ function SkirtingElevation({side,orientation,framing,gapIn,faceIn}:{
 }) {
   const scale=Math.min(620/Math.max(1,side.lengthFt),115/Math.max(1,side.startHeightFt,side.endHeightFt));
   const px=(value:number)=>35+value*scale;
-  const top=40,ground=(x:number)=>top+(side.startHeightFt+(side.endHeightFt-side.startHeightFt)*x/side.lengthFt)*scale;
+  const top=40;
+  const stair=side.kind==='stair';
+  const at=(x:number)=>side.startHeightFt+(side.endHeightFt-side.startHeightFt)*x/side.lengthFt;
+  const topAt=(x:number)=>stair?top+(side.startHeightFt-at(x))*scale:top;
+  const ground=(x:number)=>stair?top+side.startHeightFt*scale:top+at(x)*scale;
   const w=700,h=Math.max(190,Math.max(ground(0),ground(side.lengthFt))+35);
-  return <svg role="img" aria-label={'Side '+(side.edgeIndex+1)+' elevation showing '+(framing?'2x4 support framing':'skirting finish')} viewBox={'0 0 '+w+' '+h}
+  return <svg role="img" data-export-skirting="true" data-export-skirt-label={side.label ?? ('Deck side '+(side.edgeIndex+1))}
+    data-export-skirt-layer={framing?'framing':'finish'}
+    aria-label={(side.label ?? 'Side '+(side.edgeIndex+1))+' elevation showing '+(framing?'2x4 support framing':'skirting finish')} viewBox={'0 0 '+w+' '+h}
     style={{display:'block',width:'100%',maxHeight:260,background:'#f9fafb',border:'1px solid #d1d5db',borderRadius:8}}>
-    <line x1={px(0)} y1={top-7} x2={px(side.lengthFt)} y2={top-7} stroke="#374151" strokeWidth={8}/>
+    <line x1={px(0)} y1={topAt(0)-7} x2={px(side.lengthFt)} y2={topAt(side.lengthFt)-7} stroke="#374151" strokeWidth={8}/>
     {!framing && orientation==='vertical' && side.finish.map((board,i)=>{
       const bottom=ground(board.station);
-      return <line key={'board-'+i} x1={px(board.station)} y1={top} x2={px(board.station)} y2={bottom}
+      return <line key={'board-'+i} x1={px(board.station)} y1={topAt(board.station)} x2={px(board.station)} y2={bottom}
         stroke="#9b7b58" strokeWidth={Math.max(2,Math.min(faceIn*scale/12,11))}/>;
     })}
     {!framing && orientation==='horizontal' && side.courses.map((c,i)=><line key={'course-'+i}
-      x1={px(c.start)} y1={top+(c.row*(faceIn+gapIn)/12)*scale+3}
-      x2={px(c.end)} y2={top+(c.row*(faceIn+gapIn)/12)*scale+3}
+      x1={px(c.start)} y1={stair ? ground(c.start)-(c.row*(faceIn+gapIn)/12)*scale-3 : top+(c.row*(faceIn+gapIn)/12)*scale+3}
+      x2={px(c.end)} y2={stair ? ground(c.end)-(c.row*(faceIn+gapIn)/12)*scale-3 : top+(c.row*(faceIn+gapIn)/12)*scale+3}
       stroke="#9b7b58" strokeWidth={Math.max(2,Math.min(faceIn*scale/12-1,9))}/>)}
     {framing && <>
-      {side.topRails.map((rail,i)=><line key={'top-'+i} x1={px(rail.start)} y1={top} x2={px(rail.end)} y2={top} stroke="#2563eb" strokeWidth={6}/>)}
+      {side.topRails.map((rail,i)=><line key={'top-'+i} x1={px(rail.start)} y1={topAt(rail.start)} x2={px(rail.end)} y2={topAt(rail.end)} stroke="#2563eb" strokeWidth={6}/>)}
       {side.bottomRails.map((rail,i)=><line key={'bottom-'+i} x1={px(rail.start)} y1={ground(rail.start)-3} x2={px(rail.end)} y2={ground(rail.end)-3} stroke="#2563eb" strokeWidth={6}/>)}
-      {side.verticals.map((stud,i)=><line key={'stud-'+i} x1={px(stud.station)} y1={top} x2={px(stud.station)} y2={ground(stud.station)}
+      {side.verticals.map((stud,i)=><line key={'stud-'+i} x1={px(stud.station)} y1={topAt(stud.station)} x2={px(stud.station)} y2={ground(stud.station)}
         stroke={stud.role==='jamb'?'#dc2626':'#2563eb'} strokeWidth={stud.role==='jamb'?6:4}/>)}
     </>}
     <line x1={px(0)-10} y1={ground(0)} x2={px(side.lengthFt)+10} y2={ground(side.lengthFt)} stroke="#6b7280" strokeWidth={2} strokeDasharray="5 4"/>
@@ -45,9 +52,9 @@ function SkirtingElevation({side,orientation,framing,gapIn,faceIn}:{
         {opening.kind==='removable'?'PANEL':'ACCESS'}
       </text>
     </g>)}
-    <text x={px(side.lengthFt/2)} y={Math.max(ground(0),ground(side.lengthFt))+20} fontSize={13} textAnchor="middle" fill="#374151">{ft(side.lengthFt)} · E{side.edgeIndex+1}</text>
-    <text x={px(0)} y={top-19} fontSize={11} fill="#4b5563">{ft(side.startHeightFt)}</text>
-    <text x={px(side.lengthFt)} y={top-19} fontSize={11} textAnchor="end" fill="#4b5563">{ft(side.endHeightFt)}</text>
+    <text x={px(side.lengthFt/2)} y={Math.max(ground(0),ground(side.lengthFt))+20} fontSize={13} textAnchor="middle" fill="#374151">{ft(side.lengthFt)} · {side.label ?? ('E'+(side.edgeIndex+1))}</text>
+    <text x={px(0)} y={topAt(0)-19} fontSize={11} fill="#4b5563">{ft(side.startHeightFt)}</text>
+    <text x={px(side.lengthFt)} y={topAt(side.lengthFt)-19} fontSize={11} textAnchor="end" fill="#4b5563">{ft(side.endHeightFt)}</text>
   </svg>;
 }
 function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValuesChange:OnChange;lower?:boolean}) {
@@ -58,17 +65,20 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
   const deckHeightFt=Number(lower?values.lowerDeckHeight:values.deckHeight)||0;
   const gradeBase=Math.max(0.1,deckHeightFt-(model?rimIn(model.joistSize)+1:8.25)/12);
   const plan=useMemo(()=>model?buildDeckSkirting(model.edgeSegments,model.exposedSegments,deckHeightFt,rimIn(model.joistSize),values,prefix):null,[model,values,deckHeightFt,prefix]);
+  const stairPlan=useMemo(()=>model?buildDeckStairSkirting(model,values,lower):null,[model,values,lower]);
   const selected=parseArray<number>(values[k('skirtingEdges')]).map(Number);
   const grades=parseArray<SkirtGrade>(values[k('skirtingGrades')]);
   const openings=parseArray<SkirtOpening>(values[k('skirtingOpenings')]);
   const update=(key:string,val:string|number|boolean)=>onValuesChange((old)=>({...old,[k(key)]:val,...((key==='skirtingGrades'||key==='skirtingOpenings'||key==='skirtingEdges')?{[k('skirtingGradeConfirmed')]:false}:{})}));
+  const allCuts=[...(plan?.cuts??[]),...(stairPlan?.cuts??[])];
   const cutToStock=new Map<string,string>();
-  for(const [type,group] of [['Finish',plan?.finishStock??[]],['2x4',plan?.frameStock??[]]] as const)
+  for(const [type,group] of [['Finish',plan?.finishStock??[]],['2x4',plan?.frameStock??[]],
+    ['Stair finish',stairPlan?.finishStock??[]],['Stair 2x4',stairPlan?.frameStock??[]]] as const)
     group.forEach((stock,index)=>stock.cuts.forEach((cut)=>cutToStock.set(cut.id,type+' #'+(index+1)+' / '+stock.stockLengthFt+' ft')));
   const exportCutCsv=()=>{
     if(!plan)return;
     const rows=[['Cut reference','Stock assignment','Material','Finished length (ft)','Installation location'],
-      ...plan.cuts.map((cut)=>[cut.id,cutToStock.get(cut.id)??'UNALLOCATED',cut.material,String(cut.lengthFt),cut.location])];
+      ...allCuts.map((cut)=>[cut.id,cutToStock.get(cut.id)??'UNALLOCATED',cut.material,String(cut.lengthFt),cut.location])];
     const csv=rows.map((row)=>row.map((value)=>'"'+String(value).replace(/"/g,'""')+'"').join(',')).join('\r\n');
     const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
     const a=document.createElement('a');a.href=url;a.download=(lower?'lower-':'')+'deck-skirting-installer-cuts.csv';a.click();URL.revokeObjectURL(url);
@@ -89,7 +99,7 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
     const offset=Math.max(0,(edge.length-width)/2);
     update('skirtingOpenings',JSON.stringify([...openings,{edgeIndex,offset,width,kind:'opening'}]));
   };
-  return <section className="content-card full-width-card" style={{marginBottom:16}}>
+  return <section className="content-card full-width-card" data-export-skirt-tier={lower?'Lower deck':'Main deck'} style={{marginBottom:16}}>
     <div className="section-heading">
       <p className="eyebrow">{lower?'Lower tier':'Main deck'} / finish and supports</p>
       <h3>Deck skirting — elevations and material cut plan</h3>
@@ -103,15 +113,18 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
       </button>)}
     </div>
     <div style={{display:'flex',flexWrap:'wrap',justifyContent:'space-between',alignItems:'center',gap:10,marginBottom:12}}>
-      <strong>{plan.sides.length} sides · {plan.finishStock.length} finish stock boards · {plan.frameStock.length} 2×4 stock pieces</strong>
+      <strong>{plan.sides.length} deck sides + {stairPlan?.sides.length??0} stair sides · {plan.finishStock.length+(stairPlan?.finishStock.length??0)} finish boards · {plan.frameStock.length+(stairPlan?.frameStock.length??0)} 2×4 stock pieces</strong>
       <div className="preview-toolbar">
         <button type="button" className={framing?'ghost-btn small-btn':'secondary-btn small-btn'} onClick={()=>setFraming(false)}>Finish elevation</button>
         <button type="button" className={framing?'secondary-btn small-btn':'ghost-btn small-btn'} onClick={()=>setFraming(true)}>2×4 support framing</button>
       </div>
     </div>
     {plan.issues.map((issue,i)=><p key={'issue-'+i} role="alert" style={{color:'#b91c1c'}}>{issue}</p>)}
-    {plan.sides.map((side)=><article key={'side-'+side.edgeIndex} style={{border:'1px solid #d1d5db',borderRadius:10,padding:12,marginBottom:14}}>
+    {plan.sides.map((side)=><article key={'side-'+side.edgeIndex} data-export-skirt-card="true" style={{border:'1px solid #d1d5db',borderRadius:10,padding:12,marginBottom:14}}>
       <SkirtingElevation side={side} framing={framing} orientation={plan.options.orientation} gapIn={plan.options.gapIn} faceIn={plan.options.faceIn}/>
+      <div className="skirting-export-counterpart" aria-hidden="true">
+        <SkirtingElevation side={side} framing={!framing} orientation={plan.options.orientation} gapIn={plan.options.gapIn} faceIn={plan.options.faceIn}/>
+      </div>
       <div className="form-grid organized-config-grid" style={{marginTop:12}}>
         <label className="form-field"><span>Side {side.edgeIndex+1}: starting ground height (ft)</span>
           <input type="number" min={0.1} step={1/12} style={fieldStyle} value={(grades.find((x)=>x.edgeIndex===side.edgeIndex)?.startFt??gradeBase).toFixed(3)}
@@ -137,6 +150,21 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
       </div>)}
       <small className="muted">{side.finishCuts.length} finish cuts · {side.framingCuts.length} 2×4 cuts · {side.verticals.length} vertical 2×4 supports at 24″ O.C./jambs</small>
     </article>)}
+    {!!stairPlan?.sides.length && <div className="stair-skirting-sections">
+      <h4>Stair skirting — both sloping sides of every flight</h4>
+      <p className="muted">Includes sloped upper rails, ground-level 2×4 framing and vertical supports at 24 inches on center. Confirm the toe clearance and field slope.</p>
+      {stairPlan.issues.map((issue,i)=><p role="alert" key={i} style={{color:'#b91c1c'}}>{issue}</p>)}
+      {stairPlan.sides.map((side)=><article className="stair-skirting-elevation" data-export-skirt-card="true" key={side.edgeIndex}>
+        <h5>{side.label}</h5>
+        <SkirtingElevation side={side} orientation={stairPlan.options.orientation} framing={framing}
+          gapIn={stairPlan.options.gapIn} faceIn={stairPlan.options.faceIn}/>
+        <div className="skirting-export-counterpart" aria-hidden="true">
+          <SkirtingElevation side={side} orientation={stairPlan.options.orientation} framing={!framing}
+            gapIn={stairPlan.options.gapIn} faceIn={stairPlan.options.faceIn}/>
+        </div>
+        <small className="muted">{side.finishCuts.length} finish cuts · {side.framingCuts.length} support cuts</small>
+      </article>)}
+    </div>}
     <div className="callout-box compact-card">
       <strong>Supplier / installer reconciliation</strong>
       <p className="muted">Finish stock: {plan.finishStock.map((s,i)=>'S'+(i+1)+' '+s.stockLengthFt+'ft → '+s.cuts.map((cut)=>cut.id).join('+')).join('; ')||'None'}.</p>
@@ -144,11 +172,11 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
       <p className="muted">Saw kerf and stock trimming are included. Removable access panel hinge/latch details and ground contact specifications require field approval.</p>
     </div>
     <details style={{marginTop:15}}>
-      <summary style={{fontWeight:700,cursor:'pointer'}}>Installer cut list — {plan.cuts.length} exact pieces</summary>
+      <summary style={{fontWeight:700,cursor:'pointer'}}>Installer cut list — {allCuts.length} exact pieces (deck + stairs)</summary>
       <button type="button" className="secondary-btn small-btn" onClick={exportCutCsv} style={{margin:'12px 0'}}>Download installer cut CSV</button>
       <div className="table-wrap" style={{maxHeight:360,overflow:'auto'}}>
         <table><thead><tr><th>Reference</th><th>Purchase stock</th><th>Material</th><th>Finished cut</th><th>Install location</th></tr></thead>
-          <tbody>{plan.cuts.map((cut)=><tr key={cut.id}><td>{cut.id}</td>
+          <tbody>{allCuts.map((cut)=><tr key={cut.id}><td>{cut.id}</td>
             <td>{cutToStock.get(cut.id)??'Not allocated'}</td><td>{cut.material==='2x4'?'2×4 support':'Finish board'}</td>
             <td>{ft(cut.lengthFt)}</td><td>{cut.location}</td></tr>)}</tbody>
         </table>

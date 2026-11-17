@@ -4,6 +4,8 @@ import { EstimateResult, MaterialItem, SectionConfig } from './types';
 import { buildPatioPanelLayout } from './patioLayout';
 import { deriveDeckingLabelPlan } from './deckingLabels';
 import { buildDeckSkirting, packSkirtCuts, type SkirtCut } from './deckSkirting';
+import { buildDeckStairSkirting } from './deckStairSkirting';
+import { planDeckGateHardware } from './deckGates';
 import { buildTimberTechIRE } from './deckRailing';
 
 export type EstimateInputs = Record<string, string | number | boolean>;
@@ -472,15 +474,67 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const deckingStyleInfo = splitDeckStyle(deckingMaterial);
   const fasciaMaterial = resolveBoardStyle(inputs.fasciaMaterial);
   const fasciaStyleInfo = splitDeckStyle(fasciaMaterial);
+  const stairTreadMaterial = resolveBoardStyle(inputs.stairTreadStyle);
+  const stairRiserChoice = String(inputs.stairRiserStyle ?? 'auto');
+  const stairRiserUsesFascia = stairRiserChoice === 'fascia' || (stairRiserChoice === 'auto' && !isPressureTreatedDecking);
+  const stairRiserMaterial = stairRiserUsesFascia ? fasciaMaterial
+    : (stairRiserChoice === 'auto' || stairRiserChoice === 'match' ? deckingMaterial : stairRiserChoice);
+  const gatePlan = planDeckGateHardware(inputs.deckGateEntries);
   const sumGroupLf = (groups: { length?: number; cutLength?: number; count: number }[]) => groups.reduce((sum, group) => sum + Math.max(0, Number(group.length ?? group.cutLength ?? 0)) * Math.max(0, Number(group.count || 0)), 0);
   const useSubfloorDecking = String(inputs.deckingSurface ?? 'deck-boards') === 'subfloor';
   const subfloorSheetCount = (area: number) => Math.max(0, Math.ceil((area / 32) * 1.05));
   const pictureFrameBoardLf = useSubfloorDecking ? 0 : sumGroupLf(deckingPlan.groups.filter((group) => group.kind === 'picture-frame')) + (lowerDeckingPlanForTotals ? sumGroupLf(lowerDeckingPlanForTotals.groups.filter((group) => group.kind === 'picture-frame')) : 0);
-  const stairDeckBoardLf = sumGroupLf(deck.stairTreadGroups) + (lowerDeck ? sumGroupLf(lowerDeck.stairTreadGroups) : 0);
-  const totalFasciaBoardLf = Math.max(0, Number(deck.fasciaLf || 0)) + (lowerDeck ? Math.max(0, Number(lowerDeck.fasciaLf || 0)) : 0);
+  const stairBoardRunLf=(tier:typeof deck)=>tier.stairPlacements.reduce((total,placement)=>total+placement.width,0);
+  const stairDeckBoardLf = stairBoardRunLf(deck)*(deck.stairTreadsPerRun*2+(!stairRiserUsesFascia?deck.stairRisers*2:0))
+    +(lowerDeck?stairBoardRunLf(lowerDeck)*(lowerDeck.stairTreadsPerRun*2+(!stairRiserUsesFascia?lowerDeck.stairRisers*2:0)):0);
+  // Standard composite deck fascia traditionally includes stair risers.
+  // Remove those faces when a separately specified riser deck board is ordered.
+  const deckFasciaLfForOrder=Math.max(0,deck.fasciaLf-(!stairRiserUsesFascia&&!isPressureTreatedDecking?stairBoardRunLf(deck)*deck.stairRisers:0));
+  const lowerFasciaLfForOrder=lowerDeck?Math.max(0,lowerDeck.fasciaLf-
+    (!stairRiserUsesFascia&&!isPressureTreatedDecking?stairBoardRunLf(lowerDeck)*lowerDeck.stairRisers:0)):0;
+  const totalFasciaBoardLf=deckFasciaLfForOrder+lowerFasciaLfForOrder;
   const colorMatchedTrimFastenerPoints = Math.ceil((pictureFrameBoardLf + stairDeckBoardLf + totalFasciaBoardLf) * 2);
   const totalDeckAreaForNails = Math.max(0, Number(deck.area || 0)) + (lowerDeck ? Math.max(0, Number(lowerDeck.area || 0)) : 0);
   const connectorNails = (deck.joistHangers + deck.postBases + deck.lateralLoadBrackets + deck.rafterTies) * 10 + (lowerDeck ? (lowerDeck.joistHangers + lowerDeck.postBases + lowerDeck.lateralLoadBrackets + lowerDeck.rafterTies) * 10 : 0);
+
+  // Create skirting plans before deciding the framing screw purchase quantity,
+  // so 2x4 skirting fasteners are included in the same 3-inch screw boxes.
+  const skirtingPlan = buildDeckSkirting(deck.edgeSegments, deck.exposedSegments, Number(inputs.deckHeight ?? 0),
+    joistActualHeightInches(deck.joistSize), inputs);
+  const lowerSkirtingPlan = lowerDeck ? buildDeckSkirting(lowerDeck.edgeSegments, lowerDeck.exposedSegments,
+    Number(inputs.lowerDeckHeight ?? inputs.deckHeight ?? 0), joistActualHeightInches(lowerDeck.joistSize),
+    inputs,'lower') : null;
+  const stairSkirtingPlan = buildDeckStairSkirting(deck,inputs);
+  const lowerStairSkirtingPlan = lowerDeck ? buildDeckStairSkirting(lowerDeck,inputs,true) : null;
+  const activeSkirtingPlans=[skirtingPlan,lowerSkirtingPlan,stairSkirtingPlan,lowerStairSkirtingPlan]
+    .filter((plan): plan is NonNullable<typeof plan>=>Boolean(plan?.enabled));
+  const skirtingFrameScrews=activeSkirtingPlans.reduce((sum,plan)=>sum+plan.frameScrews,0);
+  const skirtingFinishNails=activeSkirtingPlans.reduce((sum,plan)=>sum+plan.finishNails,0);
+  const skirtingFinishScrews=activeSkirtingPlans.reduce((sum,plan)=>sum+plan.finishScrews,0);
+  const totalFramingScrewLocations=deck.deckFastenerCount+(lowerDeck?.deckFastenerCount??0)+skirtingFrameScrews;
+  const stairFinishIssues:string[]=[];
+  const addStairFinishCuts=(tier:typeof deck,tierLabel:string,part:'tread'|'riser',style:string,perStep:number)=>{
+    const cuts:SkirtCut[]=[];
+    const repeat=part==='tread'?tier.stairTreadsPerRun:tier.stairRisers;
+    tier.stairPlacements.forEach((placement,flight)=>{
+      for(let step=0;step<repeat;step++)for(let board=0;board<perStep;board++)
+        cuts.push({id:tierLabel.toUpperCase().replace(/\s/g,'-')+'-'+part.toUpperCase()+'-'+(flight+1)+'-'+(step+1)+'-'+(board+1),
+          edgeIndex:placement.edgeIndex??-1,material:'finish',lengthFt:placement.width,
+          location:tierLabel+' stair flight '+(flight+1)+' '+part+' '+(step+1)+' board '+(board+1)});
+    });
+    if(!cuts.length)return;
+    const pressure=/pressure\s*treated/i.test(style);
+    const lengths=pressure?[8,12,16,20]:[16,20];
+    const packing=packSkirtCuts(cuts,lengths,.125,.25);
+    stairFinishIssues.push(...packing.issues.map((issue)=>tierLabel+' '+part+'s: '+issue));
+    for(const stockLength of [...new Set(packing.stock.map((p)=>p.stockLengthFt))]){
+      const purchase=packing.stock.filter((p)=>p.stockLengthFt===stockLength);
+      const refs=purchase.flatMap((p)=>p.cuts.map((cut)=>cut.id));
+      materials.push(toMaterial(tierLabel+' stair '+part+' board','Stairs',purchase.length,
+        'boards',stockLength+' ft stock',splitDeckStyle(style).color,
+        'Independent '+part+' style: '+style+'. '+refs.length+' field cuts, saw kerf 1/8 in, stock trim 1/4 in. Locations: '+refs.slice(0,18).join(', ')+'.',refs.slice(0,12).join(', ')));
+    }
+  };
   if (useSubfloorDecking) {
     materials.push(toMaterial('4 ft x 8 ft x 3/4 in subfloor sheets', 'Decking', subfloorSheetCount(deck.area), 'sheets', '4 ft x 8 ft x 3/4 in', 'Exterior rated', `${deck.area.toFixed(1)} sq ft main deck area laid out in a staggered brick pattern; includes 5% waste allowance.`));
   } else {
@@ -510,7 +564,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     }
   }
   }
-  addBoardGroups(materials, 'Stairs', 'Stair tread deck board', deck.stairTreadGroups, `${isPressureTreatedDecking ? 'Two tread boards per tread plus two deck-board riser boards per riser.' : 'Two tread boards per tread only; risers are not deck boards unless decking is pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
+  addStairFinishCuts(deck,'Main','tread',stairTreadMaterial,2);
+  if(!stairRiserUsesFascia) addStairFinishCuts(deck,'Main','riser',stairRiserMaterial,2);
+  if(stairRiserUsesFascia && isPressureTreatedDecking && deck.stairCount>0)
+    addStairFinishCuts(deck,'Main','riser',stairRiserMaterial,1);
   addBoardGroups(materials, 'Framing', `${deck.joistSize} joist`, deck.joistLengthGroups, 'Joists at 12 in. O.C.', false, framingWoodGrade);
   addBoardGroups(materials, 'Framing', `${deck.beamMemberSize} beam ply`, deck.beamBoardGroups, 'Doubled beam members with overlap handled in the printed layout.', false, framingWoodGrade);
   addBoardGroups(materials, 'Framing', `${deck.joistSize} double band / rim board`, deck.doubleBandGroups, 'Double band applied to full perimeter with interlocked herringbone-style corners in layout preview.', false, framingWoodGrade);
@@ -536,7 +593,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
         });
       }
     }
-    addBoardGroups(materials, 'Lower tier stairs', 'Lower tier stair tread deck board', lowerDeck.stairTreadGroups, `${isPressureTreatedDecking ? 'Lower tier treads and risers.' : 'Lower tier treads only; risers are not deck boards unless pressure treated.'} Board style: ${deckingMaterial}.`, false, deckingStyleInfo.color);
+    addStairFinishCuts(lowerDeck,'Lower','tread',stairTreadMaterial,2);
+    if(!stairRiserUsesFascia) addStairFinishCuts(lowerDeck,'Lower','riser',stairRiserMaterial,2);
+    if(stairRiserUsesFascia && isPressureTreatedDecking && lowerDeck.stairCount>0)
+      addStairFinishCuts(lowerDeck,'Lower','riser',stairRiserMaterial,1);
     addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} joist`, lowerDeck.joistLengthGroups, 'Lower tier joists at 12 in. O.C.', false, framingWoodGrade);
     addBoardGroups(materials, 'Framing', `${lowerDeck.beamMemberSize} beam ply`, lowerDeck.beamBoardGroups, 'Lower tier doubled beam members.', false, framingWoodGrade);
     addBoardGroups(materials, 'Framing', `${lowerDeck.joistSize} double band / rim board`, lowerDeck.doubleBandGroups, 'Lower tier double band applied to full perimeter.', false, framingWoodGrade);
@@ -591,12 +651,25 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     toMaterial('Hex head LedgerLOK screws 5 in', 'Hardware', deck.sdsCorners, 'ea', '4 per corner', undefined, 'All band-board corners'),
     toMaterial('Joist tape', 'Hardware', deck.joistTapeLf, 'lf', 'Match roll coverage', undefined, 'Tape joists and band-board top edges'),
     ...(frameFastenerChoice === 'framing-screws'
-      ? [toMaterial('3-1/2 in exterior framing screws', 'Hardware', Math.max(1, Math.ceil(deck.deckFastenerCount / 365)), 'boxes', '365 per box', undefined, 'Selected frame assembly fastener for deck framing.')]
+      ? [toMaterial('3 in exterior framing screws', 'Hardware', Math.max(1, Math.ceil(totalFramingScrewLocations / 365)), 'boxes', '365 per box', undefined,
+        'Selected framing screws. Includes '+skirtingFrameScrews+' 3-in 2x4 skirting support screws, plus deck framing allowances; approved structural connector screws are separate.')]
       : [toMaterial('21 degree 3 in x .120 exterior collated nails with ring shank', 'Hardware', Math.max(1, Math.ceil(totalDeckAreaForNails / 200)), 'boxes', '1000 nails per box', undefined, 'Selected frame assembly fastener. Add 1000 nails per 200 sq ft of decking.')]),
-    ...(isPressureTreatedDecking ? [toMaterial('3-1/2 in exterior screws used for deck boards', 'Hardware', Math.max(1, Math.ceil((deck.area + (lowerDeck ? lowerDeck.area : 0)) / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, 'For pressure-treated decking, breaker boards, and picture-frame areas that are face screwed')] : [toMaterial('2-3/8 in CAMO screws', 'Hardware', Math.max(1, Math.ceil(deck.deckFastenerCount / 1750)), 'boxes', '1750 per box', undefined, 'Hidden deck fasteners for composite/PVC decking')]),
+    ...(isPressureTreatedDecking ? [toMaterial('2 in exterior pressure-treated deck board screws', 'Hardware', Math.max(1, Math.ceil((deck.area + (lowerDeck ? lowerDeck.area : 0)) / 300)), '5 lb boxes', '1 box per 300 sq ft of decking', undefined, '2-inch exterior screws for pressure-treated deck surface boards; verify approved fastener length for actual board thickness and substrate.')] : [toMaterial('2-3/8 in CAMO screws', 'Hardware', Math.max(1, Math.ceil(deck.deckFastenerCount / 1750)), 'boxes', '1750 per box', undefined, 'Hidden deck fasteners for composite/PVC decking')]),
     ...(connectorFastenerChoice === 'approved-screws'
       ? [toMaterial('Connector-rated structural fastener screws', 'Hardware', connectorNails, 'ea', 'Manufacturer-approved hanger/connector screw model required', undefined, 'Do not substitute standard deck/framing screws; verify exact hanger manufacturer and schedule before purchasing.')]
       : [toMaterial('Structural joist-hanger connector nails', 'Hardware', connectorNails, 'nails', 'Manufacturer-approved hanger/connector nails', undefined, 'Connector fastener quantities derived from hangers, bases, lateral brackets and ties; verify approved length and diameter.')]),
+    ...(frameFastenerChoice !== 'framing-screws' && skirtingFrameScrews > 0
+      ? [toMaterial('3 in exterior framing screws','Hardware',Math.ceil(skirtingFrameScrews/365),'boxes','365 per box',undefined,
+          'Separate skirting 2x4 screw boxes; deck framing uses collated nails. '+skirtingFrameScrews+' 3-inch screws required for skirting.')]
+      : []),
+    ...(skirtingFinishNails > 0
+      ? [toMaterial('2 in exterior finish nails - KDAT 1x5 skirting','Hardware',skirtingFinishNails,'nails','2 in stainless/corrosion-compatible exterior finish nails',undefined,
+          'Deck and stair skirting finish boards. Fastener locations derive from top/bottom 2x4 support or vertical stud intersections.')]
+      : []),
+    ...(skirtingFinishScrews > 0
+      ? [toMaterial('Manufacturer-approved skirting finish fasteners','Hardware',skirtingFinishScrews,'ea','Match PVC/composite manufacturer and board profile',undefined,
+          'Synthetic skirting finish; verify clearance, installation schedule and fastener selection.')]
+      : []),
     ...(colorMatchedTrimFastenerPoints > 0 && trimFastenerChoice === 'cortex-fascia' ? [
       toMaterial('Cortex color match fascia screws', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '2 screws per lf', fasciaStyleInfo.color ?? deckingStyleInfo.color, `Small head screws, not big flat head screws. 2 screws every 1 ft of picture-frame board, stair board, and fascia board used. Picture frame ${pictureFrameBoardLf.toFixed(1)} lf + step boards ${stairDeckBoardLf.toFixed(1)} lf + fascia ${totalFasciaBoardLf.toFixed(1)} lf.`),
     ] : []),
@@ -604,7 +677,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       toMaterial('Color match screws for plugs', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '2 screws per lf', deckingStyleInfo.color ?? fasciaStyleInfo.color, `Same count logic as fascia screws: picture-frame boards, step boards, and fascia board runs.`),
       toMaterial('Color match plugs', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '1 plug per color-match screw', deckingStyleInfo.color ?? fasciaStyleInfo.color, `Same count logic as fascia screws: picture-frame boards, step boards, and fascia board runs.`),
     ] : []),
-    ...(deck.fasciaPieces > 0 ? [toMaterial('Fascia board', 'Trim', deck.fasciaPieces, 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${deck.fasciaLf.toFixed(1)} lf on exposed deck perimeter plus stair risers/stringer sides only. Fascia style: ${fasciaMaterial}.`)] : []),
+    ...(deckFasciaLfForOrder > 0 ? [toMaterial('Fascia board', 'Trim', Math.ceil(deckFasciaLfForOrder/12), 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${deckFasciaLfForOrder.toFixed(1)} lf for deck perimeter/stringer sides ${stairRiserUsesFascia ? 'including standard stair fascia risers' : '(separate riser boards are listed under Stairs)'}. Fascia style: ${fasciaMaterial}.`)] : []),
+    ...(lowerFasciaLfForOrder > 0 ? [toMaterial('Lower-tier fascia board', 'Lower tier trim', Math.ceil(lowerFasciaLfForOrder/12), 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${lowerFasciaLfForOrder.toFixed(1)} lf lower deck fascia; separate riser boards where chosen. Style: ${fasciaMaterial}.`)] : []),
   );
   if (deck.stairStringers > 0) {
     materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringerBoardCount, 'boards', `${deck.stairStringerLength} ft stock`, framingWoodGrade, `${deck.stairStringers} stringer cut(s) at about ${feetAndInches(deck.stairStringerCutLength)} each · 12 in. O.C. · ${deck.stairRisers} risers / ${deck.stairTreadsPerRun} treads per run`));
@@ -730,16 +804,12 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       ));
     }
   }
-  const skirtingPlan = buildDeckSkirting(deck.edgeSegments, deck.exposedSegments, deckHeightFt,
-    joistActualHeightInches(deck.joistSize), inputs);
-  const lowerSkirtingPlan = lowerDeck ? buildDeckSkirting(lowerDeck.edgeSegments, lowerDeck.exposedSegments,
-    Math.max(0, Number(inputs.lowerDeckHeight ?? inputs.deckHeight ?? 0)), joistActualHeightInches(lowerDeck.joistSize),
-    inputs, 'lower') : null;
-  materials.push(...skirtingPlan.materials);
-  if (lowerSkirtingPlan) materials.push(...lowerSkirtingPlan.materials);
+  activeSkirtingPlans.forEach((plan)=>materials.push(...plan.materials));
+  materials.push(...gatePlan.materials);
   return {
     summary: [
-      { label: 'Skirting', value: [skirtingPlan, lowerSkirtingPlan].filter((p) => p?.enabled).map((p) => p!.sides.length+' sides / '+p!.finishStock.length+' finish stock boards').join('; ') || 'None' },
+      { label: 'Skirting', value: activeSkirtingPlans.map((p)=>p.sides.length+' sides / '+p.finishStock.length+' finish stock boards').join('; ') || 'None' },
+      ...(gatePlan.gates.length ? [{label:'Gate hardware',value:gatePlan.hinges+' self-closing hinges · '+gatePlan.slideBolts+' slide bolts · '+gatePlan.caneBolts+' cane bolts'}] : []),
       ...(timberTechPlan ? [{label: 'TimberTech railing',value: timberTechPlan.profile+' / '+timberTechPlan.color+' / '+timberTechPlan.panels.length+' panel kits'}] : []),
       { label: 'Framing & footings', value: `${deck.joistSize} joists · ${deck.beamMemberSize} beams · ${deck.postSize} posts · ${deck.footingDiameterIn} in × ${deck.footingDepthIn} in footings` },
       { label: 'Deck area', value: lowerDeck ? `${(deck.area + lowerDeck.area).toFixed(1)} sq ft total` : `${deck.area.toFixed(1)} sq ft` },
@@ -751,9 +821,13 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     validationIssues: [
       ...deck.postLayoutIssues.map((issue) => 'Main deck: ' + issue),
       ...woodDrinkRailIssues,
+      ...stairFinishIssues,
+      ...gatePlan.issues,
       ...(lowerDeck ? lowerDeck.postLayoutIssues.map((issue) => 'Lower deck: ' + issue) : []),
       ...skirtingPlan.issues.map((issue) => 'Main deck skirting: ' + issue),
       ...(lowerSkirtingPlan ? lowerSkirtingPlan.issues.map((issue) => 'Lower skirting: ' + issue) : []),
+      ...stairSkirtingPlan.issues.map((issue)=>'Stair skirting: '+issue),
+      ...(lowerStairSkirtingPlan ? lowerStairSkirtingPlan.issues.map((issue)=>'Lower stair skirting: '+issue) : []),
       ...(timberTechPlan ? timberTechPlan.issues.map((issue) => 'Main railing: ' + issue) : []),
       ...(lowerTimberTechPlan ? lowerTimberTechPlan.issues.map((issue) => 'Lower railing: ' + issue) : []),
     ],
@@ -768,6 +842,9 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       ...deck.postEngineeringNotes,
       `Concrete volume assumes full-depth round piers and 0.6 cu ft per 80 lb bag; final footing design, soil bearing and frost depth require field/engineer approval.`,
       ...(skirtingPlan.enabled ? skirtingPlan.notes : []),
+      ...gatePlan.notes,
+      ...(stairSkirtingPlan.enabled ? stairSkirtingPlan.notes : []),
+      ...(lowerStairSkirtingPlan?.enabled ? lowerStairSkirtingPlan.notes.map((note)=>'Lower tier: '+note) : []),
       ...(lowerSkirtingPlan?.enabled ? lowerSkirtingPlan.notes.map((note) => 'Lower tier: '+note) : []),
       ...(timberTechPlan ? timberTechPlan.notes : []),
       ...(lowerTimberTechPlan ? lowerTimberTechPlan.notes.map((note) => 'Lower tier: '+note) : []),

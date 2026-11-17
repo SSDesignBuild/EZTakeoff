@@ -45,8 +45,12 @@ export function buildTimberTechIRE(deck:Deck,inputs:Inputs,tierName='Main deck')
   const infill=norm(inputs.railingInfill,'aluminum');
   const heightIn=Number(inputs.railingHeightIn??36);
   const postSize=norm(inputs.railingPostSize,'3x3');
-  const postCap=norm(inputs.railingPostCap,'standard');
+  const requestedCap=norm(inputs.railingPostCap,'standard');
   const postTermination=norm(inputs.railingPostTermination,'at-top');
+  const hiddenPosts=postTermination==='flush-top'||postTermination==='flush-drink';
+  // Rails/boards cover a truly flush post end. No separate cap is required
+  // and it must not accidentally appear on the supplier order.
+  const postCap=hiddenPosts?'none':requestedCap;
   const empty:IREPlan={enabled,panels:[],posts:[],materials:[],issues:[],notes:[],profile,color,infill,postTermination,postCap,heightIn};
   if(!enabled)return empty;
   const issues:string[]=[],notes:string[]=[];
@@ -67,9 +71,15 @@ export function buildTimberTechIRE(deck:Deck,inputs:Inputs,tierName='Main deck')
   if(postSize==='2x2'&&!['classic','modern'].includes(profile))issues.push('2x2 posts require a supported over-the-post Classic or Modern rail.');
   if(['above-drink','flush-drink'].includes(postTermination)&&profile!=='drink')
     issues.push('This post termination requires the Drink Rail top profile.');
+  if(!['at-top','flush-top','flush-drink','above-top','above-drink'].includes(postTermination))
+    issues.push('Select a supported railing post termination detail.');
+  if(requestedCap==='none'&&!hiddenPosts)
+    issues.push('No post cap is only appropriate for an approved concealed flush termination.');
+  if(hiddenPosts && requestedCap!=='none')
+    notes.push('Post caps and post-top lights are omitted automatically: flush post ends are concealed by the continuous top/drink rail.');
   if(['above-top','above-drink'].includes(postTermination))
     notes.push('Posts extending above the top rail require approved manufacturer hardware/cut detail; not assumed structurally compatible.');
-  if(postCap!=='standard'&&postSize!=='3x3')issues.push('Selected cap/lighting option requires verification with a compatible 3x3 post kit.');
+  if(!['none','standard'].includes(postCap)&&postSize!=='3x3')issues.push('Selected cap/lighting option requires verification with a compatible 3x3 post kit.');
   const map=new Map<string,RailPost>();
   const panels:RailPanel[]=[];
   for(const run of panelRuns(deck)){
@@ -120,8 +130,8 @@ export function buildTimberTechIRE(deck:Deck,inputs:Inputs,tierName='Main deck')
   const postQty=posts.length + countStairSides*2 + panels.filter((p)=>p.kind==='stair').length-countStairSides;
   if(postQty>0){
     materials.push(materialRow(nameBase+postSize+' aluminum posts/kits',category,postQty,'kits','Compatible '+heightIn+' in rail height',colorText,
-      posts.map((p)=>p.reference).join(', ')+'; stair support count provisional, confirm post style/attachment. 3x3 post kits commonly include cap and skirt.'));
-    if(postCap!=='standard'){
+      posts.map((p)=>p.reference).join(', ')+'; stair support count provisional, confirm post style/attachment. 3x3 kits can include a cap; omit separate caps for concealed flush posts.'));
+    if(!['standard','none'].includes(postCap)){
       materials.push(materialRow(nameBase+postCap+' cap/light accessories',category,postQty,'ea','Verify exact accessory compatibility',colorText,
         'One accessory per estimated post. Check rail cap/skirt kit inclusion and low-voltage wiring.'));
     }

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { exportCanvasAsPdf, exportCanvasAsPng, exportCanvasesAsPdf, svgElementToExportCanvases } from '../lib/export';
+import { exportCanvasAsPdf, exportCanvasAsPng, exportCanvasesAsPdf, svgElementToExportCanvases, svgElementToCanvas } from '../lib/export';
 import { MaterialItem } from '../lib/types';
 
 interface MaterialTableProps {
@@ -11,6 +11,18 @@ interface MaterialTableProps {
 
 interface CustomMaterialItem extends MaterialItem { id: string; }
 interface DisplayMaterialItem extends MaterialItem { rowKey: string; source: 'estimate' | 'custom'; }
+interface RemovedMaterialRecord extends DisplayMaterialItem {
+  reason: 'unspecified' | 'on-hand' | 'supplier-unavailable' | 'not-needed' | 'other';
+  memo: string;
+  removedAt: string;
+}
+const REMOVAL_REASONS:Record<RemovedMaterialRecord['reason'],string>={
+  'unspecified':'Reason not yet selected',
+  'on-hand':'Already on hand',
+  'supplier-unavailable':'Supplier unavailable / substitute',
+  'not-needed':'Not needed for this job',
+  'other':'Other reason',
+};
 
 const infoFields = [
   { key: 'poJobName', label: 'P.O / Job name', type: 'text' as const },
@@ -171,7 +183,7 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
     rows.forEach((row, idx) => {
       const rowHeight = (rowHeightsByCategory[category] as number[])[idx];
       const rowY = y;
-      ctx.fillStyle = idx % 2 ? '#fafafa' : '#ffffff';
+      ctx.fillStyle = idx % 2 ? '#dce7f3' : '#ffffff';
       ctx.fillRect(margin, rowY, tableWidth, rowHeight);
       ctx.strokeStyle = '#d1d5db';
       ctx.strokeRect(margin, rowY, tableWidth, rowHeight);
@@ -208,6 +220,60 @@ function renderMaterialCanvas(title: string, values: Record<string, string | num
   return canvas;
 }
 
+
+async function renderCombinedSkirtingSheet(cards: Element[]) {
+  if (!cards.length) return null;
+  // Each side/flight gets BOTH finish and framing elevations grouped in one
+  // card. One landscape sheet prevents an N-side project from producing N PDF
+  // sheets with tiny, unlabeled sections.
+  const groups = await Promise.all(cards.map(async (card) => {
+    const svgs = Array.from(card.querySelectorAll<SVGSVGElement>('svg[data-export-skirting="true"]'));
+    const views = await Promise.all(svgs.map((svg) => svgElementToCanvas(svg)));
+    const tier = card.closest('[data-export-skirt-tier]')?.getAttribute('data-export-skirt-tier') ?? 'Deck';
+    const name = svgs[0]?.getAttribute('data-export-skirt-label') ?? 'Skirting side';
+    const layers = svgs.map((svg) => svg.getAttribute('data-export-skirt-layer') ?? 'finish');
+    return {label:tier+' · '+name,views,layers};
+  }));
+  const width=2400,height=1650;
+  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+  const ctx=canvas.getContext('2d');if(!ctx)return null;
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,width,height);
+  ctx.fillStyle='#171717';ctx.font='bold 52px Arial';
+  ctx.fillText('S&S DESIGN BUILD  /  DECK & STAIR SKIRTING',64,83);
+  ctx.fillStyle='#475569';ctx.font='28px Arial';
+  ctx.fillText('FINISH + 2x4 SUPPORT ELEVATIONS  ·  ALL SIDES ON ONE SHEET',64,127);
+  const count=groups.length;
+  const cols=count<=3?1:count<=9?2:3;
+  const rows=Math.ceil(count/cols);
+  const gap=20,left=54,top=167,bottom=70;
+  const tileW=(width-left*2-gap*(cols-1))/cols;
+  const tileH=(height-top-bottom-gap*(rows-1))/rows;
+  for(let i=0;i<groups.length;i++){
+    const item=groups[i],x=left+(i%cols)*(tileW+gap),y=top+Math.floor(i/cols)*(tileH+gap);
+    ctx.fillStyle=i%2===0?'#f8fafc':'#edf2f7';
+    ctx.fillRect(x,y,tileW,tileH);
+    ctx.strokeStyle='#cbd5e1';ctx.lineWidth=2;ctx.strokeRect(x,y,tileW,tileH);
+    ctx.fillStyle='#0f172a';ctx.font='bold 26px Arial';
+    ctx.fillText(item.label.slice(0,52),x+20,y+35,tileW-40);
+    const innerTop=y+49,innerHeight=tileH-60;
+    const layerHeight=innerHeight/Math.max(1,item.views.length);
+    item.views.forEach((view,j)=>{
+      if(!view)return;
+      const xPad=16,yPad=7;
+      const availableW=tileW-2*xPad,availableH=layerHeight-2*yPad;
+      const factor=Math.min(availableW/view.width,availableH/view.height);
+      const drawW=view.width*factor,drawH=view.height*factor;
+      const dx=x+(tileW-drawW)/2,dy=innerTop+j*layerHeight+(layerHeight-drawH)/2;
+      ctx.drawImage(view,dx,dy,drawW,drawH);
+      ctx.fillStyle='#334155';ctx.font='bold 17px Arial';
+      ctx.fillText((item.layers[j]??'').toUpperCase(),x+14,innerTop+j*layerHeight+20);
+    });
+  }
+  ctx.fillStyle='#475569';ctx.font='22px Arial';
+  ctx.fillText('Field verify sloping stair details, ground contact, finished grades and manufacturer clearances before fabrication.',64,height-25);
+  return canvas;
+}
+
 export function MaterialTable({ items, values, onValuesChange, validationIssues = [] }: MaterialTableProps) {
   const tableRef = useRef<HTMLDivElement | null>(null);
   const [customDraft, setCustomDraft] = useState(customDefaults);
@@ -217,6 +283,25 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
 
   const customItems = useMemo(() => parseJsonArray<CustomMaterialItem>(values.customMaterialItems, []), [values.customMaterialItems]);
   const deletedKeys = useMemo(() => new Set(parseJsonArray<string>(values.deletedMaterialKeys, [])), [values.deletedMaterialKeys]);
+  const removedLog = useMemo(() => parseJsonArray<RemovedMaterialRecord>(values.removedMaterialLog, []), [values.removedMaterialLog]);
+  const removedRecords = useMemo<RemovedMaterialRecord[]>(() => {
+    const records=new Map(removedLog.map((item)=>[item.rowKey,item]));
+    // Older jobs saved only keys. Reconstruct those rows where they still match
+    // the current estimate; keep the key even if the estimate has changed.
+    deletedKeys.forEach((rowKey)=>{
+      if(records.has(rowKey))return;
+      const original=items.find((item)=>'estimate:'+item.category+'::'+item.name+'::'+
+        (item.stockRecommendation??'')+'::'+item.unit+'::'+(item.color??'')+'::'+(item.layoutLabel??'')===rowKey);
+      records.set(rowKey,{
+        rowKey,source:'estimate',name:original?.name??rowKey.split('::')[1]??'Previously excluded line',
+        category:original?.category??'Previously excluded',quantity:original?.quantity??0,unit:original?.unit??'ea',
+        stockRecommendation:original?.stockRecommendation??'Current item no longer matches saved key',
+        color:original?.color,notes:original?.notes,layoutLabel:original?.layoutLabel,
+        reason:'unspecified',memo:'',removedAt:'',
+      });
+    });
+    return [...records.values()];
+  },[removedLog,deletedKeys,items]);
   const noteOverrides = useMemo(() => {
     const raw = values.materialNoteOverrides;
     if (typeof raw !== 'string' || raw.trim() === '') return {} as Record<string, string>;
@@ -305,11 +390,21 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     return acc;
   }, {}), [activeItems]);
 
-  const hiddenItemCount = deletedKeys.size;
+  const hiddenItemCount = removedRecords.length;
+  const printGrouped = useMemo(()=>{
+    const out={...grouped};
+    if(removedRecords.length){
+      out['REMOVED / DO NOT ORDER (reference only)']=removedRecords.map((row)=>({
+        ...row, category:'REMOVED / DO NOT ORDER (reference only)',
+        name:'EXCLUDED: '+row.name,
+        notes:REMOVAL_REASONS[row.reason]+' · '+(row.memo||'No additional note')+' · '+(row.notes??''),
+      }));
+    }
+    return out;
+  },[grouped,removedRecords]);
   const exportBaseName = sanitizeFilePart(String(values.poJobName ?? 'sns-material-order-list'));
   const updateValue = (key: string, value: string) => onValuesChange((current) => ({ ...current, [key]: value }));
   const persistCustomItems = (nextItems: CustomMaterialItem[]) => onValuesChange((current) => ({ ...current, customMaterialItems: JSON.stringify(nextItems) }));
-  const persistDeletedKeys = (nextKeys: Set<string>) => onValuesChange((current) => ({ ...current, deletedMaterialKeys: JSON.stringify(Array.from(nextKeys)) }));
 
   const addCustomItem = () => {
     if (!customDraft.name.trim()) return;
@@ -329,13 +424,36 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
   };
 
   const deleteRow = (item: DisplayMaterialItem) => {
-    if (item.source === 'custom') {
-      persistCustomItems(customItems.filter((entry) => entry.id !== item.rowKey.replace('custom:', '')));
-      return;
-    }
-    const nextKeys = new Set(deletedKeys);
-    nextKeys.add(item.rowKey);
-    persistDeletedKeys(nextKeys);
+    const record:RemovedMaterialRecord={...item,reason:'unspecified',memo:'',removedAt:new Date().toISOString()};
+    onValuesChange((current)=>({
+      ...current,
+      removedMaterialLog:JSON.stringify([...removedRecords.filter((row)=>row.rowKey!==item.rowKey),record]),
+      ...(item.source==='custom'
+        ? {customMaterialItems:JSON.stringify(customItems.filter((entry)=>entry.id!==item.rowKey.replace('custom:','')))}
+        : {deletedMaterialKeys:JSON.stringify([...new Set([...deletedKeys,item.rowKey])])}),
+    }));
+  };
+  const editRemoval=(rowKey:string,changes:Partial<RemovedMaterialRecord>)=>{
+    onValuesChange((current)=>({
+      ...current, removedMaterialLog:JSON.stringify(removedRecords.map((record)=>
+        record.rowKey===rowKey?{...record,...changes}:record)),
+    }));
+  };
+  const restoreRow=(row:RemovedMaterialRecord)=>{
+    onValuesChange((current)=>{
+      const nextRemoved=removedRecords.filter((record)=>record.rowKey!==row.rowKey);
+      const nextDeleted=new Set(deletedKeys);nextDeleted.delete(row.rowKey);
+      const existingCustom=parseJsonArray<CustomMaterialItem>(current.customMaterialItems,[]);
+      const id=row.rowKey.replace('custom:','');
+      return {...current,
+        removedMaterialLog:JSON.stringify(nextRemoved),
+        deletedMaterialKeys:JSON.stringify([...nextDeleted]),
+        ...(row.source==='custom'&&!existingCustom.some((item)=>item.id===id)
+          ? {customMaterialItems:JSON.stringify([...existingCustom,{id,category:row.category,name:row.name,quantity:row.quantity,
+              unit:row.unit,stockRecommendation:row.stockRecommendation,color:row.color,notes:row.notes,layoutLabel:row.layoutLabel}])}
+          : {}),
+      };
+    });
   };
 
   const refreshToStandard = () => {
@@ -343,6 +461,7 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
       ...current,
       customMaterialItems: JSON.stringify([]),
       deletedMaterialKeys: JSON.stringify([]),
+      removedMaterialLog: JSON.stringify([]),
       materialNameOverrides: JSON.stringify({}),
       materialQuantityOverrides: JSON.stringify({}),
       materialUnitOverrides: JSON.stringify({}),
@@ -353,7 +472,18 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     setEditingKey(null);
     setEditingDraft({ name: '', quantity: '', unit: '', stockRecommendation: '', color: '', notes: '' });
   };
-  const restoreAllHidden = () => persistDeletedKeys(new Set());
+  const restoreAllHidden = () => {
+    const restoreCustom=removedRecords.filter((row)=>row.source==='custom').map((row)=>({
+      id:row.rowKey.replace('custom:',''),category:row.category,name:row.name,quantity:row.quantity,
+      unit:row.unit,stockRecommendation:row.stockRecommendation,color:row.color,notes:row.notes,layoutLabel:row.layoutLabel,
+    }));
+    onValuesChange((current)=>{
+      const custom=parseJsonArray<CustomMaterialItem>(current.customMaterialItems,[]);
+      const seen=new Set(custom.map((item)=>item.id));
+      return {...current,deletedMaterialKeys:JSON.stringify([]),removedMaterialLog:JSON.stringify([]),
+        customMaterialItems:JSON.stringify([...custom,...restoreCustom.filter((item)=>!seen.has(item.id))])};
+    });
+  };
   const startEdit = (item: DisplayMaterialItem) => {
     setEditingKey(item.rowKey);
     setEditingDraft({
@@ -405,13 +535,13 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
 
   const exportPdf = async () => {
     if (hasBlockingIssues) return;
-    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
+    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, printGrouped);
     await exportCanvasAsPdf(canvas, 'S&S Design Build · Material order list', `${exportBaseName}.pdf`);
   };
 
   const exportPng = async () => {
     if (hasBlockingIssues) return;
-    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
+    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, printGrouped);
     await exportCanvasAsPng(canvas, `${exportBaseName}.png`);
   };
 
@@ -420,15 +550,18 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     const root = document.getElementById('service-export-root');
     // Include the deck plan and every configured skirting/railing elevation.
     // All these SVGs are driven by the same geometry as the supplier cuts.
-    const drawings = Array.from(root?.querySelectorAll('svg') ?? []) as SVGSVGElement[];
-    if (!drawings.length) return;
+    const drawings = Array.from(root?.querySelectorAll('svg:not([data-export-skirting])') ?? []) as SVGSVGElement[];
+    const skirtingCards = Array.from(root?.querySelectorAll('[data-export-skirt-card="true"]') ?? []);
+    if (!drawings.length && !skirtingCards.length) return;
     const layoutTitle = projectExportTitle('S&S Design Build · Layout', values);
     const layoutCanvases = [] as HTMLCanvasElement[];
     for (const svg of drawings) {
       layoutCanvases.push(...await svgElementToExportCanvases(svg, layoutTitle));
     }
+    const skirtingSheet = await renderCombinedSkirtingSheet(skirtingCards);
+    if (skirtingSheet) layoutCanvases.push(skirtingSheet);
     if (!layoutCanvases.length) return;
-    const materialCanvas = renderMaterialCanvas('S&S Design Build · Material order list', values, grouped);
+    const materialCanvas = renderMaterialCanvas('S&S Design Build · Material order list', values, printGrouped);
     const forcePortraitByIndex = { [layoutCanvases.length]: true } as Record<number, boolean>;
     await exportCanvasesAsPdf([...layoutCanvases, materialCanvas], 'S&S Design Build · Layout and material order list', `${exportBaseName}-layout-materials.pdf`, { forcePortraitByIndex });
   };
@@ -543,6 +676,35 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
           </div>
         ))}
       </div>
+      {hiddenItemCount>0 && <details className="removed-materials-panel">
+        <summary>
+          <strong>Excluded / removed materials ({hiddenItemCount})</strong>
+          <span>Reference only — NOT on supplier order. Expand to show quantities, why they were removed, and restore individual lines.</span>
+        </summary>
+        <div className="removed-materials-notice">The items below are intentionally omitted from the active purchase order. They remain visible here and under “REMOVED / DO NOT ORDER” in exported PDFs for the crew.</div>
+        <div className="table-wrap">
+          <table className="removed-materials-table">
+            <thead><tr><th>Material</th><th>Original quantity</th><th>Stock / specification</th><th>Removal reason</th><th>Crew / supplier note</th><th>Action</th></tr></thead>
+            <tbody>
+              {removedRecords.map((row)=><tr key={row.rowKey}>
+                <td><strong>{row.name}</strong><small>{row.category}</small></td>
+                <td>{row.quantity} {row.unit}</td>
+                <td>{row.stockRecommendation}</td>
+                <td>
+                  <select value={row.reason} aria-label={'Removal reason for '+row.name} onChange={(event)=>
+                    editRemoval(row.rowKey,{reason:event.target.value as RemovedMaterialRecord['reason']})}>
+                    {Object.entries(REMOVAL_REASONS).map(([key,label])=><option value={key} key={key}>{label}</option>)}
+                  </select>
+                </td>
+                <td><input type="text" value={row.memo??''} placeholder="On-hand location / supplier / substitute"
+                  aria-label={'Crew note for '+row.name}
+                  onChange={(event)=>editRemoval(row.rowKey,{memo:event.target.value})}/></td>
+                <td><button type="button" className="secondary-btn small-btn" onClick={()=>restoreRow(row)}>Restore</button></td>
+              </tr>)}
+            </tbody>
+          </table>
+        </div>
+      </details>}
     </div>
   );
 }
