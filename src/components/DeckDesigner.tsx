@@ -4,8 +4,8 @@ import { DeckPoint, LockedPostPoint } from '../lib/types';
 import { ExactBeamPostLayout, ExactSupportPost, evenlySpacedPosts, parseExactPostLayouts, shiftPostLayoutIndices } from '../lib/exactPostLayouts';
 
 const GRID_SIZE = 1 / 12;
-const VIEW_SIZE = 1800;
-const PADDING = 72;
+const VIEW_SIZE = 1100;
+const PADDING = 50;
 const BASE_VIEW_FEET = 25;
 const MAX_DRAW_VIEW_FEET = 60;
 const TEN_FOOT_GRID = 10;
@@ -137,6 +137,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const [mode, setMode] = useState<EditMode>('points');
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [draggingBeamIndex, setDraggingBeamIndex] = useState<number | null>(null);
+  const [selectedBeamIndex, setSelectedBeamIndex] = useState(0);
   const [draggingPost, setDraggingPost] = useState<{ beamIndex: number; id: string } | null>(null);
   const [selectedPost, setSelectedPost] = useState<{ beamIndex: number; id: string } | null>(null);
   const [postFeedback, setPostFeedback] = useState('');
@@ -166,6 +167,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     const parsed = parseNumberArray(activeDeckValues.customBeamYs);
     return parsed.length > 0 ? parsed : model.beamLines.map((line) => line.offsetFromHouse);
   }, [model.beamLines, activeDeckValues.customBeamYs]);
+  const inspectedBeamIndex = clamp(selectedBeamIndex, 0, Math.max(0, model.beamLines.length - 1));
   const lockedPosts = useMemo(() => parseLockedPosts(activeDeckValues.lockedPosts), [activeDeckValues.lockedPosts]);
   const manualPostLayouts = useMemo(() => parseExactPostLayouts(activeDeckValues.postLayouts).layouts, [activeDeckValues.postLayouts]);
   const beamEdits = useMemo(() => parseBeamEdits(activeDeckValues.beamEdits), [activeDeckValues.beamEdits]);
@@ -369,28 +371,85 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     updateExtraStairs(extraStairs.filter((_, currentIndex) => currentIndex !== index));
     setActiveStairIndex(0);
   };
-  const addBeamLine = () => {
-    const along = model.joistDirection === 'vertical' ? model.depth : model.width;
-    const midpoint = Math.max(0.5, snap(along / 2));
-    if (beamOffsets.some((offset) => Math.abs(offset - midpoint) < 0.25)) {
-      setPostFeedback('A beam already exists near the center. Move an existing beam first.'); return;
+  // Every straight support line has exactly one editable station. Moving a
+  // line writes the FULL ordered plan, ensuring the old automatic notch-beam
+  // generator cannot silently reinsert a phantom segment.
+  const moveBeamStation = (index: number, proposed: number, dragging = false) => {
+    const line = model.beamLines[index];
+    if (!line || !Number.isFinite(proposed)) {
+      setPostFeedback('Enter a valid beam station in feet.'); return;
     }
-    const index = beamOffsets.filter((offset) => offset < midpoint).length;
+    if (line.postMode === 'manual' && line.postSpecs.some((post) => post.locked)) {
+      setPostFeedback('Beam ' + (index + 1) + ' contains locked support posts. Unlock those posts before moving the beam.'); return;
+    }
+    const length = model.joistDirection === 'vertical' ? model.depth : model.width;
+    const canTouchEdge = model.attachment === 'freestanding' || model.attachment === 'brick';
+    const low = index === 0 ? (canTouchEdge ? 0 : 0.25) : beamOffsets[index - 1] + 0.25;
+    const high = index === beamOffsets.length - 1 ? (canTouchEdge ? length : length - 0.25) : beamOffsets[index + 1] - 0.25;
+    if (low > high) {
+      setPostFeedback('Beam stations are too close together. Remove or separate neighboring beams first.'); return;
+    }
+    if (!dragging && (proposed < low - 0.0001 || proposed > high + 0.0001)) {
+      setPostFeedback('Beam ' + (index + 1) + ' must remain between ' + feetAndInches(low) + ' and ' + feetAndInches(high) + '.'); return;
+    }
+    const station = snap(clamp(proposed, low, high));
+    if (Math.abs(station - beamOffsets[index]) < 0.001) return;
+    const apply = (current: Record<string, string | number | boolean>) => ({
+      ...current,
+      [tierKey('customBeamYs')]: JSON.stringify(beamOffsets.map((value, i) => i === index ? station : value)),
+    });
+    if (dragging) onValuesChange(apply);
+    else commitChange(apply);
+    setPostFeedback('');
+    setSelectedBeamIndex(index);
+  };
+  const addBeamLine = () => {
+    const length = model.joistDirection === 'vertical' ? model.depth : model.width;
+    const limits = [0, ...beamOffsets, length].sort((a, b) => a - b);
+    const gaps = limits.slice(1).map((end, i) => ({ start: limits[i], end, width: end - limits[i] }))
+      .filter((gap) => gap.width > 0.75).sort((a, b) => b.width - a.width);
+    if (!gaps.length) { setPostFeedback('No open beam bay is wide enough for another line.'); return; }
+    const gap = gaps[0];
+    const station = snap((gap.start + gap.end) / 2);
+    if (beamOffsets.some((offset) => Math.abs(offset - station) < 0.25)) {
+      setPostFeedback('New beam would overlap an existing beam.'); return;
+    }
+    const index = beamOffsets.filter((offset) => offset < station).length;
     commitChange((current) => ({
       ...current,
-      [tierKey('customBeamYs')]: JSON.stringify([...beamOffsets, midpoint].sort((a,b)=>a-b)),
+      [tierKey('customBeamYs')]: JSON.stringify([...beamOffsets, station].sort((a,b)=>a-b)),
       [tierKey('postLayouts')]: JSON.stringify(shiftPostLayoutIndices(manualPostLayouts, index, 'insert')),
       [tierKey('lockedPosts')]: JSON.stringify(lockedPosts.map((p) => ({ ...p, beamIndex: p.beamIndex >= index ? p.beamIndex + 1 : p.beamIndex }))),
       [tierKey('beamEdits')]: JSON.stringify(beamEdits.map((b) => ({ ...b, beamIndex: b.beamIndex >= index ? b.beamIndex + 1 : b.beamIndex }))),
     }));
+    setSelectedBeamIndex(index);
+    setPostFeedback('');
   };
-  const removeBeamLine = (index: number) => commitChange((current) => ({
-    ...current,
-    [tierKey('customBeamYs')]: JSON.stringify(beamOffsets.filter((_, currentIndex) => currentIndex !== index)),
-    [tierKey('beamEdits')]: JSON.stringify(beamEdits.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))),
-    [tierKey('lockedPosts')]: JSON.stringify(lockedPosts.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))),
-    [tierKey('postLayouts')]: JSON.stringify(shiftPostLayoutIndices(manualPostLayouts, index, 'remove')),
-  }));
+  const removeBeamLine = (index: number) => {
+    if (beamOffsets.length <= 1) {
+      setPostFeedback('At least one beam line must remain. Use Reset beams & supports to restore automatic layout.'); return;
+    }
+    commitChange((current) => ({
+      ...current,
+      [tierKey('customBeamYs')]: JSON.stringify(beamOffsets.filter((_, currentIndex) => currentIndex !== index)),
+      [tierKey('beamEdits')]: JSON.stringify(beamEdits.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))),
+      [tierKey('lockedPosts')]: JSON.stringify(lockedPosts.filter((item) => item.beamIndex !== index).map((item) => ({ ...item, beamIndex: item.beamIndex > index ? item.beamIndex - 1 : item.beamIndex }))),
+      [tierKey('postLayouts')]: JSON.stringify(shiftPostLayoutIndices(manualPostLayouts, index, 'remove')),
+    }));
+    setSelectedBeamIndex(Math.max(0, Math.min(index, beamOffsets.length - 2)));
+  };
+  const resetBeamLayout = () => {
+    commitChange((current) => ({
+      ...current,
+      [tierKey('customBeamYs')]: JSON.stringify([]),
+      [tierKey('postLayouts')]: JSON.stringify([]),
+      [tierKey('lockedPosts')]: JSON.stringify([]),
+      [tierKey('beamEdits')]: JSON.stringify([]),
+    }));
+    setSelectedBeamIndex(0);
+    setPostFeedback('Automatic beams and support posts restored. Undo is available if needed.');
+  };
+
   const updateBeamEdit = (index: number, key: 'startTrim' | 'endTrim', value: number) => commitChange((current) => {
     const next = [...beamEdits];
     const match = next.findIndex((item) => item.beamIndex === index);
@@ -492,23 +551,28 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     setDraggingIndex(index);
   };
 
-  const onBeamPointerDown = (event: PointerEvent<SVGLineElement>, index: number) => {
+  const onBeamPointerDown = (event: PointerEvent<SVGElement>, index: number) => {
     if (mode === 'posts') return;
     event.preventDefault();
-    if (model.beamLines[index].postSpecs.some((post) => post.locked) && model.beamLines[index].postMode === 'manual') {
-      setPostFeedback('Unlock manually locked supports before moving beam ' + (index + 1) + '.'); return;
-    }
+    event.stopPropagation();
+    setSelectedBeamIndex(index);
     setMode('beams');
+    if (model.beamLines[index].postSpecs.some((post) => post.locked) && model.beamLines[index].postMode === 'manual') {
+      setPostFeedback('Unlock locked posts in Beam ' + (index + 1) + ' before moving it.'); return;
+    }
     pushHistory();
     setFuture([]);
     setDraggingBeamIndex(index);
+    try { svgRef.current?.setPointerCapture(event.pointerId); } catch { /* browser did not capture pointer */ }
   };
 
   const onPostPointerDown = (event: PointerEvent<SVGRectElement>, beamIndex: number, id: string) => {
+    if (mode !== 'posts') return;
     event.preventDefault();
     event.stopPropagation();
     setMode('posts');
     setSelectedPost({ beamIndex, id });
+    setSelectedBeamIndex(beamIndex);
     pushHistory();
     setFuture([]);
     const beam = manualizePostBeam(beamIndex);
@@ -567,10 +631,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     }
     if (draggingBeamIndex !== null) {
       const along = model.joistDirection === 'vertical' ? point.y - model.minY : point.x - model.minX;
-      const previous = draggingBeamIndex > 0 ? beamOffsets[draggingBeamIndex - 1] + 0.25 : 0;
-      const next = draggingBeamIndex < beamOffsets.length - 1 ? beamOffsets[draggingBeamIndex + 1] - 0.25 : (model.joistDirection === 'vertical' ? model.depth : model.width);
-      const station = clamp(snap(along), previous, Math.max(previous, next));
-      onValuesChange((current) => ({ ...current, [tierKey('customBeamYs')]: JSON.stringify(beamOffsets.map((value, index) => index === draggingBeamIndex ? station : value)) }));
+      moveBeamStation(draggingBeamIndex, along, true);
       return;
     }
     if (draggingStair && model.stairPlacement.edgeIndex !== null) {
@@ -595,7 +656,11 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       setDraggingStair(false);
     };
     window.addEventListener('pointerup', release);
-    return () => window.removeEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
   }, []);
 
   const lastPoint = points[points.length - 1] ?? null;
@@ -622,9 +687,9 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       <div className="designer-mode-row tidy-mode-row">
         <button type="button" className={activeTier === 'main' ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => { setActiveTier('main'); setMode('points'); setSelectedIndex(null); setDrawingSequence(mainPoints.length === 0); }}>Main deck shape</button>
         {lowerTierEnabled && <button type="button" className={activeTier === 'lower' ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => { setActiveTier('lower'); setMode('points'); setSelectedIndex(null); setDrawingSequence(lowerPoints.length === 0); }}>Lower tier shape</button>}
-        {(['points', 'house', 'railing', 'stairs', 'beams', 'posts'] as EditMode[]).map((item) => (
+        {(['points', 'house', 'beams', 'posts', 'railing', 'stairs'] as EditMode[]).map((item) => (
           <button key={item} type="button" className={mode === item ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => setMode(item)}>
-            {item === 'points' ? (drawingSequence ? 'Draw footprint' : 'Edit points') : item === 'house' ? 'Pick house sides' : item === 'railing' ? 'Pick railing edges' : item === 'stairs' ? 'Place stairs' : item === 'beams' ? 'Move beam lines' : 'Edit posts'}
+            {item === 'points' ? (drawingSequence ? 'Draw footprint' : 'Edit points') : item === 'house' ? 'Pick house sides' : item === 'railing' ? 'Pick railing edges' : item === 'stairs' ? 'Place stairs' : item === 'beams' ? 'Move beams' : 'Edit posts'}
           </button>
         ))}
         <button type="button" className="ghost-btn mode-btn" onClick={undo} disabled={!history.length}>Undo</button>
@@ -701,9 +766,27 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
                 <g key={'beam-' + index}>
                   {beam.segments.map((segment, run) => {
                     const from = pointOnBeam(segment.startX), to = pointOnBeam(segment.endX);
+                    const vertical = model.joistDirection === 'horizontal';
+                    const mid = pointOnBeam((segment.startX + segment.endX) / 2);
                     return <g key={'beam-run-' + index + '-' + run}>
-                      <line x1={from.x} y1={from.y - 3} x2={to.x} y2={to.y - 3} className="beam-line beam-line-editable" onPointerDown={(e) => onBeamPointerDown(e, index)}/>
-                      <line x1={from.x} y1={from.y + 3} x2={to.x} y2={to.y + 3} className="beam-line beam-line-secondary" onPointerDown={(e) => onBeamPointerDown(e, index)}/>
+                      <line x1={from.x + (vertical ? -3 : 0)} y1={from.y + (vertical ? 0 : -3)}
+                        x2={to.x + (vertical ? -3 : 0)} y2={to.y + (vertical ? 0 : -3)}
+                        className="beam-line beam-line-editable" />
+                      <line x1={from.x + (vertical ? 3 : 0)} y1={from.y + (vertical ? 0 : 3)}
+                        x2={to.x + (vertical ? 3 : 0)} y2={to.y + (vertical ? 0 : 3)}
+                        className="beam-line beam-line-secondary"/>
+                      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                        className="beam-drag-hit" stroke="transparent" strokeWidth={24} pointerEvents={mode === 'beams' ? 'stroke' : 'none'}
+                        onPointerDown={(event) => onBeamPointerDown(event, index)} />
+                      <circle cx={mid.x + (vertical ? 17 : 0)} cy={mid.y + (vertical ? 0 : -17)} r={11}
+                        className={'beam-drag-handle' + (selectedBeamIndex === index && mode === 'beams' ? ' is-selected' : '')}
+                        pointerEvents={mode === 'beams' ? 'auto' : 'none'}
+                        onPointerDown={(event) => onBeamPointerDown(event, index)}>
+                        <title>{'Move beam ' + (index + 1)}</title>
+                      </circle>
+                      <text x={mid.x + (vertical ? 24 : 14)} y={mid.y + (vertical ? -17 : -14)} className="beam-number-label">
+                        {'B' + (index + 1)}
+                      </text>
                     </g>;
                   })}
                   {beam.postSpecs.map((post, postIndex) => {
@@ -712,7 +795,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
                     return <g key={post.id}>
                       <rect x={p.x - 7} y={p.y - 7} width={14} height={14} rx={2}
                         className={'post-lock ' + (post.locked ? 'locked ' : '') + (active ? 'post-selected' : '')}
-                        style={{ cursor: post.locked ? 'pointer' : 'grab', strokeWidth: active ? 3 : 1.5 }}
+                        style={{ cursor: mode === 'posts' ? (post.locked ? 'pointer' : 'grab') : 'default', strokeWidth: active ? 3 : 1.5 }}
+                        pointerEvents={mode === 'posts' ? 'auto' : 'none'}
                         onPointerDown={(e) => onPostPointerDown(e, index, post.id)}
                         onClick={(e) => { e.stopPropagation(); setSelectedPost({ beamIndex: index, id: post.id }); }}/>
                       <text x={p.x + 10} y={p.y - 10} className="deck-point-label">{'B' + (index + 1) + '-P' + (postIndex + 1)}</text>
@@ -726,24 +810,37 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
               const b = toSvgPoint(beam.end);
               return <g key={`angled-beam-${index}`}><line x1={a.x} y1={a.y - 3} x2={b.x} y2={b.y - 3} className="beam-line beam-line-editable" /><line x1={a.x} y1={a.y + 3} x2={b.x} y2={b.y + 3} className="beam-line beam-line-secondary" />{beam.postPoints.map((post, postIndex) => { const p = toSvgPoint(post); return <rect key={`angled-post-${index}-${postIndex}`} x={p.x - 4} y={p.y - 4} width={8} height={8} className="post-lock" />; })}</g>;
             })}
-            {points.map((point, index) => { const svgPoint = toSvgPoint(point); const isClosePoint = drawingSequence && index === 0 && points.length >= 3; return <g key={`${point.x}-${point.y}-${index}`}><circle cx={svgPoint.x} cy={svgPoint.y} r={selectedIndex === index ? 9 : 7} className={selectedIndex === index ? 'deck-point active' : isClosePoint ? 'deck-point close-target' : 'deck-point'} onPointerDown={(event) => onPointPointerDown(event, index)} onClick={(event) => { event.stopPropagation(); if (drawingSequence && !isClosePoint) return; if (isClosePoint) { finishDrawing(); return; } setSelectedIndex(index); }} /><text x={svgPoint.x + 10} y={svgPoint.y - 10} className="deck-point-label">P{index + 1}{isClosePoint ? ' · close' : ''}</text></g>; })}
-            {(model.stairPlacements ?? [model.stairPlacement]).map((placement, stairIdx) => placement.start && placement.end ? <g key={`stair-placement-${stairIdx}`} onClick={() => setActiveStairIndex(stairIdx)}><line x1={toSvgPoint(placement.start).x} y1={toSvgPoint(placement.start).y} x2={toSvgPoint(placement.end).x} y2={toSvgPoint(placement.end).y} className={activeStairIndex === stairIdx ? "stair-edge-highlight active-stair" : "stair-edge-highlight"} onPointerDown={onStairPointerDown} /><circle cx={(toSvgPoint(placement.start).x + toSvgPoint(placement.end).x) / 2} cy={(toSvgPoint(placement.start).y + toSvgPoint(placement.end).y) / 2} r={activeStairIndex === stairIdx ? 10 : 7} className="stair-handle" /><text x={(toSvgPoint(placement.start).x + toSvgPoint(placement.end).x) / 2 + 10} y={(toSvgPoint(placement.start).y + toSvgPoint(placement.end).y) / 2 - 10} className="deck-point-label">Stair {stairIdx + 1}</text></g> : null)}
+            {points.map((point, index) => { const svgPoint = toSvgPoint(point); const isClosePoint = drawingSequence && index === 0 && points.length >= 3; return <g key={`${point.x}-${point.y}-${index}`}><circle cx={svgPoint.x} cy={svgPoint.y} r={selectedIndex === index ? 9 : 7} className={selectedIndex === index ? 'deck-point active' : isClosePoint ? 'deck-point close-target' : 'deck-point'} pointerEvents={mode === 'points' ? 'auto' : 'none'} onPointerDown={(event) => onPointPointerDown(event, index)} onClick={(event) => { event.stopPropagation(); if (drawingSequence && !isClosePoint) return; if (isClosePoint) { finishDrawing(); return; } setSelectedIndex(index); }} /><text x={svgPoint.x + 10} y={svgPoint.y - 10} className="deck-point-label">P{index + 1}{isClosePoint ? ' · close' : ''}</text></g>; })}
+            {(model.stairPlacements ?? [model.stairPlacement]).map((placement, stairIdx) => placement.start && placement.end ? <g key={`stair-placement-${stairIdx}`} onClick={() => setActiveStairIndex(stairIdx)}><line x1={toSvgPoint(placement.start).x} y1={toSvgPoint(placement.start).y} x2={toSvgPoint(placement.end).x} y2={toSvgPoint(placement.end).y} className={activeStairIndex === stairIdx ? "stair-edge-highlight active-stair" : "stair-edge-highlight"} pointerEvents={mode === 'stairs' ? 'auto' : 'none'} onPointerDown={onStairPointerDown} /><circle cx={(toSvgPoint(placement.start).x + toSvgPoint(placement.end).x) / 2} cy={(toSvgPoint(placement.start).y + toSvgPoint(placement.end).y) / 2} r={activeStairIndex === stairIdx ? 10 : 7} className="stair-handle" /><text x={(toSvgPoint(placement.start).x + toSvgPoint(placement.end).x) / 2 + 10} y={(toSvgPoint(placement.start).y + toSvgPoint(placement.end).y) / 2 - 10} className="deck-point-label">Stair {stairIdx + 1}</text></g> : null)}
           </svg>
           </div>
         </div>
         <div className="deck-designer-controls organized-controls">
-          <div className="callout-box compact-card"><h4>Selected point</h4>{selectedIndex === null ? <p className="muted">{drawingSequence ? 'Keep drawing the footprint, then click P1 to close it.' : 'Click a point in the drawing to fine-tune it.'}</p> : <div className="stack-list"><div className="form-grid compact-grid"><label className="form-field"><span>X (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].x} onChange={(event) => updatePoint(selectedIndex, 'x', Number(event.target.value))} /><small>{feetAndInches(points[selectedIndex].x)}</small></label><label className="form-field"><span>Y (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].y} onChange={(event) => updatePoint(selectedIndex, 'y', Number(event.target.value))} /><small>{feetAndInches(points[selectedIndex].y)}</small></label></div><div className="point-nudge-grid"><span className="muted">Move by inches</span><div className="point-nudge-row"><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('x', -1)}>X −1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('x', 1)}>X +1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('y', -1)}>Y −1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('y', 1)}>Y +1"</button></div></div><button type="button" className="secondary-btn block-btn" onClick={removeSelected}>Remove point</button></div>}</div>
-          <div className="callout-box compact-card"><h4>Tier drawing</h4><p className="muted">Draw the main/upper deck first. Turn on Add lower deck tier to draw and edit a separate lower deck with its own stairs, railing, beams, and posts.</p><div className="tag-row"><span className="tag">Main: {mainPoints.length >= 3 ? `${feetAndInches(polygonArea(mainPoints))} sf` : 'not closed'}</span>{lowerTierEnabled && <span className="tag">Lower: {lowerPoints.length >= 3 ? `${feetAndInches(polygonArea(lowerPoints))} sf` : 'not closed'}</span>}</div></div>
-          <div className="callout-box compact-card"><h4>Quick rectangle</h4><div className="form-grid compact-grid"><label className="form-field"><span>Width (ft)</span><input type="number" step={1} min={1} value={Number(values.quickWidth ?? 16)} onChange={(event) => commitChange((current) => ({ ...current, quickWidth: Number(event.target.value) }))} /></label><label className="form-field"><span>Projection (ft)</span><input type="number" step={1} min={1} value={Number(values.quickProjection ?? 12)} onChange={(event) => commitChange((current) => ({ ...current, quickProjection: Number(event.target.value) }))} /></label><button type="button" className="ghost-btn block-btn" onClick={applyRectangle}>Apply rectangle</button></div></div>
-          <div className="callout-box compact-card"><h4>Staircases</h4><p className="muted">Use Place stairs, choose which staircase is active, then click/drag an edge for that staircase.</p><div className="stack-list"><button type="button" className={activeStairIndex === 0 ? 'secondary-btn block-btn' : 'ghost-btn block-btn'} onClick={() => { setActiveStairIndex(0); setMode('stairs'); }}>Edit staircase 1</button>{extraStairs.map((stair, index) => <div key={`extra-stair-${index}`} className="beam-editor-row beam-edit-grid"><button type="button" className={activeStairIndex === index + 1 ? 'secondary-btn small-btn' : 'ghost-btn small-btn'} onClick={() => { setActiveStairIndex(index + 1); setMode('stairs'); }}>Stair {index + 2}</button><label className="inline-mini-field"><span>Width</span><input type="number" step={GRID_SIZE} value={stair.width} onChange={(event) => { const next = [...extraStairs]; next[index] = { ...stair, width: Number(event.target.value) }; updateExtraStairs(next); }} /></label><label className="inline-mini-field"><span>Offset</span><input type="number" step={GRID_SIZE} value={stair.offset} onChange={(event) => { const next = [...extraStairs]; next[index] = { ...stair, offset: snap(Number(event.target.value)) }; updateExtraStairs(next); }} /></label><button type="button" className="ghost-btn small-btn" onClick={() => removeExtraStair(index)}>Remove</button></div>)}<button type="button" className="ghost-btn block-btn" onClick={addExtraStair}>Add another staircase</button></div></div>
-          <div className="callout-box compact-card">
+          {mode === 'points' && <div className="callout-box compact-card"><h4>Selected point</h4>{selectedIndex === null ? <p className="muted">{drawingSequence ? 'Keep drawing the footprint, then click P1 to close it.' : 'Click a point in the drawing to fine-tune it.'}</p> : <div className="stack-list"><div className="form-grid compact-grid"><label className="form-field"><span>X (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].x} onChange={(event) => updatePoint(selectedIndex, 'x', Number(event.target.value))} /><small>{feetAndInches(points[selectedIndex].x)}</small></label><label className="form-field"><span>Y (ft)</span><input type="number" step={GRID_SIZE} value={points[selectedIndex].y} onChange={(event) => updatePoint(selectedIndex, 'y', Number(event.target.value))} /><small>{feetAndInches(points[selectedIndex].y)}</small></label></div><div className="point-nudge-grid"><span className="muted">Move by inches</span><div className="point-nudge-row"><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('x', -1)}>X −1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('x', 1)}>X +1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('y', -1)}>Y −1"</button><button type="button" className="ghost-btn small-btn" onClick={() => nudgeSelectedPoint('y', 1)}>Y +1"</button></div></div><button type="button" className="secondary-btn block-btn" onClick={removeSelected}>Remove point</button></div>}</div>}
+          {mode === 'points' && <div className="callout-box compact-card"><h4>Tier drawing</h4><p className="muted">Draw the main/upper deck first. Turn on Add lower deck tier to draw and edit a separate lower deck with its own stairs, railing, beams, and posts.</p><div className="tag-row"><span className="tag">Main: {mainPoints.length >= 3 ? `${feetAndInches(polygonArea(mainPoints))} sf` : 'not closed'}</span>{lowerTierEnabled && <span className="tag">Lower: {lowerPoints.length >= 3 ? `${feetAndInches(polygonArea(lowerPoints))} sf` : 'not closed'}</span>}</div></div>}
+          {mode === 'points' && <div className="callout-box compact-card"><h4>Quick rectangle</h4><div className="form-grid compact-grid"><label className="form-field"><span>Width (ft)</span><input type="number" step={1} min={1} value={Number(values.quickWidth ?? 16)} onChange={(event) => commitChange((current) => ({ ...current, quickWidth: Number(event.target.value) }))} /></label><label className="form-field"><span>Projection (ft)</span><input type="number" step={1} min={1} value={Number(values.quickProjection ?? 12)} onChange={(event) => commitChange((current) => ({ ...current, quickProjection: Number(event.target.value) }))} /></label><button type="button" className="ghost-btn block-btn" onClick={applyRectangle}>Apply rectangle</button></div></div>}
+          {mode === 'stairs' && <div className="callout-box compact-card"><h4>Staircases</h4><p className="muted">Use Place stairs, choose which staircase is active, then click/drag an edge for that staircase.</p><div className="stack-list"><button type="button" className={activeStairIndex === 0 ? 'secondary-btn block-btn' : 'ghost-btn block-btn'} onClick={() => { setActiveStairIndex(0); setMode('stairs'); }}>Edit staircase 1</button>{extraStairs.map((stair, index) => <div key={`extra-stair-${index}`} className="beam-editor-row beam-edit-grid"><button type="button" className={activeStairIndex === index + 1 ? 'secondary-btn small-btn' : 'ghost-btn small-btn'} onClick={() => { setActiveStairIndex(index + 1); setMode('stairs'); }}>Stair {index + 2}</button><label className="inline-mini-field"><span>Width</span><input type="number" step={GRID_SIZE} value={stair.width} onChange={(event) => { const next = [...extraStairs]; next[index] = { ...stair, width: Number(event.target.value) }; updateExtraStairs(next); }} /></label><label className="inline-mini-field"><span>Offset</span><input type="number" step={GRID_SIZE} value={stair.offset} onChange={(event) => { const next = [...extraStairs]; next[index] = { ...stair, offset: snap(Number(event.target.value)) }; updateExtraStairs(next); }} /></label><button type="button" className="ghost-btn small-btn" onClick={() => removeExtraStair(index)}>Remove</button></div>)}<button type="button" className="ghost-btn block-btn" onClick={addExtraStair}>Add another staircase</button></div></div>}
+          {mode === 'stairs' && <div className="callout-box compact-card">
+            <h4>Stair placement offset</h4>
+            <label className="form-field"><span>Distance along selected edge (ft)</span>
+              <input type="number" min={0} step={GRID_SIZE} value={Number(activeDeckValues.stairOffset ?? 0)}
+                onChange={(event) => commitChange((current) => ({ ...current, [tierKey('stairOffset')]: snap(Number(event.target.value)) }))}/>
+            </label>
+            <p className="muted">Use the Stairs mode to click or drag the stair opening along an edge.</p>
+          </div>}
+          {mode === 'posts' && <div className="callout-box compact-card">
             <h4>Exact support-post layouts</h4>
+            <div className="beam-selector-row" role="group" aria-label="Select beam supports">
+              {model.beamLines.map((beam, index) => <button key={'post-select-' + index} type="button"
+                aria-pressed={inspectedBeamIndex === index} className={inspectedBeamIndex === index ? 'secondary-btn small-btn' : 'ghost-btn small-btn'}
+                onClick={() => setSelectedBeamIndex(index)}>{'Beam ' + (index + 1) + ' · ' + beam.postXs.length + ' posts'}</button>)}
+            </div>
             <p className="muted">Select <strong>Edit posts</strong> to drag a square on the drawing, or enter exact station values below. Manual supports REPLACE automatic supports, and all post-dependent quantities update. Positions are not engineering approvals.</p>
             {postFeedback && <p className="muted" role="status">{postFeedback}</p>}
             {model.postLayoutIssues.map((issue, i) => <p key={'post-issue-' + i} role="alert" style={{ color: '#b91c1c' }}>{issue}</p>)}
             {model.postEngineeringNotes.map((note, i) => <p key={'post-note-' + i} style={{ color: '#92400e' }}>{note}</p>)}
             <div className="stack-list">
-              {model.beamLines.map((beam, beamIndex) => <div key={'post-beam-' + beamIndex} style={{ border: '1px solid var(--border, #d1d5db)', borderRadius: 10, padding: 12, marginBottom: 10 }}>
+              {model.beamLines.map((beam, beamIndex) => beamIndex !== inspectedBeamIndex ? null : <div key={'post-beam-' + beamIndex} style={{ border: '1px solid var(--border, #d1d5db)', borderRadius: 10, padding: 12, marginBottom: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
                   <strong>{'Beam ' + (beamIndex + 1)}</strong>
                   <span className="muted">{beam.postMode === 'manual' ? 'Manual / exact' : 'Automatic'} · {beam.postSpecs.length} posts</span>
@@ -768,11 +865,61 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
                 </div>
               </div>)}
             </div>
-          </div>
-          <div className="callout-box compact-card"><h4>Manual framing controls</h4><div className="form-grid compact-grid"><label className="form-field"><span>Stair offset along selected edge</span><input type="number" step={GRID_SIZE} value={Number(activeDeckValues.stairOffset ?? 0)} onChange={(event) => commitChange((current) => ({ ...current, [tierKey('stairOffset')]: snap(Number(event.target.value)) }))} /></label><label className="form-field"><span>Locked posts</span><input type="text" value={lockedPosts.length ? lockedPosts.map((item) => `B${item.beamIndex + 1}@${feetAndInches(item.x)}`).join(', ') : 'none'} readOnly /></label><button type="button" className="ghost-btn block-btn" onClick={addBeamLine}>Add straight beam line</button><button type="button" className="ghost-btn block-btn" onClick={() => updateNumberArray(tierKey('customBeamYs'), [])}>Reset auto beam lines</button></div>{model.angledBeamLines?.length ? <p className="muted">Angled perimeter support beams are added automatically where angled deck edges need support.</p> : null}<div className="stack-list beam-editor-list">{model.beamLines.map((beam, index) => <div key={`beam-edit-${index}`} className="beam-editor-row beam-edit-grid"><span>Beam {index + 1}</span><strong>{feetAndInches(beam.offsetFromHouse)}</strong><label className="inline-mini-field"><span>Start trim</span><input type="number" step={GRID_SIZE} value={beam.startTrim} onChange={(event) => updateBeamEdit(index, 'startTrim', Number(event.target.value))} /></label><label className="inline-mini-field"><span>End trim</span><input type="number" step={GRID_SIZE} value={beam.endTrim} onChange={(event) => updateBeamEdit(index, 'endTrim', Number(event.target.value))} /></label><button type="button" className="ghost-btn small-btn" onClick={() => removeBeamLine(index)}>Remove</button></div>)}</div></div>
-          <div className="callout-box compact-card"><h4>Reset</h4><button type="button" className="ghost-btn block-btn" onClick={resetShape}>Reset shape and manual overrides</button></div>
-          <div className="callout-box compact-card workflow-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Viewport</span><strong>{feetAndInches(viewFeet)} × {feetAndInches(viewFeet)}</strong></div><div><span>Origin</span><strong>{feetAndInches(limits.minX)} , {feetAndInches(limits.minY)}</strong></div></div></div>
-          <div className="callout-box compact-card workflow-card"><h4>Drawing workflow</h4><ul className="plain-list compact"><li>Click to place P1, then keep clicking each next corner.</li><li>The live line follows your cursor and snaps to 45° / 90° when nearby.</li><li>Click back on P1 to close the shape.</li><li>After closing, drag any point or insert a new one on any edge.</li><li>Use Pick house sides to mark any side that is against the house so picture frame/band/attachment logic follows the real plan.</li></ul></div>
+          </div>}
+          {mode === 'beams' && <div className="callout-box compact-card beam-inspector">
+            <h4>Beam placement</h4>
+            <p className="muted">Drag the blue beam handle or set an exact station. Every straight beam is editable, including those on stepped decks. Stations are measured from the rear/left bounding edge and snapped to 1 inch.</p>
+            {postFeedback && <p role="status" className="deck-designer-feedback">{postFeedback}</p>}
+            <div className="beam-selector-row" role="group" aria-label="Select beam to edit">
+              {model.beamLines.map((_, index) => <button type="button" key={index}
+                aria-pressed={inspectedBeamIndex === index}
+                className={inspectedBeamIndex === index ? 'secondary-btn small-btn' : 'ghost-btn small-btn'}
+                onClick={() => setSelectedBeamIndex(index)}>{'Beam ' + (index + 1)}</button>)}
+            </div>
+            {model.beamLines[inspectedBeamIndex] && <div className="beam-position-editor">
+              <div className="beam-location-heading">
+                <strong>{'B' + (inspectedBeamIndex + 1)} · {feetAndInches(beamOffsets[inspectedBeamIndex] ?? 0)}</strong>
+                <span className="muted">{model.beamLines[inspectedBeamIndex].segments.length} continuous run(s)</span>
+              </div>
+              <label className="form-field"><span>{model.joistDirection === 'vertical' ? 'Distance from rear (ft)' : 'Distance from left (ft)'}</span>
+                <input type="number" min={0} max={model.joistDirection === 'vertical' ? model.depth : model.width}
+                  step={GRID_SIZE} value={Number((beamOffsets[inspectedBeamIndex] ?? 0).toFixed(4))}
+                  onChange={(event) => moveBeamStation(inspectedBeamIndex, Number(event.target.value))}/>
+              </label>
+              <div className="beam-nudge-actions">
+                <button type="button" className="ghost-btn small-btn" onClick={() => moveBeamStation(inspectedBeamIndex, (beamOffsets[inspectedBeamIndex] ?? 0) - 1)}>−1 ft</button>
+                <button type="button" className="ghost-btn small-btn" onClick={() => moveBeamStation(inspectedBeamIndex, (beamOffsets[inspectedBeamIndex] ?? 0) - 1 / 12)}>−1 in</button>
+                <button type="button" className="ghost-btn small-btn" onClick={() => moveBeamStation(inspectedBeamIndex, (beamOffsets[inspectedBeamIndex] ?? 0) + 1 / 12)}>+1 in</button>
+                <button type="button" className="ghost-btn small-btn" onClick={() => moveBeamStation(inspectedBeamIndex, (beamOffsets[inspectedBeamIndex] ?? 0) + 1)}>+1 ft</button>
+              </div>
+              <div className="form-grid compact-grid">
+                <label className="form-field"><span>Start trim (ft)</span>
+                  <input type="number" min={0} step={GRID_SIZE} value={model.beamLines[inspectedBeamIndex].startTrim}
+                    onChange={(event) => updateBeamEdit(inspectedBeamIndex, 'startTrim', Number(event.target.value))}/></label>
+                <label className="form-field"><span>End trim (ft)</span>
+                  <input type="number" min={0} step={GRID_SIZE} value={model.beamLines[inspectedBeamIndex].endTrim}
+                    onChange={(event) => updateBeamEdit(inspectedBeamIndex, 'endTrim', Number(event.target.value))}/></label>
+              </div>
+              <button type="button" className="ghost-btn small-btn" disabled={beamOffsets.length <= 1}
+                onClick={() => removeBeamLine(inspectedBeamIndex)}>Remove selected beam</button>
+            </div>}
+            <div className="beam-inspector-actions">
+              <button type="button" className="secondary-btn small-btn" onClick={addBeamLine}>+ Add beam in open bay</button>
+              <button type="button" className="ghost-btn small-btn" onClick={resetBeamLayout}>Reset beams & supports to auto</button>
+            </div>
+            {model.angledBeamLines?.length > 0 && <p className="muted">Angled perimeter braces follow their angled edges automatically; straight beam stations above are fully editable.</p>}
+          </div>}
+          {mode === 'house' && <div className="callout-box compact-card">
+            <h4>Identify house attachment</h4>
+            <p className="muted">Click each edge that touches the house. House edges affect ledger conditions and fascia, railing and picture-frame eligibility. Selected house edges: {[...houseEdges].map((i) => 'E' + (i + 1)).join(', ') || 'none'}.</p>
+          </div>}
+          {mode === 'railing' && <div className="callout-box compact-card">
+            <h4>Choose railing edges</h4>
+            <p className="muted">Click each exposed edge that needs a railing. Adjust railing system, height and materials in the next Stairs & railing step. Selected edges: {[...railingEdges].map((i) => 'E' + (i + 1)).join(', ') || 'none'}.</p>
+          </div>}
+          {mode === 'points' && <div className="callout-box compact-card"><h4>Reset</h4><button type="button" className="ghost-btn block-btn" onClick={resetShape}>Reset shape and manual overrides</button></div>}
+          {mode === 'points' && <div className="callout-box compact-card workflow-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Viewport</span><strong>{feetAndInches(viewFeet)} × {feetAndInches(viewFeet)}</strong></div><div><span>Origin</span><strong>{feetAndInches(limits.minX)} , {feetAndInches(limits.minY)}</strong></div></div></div>}
+          {mode === 'points' && <div className="callout-box compact-card workflow-card"><h4>Drawing workflow</h4><ul className="plain-list compact"><li>Click to place P1, then keep clicking each next corner.</li><li>The live line follows your cursor and snaps to 45° / 90° when nearby.</li><li>Click back on P1 to close the shape.</li><li>After closing, drag any point or insert a new one on any edge.</li><li>Use Pick house sides to mark any side that is against the house so picture frame/band/attachment logic follows the real plan.</li></ul></div>}
         </div>
       </div>
     </div>

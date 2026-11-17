@@ -4,9 +4,7 @@ import { FieldRenderer } from '../components/FieldRenderer';
 import { LayoutPreview } from '../components/LayoutPreview';
 import { MaterialTable } from '../components/MaterialTable';
 import { MetricCard } from '../components/MetricCard';
-import { DeckDesigner } from '../components/DeckDesigner';
-import { DeckSkirtingEditor } from '../components/DeckSkirtingEditor';
-import { DeckRailingElevation } from '../components/DeckRailingElevation';
+import { DeckWorkspaceFlow } from '../components/DeckWorkspaceFlow';
 import { SectionEditor } from '../components/SectionEditor';
 import { SunroomSectionEditor } from '../components/SunroomSectionEditor';
 import { WoodenStructureEditor } from '../components/WoodenStructureEditor';
@@ -51,9 +49,12 @@ export function ServiceWorkspacePage() {
     return String(actual) === String(expected);
   });
 
+  if (service.slug === 'decks') return (
+    <DeckWorkspaceFlow values={values} onValuesChange={setValues} estimate={estimate} visibleFields={visibleFields}/>
+  );
+
   return (
     <div className="page-stack">
-      {service.slug === 'decks' && <DeckDesigner values={values} onValuesChange={setValues} />}
       {(service.slug === 'screen-rooms' || service.slug === 'renaissance-screen-rooms') && (
         <SectionEditor renaissance={service.slug === 'renaissance-screen-rooms'} values={values} onValuesChange={setValues} />
       )}
@@ -75,8 +76,6 @@ export function ServiceWorkspacePage() {
 
         <div className="workspace-right-col full-width-card" id="service-export-root">
           <LayoutPreview serviceSlug={service.slug} values={values} onValuesChange={setValues} />
-          {service.slug === 'decks' && <DeckSkirtingEditor values={values} onValuesChange={setValues} />}
-          {service.slug === 'decks' && <DeckRailingElevation values={values} />}
           <div className="metrics-grid">
             {estimate.summary.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} />)}
           </div>
