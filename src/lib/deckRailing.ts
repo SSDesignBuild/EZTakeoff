@@ -55,6 +55,7 @@ export function buildTimberTechIRE(deck:Deck,inputs:Inputs,tierName='Main deck')
   if(!['classic','modern','drink'].includes(profile))issues.push('Select Classic, Modern or Drink top rail.');
   if(!['white','black','dark-bronze'].includes(color))issues.push('Select a published Impression Rail Express finish (White, Black, Dark Bronze).');
   if(!['aluminum','glass','midrail','horizontal-cable'].includes(infill))issues.push('Infill choice needs manufacturer verification.');
+  if(infill!=='aluminum')issues.push('Special infill '+infill+' needs a confirmed manufacturer-specific panel/channel/cable kit BOM; universal baluster panel cannot be substituted.');
   if(![36,42].includes(heightIn))issues.push('TimberTech Impression Rail Express is configured for 36 or 42 in railing height.');
   if(!['3x3','4x4','2x2'].includes(postSize))issues.push('Choose a supported post size.');
   if(profile==='drink'&&infill==='glass')issues.push('TimberTech Drink Rail cannot use glass infill.');
@@ -83,7 +84,7 @@ export function buildTimberTechIRE(deck:Deck,inputs:Inputs,tierName='Main deck')
       if(!map.has(key))map.set(key,{...point,reference:'IR-P'+(map.size+1),edgeIndex:run.edgeIndex});
       if(i<n){
         const next=run.start+(len*(i+1))/n;
-        panels.push({kind:'level',edgeIndex:run.edgeIndex,startFt:p3(station),endFt:p3(next),stockFt:(next-station<=6+0.0001?6:8),label:'E'+(run.edgeIndex+1)+'-'+(i+1)});
+        panels.push({kind:'level',edgeIndex:run.edgeIndex,startFt:p3(station),endFt:p3(next),stockFt:(next-station<=6+0.0001?6:8),label:'E'+(run.edgeIndex+1)+'-B'+(panels.length+1)});
       }
     }
   }
