@@ -1,4 +1,4 @@
-import type { DeckEdgeSegment, MaterialItem } from './types';
+import type { MaterialItem } from './types';
 import type { buildDeckModel } from './deckModel';
 import { packSkirtCuts, type SkirtPlan, type SkirtSide, type SkirtCut, type SkirtVertical, type SkirtCourse } from './deckSkirting';
 
@@ -52,7 +52,8 @@ export function buildDeckStairSkirting(deck:Deck,inputs:Inputs,lower=false):Skir
     const cutRail=(sloped:boolean)=>{
       let left=0;
       while(left<run-.001){
-        const next=stations.filter((x)=>x>left+.01&&x<=Math.min(run,left+15.5)).at(-1);
+        const candidates=stations.filter((x)=>x>left+.01&&x<=Math.min(run,left+15.5));
+        const next=candidates[candidates.length-1];
         if(next===undefined){issues.push(label+': unable to locate a supported 2x4 framing joint.');break;}
         const horizontalLength=next-left;
         const change=sloped?Math.abs(height(next)-height(left)):0;
@@ -82,7 +83,8 @@ export function buildDeckStairSkirting(deck:Deck,inputs:Inputs,lower=false):Skir
         // Split finish courses at vertical support studs; no fictitious seam.
         let left=0;
         while(left<maxX-.001){
-          const next=stations.filter((x)=>x>left+.01&&x<=Math.min(maxX,left+15.5)).at(-1)??maxX;
+          const candidates=stations.filter((x)=>x>left+.01&&x<=Math.min(maxX,left+15.5));
+          const next=candidates[candidates.length-1]??Math.min(maxX,left+15.5);
           add('finish',next-left,'horizontal course '+(row+1)+'; ending cut scribed to stair slope');
           left=next;
         }
