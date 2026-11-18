@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useState, type ChangeEvent } from '
 import { useNavigate, useParams } from 'react-router-dom';
 import { DeckDesigner } from './DeckDesigner';
 import { DeckGateEditor } from './DeckGateEditor';
+import { ConsultationSkirtingOptions } from './ConsultationSkirtingOptions';
+import { ConsultationTechnicalSettings } from './ConsultationTechnicalSettings';
 import { ManufacturerBoardPicker, ManufacturerRailPicker, ManufacturerCoverPicker } from './ConsultationVisualPickers';
 import { buildDeckModel } from '../lib/deckModel';
 import { calculateEstimate } from '../lib/estimate';
@@ -168,7 +170,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
     {step==='layout'&&<section className="consultation-panel">
       <div className="consultation-panel-copy"><p className="eyebrow">Step 2 / Footprint</p>
         <h3>Draw the deck together</h3>
-        <p>Use the dimensioned editor to create the footprint, steps, additional tier, support locations and railing edges. This is the same underlying deck model as Admin Takeoff.</p>
+        <p>Sketch the footprint, place stairs and railing edges, then move support beams/posts if needed. It shares the exact geometry engine with Admin Takeoff.</p>
       </div>
       <div className="consultation-quick-inputs">
         <label>Height above grade (ft)<input type="number" min={.25} step={.25} value={number(project.values.deckHeight,8)}
@@ -182,12 +184,13 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
           onChange={(e)=>setValue('multiTierEnabled',e.target.checked)}/>Add lower deck tier</label>
       </div>
       <DeckDesigner values={project.values} onValuesChange={updateValues}/>
+      <ConsultationTechnicalSettings values={project.values} onValuesChange={updateValues}/>
       <p className="consultation-engineering-note">Dimensioned geometry is reused in the 3D scene and material estimator. Structural sizes and foundations require field verification before ordering.</p>
     </section>}
     {step==='options'&&<section className="consultation-panel">
       <div className="consultation-panel-copy"><p className="eyebrow">Step 3 / Materials</p>
-        <h3>Build the outdoor living package</h3>
-        <p>Pick products in a visual sequence. The product names come from the S&S takeoff catalog, so choices flow into the same material rules.</p>
+        <h3>Curate the outdoor living finishes</h3>
+        <p>Choose the details homeowners see. Structural sizing, foundations and framing hardware live in the expandable construction settings on the design step.</p>
       </div>
       <ManufacturerBoardPicker values={project.values} onValues={(values)=>onChange({values})}/>
       <div className="consultation-option-columns">
@@ -218,16 +221,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
             <option value="fascia">Match fascia trim</option>
           </select></label>
         </article>
-        <article className="consultation-option-card">
-          <h4>Skirting & gates</h4>
-          <label className="consultation-checkbox"><input type="checkbox" checked={project.values.skirtingEnabled===true}
-            onChange={(e)=>setValue('skirtingEnabled',e.target.checked)}/>Add skirting</label>
-          {project.values.skirtingEnabled===true&&<label>Skirting finish<select value={String(project.values.skirtingMaterial??'kdat')}
-            onChange={(e)=>setValue('skirtingMaterial',e.target.value)}>
-            <option value="kdat">1×5 KDAT pressure-treated</option><option value="composite">Composite</option><option value="pvc">PVC</option>
-          </select></label>}
-          <p className="muted">Gate hardware, post layouts and exact skirting sides are still configured in Admin Takeoff for advanced ordering. Gate hardware can be entered below.</p>
-        </article>
+        <ConsultationSkirtingOptions values={project.values} onValuesChange={updateValues}/>
         <ManufacturerCoverPicker project={project} onChange={onChange}/>
       </div>
       <DeckGateEditor values={project.values} onValuesChange={updateValues}/>
