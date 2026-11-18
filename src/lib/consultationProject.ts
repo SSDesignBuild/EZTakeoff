@@ -47,7 +47,12 @@ const iso=()=>new Date().toISOString();
 export const makeConsultationProject = (id: string): ConsultationProject => ({
   schemaVersion:1,id,revision:1,createdAt:iso(),updatedAt:iso(),title:'New outdoor living consultation',
   kind:'deck',client:{name:'',address:'',phone:'',email:''},
-  values:{...deckDefaults},
+  values:{...deckDefaults,
+    deckingMaterial:'TimberTech Vintage - Coastline',
+    deckingType:'composite',
+    railingVisualId:'tt-ire-modern',
+    railingType:'aluminum',railingSystem:'timbertech-ire',
+    railingTopProfile:'modern',railingColor:'black',railingInfill:'aluminum'},
   coverFamily:'none',coverColor:'White',coverRoofStyle:'studio',coverShadePercent:65,coverLouverAngle:12,photoPresent:false,
   calibration:{scale:1,offsetX:0,offsetY:0,rotationDeg:0},
   estimatingResponse:null,
