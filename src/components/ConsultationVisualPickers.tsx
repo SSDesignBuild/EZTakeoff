@@ -170,6 +170,55 @@ export function ManufacturerCoverPicker({project,onChange}:{
           className={color===project.coverColor?'selected':''} onClick={()=>onChange({coverColor:color})}>
           <span style={{background:getCoverFinish(color)}}/>{color}</button>)}
       </div>
+      <div className="consultation-skirting-finish">
+        <label>Renaissance structural frame profile
+          <select value={project.coverFraming??'standard'}
+            onChange={e=>onChange({coverFraming:e.target.value as 'standard'|'hd'|'wide'|'wide-insert'})}>
+            <option value="standard">Standard (SD) · engineered extrusion</option>
+            <option value="hd">Heavy Duty (HD) · engineered extrusion</option>
+            <option value="wide">Wide (WD) · architectural open span</option>
+            <option value="wide-insert">Wide + insert · reinforced visual configuration</option>
+          </select></label>
+        <label>Cover placement
+          <select value={project.coverMount??'wall-attached'}
+            onChange={e=>onChange({coverMount:e.target.value as 'wall-attached'|'freestanding'})}>
+            <option value="wall-attached">Attached to house / existing structure</option>
+            <option value="freestanding">Freestanding · posts front and back</option>
+          </select></label>
+        <label>Screen walls
+          <select value={project.coverScreenStyle??'none'}
+            onChange={e=>onChange({coverScreenStyle:e.target.value as 'none'|'dolce-open-view'|'dolce-standard'})}>
+            <option value="none">No screens · open patio</option>
+            <option value="dolce-open-view">Dolce · open-view screened walls</option>
+            <option value="dolce-standard">Dolce · standard screened panels</option>
+          </select></label>
+      </div>
+      <div className="consultation-skirting-finish">
+        <label>Roof width (ft) · 0 = follow deck
+          <input type="number" min={0} max={100} step={.5} value={project.coverWidthFt??0}
+            onChange={e=>onChange({coverWidthFt:Number(e.target.value)})}/></label>
+        <label>Roof projection (ft) · 0 = follow deck
+          <input type="number" min={0} max={80} step={.5} value={project.coverProjectionFt??0}
+            onChange={e=>onChange({coverProjectionFt:Number(e.target.value)})}/></label>
+        <label>Clear headroom above deck (ft)
+          <input type="number" min={7} max={16} step={.25} value={project.coverHeightFt??9}
+            onChange={e=>onChange({coverHeightFt:Number(e.target.value)})}/></label>
+      </div>
+      <details className="consultation-subsettings">
+        <summary>Structural layout options · post placement & roof overhangs</summary>
+        <div className="consultation-subsettings-content consultation-skirting-finish">
+          <label>Front support posts (0 = initial layout)
+            <input type="number" min={0} max={18} step={1} value={project.coverPostCount??0}
+              onChange={e=>onChange({coverPostCount:Number(e.target.value)})}/></label>
+          <label>Side roof overhang (ft)
+            <input type="number" min={0} max={5} step={.25} value={project.coverSideOverhangFt??1}
+              onChange={e=>onChange({coverSideOverhangFt:Number(e.target.value)})}/></label>
+          <label>Front roof overhang (ft)
+            <input type="number" min={0} max={5} step={.25} value={project.coverFrontOverhangFt??1}
+              onChange={e=>onChange({coverFrontOverhangFt:Number(e.target.value)})}/></label>
+          <p className="consultation-visual-note">Post count and beam profile affect the visualization. Do not assume fewer posts are allowed without manufacturer's signed span schedule, site wind/snow load and engineering approval.</p>
+        </div>
+      </details>
       {selected.roofStyles.length>1&&<label>Roof shape
         <select value={project.coverRoofStyle??'studio'}
           onChange={(e)=>onChange({coverRoofStyle:e.target.value as 'studio'|'gable'})}>
@@ -182,6 +231,6 @@ export function ManufacturerCoverPicker({project,onChange}:{
         <input type="range" min={0} max={90} step={5} value={project.coverLouverAngle??12}
           onChange={(e)=>onChange({coverLouverAngle:Number(e.target.value)})}/></label>}
     </div>}
-    <p className="manufacturer-source-footer">3D profiles are based on verified architectural differences, but remain concept geometry. Exact Renaissance extrusion drawings, span schedules and cover BOM are not yet incorporated.</p>
+    <p className="manufacturer-source-footer">Models now distinguish Standard / Heavy Duty / Wide framing, lean-to / gable, freestanding posts and optional Dolce screens using the supplied Renaissance design drawings. Manufacturer engineering, exact extrusion dimensions, loads and supplier BOM still require an approved project configuration.</p>
   </section>;
 }
