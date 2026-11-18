@@ -261,8 +261,9 @@ function Stairs3D({model,center,height,values}:{model:DeckModel;center:P2;height
           return <group key={'fascia-side-'+i}>
             <SlopedPlank from={world(x,.05,height-.2)} to={world(x,geo.run,toGround+.16)}
               depthFt={.93} widthFt={.072} color="#adb4b1" texture={sideFascia}/>
-            {skirting&&Array.from({length:Math.max(1,Math.floor(geo.run/(.4+Number(values.skirtingGapIn??.25)/12)))},(_,k,all)=>{
-              const station=geo.run*(k+.5)/all.length;
+            {skirting&&Array.from({length:Math.max(1,Math.floor(geo.run/(.4+Number(values.skirtingGapIn??.25)/12)))},(_,k)=>{
+              const count=Math.max(1,Math.floor(geo.run/(.4+Number(values.skirtingGapIn??.25)/12)));
+              const station=geo.run*(k+.5)/count;
               const top=height-station/geo.run*(stairRise-.15)-.35;
               const bh=Math.max(.08,top-toGround-.12);
               const [wx,_,wz]=world(x,station,toGround+bh/2+.12);
