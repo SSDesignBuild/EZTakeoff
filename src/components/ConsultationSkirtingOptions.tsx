@@ -24,7 +24,7 @@ export function ConsultationSkirtingOptions({values,onValuesChange}:{
   const plan=useMemo(()=>buildDeckSkirting(deck.edgeSegments,exposed,
     Number(values.deckHeight??8),rimDepth,values),[deck,exposed,values,rimDepth]);
   const stairs=useMemo(()=>buildDeckStairSkirting(deck,values),[deck,values]);
-  const change=(changes:Partial<V>)=>onValuesChange(old=>({...old,...changes}));
+  const change=(changes:V)=>onValuesChange(old=>({...old,...changes}));
   const enable=()=>{
     const all=exposed.map(s=>s.index);
     change({skirtingEnabled:!enabled,
