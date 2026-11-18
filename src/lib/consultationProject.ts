@@ -1,7 +1,8 @@
 import { SERVICES } from '../data/services';
+import { deckVisualProducts, coverVisualProducts, type CoverColor, type CoverFamily } from '../data/visualCatalog';
 
 export type ProjectKind = 'deck' | 'covered-deck';
-export type CoverFamily = 'none' | 'Moderno' | 'Contempo' | 'Classico' | 'Fresco' | 'Aria';
+export type { CoverFamily, CoverColor } from '../data/visualCatalog';
 export interface ConsultationClient {
   name: string; address: string; phone: string; email: string;
 }
@@ -19,7 +20,10 @@ export interface ConsultationProject {
   client: ConsultationClient;
   values: Record<string,string|number|boolean>;
   coverFamily: CoverFamily;
-  coverColor: 'White' | 'Bronze';
+  coverColor: CoverColor;
+  coverRoofStyle?: 'studio'|'gable';
+  coverShadePercent?: number;
+  coverLouverAngle?: number;
   photoPresent: boolean;
   calibration: PhotoCalibration;
   estimatingResponse: EstimateResponse | null;
@@ -43,8 +47,13 @@ const iso=()=>new Date().toISOString();
 export const makeConsultationProject = (id: string): ConsultationProject => ({
   schemaVersion:1,id,revision:1,createdAt:iso(),updatedAt:iso(),title:'New outdoor living consultation',
   kind:'deck',client:{name:'',address:'',phone:'',email:''},
-  values:{...deckDefaults},
-  coverFamily:'none',coverColor:'White',photoPresent:false,
+  values:{...deckDefaults,
+    deckingMaterial:'TimberTech Vintage - Coastline',
+    deckingType:'composite',
+    railingVisualId:'tt-ire-modern',
+    railingType:'aluminum',railingSystem:'timbertech-ire',
+    railingTopProfile:'modern',railingColor:'black',railingInfill:'aluminum'},
+  coverFamily:'none',coverColor:'White',coverRoofStyle:'studio',coverShadePercent:65,coverLouverAngle:12,photoPresent:false,
   calibration:{scale:1,offsetX:0,offsetY:0,rotationDeg:0},
   estimatingResponse:null,
 });
@@ -56,7 +65,9 @@ export const loadConsultations = (): ConsultationProject[] => {
     const stored=JSON.parse(window.localStorage.getItem(KEY)??'[]') as unknown;
     if(!Array.isArray(stored))return [];
     return stored.filter(valid).map((p)=>({
-      ...p,client:{name:p.client?.name??'',address:p.client?.address??'',phone:p.client?.phone??'',email:p.client?.email??''},
+      ...p,coverRoofStyle:p.coverRoofStyle??'studio',coverShadePercent:p.coverShadePercent??65,
+      coverLouverAngle:p.coverLouverAngle??12,
+      client:{name:p.client?.name??'',address:p.client?.address??'',phone:p.client?.phone??'',email:p.client?.email??''},
       calibration:{scale:p.calibration?.scale??1,offsetX:p.calibration?.offsetX??0,offsetY:p.calibration?.offsetY??0,rotationDeg:p.calibration?.rotationDeg??0},
       values:{...deckDefaults,...p.values},
     }));
@@ -82,4 +93,5 @@ export const railingProducts=[
   {value:'aluminum',label:'Aluminum railing'},
   {value:'vinyl',label:'Vinyl railing'},
 ] as const;
-export const coverProducts:CoverFamily[]=['none','Moderno','Contempo','Classico','Fresco','Aria'];
+export const coverProducts:CoverFamily[]=coverVisualProducts.map((p)=>p.id);
+export const verifiedDeckProducts=deckVisualProducts;

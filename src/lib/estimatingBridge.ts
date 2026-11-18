@@ -10,7 +10,7 @@ export interface EstimateHandoffV1 {
   revision:number;
   exportedAt:string;
   customer:{name:string;address:string;phone:string;email:string};
-  project:{kind:string;coverFamily:string;coverColor:string;photoAttachedToThisPayload:false};
+  project:{kind:string;coverFamily:string;coverColor:string;coverRoofStyle:string;photoAttachedToThisPayload:false};
   geometry:{footprint:{x:number;y:number}[];areaSqFt:number;deckHeightFt:number;stairCount:number};
   selections:Record<string,string|number|boolean>;
   materials:MaterialItem[];
@@ -22,14 +22,19 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
   const estimate=calculateEstimate('decks',project.values);
   const blockers=[...(estimate.validationIssues??[])];
   if(project.kind!=='deck')blockers.push('Covered-deck patio cover is visual-only; patio cover takeoff not included.');
-  if(project.coverFamily!=='none')blockers.push('Cover option is a concept only; cover takeoff requires a separate approved model.');
+  if(project.coverFamily!=='none')blockers.push('Renaissance cover model is a manufacturer-family visualization, not a supplier-approved BOM; obtain certified drawings before pricing the cover.');
+  if(typeof project.values.railingVisualId==='string' && !String(project.values.railingVisualId).startsWith('tt-ire-'))
+    blockers.push('Selected railing style needs manufacturer-specific panel/kit takeoff verification; the standard railing BOM is not a verified match.');
   return {
     schemaVersion:1,messageType:'sns.eztakeoff.estimate-request',
     projectId:project.id,revision:project.revision,exportedAt:new Date().toISOString(),
     customer:{...project.client},
-    project:{kind:project.kind,coverFamily:project.coverFamily,coverColor:project.coverColor,photoAttachedToThisPayload:false},
+    project:{kind:project.kind,coverFamily:project.coverFamily,coverColor:project.coverColor,
+      coverRoofStyle:project.coverRoofStyle??'studio',photoAttachedToThisPayload:false},
     geometry:{footprint:deck.points,areaSqFt:deck.area,deckHeightFt:Number(project.values.deckHeight??0),stairCount:deck.stairCount},
-    selections:{...project.values},
+    selections:{...project.values,coverRoofStyle:project.coverRoofStyle??'studio',
+      coverShadePercent:project.coverShadePercent??65,coverLouverAngle:project.coverLouverAngle??12,
+      coverFamily:project.coverFamily,coverColor:project.coverColor},
     materials:estimate.materials,blockers,
     assumptions:estimate.orderNotes,
   };
