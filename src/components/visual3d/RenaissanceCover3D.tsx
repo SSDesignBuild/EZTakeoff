@@ -27,6 +27,9 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const isLattice=product.family==='lattice';
   const isLouvered=product.family==='louvered';
   const countRafters=Math.max(4,Math.ceil(width/2)+1);
+  const latticeCount=Math.min(100,Math.max(5,
+    Math.round(depth/Math.max(.22,1-(project.coverShadePercent??65)/100))));
+  const louverCount=Math.max(4,Math.ceil(depth/.7));
   const roofDepth=depth;
   const roofFront=roofY-slopeRise/2,roofBack=roofY+slopeRise/2;
   return <group name={'Renaissance-'+product.id} position={[0,0,0]}>
@@ -121,8 +124,8 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       {Array.from({length:countRafters},(_,i)=>
         <Block key={'aria-rafter-'+i} position={[left+width*i/(countRafters-1),roofY+.13,zMid]}
           size={[.13,.27,depth+.5]} color={powder} metalness={.32}/>)}
-      {Array.from({length:Math.min(100,Math.max(5,Math.round(depth/Math.max(.22,1-(project.coverShadePercent??65)/100))))},(_,i,all)=>{
-        const z=back+depth*(i+.5)/all.length;
+      {Array.from({length:latticeCount},(_,i)=>{
+        const z=back+depth*(i+.5)/latticeCount;
         return <Block key={'shade-slat-'+i} position={[xMid,roofY+.37,z]}
           size={[width+.18,.075,.17]} color={powder} metalness={.27}/>;
       })}
@@ -136,11 +139,11 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       <Beam start={[left,front]} end={[right,front]} height={roofY-.15} thickness={.33} depth={.34} color={powder} metalness={.47}/>
       <Beam start={[left,back]} end={[left,front]} height={roofY-.15} thickness={.33} depth={.34} color={powder} metalness={.47}/>
       <Beam start={[right,back]} end={[right,front]} height={roofY-.15} thickness={.33} depth={.34} color={powder} metalness={.47}/>
-      {Array.from({length:Math.max(4,Math.ceil(depth/.7))},(_,i,all)=>
+      {Array.from({length:louverCount},(_,i)=>
         <mesh key={'motorized-louver-'+i} castShadow
-          position={[xMid,roofY+.03,back+depth*(i+.5)/all.length]}
+          position={[xMid,roofY+.03,back+depth*(i+.5)/louverCount]}
           rotation={[(project.coverLouverAngle??12)*Math.PI/180,0,0]}>
-          <boxGeometry args={[width-.5,.085,Math.min(.62,depth/all.length-.025)]}/>
+          <boxGeometry args={[width-.5,.085,Math.min(.62,depth/louverCount-.025)]}/>
           <meshStandardMaterial color={powder} metalness={.43} roughness={.3}/>
         </mesh>)}
     </>}
