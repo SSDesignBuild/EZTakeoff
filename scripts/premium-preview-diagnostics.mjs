@@ -16,4 +16,21 @@ const lines=results.map(({stage,code,output})=>{
 }).join('\n');
 await writeFile('dist/build-diagnostics.txt','PREVIEW COMPILER ERRORS ONLY\n'+lines);
 if(failed!=='none')await writeFile('dist/index.html','<!doctype html><meta charset="utf-8"><title>Under test</title><p>Internal preview build error. Strict production deploy blocked.</p>');
+const safe=s=>String(s).replace(/[^A-Za-z0-9_-]+/g,'-').slice(0,72);
+const last=results.at(-1)?.output??'';
+const ts=[...last.matchAll(/(src\/[\w.\-/]+\.tsx?)\((\d+),(\d+)\): error TS(\d+)/g)];
+if(failed!=='none'){
+ await writeFile('dist/DIAG-FAILED-'+safe(failed)+'.html','<!doctype html><p>Test/compile diagnostics only.</p>');
+ if(ts.length){
+  for(const [i,m] of ts.slice(0,15).entries()){
+   const file=safe('TS'+m[4]+'-'+m[1].split('/').pop()+'-LINE-'+m[2]+'-COL-'+m[3]+'-E'+i)+'.html';
+   await writeFile('dist/'+file,'<!doctype html><p>Build diagnostic, no client data.</p>');
+  }
+ }else{
+  const stack=last.match(/(?:scripts\/)([\w.-]+\.cjs):(\d+):(\d+)/);
+  const err=last.match(/(?:AssertionError|ReferenceError|SyntaxError|TypeError|Error):[^\n]*/);
+  const file=safe('TEST-'+(stack?.[1]??'unknown')+'-L'+(stack?.[2]??0)+'-'+(err?.[0]??'unknown'))+'.html';
+  await writeFile('dist/'+file,'<!doctype html><p>Test diagnostic, no client data.</p>');
+ }
+}else await writeFile('dist/DIAG-ALL-STAGES-PASSED.html','<!doctype html><p>All preview checks passed.</p>');
 console.log('PREVIEW DIAG STATUS',failed);
