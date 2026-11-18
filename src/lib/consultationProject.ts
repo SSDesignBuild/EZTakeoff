@@ -56,8 +56,8 @@ export const loadConsultations = (): ConsultationProject[] => {
     const stored=JSON.parse(window.localStorage.getItem(KEY)??'[]') as unknown;
     if(!Array.isArray(stored))return [];
     return stored.filter(valid).map((p)=>({
-      ...p,client:{name:'',address:'',phone:'',email:'',...p.client},
-      calibration:{scale:1,offsetX:0,offsetY:0,rotationDeg:0,...p.calibration},
+      ...p,client:{name:p.client?.name??'',address:p.client?.address??'',phone:p.client?.phone??'',email:p.client?.email??''},
+      calibration:{scale:p.calibration?.scale??1,offsetX:p.calibration?.offsetX??0,offsetY:p.calibration?.offsetY??0,rotationDeg:p.calibration?.rotationDeg??0},
       values:{...deckDefaults,...p.values},
     }));
   }catch{return [];}
