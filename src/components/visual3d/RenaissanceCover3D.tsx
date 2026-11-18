@@ -154,7 +154,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       })}
     {/* Fresco: translucent polycarbonate standing-seam roofing over exposed pergola framing. */}
     {isTranslucent&&<>
-      {Array.from({length:Math.ceil(width/4)},(_,i,all)=>{
+      {Array.from({length:Math.ceil(width/4)},(_,i)=>{
         const panelWidth=width/Math.ceil(width/4);
         const x=left+(i+.5)*panelWidth;
         return <mesh key={'fresco-polycarbonate-'+i}
