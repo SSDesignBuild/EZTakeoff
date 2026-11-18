@@ -1,9 +1,7 @@
-name: EZTakeoff Validation
+name: EZTakeoff Validation (Manual Only)
+# Production and preview builds run on Netlify. Avoid GitHub Actions costs.
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
