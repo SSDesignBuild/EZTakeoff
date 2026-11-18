@@ -210,8 +210,6 @@ const BOARD_STOCK_LENGTHS = [8, 12, 16, 20];
 /** Installed decking face and gap shared with the Admin Takeoff and 3D. */
 export const DECK_BOARD_FACE_FT = 5.5 / 12;
 export const DECK_GAP_FT = 0.125 / 12;
-const DECK_BOARD_FACE = DECK_BOARD_FACE_FT;
-const DECK_GAP = DECK_GAP_FT;
 const EFFECTIVE_COVERAGE = DECK_BOARD_FACE_FT + DECK_GAP_FT;
 const JOIST_SPACING = 1;
 const BEAM_TARGET_SPACING = 10;
