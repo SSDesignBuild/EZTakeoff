@@ -3,6 +3,28 @@ import type { ConsultationProject } from '../../lib/consultationProject';
 import { getCoverVisualProduct, getCoverFinish } from '../../data/visualCatalog';
 import { Beam, Block, Rod, type P2 } from './Primitives';
 
+function DolceScreenRun({from,to,bottom,top,openView,finish}:{
+  from:P2;to:P2;bottom:number;top:number;openView:boolean;finish:string;
+}){
+  const dx=to[0]-from[0],dz=to[1]-from[1],len=Math.hypot(dx,dz);
+  if(len<.3||top-bottom<1)return null;
+  const angle=-Math.atan2(dz,dx),mid:[number,number,number]=[(from[0]+to[0])/2,(top+bottom)/2,(from[1]+to[1])/2];
+  const mullions=openView?Math.max(1,Math.ceil(len/12)):Math.max(1,Math.ceil(len/5));
+  return <group name={openView?'Dolce-open-view-wall':'Dolce-screened-wall'}>
+    <mesh position={mid} rotation={[0,angle,0]}>
+      <boxGeometry args={[len,top-bottom,.024]}/>
+      <meshPhysicalMaterial color="#b5bec2" transparent opacity={.25} metalness={.0} roughness={.25} depthWrite={false}/>
+    </mesh>
+    {[bottom,top].map(y=><Beam key={y} start={from} end={to} height={y} thickness={.105} depth={.095} color={finish}/>)}
+    {!openView&&<Beam start={from} end={to} height={bottom+2.3} thickness={.12} depth={.10} color={finish}/>}
+    {Array.from({length:mullions+1},(_,i)=>{
+      const t=i/mullions,x=from[0]+dx*t,z=from[1]+dz*t;
+      return <Block key={'Dolce-mullion-'+i} position={[x,mid[1],z]}
+        size={[.092,top-bottom,.092]} color={finish}/>;
+    })}
+  </group>;
+}
+
 export function RenaissanceCover3D({model,project,center,deckHeight}:{
   model:DeckModel;project:ConsultationProject;center:P2;deckHeight:number;
 }){
@@ -49,17 +71,20 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const roofFront=roofY-slopeRise/2,roofBack=roofY+slopeRise/2;
   return <group name={'Renaissance-'+product.id} position={[0,0,0]}>
     {/* Real physical framing: column sleeves, base collars, sculpted caps and wrap fascia */}
-    {allPosts.map(([x,z],i)=><group key={'column-'+i}>
-      <Block position={[x,(deckHeight+roofFront-profile.beamH)/2,z]}
-        size={[profile.post,Math.max(2,roofFront-deckHeight-profile.beamH),profile.post]}
-        color={powder} metalness={.32} roughness={.32}/>
-      <Block position={[x,deckHeight+.12,z]}
-        size={[profile.post+.12,.24,profile.post+.12]} color={powder} metalness={.25}/>
-      <Block position={[x,roofFront-profile.beamH*.48,z]}
-        size={[profile.post+.09,.32,profile.post+.09]} color={shadowColor} metalness={.25}/>
-      <Block position={[x,deckHeight+.30,z]}
-        size={[profile.post+.06,.19,profile.post+.06]} color={shadowColor} metalness={.22}/>
-    </group>)}
+    {allPosts.map(([x,z],i)=>{
+      const topY=z<zMid?roofBack:roofFront;
+      return <group key={'column-'+i}>
+        <Block position={[x,(deckHeight+topY-profile.beamH)/2,z]}
+          size={[profile.post,Math.max(2,topY-deckHeight-profile.beamH),profile.post]}
+          color={powder} metalness={.32} roughness={.32}/>
+        <Block position={[x,deckHeight+.12,z]}
+          size={[profile.post+.12,.24,profile.post+.12]} color={powder} metalness={.25}/>
+        <Block position={[x,topY-profile.beamH*.48,z]}
+          size={[profile.post+.09,.32,profile.post+.09]} color={shadowColor} metalness={.25}/>
+        <Block position={[x,deckHeight+.30,z]}
+          size={[profile.post+.06,.19,profile.post+.06]} color={shadowColor} metalness={.22}/>
+      </group>;
+    })}
     <Beam start={[frameLeft,frameFront]} end={[frameRight,frameFront]}
       height={roofFront-profile.beamH/2} thickness={profile.beamH} depth={profile.beamW}
       color={powder} metalness={.4}/>
@@ -129,11 +154,21 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       })}
     {/* Fresco: translucent polycarbonate standing-seam roofing over exposed pergola framing. */}
     {isTranslucent&&<>
-      <mesh position={[xMid,roofY,roofMidZ]} rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow>
-        <boxGeometry args={[width,.105,depth]}/>
-        <meshPhysicalMaterial color="#cce0e5" transparent opacity={.63}
-          metalness={0} roughness={.17} transmission={.05} depthWrite={false}/>
-      </mesh>
+      {Array.from({length:Math.ceil(width/4)},(_,i,all)=>{
+        const panelWidth=width/Math.ceil(width/4);
+        const x=left+(i+.5)*panelWidth;
+        return <mesh key={'fresco-polycarbonate-'+i}
+          position={[x,roofY,roofMidZ]} rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow>
+          <boxGeometry args={[panelWidth-.014,.085,depth]}/>
+          <meshPhysicalMaterial color="#cce0e5" transparent opacity={.63}
+            metalness={0} roughness={.15} depthWrite={false}/>
+        </mesh>;
+      })}
+      {Array.from({length:Math.max(2,Math.ceil(width/4)+1)},(_,i)=>{
+        const x=left+i*(width/Math.ceil(width/4));
+        return <Rod key={'standing-seam-'+i} from={[x,roofBack+.085,back]}
+          to={[x,roofFront+.085,front]} radius={.031} color={powder} metalness={.25}/>;
+      })}
       {Array.from({length:countRafters},(_,i)=>{
         const x=left+width*i/(countRafters-1);
         return <group key={'fresco-rafters-'+i}>
@@ -149,7 +184,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       <Beam start={[left,back]} end={[right,back]} height={roofY} thickness={.35} depth={.31} color={powder} metalness={.35}/>
       <Beam start={[left,front]} end={[right,front]} height={roofY} thickness={.35} depth={.31} color={powder} metalness={.35}/>
       {Array.from({length:countRafters},(_,i)=>
-        <Block key={'aria-rafter-'+i} position={[left+width*i/(countRafters-1),roofY+.13,zMid]}
+        <Block key={'aria-rafter-'+i} position={[left+width*i/(countRafters-1),roofY+.13,roofMidZ]}
           size={[.13,.27,depth+.5]} color={powder} metalness={.32}/>)}
       {Array.from({length:latticeCount},(_,i)=>{
         const z=back+depth*(i+.5)/latticeCount;
@@ -173,6 +208,20 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           <boxGeometry args={[width-.5,.085,Math.min(.62,depth/louverCount-.025)]}/>
           <meshStandardMaterial color={powder} metalness={.43} roughness={.3}/>
         </mesh>)}
+    </>}
+    {(project.coverScreenStyle??'none')!=='none'&&<>
+      <DolceScreenRun from={[frameLeft,frameFront]} to={[frameRight,frameFront]}
+        bottom={deckHeight+.12} top={roofFront-profile.beamH}
+        openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>
+      <DolceScreenRun from={[frameLeft,back]} to={[frameLeft,frameFront]}
+        bottom={deckHeight+.12} top={roofFront-profile.beamH}
+        openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>
+      <DolceScreenRun from={[frameRight,back]} to={[frameRight,frameFront]}
+        bottom={deckHeight+.12} top={roofFront-profile.beamH}
+        openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>
+      {!attached&&<DolceScreenRun from={[frameLeft,back]} to={[frameRight,back]}
+        bottom={deckHeight+.12} top={roofBack-profile.beamH}
+        openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>}
     </>}
     {/* Architectural wrap-around rain gutter is a separate U section. */}
     {(isSolid||isTranslucent)&&<>
