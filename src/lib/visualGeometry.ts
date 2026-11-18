@@ -56,7 +56,9 @@ export function surfaceStrips(
     const bandWidth=Math.min(boardWidthFt,max-bandStart);
     if(bandWidth<=.001)continue;
     const sample=bandStart+bandWidth/2;
-    const epsilon=Math.min(.001,bandWidth/4);
+    // Sample extremely near the true edge: a wider inset can leave 3D board
+    // corners outside diagonal boundaries even after the .01-ft end trim.
+    const epsilon=Math.min(.000001,bandWidth/1000);
     const middle=scan(sample),low=scan(bandStart+epsilon),high=scan(bandStart+bandWidth-epsilon);
     for(const [startMid,endMid] of middle){
       const midpoint=(startMid+endMid)/2;
