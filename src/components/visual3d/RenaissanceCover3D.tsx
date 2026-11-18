@@ -2,7 +2,15 @@ import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { getCoverVisualProduct, getCoverFinish } from '../../data/visualCatalog';
 import { maxReferenceOverhangFt } from '../../lib/renaissanceGuidance';
-import { Beam, Block, Rod, type P2 } from './Primitives';
+import { Beam, Block, Rod, SlopedBeam, type P2 } from './Primitives';
+import {
+  getRenaissanceExtrusion,makeRenaissanceFramePlan,inchToFoot,
+  RENAISSANCE_INSULATED_ROOF,RENAISSANCE_SHADE_TUBE,
+  RENAISSANCE_TRUSS,
+} from '../../lib/renaissanceManufacturer';
+import {
+  RenaissancePost,RenaissanceHeader,RenaissanceGutter,RenaissanceTruss,
+} from './RenaissanceExtrusions';
 
 function DolceScreenRun({from,to,bottom,top,openView,finish}:{
   from:P2;to:P2;bottom:number;top:number;openView:boolean;finish:string;
@@ -31,106 +39,137 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
 }){
   const product=getCoverVisualProduct(project.coverFamily);
   if(project.coverFamily==='none')return null;
-  const frameWidth=project.coverWidthFt&&project.coverWidthFt>0?project.coverWidthFt:model.width;
-  const frameDepth=project.coverProjectionFt&&project.coverProjectionFt>0?project.coverProjectionFt:model.depth;
-  const referenceOverhangLimit=maxReferenceOverhangFt(project.coverFamily);
-  const overhangSide=Math.max(0,Math.min(referenceOverhangLimit,project.coverSideOverhangFt??1));
-  const overhangFront=Math.max(0,Math.min(referenceOverhangLimit,project.coverFrontOverhangFt??1));
-  const width=frameWidth+2*overhangSide,depth=frameDepth+overhangFront;
+  const frameVariant=project.coverFraming??'standard';
+  const profile=getRenaissanceExtrusion(frameVariant);
+  const plan=makeRenaissanceFramePlan({
+    family:project.coverFamily,variant:frameVariant,
+    mount:project.coverMount??'wall-attached',
+    roofStyle:project.coverRoofStyle??'studio',
+    frameWidthFt:project.coverWidthFt&&project.coverWidthFt>0?project.coverWidthFt:model.width,
+    frameProjectionFt:project.coverProjectionFt&&project.coverProjectionFt>0?
+      project.coverProjectionFt:model.depth,
+    deckHeightFt:deckHeight,postHeightFt:project.coverHeightFt??9,
+    sideOverhangFt:Math.min(maxReferenceOverhangFt(project.coverFamily),project.coverSideOverhangFt??1),
+    frontOverhangFt:Math.min(maxReferenceOverhangFt(project.coverFamily),project.coverFrontOverhangFt??1),
+    requestedFrontPosts:project.coverPostCount??0,
+  });
+  const frameWidth=plan.frameWidthFt,frameDepth=plan.frameProjectionFt;
+  const width=plan.roofWidthFt,depth=plan.roofProjectionFt;
   const xMid=(model.minX+model.maxX)/2-center[0],zMid=(model.minY+model.maxY)/2-center[1];
   const left=xMid-width/2,right=xMid+width/2;
   const frameLeft=xMid-frameWidth/2,frameRight=xMid+frameWidth/2;
-  const back=zMid-frameDepth/2,frameFront=back+frameDepth,front=frameFront+overhangFront;
-  const roofMidZ=(back+front)/2;
-  const roofY=deckHeight+Math.max(7,Math.min(16,project.coverHeightFt??9));
+  const back=zMid-frameDepth/2,frameFront=back+frameDepth;
+  const roofBackEdge=back-plan.rearOverhangFt;
+  const front=frameFront+plan.frontOverhangFt;
+  const roofMidZ=(roofBackEdge+front)/2;
   const powder=getCoverFinish(project.coverColor);
-  const shadowColor=project.coverColor==='White'?'#c1c5c5':project.coverColor==='Sandstone'?'#938271':project.coverColor==='Black'?'#202327':'#3c352f';
-  const shape=project.coverRoofStyle??'studio';
-  const slopeRise=frameDepth*.5/12;
-  const gableRise=Math.min(3,width*.13);
-  const frameVariant=project.coverFraming??'standard';
-  // Illustrative extrusion envelopes vary with the supplied SD/HD/WD frame
-  // family. Exact profile dimensions and allowable spans require manufacturer review.
-  const profile=frameVariant==='hd'?{post:.4,beamH:.73,beamW:.38}:
-    frameVariant==='wide'?{post:.46,beamH:.83,beamW:.45}:
-    frameVariant==='wide-insert'?{post:.5,beamH:.95,beamW:.50}:
-    {post:.33,beamH:.55,beamW:.32};
-  const configured=Number(project.coverPostCount??0);
-  const postCount=configured>=2?Math.min(18,Math.floor(configured)):Math.max(2,Math.ceil(frameWidth/9)+1);
-  const attached=(project.coverMount??'wall-attached')==='wall-attached';
-  const frontPosts=Array.from({length:postCount},(_,i):P2=>[frameLeft+frameWidth*i/(postCount-1),frameFront]);
-  const rearPosts=attached?[]:Array.from({length:postCount},(_,i):P2=>[frameLeft+frameWidth*i/(postCount-1),back]);
+  const shadowColor=project.coverColor==='White'?'#c1c5c5':project.coverColor==='Sandstone'?'#938271':
+    project.coverColor==='Black'?'#202327':'#3c352f';
+  const shape=plan.gable?'gable':'studio';
+  const attached=plan.attached;
+  const headerHeight=inchToFoot(profile.headerHeightIn);
+  const roofBack=plan.backTopFt,roofFront=plan.frontTopFt;
+  const eaveY=roofFront;
+  const roofRearY=shape==='gable'?eaveY:roofBack+plan.rearOverhangFt*plan.pitchInPerFt/12;
+  const roofFrontY=shape==='gable'?eaveY:roofFront-plan.frontOverhangFt*plan.pitchInPerFt/12;
+  const roofY=(roofRearY+roofFrontY)/2;
+  const slopeRise=roofRearY-roofFrontY;
+  const gableRise=plan.ridgeTopFt-plan.backTopFt;
+  const frontPosts=plan.frontPostXsFt.map((x):P2=>[xMid+x,frameFront]);
+  const rearPosts=plan.rearPostXsFt.map((x):P2=>[xMid+x,back]);
   const allPosts=[...frontPosts,...rearPosts];
   const isSolid=product.family==='solid-studio'||product.family==='solid-truss-ends'||product.family==='full-trusses';
   const isTranslucent=product.family==='translucent';
   const isLattice=product.family==='lattice';
   const isLouvered=product.family==='louvered';
-  const countRafters=Math.max(4,Math.ceil(width/2)+1);
-  const latticeCount=Math.min(100,Math.max(5,
-    Math.round(depth/Math.max(.22,1-(project.coverShadePercent??65)/100))));
+  const countRafters=plan.projectionTrussStationsFt.length;
+  // A 2-inch square Aria tube with a 4-inch CLEAR gap yields a 6-inch pitch.
+  // The coverage control varies only this aesthetic gap within a 2-6-in envelope.
+  const shadeGapIn=Math.max(2,Math.min(6,4+(65-(project.coverShadePercent??65))*.08));
+  const latticeCount=Math.max(2,Math.ceil((depth*12)/(RENAISSANCE_SHADE_TUBE.outsideWidthIn+shadeGapIn)));
   const louverCount=Math.max(4,Math.ceil(depth/.7));
   const roofDepth=depth;
-  const roofFront=roofY-slopeRise/2,roofBack=roofY+slopeRise/2;
   return <group name={'Renaissance-'+product.id} position={[0,0,0]}>
-    {/* Real physical framing: column sleeves, base collars, sculpted caps and wrap fascia */}
+    {/* Manufacturer outside dimensions: SD/HD 3.875-in hollow columns,
+        WD 6-in columns; SD/HD 7x2.75 and WD 7x4.875 headers. */}
     {allPosts.map(([x,z],i)=>{
-      const topY=z<zMid?roofBack:roofFront;
-      return <group key={'column-'+i}>
-        <Block position={[x,(deckHeight+topY-profile.beamH)/2,z]}
-          size={[profile.post,Math.max(2,topY-deckHeight-profile.beamH),profile.post]}
-          color={powder} metalness={.32} roughness={.32}/>
-        <Block position={[x,deckHeight+.12,z]}
-          size={[profile.post+.12,.24,profile.post+.12]} color={powder} metalness={.25}/>
-        <Block position={[x,topY-profile.beamH*.48,z]}
-          size={[profile.post+.09,.32,profile.post+.09]} color={shadowColor} metalness={.25}/>
-        <Block position={[x,deckHeight+.30,z]}
-          size={[profile.post+.06,.19,profile.post+.06]} color={shadowColor} metalness={.22}/>
+      const rear=i>=frontPosts.length;
+      const topY=(rear?roofBack:roofFront)-headerHeight;
+      const baseOutside=inchToFoot(profile.postOutsideIn+1.8);
+      const postCap=inchToFoot(profile.postCapOutsideIn);
+      return <group key={'renaissance-column-'+i}>
+        <RenaissancePost x={x} z={z} bottom={deckHeight} top={topY}
+          profile={profile} color={powder}/>
+        {attached&&<Block position={[x,deckHeight+.009,z]}
+          size={[baseOutside,.018,baseOutside]} color={shadowColor} metalness={.42}/>}
+        <Block position={[x,topY-.008,z]}
+          size={[postCap,.05,postCap]} color={powder} metalness={.38}/>
+        {/* Physical header clips and fastener head placements, not fake oversized collars. */}
+        {[-1,1].map(side=>[-1,1].map(level=>
+          <mesh key={'clip-screw-'+side+'-'+level}
+            position={[x+(inchToFoot(profile.postOutsideIn)/2+.002)*side,
+              topY-.12+level*.065,z]} rotation={[0,Math.PI/2,0]} castShadow>
+            <circleGeometry args={[.018,10]}/>
+            <meshStandardMaterial color={shadowColor} metalness={.68} roughness={.26}/>
+          </mesh>))}
       </group>;
     })}
-    <Beam start={[frameLeft,frameFront]} end={[frameRight,frameFront]}
-      height={roofFront-profile.beamH/2} thickness={profile.beamH} depth={profile.beamW}
-      color={powder} metalness={.4}/>
-    <Beam start={[frameLeft,frameFront+profile.beamW*.44]} end={[frameRight,frameFront+profile.beamW*.44]}
-      height={roofFront-profile.beamH*.18} thickness={.055} depth={.04}
-      color={shadowColor} metalness={.38}/>
-    {frameVariant==='wide-insert'&&<Beam start={[frameLeft,frameFront]} end={[frameRight,frameFront]}
-      height={roofFront-profile.beamH*.65} thickness={.14} depth={profile.beamW+.06}
-      color={shadowColor} metalness={.43}/>}
-    {!attached&&<Beam start={[frameLeft,back]} end={[frameRight,back]}
-      height={roofBack-profile.beamH/2} thickness={profile.beamH} depth={profile.beamW}
-      color={powder} metalness={.38}/>}
+    <RenaissanceHeader start={[frameLeft,frameFront]} end={[frameRight,frameFront]}
+      midY={roofFront-headerHeight/2} profile={profile} color={powder}/>
+    {!attached&&<RenaissanceHeader start={[frameLeft,back]} end={[frameRight,back]}
+      midY={roofBack-headerHeight/2} profile={profile} color={powder}/>}
+    {/* Wide + insert keeps the SAME outside extrusion dimensions as Wide.
+        Reinforcement resides inside the profiles and is not an exterior bar. */}
     {/* Rectangular canopy is anchored to the deck's footprint bounding box.
         A custom L-shaped roof and its supporting load paths still require
         a separately approved engineered Renaissance layout. */}
     {isSolid&&shape==='studio'&&<>
       <mesh position={[xMid,roofY,roofMidZ]} rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow receiveShadow>
-        <boxGeometry args={[width,.3,roofDepth]}/>
+        <boxGeometry args={[width,inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn),roofDepth]}/>
         <meshStandardMaterial color={powder} metalness={.34} roughness={.31}/>
       </mesh>
-      {/* Insulated-panel seams, narrow wrapped fascia caps. */}
-      {Array.from({length:Math.max(2,Math.ceil(width/3))},(_,i)=>{
-        const x=left+width*i/Math.max(1,Math.ceil(width/3));
-        return <Rod key={'seam-'+i} from={[x,roofBack+.17,back]} to={[x,roofFront+.17,front]}
-          radius={.018} color={shadowColor} metalness={.55}/>;
+      {/* Genuine 48-in panel modules with discreet longitudinal closure strips,
+          rather than generic round tubes drawn across an uninterrupted slab. */}
+      {Array.from({length:Math.max(1,Math.ceil(width/
+          inchToFoot(RENAISSANCE_INSULATED_ROOF.standardPanelWidthIn)))-1},(_,i)=>{
+        const panels=Math.max(1,Math.ceil(width/inchToFoot(RENAISSANCE_INSULATED_ROOF.standardPanelWidthIn)));
+        const x=left+width*(i+1)/panels;
+        return <SlopedBeam key={'panel-lock-'+i}
+          start={[x,roofRearY+.035,roofBackEdge]} end={[x,roofFrontY+.035,front]}
+          thickness={.045} depth={.055} color={shadowColor}/>;
       })}
-      <Beam start={[left,front]} end={[right,front]} height={roofFront-.16}
-        thickness={.4} depth={.36} color={powder} metalness={.38}/>
+      {/* The 5x5-in structural gutter is a distinct open extrusion, not three
+          stacked generic rectangles. */}
+      <RenaissanceGutter start={[left,front]} end={[right,front]}
+        topY={roofFrontY-.07} color={powder}/>
     </>}
     {isSolid&&shape==='gable'&&<>
       {[-1,1].map((sign)=>{
         const slope=Math.atan2(gableRise,width/2);
         return <mesh key={'gable-panel-'+sign} castShadow receiveShadow
-          position={[xMid+sign*width/4,roofY+gableRise/2,roofMidZ]} rotation={[0,0,-sign*slope]}>
-          <boxGeometry args={[Math.hypot(width/2,gableRise),.28,depth]}/>
+          position={[xMid+sign*width/4,eaveY+gableRise/2,roofMidZ]} rotation={[0,0,-sign*slope]}>
+          <boxGeometry args={[Math.hypot(width/2,gableRise),inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn),depth]}/>
           <meshStandardMaterial color={powder} metalness={.34} roughness={.34}/>
         </mesh>;
       })}
-      <Beam start={[xMid,back]} end={[xMid,front]} height={roofY+gableRise+.1}
+      <Beam start={[xMid,back]} end={[xMid,front]} height={eaveY+gableRise+.1}
         thickness={.18} depth={.13} color={shadowColor} metalness={.28}/>
       {[-1,1].map((sign)=><Beam key={sign}
         start={[xMid+sign*width/2,back]} end={[xMid+sign*width/2,front]}
-        height={roofY+.08} thickness={.35} depth={.2} color={powder} metalness={.4}/>)}
+        height={eaveY+.08} thickness={.35} depth={.2} color={powder} metalness={.4}/>)}
     </>}
+    {isSolid&&shape==='gable'&&
+      // The 14-ft Moderno HD reference includes a central ridge support,
+      // front tie beam, and two 7-ft sloping eaves.
+      <group name="gable-ridge-and-front-tie">
+        <RenaissanceTruss from={[left,eaveY-.42,frameFront]}
+          to={[right,eaveY-.42,frameFront]} color={powder}/>
+        <RenaissanceTruss from={[xMid,eaveY-.42,frameFront]}
+          to={[xMid,eaveY+gableRise,frameFront]} color={powder}/>
+        {[-1,1].map(sign=><RenaissanceTruss key={'gable-web-'+sign}
+          from={[xMid,eaveY+gableRise-.04,frameFront]}
+          to={[xMid+sign*width/2,eaveY,frameFront]} color={powder}/>)}
+      </group>}
     {product.family==='solid-truss-ends'&&
       Array.from({length:countRafters},(_,i)=>{
         const x=left+(width*i)/(countRafters-1);
@@ -154,46 +193,52 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           <Rod from={[right-width*.24,bottom,z]} to={[xMid,ridge,z]} radius={.052} color={powder}/>
         </group>;
       })}
-    {/* Fresco: translucent polycarbonate standing-seam roofing over exposed pergola framing. */}
-    {isTranslucent&&<>
-      {Array.from({length:Math.ceil(width/4)},(_,i)=>{
-        const panelWidth=width/Math.ceil(width/4);
-        const x=left+(i+.5)*panelWidth;
-        return <mesh key={'fresco-polycarbonate-'+i}
-          position={[x,roofY,roofMidZ]} rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow>
-          <boxGeometry args={[panelWidth-.014,.085,depth]}/>
-          <meshPhysicalMaterial color="#cce0e5" transparent opacity={.63}
-            metalness={0} roughness={.15} depthWrite={false}/>
+    {/* Fresco: correctly oriented translucent polycarbonate sheets captured by
+        aluminum projection trusses and snap-cover channels, not glass or rods. */}
+    {isTranslucent&&<group name="fresco-polycarbonate-snap-channel-roof">
+      {Array.from({length:Math.max(1,countRafters-1)},(_,i)=>{
+        const x1=xMid+plan.projectionTrussStationsFt[i];
+        const x2=xMid+plan.projectionTrussStationsFt[i+1];
+        return <mesh key={'fresco-polycarbonate-'+i} castShadow receiveShadow
+          position={[(x1+x2)/2,roofY+.075,roofMidZ]}
+          rotation={[Math.atan2(slopeRise,depth),0,0]}>
+          <boxGeometry args={[Math.max(.06,x2-x1-.055),.032,depth]}/>
+          <meshPhysicalMaterial color="#dde5e3" metalness={0} roughness={.32}
+            transparent opacity={.82} depthWrite={false} side={2}/>
         </mesh>;
       })}
-      {Array.from({length:Math.max(2,Math.ceil(width/4)+1)},(_,i)=>{
-        const x=left+i*(width/Math.ceil(width/4));
-        return <Rod key={'standing-seam-'+i} from={[x,roofBack+.085,back]}
-          to={[x,roofFront+.085,front]} radius={.031} color={powder} metalness={.25}/>;
-      })}
-      {Array.from({length:countRafters},(_,i)=>{
-        const x=left+width*i/(countRafters-1);
-        return <group key={'fresco-rafters-'+i}>
-          <Rod from={[x,roofBack+.065,back-.35]} to={[x,roofFront+.065,front+.38]}
-            radius={.056} color={powder} metalness={.37}/>
-          <Rod from={[x,roofBack-.24,back]} to={[x,roofFront-.24,front]}
-            radius={.049} color={shadowColor} metalness={.26}/>
+      {plan.projectionTrussStationsFt.map((localX,i)=>{
+        const x=xMid+localX;
+        return <group key={'fresco-tube-and-snap-'+i}>
+          <RenaissanceTruss from={[x,roofRearY-.24,roofBackEdge]}
+            to={[x,roofFrontY-.24,front]} color={powder}/>
+          <SlopedBeam start={[x,roofRearY+.115,roofBackEdge]}
+            end={[x,roofFrontY+.115,front]}
+            thickness={.07} depth={.09} color={powder}/>
+          <SlopedBeam start={[x,roofRearY+.16,roofBackEdge]}
+            end={[x,roofFrontY+.16,front]}
+            thickness={.024} depth={.055} color={shadowColor}/>
         </group>;
       })}
-    </>}
-    {/* Aria: independent rectangular beams with variable-density adjustable shade lattice. */}
-    {isLattice&&<>
-      <Beam start={[left,back]} end={[right,back]} height={roofY} thickness={.35} depth={.31} color={powder} metalness={.35}/>
-      <Beam start={[left,front]} end={[right,front]} height={roofY} thickness={.35} depth={.31} color={powder} metalness={.35}/>
-      {Array.from({length:countRafters},(_,i)=>
-        <Block key={'aria-rafter-'+i} position={[left+width*i/(countRafters-1),roofY+.13,roofMidZ]}
-          size={[.13,.27,depth+.5]} color={powder} metalness={.32}/>)}
-      {Array.from({length:latticeCount},(_,i)=>{
-        const z=back+depth*(i+.5)/latticeCount;
-        return <Block key={'shade-slat-'+i} position={[xMid,roofY+.37,z]}
-          size={[width+.18,.075,.17]} color={powder} metalness={.27}/>;
+    </group>}
+    {/* Aria: 6x2-inch trusses at 2ft OC; 2x2-in shade tubes with
+        4-inch default CLEAR spacing (the source uses actual 2-in tube height). */}
+    {isLattice&&<group name="aria-projection-trusses-and-shade-tubes">
+      {plan.projectionTrussStationsFt.map((localX,i)=>{
+        const x=xMid+localX;
+        return <RenaissanceTruss key={'aria-truss-'+i}
+          from={[x,roofRearY-.25,roofBackEdge]}
+          to={[x,roofFrontY-.25,front]} color={powder}/>;
       })}
-    </>}
+      {Array.from({length:latticeCount},(_,i)=>{
+        const station=roofBackEdge+depth*(i+.5)/latticeCount;
+        return <Block key={'aria-shade-tube-'+i}
+          position={[xMid,roofY+.145,station]}
+          size={[width,inchToFoot(RENAISSANCE_SHADE_TUBE.outsideHeightIn),
+            inchToFoot(RENAISSANCE_SHADE_TUBE.outsideWidthIn)]}
+          color={powder} metalness={.39} roughness={.33}/>;
+      })}
+    </group>}
     {/* Solé: separated full-width pivoting louvers. Angle is user-controlled. */}
     {isLouvered&&<>
       {[[left,back],[right,back],[left,front],[right,front]].map(([x,z],i)=>
@@ -225,14 +270,6 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         bottom={deckHeight+.12} top={roofBack-profile.beamH}
         openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>}
     </>}
-    {/* Architectural wrap-around rain gutter is a separate U section. */}
-    {(isSolid||isTranslucent)&&<>
-      <Beam start={[left-.14,front+.19]} end={[right+.14,front+.19]}
-        height={roofFront-.31} thickness={.25} depth={.34} color={powder} metalness={.31}/>
-      <Beam start={[left-.14,front+.35]} end={[right+.14,front+.35]}
-        height={roofFront-.21} thickness={.16} depth={.055} color={powder} metalness={.34}/>
-      <Beam start={[left-.14,front+.04]} end={[right+.14,front+.04]}
-        height={roofFront-.21} thickness={.16} depth={.055} color={powder} metalness={.34}/>
-    </>}
+    {/* Solid-roof gutter is included above; Fresco uses its own snap channels. */}
   </group>;
 }
