@@ -207,9 +207,12 @@ const DEFAULT_SHAPE: DeckPoint[] = [
 ];
 const STOCK_LENGTHS = [8, 10, 12, 16, 20];
 const BOARD_STOCK_LENGTHS = [8, 12, 16, 20];
-const DECK_BOARD_FACE = 5.5 / 12;
-const DECK_GAP = 0.125 / 12;
-const EFFECTIVE_COVERAGE = DECK_BOARD_FACE + DECK_GAP;
+/** Installed decking face and gap shared with the Admin Takeoff and 3D. */
+export const DECK_BOARD_FACE_FT = 5.5 / 12;
+export const DECK_GAP_FT = 0.125 / 12;
+const DECK_BOARD_FACE = DECK_BOARD_FACE_FT;
+const DECK_GAP = DECK_GAP_FT;
+const EFFECTIVE_COVERAGE = DECK_BOARD_FACE_FT + DECK_GAP_FT;
 const JOIST_SPACING = 1;
 const BEAM_TARGET_SPACING = 10;
 const POST_MAX_SPACING = 7.5;
@@ -429,7 +432,7 @@ function groupRepeatedCutsIntoStock(pieceCount: number, cutLength: number, stock
 }
 
 
-function boardStockSegments(totalLength: number, availableBreaks: number[] = []) {
+export function boardStockSegments(totalLength: number, availableBreaks: number[] = []) {
   const sortedBreaks = availableBreaks.filter((value) => value > 0.05 && value < totalLength - 0.05).sort((a, b) => a - b);
   const marks = [0, ...sortedBreaks, totalLength];
   const segments: number[] = [];

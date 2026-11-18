@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { DeckModel } from '../../lib/deckModel';
 import { Beam, Block, type P2 } from './Primitives';
+import { actualPostWidthFt, rimPlyCenterlines } from '../../lib/visualStructure';
 
 type Point={x:number;y:number};
 const edgeClip=(points:Point[],vertical:boolean,station:number):number[]=>{
@@ -46,16 +47,13 @@ export function DeckStructure3D({model,center,height}:{
   return <group name="actual-framing-joists-double-beams-notched-posts">
     {joists.map(joist=><Beam key={joist.key} start={joist.a} end={joist.b}
       height={joistTop-joistD/2} thickness={joistD} depth={1.5/12} color="#aa8560"/>)}
-    {model.edgeSegments.map(edge=>{
-      const a:P2=[edge.start.x-center[0],edge.start.y-center[1]];
-      const b:P2=[edge.end.x-center[0],edge.end.y-center[1]];
-      return <group key={'rim-'+edge.index}>
-        <Beam start={a} end={b} height={joistTop-joistD/2}
-          thickness={joistD} depth={1.5/12} color="#957356"/>
-        <Beam start={a} end={b} height={joistTop-joistD/2}
-          thickness={joistD} depth={3/12} color="#b28b61"/>
-      </group>;
-    })}
+    {model.edgeSegments.map(edge=><group key={'rim-'+edge.index}>
+      {rimPlyCenterlines(model.points,edge).map((ply,i)=><Beam key={'rim-ply-'+i}
+        start={[ply.start.x-center[0],ply.start.y-center[1]]}
+        end={[ply.end.x-center[0],ply.end.y-center[1]]}
+        height={joistTop-joistD/2} thickness={joistD} depth={1.5/12}
+        color={i===0?'#957356':'#b28b61'}/>)}
+    </group>)}
     {model.beamLines.flatMap((line,index)=>line.segments.map((segment,i)=>{
       const a:P2=vertical?[segment.startX-center[0],line.y-center[1]]:[line.y-center[0],segment.startX-center[1]];
       const b:P2=vertical?[segment.endX-center[0],line.y-center[1]]:[line.y-center[0],segment.endX-center[1]];
@@ -75,7 +73,7 @@ export function DeckStructure3D({model,center,height}:{
       height={beamTop-beamD/2} thickness={beamD} depth={3/12} color="#a47b54"/>)}
     {model.postLocations.map(post=>{
       const x=cm(post.x-center[0]),z=cm(post.y-center[1]);
-      const nominal=model.postSize==='8x8'?.667:.5;
+      const nominal=actualPostWidthFt(model.postSize);
       const clear=Math.max(.1,beamBottom);
       const footerSize=Math.max(.72,model.footingDiameterIn/12);
       return <group key={'support-'+post.reference}>
