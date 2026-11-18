@@ -11,3 +11,12 @@
 **Release procedure**: branch off latest main; edit source via GitHub connector; add regression test; verify npm ci, npm test, npm run build in GitHub Actions + Netlify preview; merge PR, verify main status and Netlify Ready/Published commit exact match. Do not modify original environment without preserving user changes. Do not claim visual interaction QA if not run.
 **Active roadmap**: RBAC and cloud project media; product catalog admin/SKUs/material textures; photo calibration and geometry-constrained AI visualization; composite services and reliable cover/screen/sunroom takeoffs; secure external estimating app integration; saved design options and client proposal.
 **Continuation Skill**: `eztakeoff-continuation` package attached to chat; user can install it in ChatGPT Skills for discovery in future conversations. Repository docs are persistent fallback.
+
+
+## Manufacturer visual catalog release (2026-11-18)
+- Manufacturer image registry: src/data/timbertechVisualAssets.json (36 official TimberTech product images, collection, grain); first-party Netlify build cache via scripts/sync-manufacturer-assets.mjs.
+- Approved visual definition: src/data/visualCatalog.ts (13 metal/PVC/composite/vinyl/PT rail styles, 6 Renaissance cover styles and four official roof colors).
+- Sales selectors: src/components/ConsultationVisualPickers.tsx; modular 3D rendering: src/components/visual3d/{Primitives,ManufacturerDeck3D,ManufacturerRailing3D,RenaissanceCover3D}.tsx. Concave deck floor row clipping: src/lib/visualGeometry.ts.
+- Netlify runs asset download, npm test, npm run build and deploy; GitHub Actions workflow manual-only per user instruction to avoid paid CI builds.
+- Visualized patio/railing assemblies are manufacturer family approximations, not verified extrusion/engineering. For precise model engineering use manufacturer drawings and approvals. Commercial license/reuse rights for manufacturer images should be verified.
+- Preserve original Admin Takeoff and independent external estimator. New regression gate: scripts/test-visual-catalog.cjs.
