@@ -257,16 +257,16 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     </>}
     {(project.coverScreenStyle??'none')!=='none'&&<>
       <DolceScreenRun from={[frameLeft,frameFront]} to={[frameRight,frameFront]}
-        bottom={deckHeight+.12} top={roofFront-profile.beamH}
+        bottom={deckHeight+.12} top={roofFront-headerHeight}
         openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>
       <DolceScreenRun from={[frameLeft,back]} to={[frameLeft,frameFront]}
-        bottom={deckHeight+.12} top={roofFront-profile.beamH}
+        bottom={deckHeight+.12} top={roofFront-headerHeight}
         openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>
       <DolceScreenRun from={[frameRight,back]} to={[frameRight,frameFront]}
-        bottom={deckHeight+.12} top={roofFront-profile.beamH}
+        bottom={deckHeight+.12} top={roofFront-headerHeight}
         openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>
       {!attached&&<DolceScreenRun from={[frameLeft,back]} to={[frameRight,back]}
-        bottom={deckHeight+.12} top={roofBack-profile.beamH}
+        bottom={deckHeight+.12} top={roofBack-headerHeight}
         openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>}
     </>}
     {/* Solid-roof gutter is included above; Fresco uses its own snap channels. */}
