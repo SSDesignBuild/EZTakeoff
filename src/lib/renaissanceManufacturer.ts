@@ -52,7 +52,7 @@ export const RENAISSANCE_STRUCTURAL_GUTTER={
 } as const;
 /** Representative estimating layout, never an approved beam-span capacity. */
 export const SAMPLE_POST_BAY_FT:Record<RenaissanceFrameVariant,number>={
-  standard:9,hd:14,wide:18,'wide-insert':18,
+  standard:16,hd:14,wide:18,'wide-insert':18,
 };
 export interface RenaissancePlanInput {
   family:string;variant:RenaissanceFrameVariant;
