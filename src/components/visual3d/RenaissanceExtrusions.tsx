@@ -10,7 +10,7 @@ function outlineWithRibs(width:number,height:number){
   // Physical beam silhouette: repeated extrusion tongues along each vertical
   // side, exact outside envelope. Actual tight corner radii are not dimensioned
   // in the supplied elevation, so no radius is represented as verified.
-  const w=width/2,h=height/2,g=Math.min(.020,width*.12);
+  const w=width/2,h=height/2,g=Math.min(.006,width*.10);
   const shape=new THREE.Shape();
   shape.moveTo(-w,-h);shape.lineTo(w,-h);
   for(const level of [-.57,-.48,.25,.34]){
