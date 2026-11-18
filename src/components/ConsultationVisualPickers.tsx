@@ -190,7 +190,10 @@ export function ManufacturerCoverPicker({project,onChange}:{
         onClick={()=>onChange({coverFamily:item.id,kind:item.id==='none'?'deck':'covered-deck',
           coverColor:item.colors.includes(project.coverColor)?project.coverColor:item.colors[0],
           coverRoofStyle:item.roofStyles.includes(project.coverRoofStyle??'studio')?project.coverRoofStyle:'studio'})}>
-        <ProductPhoto photo={coverPhotos[item.id]} name={item.name+' Renaissance'} fallback={item.sourcePage}/>
+        {item.id==='none'?<div className="manufacturer-photo manufacturer-photo--missing">
+          <strong>Open-air deck</strong><span>No cover or pergola included</span>
+        </div>:<ProductPhoto photo={coverPhotos[item.id]} name={item.name+' Renaissance'} fallback={item.sourcePage}/>}
+
         <strong>{item.name}</strong>
         <small>{item.description}</small>
       </button>)}
