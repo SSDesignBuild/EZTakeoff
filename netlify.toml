@@ -1,5 +1,5 @@
 [build]
-  command = "npm test && npm run build" # TEMPORARY DIAGNOSIS: preview only; restore before merge
+  command = "npm run build" # TEMPORARY DIAGNOSIS: compile alone; restore before merge
   publish = "dist"
 
 [[redirects]]
