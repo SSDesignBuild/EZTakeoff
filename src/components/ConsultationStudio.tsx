@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useMemo, useState, type ChangeEvent } from '
 import { useNavigate, useParams } from 'react-router-dom';
 import { DeckDesigner } from './DeckDesigner';
 import { DeckGateEditor } from './DeckGateEditor';
+import { SalesSkirtingOptions } from './SalesSkirtingOptions';
+import { SalesTechnicalSettings } from './SalesTechnicalSettings';
 import { ManufacturerBoardPicker, ManufacturerRailPicker, ManufacturerCoverPicker } from './ConsultationVisualPickers';
 import { buildDeckModel } from '../lib/deckModel';
 import { calculateEstimate } from '../lib/estimate';
@@ -173,15 +175,15 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
       <div className="consultation-quick-inputs">
         <label>Height above grade (ft)<input type="number" min={.25} step={.25} value={number(project.values.deckHeight,8)}
           onChange={(e)=>setValue('deckHeight',Number(e.target.value))}/></label>
-        <label>Attachment<select value={String(project.values.attachment??'siding')} onChange={(e)=>setValue('attachment',e.target.value)}>
-          <option value="siding">Attached to siding / suitable ledger structure</option>
-          <option value="brick">Brick / masonry — independent gravity support</option>
-          <option value="freestanding">Freestanding</option>
-        </select></label>
+        <div className="consultation-quick-summary">
+          <strong>Construction preset</strong>
+          <span>{String(project.values.postSizeChoice??'6x6')} support posts · {String(project.values.attachment??'siding').replace('-', ' ')} attachment</span>
+        </div>
         <label className="consultation-checkbox"><input type="checkbox" checked={project.values.multiTierEnabled===true}
           onChange={(e)=>setValue('multiTierEnabled',e.target.checked)}/>Add lower deck tier</label>
       </div>
       <DeckDesigner values={project.values} onValuesChange={updateValues}/>
+      <SalesTechnicalSettings values={project.values} onValuesChange={updateValues}/>
       <p className="consultation-engineering-note">Dimensioned geometry is reused in the 3D scene and material estimator. Structural sizes and foundations require field verification before ordering.</p>
     </section>}
     {step==='options'&&<section className="consultation-panel">
@@ -218,16 +220,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
             <option value="fascia">Match fascia trim</option>
           </select></label>
         </article>
-        <article className="consultation-option-card">
-          <h4>Skirting & gates</h4>
-          <label className="consultation-checkbox"><input type="checkbox" checked={project.values.skirtingEnabled===true}
-            onChange={(e)=>setValue('skirtingEnabled',e.target.checked)}/>Add skirting</label>
-          {project.values.skirtingEnabled===true&&<label>Skirting finish<select value={String(project.values.skirtingMaterial??'kdat')}
-            onChange={(e)=>setValue('skirtingMaterial',e.target.value)}>
-            <option value="kdat">1×5 KDAT pressure-treated</option><option value="composite">Composite</option><option value="pvc">PVC</option>
-          </select></label>}
-          <p className="muted">Gate hardware, post layouts and exact skirting sides are still configured in Admin Takeoff for advanced ordering. Gate hardware can be entered below.</p>
-        </article>
+        <SalesSkirtingOptions values={project.values} onValuesChange={updateValues}/>
         <ManufacturerCoverPicker project={project} onChange={onChange}/>
       </div>
       <DeckGateEditor values={project.values} onValuesChange={updateValues}/>

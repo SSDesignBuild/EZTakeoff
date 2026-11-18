@@ -2167,3 +2167,104 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
   .manufacturer-rail-config{grid-template-columns:minmax(0,1fr)}
   .manufacturer-cover-card small,.manufacturer-rail-card small{font-size:.7rem}
 }
+
+
+/* S&S Visual Studio / refined emerald, platinum and champagne design system.
+   Replaces the legacy bronze UI without altering the selected actual product colors. */
+:root{
+  --bg:#f6f7f6;--bg-2:#f0f3f1;
+  --panel:rgba(255,255,255,.97);--panel-strong:#fff;
+  --border:rgba(27,56,47,.13);--ink:#1b2b2d;--text:var(--ink);
+  --muted:#586c68;--accent:#126e59;--accent-strong:#0d5b4a;
+  --accent-soft:rgba(18,110,89,.085);
+  --green-soft:rgba(18,110,89,.075);--green-strong:#126e59;
+  --lux-metal:#b69b67;--lux-ink:#1b2b2d;--lux-focus:#207b64;
+  --shadow:0 16px 40px rgba(32,53,46,.065);
+  --grid-line:rgba(19,73,58,.065);--svg-soft:rgba(18,110,89,.095);
+}
+:root[data-theme='dark']{
+  --bg:#0b151a;--bg-2:#111f24;--panel:rgba(22,35,40,.96);
+  --panel-strong:#1b2c30;--border:rgba(197,214,206,.17);
+  --ink:#eff5f1;--text:var(--ink);--muted:#b1c2bd;
+  --accent:#95d3b7;--accent-strong:#b5e1cb;--accent-soft:rgba(113,183,151,.16);
+  --green-soft:rgba(93,166,131,.14);--green-strong:#96d6b8;
+  --lux-metal:#c6af7b;--lux-ink:#edf2ef;--lux-focus:#aedfbf;
+  --shadow:0 22px 58px rgba(0,0,0,.23);
+  --grid-line:rgba(221,234,224,.085);--svg-soft:rgba(122,203,168,.12);
+}
+body{
+  background:radial-gradient(circle at 78% 0%,color-mix(in srgb,var(--accent) 9%,transparent),transparent 37%),
+    linear-gradient(165deg,var(--bg-2),var(--bg) 64%);color:var(--ink);
+}
+.topbar-brand,.consultation-panel,.consultations-banner,.consultation-titlebar{
+  border-radius:16px;box-shadow:var(--shadow);
+}
+.topbar-brand{border:1px solid var(--border);background:var(--panel)}
+.sidebar-footer{background:linear-gradient(135deg,#102c2c,#174a3c);color:#f8fcf9}
+:root[data-theme='dark'] .form-field input,
+:root[data-theme='dark'] .form-field select,
+:root[data-theme='dark'] .consultation-form input,
+:root[data-theme='dark'] .consultation-form select,
+:root[data-theme='dark'] .consultation-option-card input,
+:root[data-theme='dark'] .consultation-option-card select,
+:root[data-theme='dark'] .consultation-quick-inputs input,
+:root[data-theme='dark'] .consultation-technical-settings input,
+:root[data-theme='dark'] .consultation-technical-settings select{
+  color:var(--text);background:var(--panel-strong);border:1px solid var(--border);
+}
+.consultation-step-nav button{border-radius:11px;min-height:72px;box-shadow:none;}
+.consultation-step-nav button.active{border-color:var(--accent);background:var(--accent-soft);
+  box-shadow:inset 0 -3px 0 var(--lux-metal);}
+.consultation-option-card{border-radius:12px;box-shadow:none;}
+.consultation-panel{border-top:3px solid var(--lux-metal);}
+.consultations-banner{border-top:3px solid var(--lux-metal);}
+.consultation-titlebar{border-left:3px solid var(--lux-metal);}
+.consultation-panel-copy h3{letter-spacing:-.045em;}
+.consultation-quick-summary{display:grid;align-content:center;gap:.25rem;padding:.6rem .9rem;
+  border-radius:9px;background:var(--accent-soft);color:var(--text);font-size:.85rem;}
+.consultation-quick-summary span{color:var(--muted);font-size:.75rem;}
+.consultation-feature-heading{display:flex;align-items:center;justify-content:space-between;
+  gap:1rem;flex-wrap:wrap;}
+.consultation-feature-heading h4{font-size:1.2rem;letter-spacing:-.03em;}
+.consultation-feature-heading .eyebrow{font-size:.68rem;margin-bottom:.25rem;}
+.consultation-feature-heading p{font-size:.78rem;max-width:480px;margin:.3rem 0 0;}
+.consultation-skirting-card{grid-column:1/-1;}
+.consultation-skirting-options,.consultation-technical-grid{display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem;}
+.consultation-skirting-options label,.consultation-technical-grid label{display:grid;gap:.35rem;font-size:.82rem;}
+.consultation-skirting-options select,.consultation-skirting-options input,
+.consultation-technical-grid input,.consultation-technical-grid select{
+  min-width:0;width:100%;min-height:43px;padding:.52rem .7rem;border:1px solid var(--border);
+  background:var(--panel);color:var(--text);border-radius:8px;}
+.consultation-skirting-options .consultation-checkbox{align-self:center;}
+.consultation-skirting-match{display:flex;align-items:center;gap:.8rem;
+  padding:.5rem;border-radius:10px;background:var(--accent-soft);font-size:.83rem;}
+.consultation-skirting-match img{width:100px;height:58px;object-fit:cover;border-radius:7px;}
+.consultation-skirting-match small{display:block;color:var(--muted);font-size:.7rem;margin-top:.2rem;}
+.consultation-skirting-hint{font-size:.75rem;color:var(--muted);margin:0;}
+.consultation-detailed-configuration,.consultation-technical-settings{
+  border:1px solid var(--border);background:var(--panel-strong);border-radius:11px;
+  padding:.95rem 1.1rem;min-width:0;}
+.consultation-detailed-configuration summary,.consultation-technical-settings summary{
+  cursor:pointer;display:flex;align-items:center;gap:.85rem;font-weight:800;
+  font-size:.87rem;line-height:1.35;list-style:none;color:var(--text);}
+.consultation-detailed-configuration summary::after,.consultation-technical-settings summary::after{
+  content:'⌄';font-size:1.15rem;margin-left:auto;color:var(--accent);}
+.consultation-detailed-configuration[open] summary::after,
+.consultation-technical-settings[open] summary::after{transform:rotate(180deg)}
+.consultation-setting-icon{width:38px;height:38px;display:grid;place-items:center;
+  background:var(--accent-soft);border-radius:10px;color:var(--accent);font-size:1.1rem;}
+.consultation-technical-settings summary strong,
+.consultation-technical-settings summary small{display:block;}
+.consultation-technical-settings summary small{color:var(--muted);font-weight:500;font-size:.71rem;margin-top:.2rem;}
+.consultation-settings-state{font-size:.7rem;font-weight:650;color:var(--muted);}
+.consultation-technical-settings .consultation-technical-grid{margin-top:1.1rem;}
+.consultation-technical-settings>p{font-size:.77rem;color:var(--muted);line-height:1.5;margin-bottom:0;}
+.consultation-detailed-configuration .muted{font-size:.8rem;}
+.consultation-detailed-configuration>div{margin-top:1rem;}
+.consultation-option-columns>.manufacturer-cover-picker{grid-column:1/-1}
+.manufacturer-board-card.selected,.manufacturer-rail-card.selected,
+.manufacturer-cover-card.selected{border:2px solid var(--accent);box-shadow:0 2px 15px var(--accent-soft);}
+.consultation-local-label{color:var(--accent);font-weight:700;}
+@media(max-width:870px){.consultation-skirting-options,.consultation-technical-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media(max-width:560px){.consultation-skirting-options,.consultation-technical-grid{grid-template-columns:1fr;}}
