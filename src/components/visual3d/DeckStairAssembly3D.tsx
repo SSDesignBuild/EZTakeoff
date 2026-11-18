@@ -34,7 +34,6 @@ function Flight({placement,model,center,height,values,texture}:{
   },0);
   const outwardX=(winding>=0?dz:-dz)/width,outwardZ=(winding>=0?-dx:dx)/width;
   const yaw=Math.atan2(outwardX,outwardZ);
-  const risers=Math.max(2,model.stairRisers);
   const treads=Math.max(1,model.stairTreadsPerRun);
   const rise=riseFor(model,height);
   const treadDepth=Math.max(.65,model.stairRunFt/treads);
