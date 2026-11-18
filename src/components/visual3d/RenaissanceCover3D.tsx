@@ -8,7 +8,7 @@ import {
   RENAISSANCE_INSULATED_ROOF,RENAISSANCE_SHADE_TUBE,
 } from '../../lib/renaissanceManufacturer';
 import {
-  RenaissancePost,RenaissanceHeader,RenaissanceGutter,RenaissanceTruss,
+  RenaissancePost,RenaissanceHeader,RenaissanceGutter,RenaissanceTruss,RenaissanceShadeTube,
 } from './RenaissanceExtrusions';
 
 function DolceScreenRun({from,to,bottom,top,openView,finish}:{
@@ -231,11 +231,9 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       })}
       {Array.from({length:latticeCount},(_,i)=>{
         const station=roofBackEdge+depth*(i+.5)/latticeCount;
-        return <Block key={'aria-shade-tube-'+i}
-          position={[xMid,roofY+.145,station]}
-          size={[width,inchToFoot(RENAISSANCE_SHADE_TUBE.outsideHeightIn),
-            inchToFoot(RENAISSANCE_SHADE_TUBE.outsideWidthIn)]}
-          color={powder} metalness={.39} roughness={.33}/>;
+        return <RenaissanceShadeTube key={'aria-shade-tube-'+i}
+          from={[left,roofY+.145,station]} to={[right,roofY+.145,station]}
+          color={powder}/>;
       })}
     </group>}
     {/* Solé: separated full-width pivoting louvers. Angle is user-controlled. */}
