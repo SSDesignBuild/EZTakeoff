@@ -1,7 +1,7 @@
 import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { getCoverVisualProduct, getCoverFinish } from '../../data/visualCatalog';
-import { Beam, Block, Rod, type P2, type P3 } from './Primitives';
+import { Beam, Block, Rod, type P2 } from './Primitives';
 
 export function RenaissanceCover3D({model,project,center,deckHeight}:{
   model:DeckModel;project:ConsultationProject;center:P2;deckHeight:number;
@@ -121,7 +121,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       {Array.from({length:countRafters},(_,i)=>
         <Block key={'aria-rafter-'+i} position={[left+width*i/(countRafters-1),roofY+.13,zMid]}
           size={[.13,.27,depth+.5]} color={powder} metalness={.32}/>)}
-      {Array.from({length:Math.max(5,Math.round(depth/Math.max(.22,1-(project.coverShadePercent??65)/100)) )},(_,i,all)=>{
+      {Array.from({length:Math.min(100,Math.max(5,Math.round(depth/Math.max(.22,1-(project.coverShadePercent??65)/100))))},(_,i,all)=>{
         const z=back+depth*(i+.5)/all.length;
         return <Block key={'shade-slat-'+i} position={[xMid,roofY+.37,z]}
           size={[width+.18,.075,.17]} color={powder} metalness={.27}/>;
