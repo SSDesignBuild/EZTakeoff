@@ -56,6 +56,8 @@ const c=read('src/components/ConsultationVisualPickers.tsx');
 assert.ok(c.includes('ProductPhoto'));
 assert.ok(!c.includes('function RailStyleDiagram('));
 assert.ok(!c.includes('function CoverSilhouette('));
+assert.ok(c.includes('IntersectionObserver') && c.includes('rootMargin:') && c.includes('12000'));
+assert.ok(c.includes("onLoad={()=>{loaded.current=true;cancelTimeout();}}"));
 const photos=read('src/data/consultationPhotos.ts');
 assert.ok(photos.includes('images.squarespace-cdn.com'));
 assert.ok(photos.includes('sunsolutions1.com'));

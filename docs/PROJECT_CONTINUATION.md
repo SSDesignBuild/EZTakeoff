@@ -45,3 +45,8 @@ Style system: midnight navy and emerald/pearl + restrained champagne; real manuf
 New files: src/components/ConsultationSkirtingOptions.tsx, ConsultationTechnicalSettings.tsx, src/data/consultationPhotos.ts, src/components/visual3d/DeckStructure3D.tsx, DeckStairAssembly3D.tsx, DeckSkirting3D.tsx. Modified ManufacturerDeck3D, RenaissanceCover3D, consultation data and external estimate bridge.
 Renaissance render implements SD/HD/WD/Wide+Insert envelope, lean-to/gable roof family, freestanding layout, independent roof overhangs, Dolce-like screen assemblies and Fresco standing seams. Exact extrusion wall thickness/span schedules/roof BOM remain unverified, do not claim certified engineering.
 Only GitHub as repository; Netlify handles build/test/deploy; automatic paid GitHub Actions remains off.
+
+## November 18, 2026 — client consultation release hardening
+- Manufacturer photo cards now cap waiting at 12 seconds when a lazy-loaded image enters/approaches the viewport. An unavailable remote gallery photo yields an explicit fallback and manufacturer link instead of an indefinitely empty image; off-screen cards are not incorrectly timed out.
+- Netlify routine builds remain authoritative; temporary success-shaped diagnostic preview commands and helper file have been removed before merging. Strict preview must execute the same `npm run assets:sync && npm test && npm run build` command as production.
+- Netlify first-party TimberTech swatches retain the end-to-end manufacturer image delivery deadline and asset-status manifest. If official photos are missing, do not substitute unverified wood colors.

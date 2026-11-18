@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { railingPhotos, coverPhotos, type PhotoReference } from '../data/consultationPhotos';
 import type { ConsultationProject } from '../lib/consultationProject';
 import {
@@ -62,16 +62,49 @@ export function ManufacturerBoardPicker({values,onValues}:{
     </footer>
   </section>;
 }
+/**
+ * An unavailable manufacturer CDN must not leave a blank card indefinitely.
+ * Start the deadline only when a lazy photo nears the viewport: starting it
+ * on mount would incorrectly time out photos further down long catalogs.
+ */
 function ProductPhoto({photo,name,fallback}:{photo?:PhotoReference;name:string;fallback:string}){
   const [failed,setFailed]=useState(false);
-  if(!photo||failed)return <div className="manufacturer-photo manufacturer-photo--missing">
-    <strong>Manufacturer photo not available</strong>
-    <span>View the actual {name} gallery to verify appearance.</span>
+  const container=useRef<HTMLDivElement>(null);
+  const timer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const loaded=useRef(false);
+  const cancelTimeout=()=>{
+    if(timer.current!==null){window.clearTimeout(timer.current);timer.current=null;}
+  };
+  useEffect(()=>{
+    setFailed(false);
+    loaded.current=false;
+    if(!photo?.url)return;
+    const beginDeliveryDeadline=()=>{
+      if(timer.current!==null||loaded.current)return;
+      timer.current=window.setTimeout(()=>{
+        timer.current=null;
+        if(!loaded.current)setFailed(true);
+      },12000);
+    };
+    let observer:IntersectionObserver|null=null;
+    if(container.current&&typeof IntersectionObserver!=='undefined'){
+      observer=new IntersectionObserver((entries)=>{
+        if(entries.some(entry=>entry.isIntersecting)){beginDeliveryDeadline();observer?.disconnect();}
+      },{rootMargin:'250px'});
+      observer.observe(container.current);
+    }else beginDeliveryDeadline();
+    return ()=>{observer?.disconnect();cancelTimeout();};
+  },[photo?.url]);
+  if(!photo||failed)return <div ref={container} className="manufacturer-photo manufacturer-photo--missing">
+    <strong>Manufacturer photograph unavailable</strong>
+    <span>View {name} in the manufacturer gallery to verify the finish.</span>
     {fallback&&<small className="photo-source-text">Manufacturer gallery linked in product details</small>}
   </div>;
-  return <div className="manufacturer-photo">
+  return <div ref={container} className="manufacturer-photo">
     <img src={photo.url} loading="lazy" alt={name+' installed manufacturer product photograph'}
-      referrerPolicy="no-referrer" onError={()=>setFailed(true)}/>
+      referrerPolicy="no-referrer"
+      onLoad={()=>{loaded.current=true;cancelTimeout();}}
+      onError={()=>{cancelTimeout();setFailed(true);}}/>
     <span className="photo-credit">{photo.credit}</span>
     {photo.qualifier&&<span className="photo-qualifier">{photo.qualifier}</span>}
   </div>;
