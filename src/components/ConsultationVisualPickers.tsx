@@ -3,7 +3,7 @@ import type { ConsultationProject } from '../lib/consultationProject';
 import {
   deckVisualProducts, deckCollections, getDeckVisualProduct,
   railVisualProducts, getRailVisualProduct, coverVisualProducts, getCoverVisualProduct,
-  getCoverFinish, type RailVisualProduct, type RailInfill, type CoverFamily, type CoverColor,
+  getCoverFinish, type RailVisualProduct, type RailInfill, type CoverFamily,
 } from '../data/visualCatalog';
 
 type Values=ConsultationProject['values'];
@@ -71,7 +71,6 @@ function RailStyleDiagram({rail,color,infill}:{
 }){
   const metal=rail.family==='metal';
   const width=rail.topWidthIn;
-  const topHeight=rail.topHeightIn;
   const x0=25,x1=264,yTop=28,yBottom=145;
   const circular=['round-black'].includes(infill);
   const topRound=rail.geometry==='composite-radiance'||rail.geometry==='composite-premier';
