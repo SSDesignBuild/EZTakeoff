@@ -6,7 +6,6 @@ import { Beam, Block, Rod, SlopedBeam, type P2 } from './Primitives';
 import {
   getRenaissanceExtrusion,makeRenaissanceFramePlan,inchToFoot,
   RENAISSANCE_INSULATED_ROOF,RENAISSANCE_SHADE_TUBE,
-  RENAISSANCE_TRUSS,
 } from '../../lib/renaissanceManufacturer';
 import {
   RenaissancePost,RenaissanceHeader,RenaissanceGutter,RenaissanceTruss,
@@ -118,7 +117,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       midY={roofFront-headerHeight/2} profile={profile} color={powder}/>
     {!attached&&<RenaissanceHeader start={[frameLeft,back]} end={[frameRight,back]}
       midY={roofBack-headerHeight/2} profile={profile} color={powder}/>}
-    {/* Wide + insert keeps the SAME outside extrusion dimensions as Wide.
+    {/* 'wide-insert' keeps the SAME outside extrusion dimensions as Wide.
         Reinforcement resides inside the profiles and is not an exterior bar. */}
     {/* Rectangular canopy is anchored to the deck's footprint bounding box.
         A custom L-shaped roof and its supporting load paths still require
