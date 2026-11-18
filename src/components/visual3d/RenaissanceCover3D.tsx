@@ -8,19 +8,34 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
 }){
   const product=getCoverVisualProduct(project.coverFamily);
   if(project.coverFamily==='none')return null;
-  const width=model.width+.8,depth=model.depth+.8;
+  const frameWidth=project.coverWidthFt&&project.coverWidthFt>0?project.coverWidthFt:model.width;
+  const frameDepth=project.coverProjectionFt&&project.coverProjectionFt>0?project.coverProjectionFt:model.depth;
+  const overhangSide=Math.max(0,Math.min(5,project.coverSideOverhangFt??1));
+  const overhangFront=Math.max(0,Math.min(5,project.coverFrontOverhangFt??1));
+  const width=frameWidth+2*overhangSide,depth=frameDepth+overhangFront;
   const xMid=(model.minX+model.maxX)/2-center[0],zMid=(model.minY+model.maxY)/2-center[1];
-  const left=xMid-width/2,right=xMid+width/2,back=zMid-depth/2,front=zMid+depth/2;
-  const roofY=deckHeight+8.3;
+  const left=xMid-width/2,right=xMid+width/2;
+  const frameLeft=xMid-frameWidth/2,frameRight=xMid+frameWidth/2;
+  const back=zMid-frameDepth/2,frameFront=back+frameDepth,front=frameFront+overhangFront;
+  const roofMidZ=(back+front)/2;
+  const roofY=deckHeight+Math.max(7,Math.min(16,project.coverHeightFt??9));
   const powder=getCoverFinish(project.coverColor);
   const shadowColor=project.coverColor==='White'?'#c1c5c5':project.coverColor==='Sandstone'?'#938271':project.coverColor==='Black'?'#202327':'#3c352f';
   const shape=project.coverRoofStyle??'studio';
-  const slopeRise=.75;
+  const slopeRise=frameDepth*.5/12;
   const gableRise=Math.min(3,width*.13);
-  const postCount=Math.max(2,Math.ceil(width/11)+1);
-  const attached=project.values.attachment!=='freestanding'&&project.values.attachment!=='brick';
-  const frontPosts=Array.from({length:postCount},(_,i):P2=>[left+.4+(width-.8)*i/(postCount-1),front-.5]);
-  const rearPosts=attached?[]:Array.from({length:postCount},(_,i):P2=>[left+.4+(width-.8)*i/(postCount-1),back+.5]);
+  const frameVariant=project.coverFraming??'standard';
+  // Illustrative extrusion envelopes vary with the supplied SD/HD/WD frame
+  // family. Exact profile dimensions and allowable spans require manufacturer review.
+  const profile=frameVariant==='hd'?{post:.4,beamH:.73,beamW:.38}:
+    frameVariant==='wide'?{post:.46,beamH:.83,beamW:.45}:
+    frameVariant==='wide-insert'?{post:.5,beamH:.95,beamW:.50}:
+    {post:.33,beamH:.55,beamW:.32};
+  const configured=Number(project.coverPostCount??0);
+  const postCount=configured>=2?Math.min(18,Math.floor(configured)):Math.max(2,Math.ceil(frameWidth/9)+1);
+  const attached=(project.coverMount??'wall-attached')==='wall-attached';
+  const frontPosts=Array.from({length:postCount},(_,i):P2=>[frameLeft+frameWidth*i/(postCount-1),frameFront]);
+  const rearPosts=attached?[]:Array.from({length:postCount},(_,i):P2=>[frameLeft+frameWidth*i/(postCount-1),back]);
   const allPosts=[...frontPosts,...rearPosts];
   const isSolid=product.family==='solid-studio'||product.family==='solid-truss-ends'||product.family==='full-trusses';
   const isTranslucent=product.family==='translucent';
@@ -35,21 +50,33 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   return <group name={'Renaissance-'+product.id} position={[0,0,0]}>
     {/* Real physical framing: column sleeves, base collars, sculpted caps and wrap fascia */}
     {allPosts.map(([x,z],i)=><group key={'column-'+i}>
-      <Block position={[x,(deckHeight+roofFront-.38)/2,z]}
-        size={[.33,Math.max(2,roofFront-deckHeight-.38),.33]} color={powder} metalness={.32} roughness={.32}/>
-      <Block position={[x,deckHeight+.12,z]} size={[.47,.26,.47]} color={powder} metalness={.25}/>
-      <Block position={[x,roofFront-.43,z]} size={[.47,.46,.47]} color={powder} metalness={.25}/>
-      <Block position={[x,deckHeight+.28,z]} size={[.38,.34,.38]} color={shadowColor} metalness={.22}/>
+      <Block position={[x,(deckHeight+roofFront-profile.beamH)/2,z]}
+        size={[profile.post,Math.max(2,roofFront-deckHeight-profile.beamH),profile.post]}
+        color={powder} metalness={.32} roughness={.32}/>
+      <Block position={[x,deckHeight+.12,z]}
+        size={[profile.post+.12,.24,profile.post+.12]} color={powder} metalness={.25}/>
+      <Block position={[x,roofFront-profile.beamH*.48,z]}
+        size={[profile.post+.09,.32,profile.post+.09]} color={shadowColor} metalness={.25}/>
+      <Block position={[x,deckHeight+.30,z]}
+        size={[profile.post+.06,.19,profile.post+.06]} color={shadowColor} metalness={.22}/>
     </group>)}
-    <Beam start={[left,front-.42]} end={[right,front-.42]} height={roofFront-.37}
-      thickness={.54} depth={.35} color={powder} metalness={.4}/>
-    {!attached&&<Beam start={[left,back+.42]} end={[right,back+.42]} height={roofBack-.44}
-      thickness={.4} depth={.3} color={powder} metalness={.38}/>}
+    <Beam start={[frameLeft,frameFront]} end={[frameRight,frameFront]}
+      height={roofFront-profile.beamH/2} thickness={profile.beamH} depth={profile.beamW}
+      color={powder} metalness={.4}/>
+    <Beam start={[frameLeft,frameFront+profile.beamW*.44]} end={[frameRight,frameFront+profile.beamW*.44]}
+      height={roofFront-profile.beamH*.18} thickness={.055} depth={.04}
+      color={shadowColor} metalness={.38}/>
+    {frameVariant==='wide-insert'&&<Beam start={[frameLeft,frameFront]} end={[frameRight,frameFront]}
+      height={roofFront-profile.beamH*.65} thickness={.14} depth={profile.beamW+.06}
+      color={shadowColor} metalness={.43}/>}
+    {!attached&&<Beam start={[frameLeft,back]} end={[frameRight,back]}
+      height={roofBack-profile.beamH/2} thickness={profile.beamH} depth={profile.beamW}
+      color={powder} metalness={.38}/>}
     {/* Rectangular canopy is anchored to the deck's footprint bounding box.
         A custom L-shaped roof and its supporting load paths still require
         a separately approved engineered Renaissance layout. */}
     {isSolid&&shape==='studio'&&<>
-      <mesh position={[xMid,roofY,zMid]} rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow receiveShadow>
+      <mesh position={[xMid,roofY,roofMidZ]} rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow receiveShadow>
         <boxGeometry args={[width,.3,roofDepth]}/>
         <meshStandardMaterial color={powder} metalness={.34} roughness={.31}/>
       </mesh>
@@ -66,7 +93,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       {[-1,1].map((sign)=>{
         const slope=Math.atan2(gableRise,width/2);
         return <mesh key={'gable-panel-'+sign} castShadow receiveShadow
-          position={[xMid+sign*width/4,roofY+gableRise/2,zMid]} rotation={[0,0,-sign*slope]}>
+          position={[xMid+sign*width/4,roofY+gableRise/2,roofMidZ]} rotation={[0,0,-sign*slope]}>
           <boxGeometry args={[Math.hypot(width/2,gableRise),.28,depth]}/>
           <meshStandardMaterial color={powder} metalness={.34} roughness={.34}/>
         </mesh>;
@@ -102,7 +129,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       })}
     {/* Fresco: translucent polycarbonate standing-seam roofing over exposed pergola framing. */}
     {isTranslucent&&<>
-      <mesh position={[xMid,roofY,zMid]} rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow>
+      <mesh position={[xMid,roofY,roofMidZ]} rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow>
         <boxGeometry args={[width,.105,depth]}/>
         <meshPhysicalMaterial color="#cce0e5" transparent opacity={.63}
           metalness={0} roughness={.17} transmission={.05} depthWrite={false}/>
