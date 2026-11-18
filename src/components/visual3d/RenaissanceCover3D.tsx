@@ -2,15 +2,18 @@ import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { getCoverVisualProduct, getCoverFinish } from '../../data/visualCatalog';
 import { maxReferenceOverhangFt } from '../../lib/renaissanceGuidance';
-import { Beam, Block, Rod, SlopedBeam, type P2 } from './Primitives';
+import { Beam, Block, SlopedBeam, type P2 } from './Primitives';
+import { roofLineAtX } from '../../lib/renaissanceDetailGeometry';
 import {
   getRenaissanceExtrusion,makeRenaissanceFramePlan,inchToFoot,
   RENAISSANCE_INSULATED_ROOF,RENAISSANCE_SHADE_TUBE,
 } from '../../lib/renaissanceManufacturer';
 import {
   RenaissancePost,RenaissanceHeader,RenaissanceGutter,RenaissanceTruss,RenaissanceShadeTube,
+  RenaissanceCurvedTrussEnd,
 } from './RenaissanceExtrusions';
 
+/** Roof-following Dolce screen wall with real triangular mesh at sloping eaves. */
 function DolceScreenRun({from,to,bottom,top,openView,finish}:{
   from:P2;to:P2;bottom:number;top:number;openView:boolean;finish:string;
 }){
@@ -169,27 +172,44 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           from={[xMid,eaveY+gableRise-.04,frameFront]}
           to={[xMid+sign*width/2,eaveY,frameFront]} color={powder}/>)}
       </group>}
+    {/* Contempo: the source system is a solid roof with sculpted decorative
+        truss ends at 2-ft visual stations; it is NOT a full truss pergola. */}
     {product.family==='solid-truss-ends'&&
-      Array.from({length:countRafters},(_,i)=>{
-        const x=left+(width*i)/(countRafters-1);
-        const y=shape==='gable'?roofY+gableRise*(1-Math.abs(x-xMid)/(width/2)):roofY;
-        return <group key={'truss-tail-'+i}>
-          <Block position={[x,y-.1,front+.25]} size={[.13,.28,.9]} color={powder} metalness={.31}/>
-          <Rod from={[x,y-.35,front-.5]} to={[x,y-.65,front+.25]} radius={.05} color={powder}/>
-        </group>;
+      plan.projectionTrussStationsFt.map((station,i)=>{
+        const x=xMid+station;
+        const roofAtFront=roofLineAtX({
+          xFt:x,midXFt:xMid,roofWidthFt:width,eaveFt,
+          gableRiseFt:gableRise,gable:shape==='gable',
+          studioRearFt:roofRearY,studioFrontFt:roofFrontY,rear:false,
+        });
+        return <RenaissanceCurvedTrussEnd key={'contempo-end-'+i}
+          x={x}frontZ={frameFront}topY={roofAtFront-inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn)/2}
+          projectionFt={plan.frontOverhangFt}color={powder}/>;
       })}
+    {/* Classico: full-length projection trusses BELOW the insulated panels,
+        with sculpted tails. They must run front-to-back at width stations,
+        not left-to-right at arbitrary projection stations. */}
     {product.family==='full-trusses'&&
-      Array.from({length:Math.max(2,Math.ceil(depth/7)+1)},(_,i)=>{
-        const z=back+depth*i/Math.max(1,Math.ceil(depth/7));
-        const bottom=roofY-1.25;
-        const ridge=shape==='gable'?roofY+gableRise-.28:roofY-.26;
-        return <group key={'full-truss-'+i}>
-          <Rod from={[left,bottom,z]} to={[right,bottom,z]} radius={.075} color={powder}/>
-          <Rod from={[left,bottom,z]} to={[xMid,ridge,z]} radius={.072} color={powder}/>
-          <Rod from={[right,bottom,z]} to={[xMid,ridge,z]} radius={.072} color={powder}/>
-          <Rod from={[xMid,bottom,z]} to={[xMid,ridge,z]} radius={.055} color={powder}/>
-          <Rod from={[left+width*.24,bottom,z]} to={[xMid,ridge,z]} radius={.052} color={powder}/>
-          <Rod from={[right-width*.24,bottom,z]} to={[xMid,ridge,z]} radius={.052} color={powder}/>
+      plan.projectionTrussStationsFt.map((station,i)=>{
+        const x=xMid+station;
+        const yBack=roofLineAtX({
+          xFt:x,midXFt:xMid,roofWidthFt:width,eaveFt,
+          gableRiseFt:gableRise,gable:shape==='gable',
+          studioRearFt:roofRearY,studioFrontFt:roofFrontY,rear:true,
+        });
+        const yFront=roofLineAtX({
+          xFt:x,midXFt:xMid,roofWidthFt:width,eaveFt,
+          gableRiseFt:gableRise,gable:shape==='gable',
+          studioRearFt:roofRearY,studioFrontFt:roofFrontY,rear:false,
+        });
+        const drop=inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn)/2+
+          inchToFoot(6)/2;
+        return <group key={'classico-projection-truss-'+i}>
+          <RenaissanceTruss from={[x,yBack-drop,roofBackEdge]}
+            to={[x,yFront-drop,front]} color={powder}/>
+          <RenaissanceCurvedTrussEnd x={x} frontZ={frameFront}
+            topY={yFront-inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn)/2}
+            projectionFt={plan.frontOverhangFt} color={powder}/>
         </group>;
       })}
     {/* Fresco: correctly oriented translucent polycarbonate sheets captured by
