@@ -47,8 +47,8 @@ export function ManufacturerRailing3D({model,values,center,deckHeight}:{
       const at=(t:number):P2=>startCoords(edge,coverage.start+runLength*t);
       const isGlass=infill==='glass';
       return <group key={'railing-'+index}>
-        <Beam start={from} end={to} height={yBottom} thickness={wooden?.26:.11} depth={wooden?.28:.13} color={color} metalness={metallic?.64:0}/>
-        <Beam start={from} end={to} height={yTop-.13} thickness={topThick} depth={topWidth} color={color} metalness={metallic?.68:0}/>
+        <Beam start={from} end={to} height={yBottom} thickness={wooden ? .26 : .11} depth={wooden ? .28 : .13} color={color} metalness={metallic ? .64 : 0}/>
+        <Beam start={from} end={to} height={yTop-.13} thickness={topThick} depth={topWidth} color={color} metalness={metallic ? .68 : 0}/>
         {style.geometry==='ire-classic'&&<>
           <Beam start={from} end={to} height={yTop+.025} thickness={.055} depth={topWidth+.045} color={color} metalness={.7}/>
           <Beam start={from} end={to} height={yTop-.26} thickness={.045} depth={topWidth*.72} color={color} metalness={.7}/>
@@ -65,11 +65,11 @@ export function ManufacturerRailing3D({model,values,center,deckHeight}:{
           const p=at(i/bays);
           return <group key={'railing-post-'+i}>
             <Block position={[p[0],deckHeight+height/2,p[1]]}
-              size={[postWidth,height+.08,postWidth]} color={color} metalness={metallic?.65:.025}/>
+              size={[postWidth,height+.08,postWidth]} color={color} metalness={metallic ? .65 : .025}/>
             {!hideCap&&<Block position={[p[0],yTop+.06,p[1]]}
-              size={[postWidth+.045,.085,postWidth+.045]} color={color} metalness={metallic?.66:0}/>}
+              size={[postWidth+.045,.085,postWidth+.045]} color={color} metalness={metallic ? .66 : 0}/>}
             {!wooden&&<Block position={[p[0],deckHeight+.07,p[1]]}
-              size={[postWidth+.06,.135,postWidth+.06]} color={color} metalness={metallic?.6:0}/>}
+              size={[postWidth+.06,.135,postWidth+.06]} color={color} metalness={metallic ? .6 : 0}/>}
           </group>;
         })}
         {isGlass&&<mesh position={[(from[0]+to[0])/2,deckHeight+height/2+.04,(from[1]+to[1])/2]}
@@ -93,19 +93,19 @@ export function ManufacturerRailing3D({model,values,center,deckHeight}:{
           </group>;
         })}
         {!isGlass&&infill!=='horizontal-cable'&&!['chippendale','square-web'].includes(infill)&&
-          Array.from({length:Math.max(2,Math.ceil(runLength/(wooden?.4:metallic?.39:.43)))},(_,i)=>{
-            const n=Math.max(2,Math.ceil(runLength/(wooden?.4:metallic?.39:.43)));
+          Array.from({length:Math.max(2,Math.ceil(runLength/(wooden ? .4 : metallic ? .39 : .43)))},(_,i)=>{
+            const n=Math.max(2,Math.ceil(runLength/(wooden ? .4 : metallic ? .39 : .43)));
             const p=at((i+.5)/n);
             const dark=['round-black','square-black','aluminum','vertical-cable'].includes(infill);
             const balusterColor=dark?metallic?color:'#25292d':color;
             const isRound=infill==='round-black'||infill==='vertical-cable';
             return isRound?
               <Rod key={'baluster-'+i} from={[p[0],yBottom+.13,p[1]]}
-                to={[p[0],yTop-.28,p[1]]} radius={infill==='vertical-cable'?.009:.026}
-                color={balusterColor} metalness={dark?.7:.05}/>
+                to={[p[0],yTop-.28,p[1]]} radius={infill==='vertical-cable' ? .009 : .026}
+                color={balusterColor} metalness={dark ? .7 : .05}/>
               : <Block key={'baluster-'+i} position={[p[0],(yBottom+yTop)/2,p[1]]}
-                  size={[wooden?.12:metallic?.048:.12,yTop-yBottom-.32,wooden?.12:metallic?.048:.12]}
-                  color={balusterColor} metalness={metallic?.65:.02}/>;
+                  size={[wooden ? .12 : metallic ? .048 : .12,yTop-yBottom-.32,wooden ? .12 : metallic ? .048 : .12]}
+                  color={balusterColor} metalness={metallic ? .65 : .02}/>;
           })}
       </group>;
     })}
