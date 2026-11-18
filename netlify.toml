@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build > /tmp/renaissance-ts-build.txt 2>&1; code=$?; mkdir -p dist; tail -n 80 /tmp/renaissance-ts-build.txt > dist/__temporary_build_diagnostics.txt; echo EXIT_CODE=$code >> dist/__temporary_build_diagnostics.txt; exit 0" # TEMPORARY preview-only diagnostic; must remove before merge
+  command = "npm run build" # TEMPORARY compile-only probe; must restore strict gate
   publish = "dist"
 
 [[redirects]]
