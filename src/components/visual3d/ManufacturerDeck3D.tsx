@@ -4,7 +4,10 @@ import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { getDeckVisualProduct } from '../../data/visualCatalog';
 import { surfaceStrips } from '../../lib/visualGeometry';
-import { Beam, Block, Rod, type P2, type P3 } from './Primitives';
+import { Beam, type P2 } from './Primitives';
+import { DeckStructure3D } from './DeckStructure3D';
+import { DeckStairAssembly3D } from './DeckStairAssembly3D';
+import { DeckSkirting3D } from './DeckSkirting3D';
 import { ManufacturerRailing3D } from './ManufacturerRailing3D';
 import { RenaissanceCover3D } from './RenaissanceCover3D';
 
@@ -73,8 +76,16 @@ function VisibleDeckBoards({model,center,height,boardName}:{
   return <group name={missing?'decking-needs-manufacturer-texture':'genuine-manufacturer-board-texture'}>
     <instancedMesh ref={ref} args={[undefined,undefined,strips.length]} castShadow receiveShadow>
       <boxGeometry args={[1,1,1]}/>
-      <meshStandardMaterial color={map?'#ffffff':'#bfc5c7'}
-        map={map??undefined} roughness={.78} metalness={0}/>
+      {map
+        ? <>
+          <meshStandardMaterial attach="material-0" color="#ada99f" map={map} roughness={.78}/>
+          <meshStandardMaterial attach="material-1" color="#ada99f" map={map} roughness={.78}/>
+          <meshBasicMaterial attach="material-2" color="#ffffff" map={map} toneMapped={false}/>
+          <meshStandardMaterial attach="material-3" color="#8b8277" roughness={.85}/>
+          <meshStandardMaterial attach="material-4" color="#ada99f" map={map} roughness={.78}/>
+          <meshStandardMaterial attach="material-5" color="#ada99f" map={map} roughness={.78}/>
+        </>
+        : <meshStandardMaterial color="#bfc5c7" roughness={.78} metalness={0}/>}
     </instancedMesh>
   </group>;
 }
@@ -98,92 +109,14 @@ function BorderBoards({model,center,deckHeight,color,texture}:{
     }))}
   </group>;
 }
-function StructuralDeck({model,center,height}:{
-  model:DeckModel;center:P2;height:number;
-}){
-  return <group name="S&S-deck-structure">
-    {model.beamLines.flatMap((line,index)=>line.segments.map((segment,i)=>{
-      const vertical=model.joistDirection==='vertical';
-      const from:P2=vertical?[segment.startX-center[0],line.y-center[1]]:[line.y-center[0],segment.startX-center[1]];
-      const to:P2=vertical?[segment.endX-center[0],line.y-center[1]]:[line.y-center[0],segment.endX-center[1]];
-      return <Beam key={'beam-'+index+'-'+i} start={from} end={to}
-        height={height-.92} thickness={.44} depth={.35} color="#775d43"/>;
-    }))}
-    {model.postLocations.map((post)=><group key={post.reference}>
-      <Block position={[post.x-center[0],Math.max(.45,height-1.14)/2,post.y-center[1]]}
-        size={[model.postSize === '8x8' ? .67 : .5,Math.max(.45,height-1.14),model.postSize==='8x8'?.67:.5]}
-        color="#876b4e"/>
-      <Block position={[post.x-center[0],.12,post.y-center[1]]}
-        size={[.72,.24,.72]} color="#8d9391"/>
-    </group>)}
-  </group>;
-}
-function FasciaAndSkirting({model,center,height,values}:{
-  model:DeckModel;center:P2;height:number;values:ConsultationProject['values'];
-}){
-  const skirt=values.skirtingEnabled===true||values.skirtingEnabled==='true';
-  const gap=.035,face=.4;
-  const skirtingCount=(length:number)=>Math.min(90,Math.max(1,Math.floor(length/(face+gap))));
-  return <group name="fascia-and-deck-skirting">
-    {model.exposedSegments.map((edge)=><group key={'fascia-'+edge.index}>
-      <Beam start={[edge.start.x-center[0],edge.start.y-center[1]]}
-        end={[edge.end.x-center[0],edge.end.y-center[1]]}
-        height={height-.43} thickness={.65} depth={.075} color="#9c8a76"/>
-      {skirt&&Array.from({length:skirtingCount(edge.length)},(_,i)=>{
-        const t=(i+.5)/skirtingCount(edge.length);
-        const x=edge.start.x+(edge.end.x-edge.start.x)*t-center[0],
-          z=edge.start.y+(edge.end.y-edge.start.y)*t-center[1];
-        const size=Math.max(.4,height-.7);
-        return <Block key={'skirt-'+i} position={[x,size/2,z]}
-          size={[edge.orientation==='horizontal'?face:.075,size,edge.orientation==='vertical'?face:.075]}
-          color={values.skirtingMaterial==='pvc'?'#dadcda':'#9d886b'}/>;
-      })}
-    </group>)}
-  </group>;
-}
-function DeckStairs({model,center,height,boardName}:{
-  model:DeckModel;center:P2;height:number;boardName:unknown;
-}){
-  const {map}=useManufacturerTexture(boardName);
-  if(!model.stairCount||!model.stairPlacements.length)return null;
-  const winding=model.points.reduce((sum,p,i)=>{
-    const next=model.points[(i+1)%model.points.length];
-    return sum+p.x*next.y-next.x*p.y;
-  },0);
-  return <group name="dimensioned-deck-stairs">
-    {model.stairPlacements.map((placement,index)=>{
-      if(!placement.start||!placement.end||placement.edgeIndex===null)return null;
-      const dx=placement.end.x-placement.start.x,dz=placement.end.y-placement.start.y;
-      const length=Math.hypot(dx,dz);if(length<.1)return null;
-      const nx=(winding>=0?dz:-dz)/length,nz=(winding>=0?-dx:dx)/length;
-      const cx=(placement.start.x+placement.end.x)/2-center[0],cz=(placement.start.y+placement.end.y)/2-center[1];
-      const count=Math.max(1,Math.min(28,model.stairTreadsPerRun));
-      const rise=Math.min(.65,height/count);
-      const footprint=.9;
-      const angle=-Math.atan2(dz,dx);
-      return <group key={'stair-'+index}>
-        {Array.from({length:count},(_,i)=>{
-          const reach=(i+.5)*footprint;
-          const level=Math.max(.07,height-(i+1)*rise);
-          return <group key={'tread-'+i}>
-            <mesh position={[cx+nx*reach,level,cz+nz*reach]} rotation={[0,angle,0]} castShadow receiveShadow>
-              <boxGeometry args={[length,.11,footprint-.025]}/>
-              <meshStandardMaterial color={map?'#ffffff':'#bbc0c2'} map={map??undefined} roughness={.79}/>
-            </mesh>
-            <mesh position={[cx+nx*(reach+footprint/2),level-rise/2,cz+nz*(reach+footprint/2)]}
-              rotation={[0,angle,0]} castShadow>
-              <boxGeometry args={[length,rise-.06,.07]}/>
-              <meshStandardMaterial color="#a0a4a1" roughness={.79}/>
-            </mesh>
-          </group>;
-        })}
-        {[0,.5,1].map((t)=>{
-          const x=placement.start!.x+dx*t-center[0],z=placement.start!.y+dz*t-center[1];
-          const from:P3=[x,height-.2,z],to:P3=[x+nx*count*footprint,.2,z+nz*count*footprint];
-          return <Rod key={'stringer-'+t} from={from} to={to} radius={.10} color="#8c7557" metalness={0}/>;
-        })}
-      </group>;
-    })}
+function DeckFascia({model,center,height,texture}:{model:DeckModel;center:P2;height:number;texture:THREE.Texture|null}){
+  const rimDepth=(model.joistSize==='2x12'?11.25:model.joistSize==='2x10'?9.25:7.25)/12;
+  return <group name="full-depth-deck-fascia">
+    {model.exposedSegments.map(edge=><Beam key={'fascia-'+edge.index}
+      start={[edge.start.x-center[0],edge.start.y-center[1]]}
+      end={[edge.end.x-center[0],edge.end.y-center[1]]}
+      height={height-.10-rimDepth/2} thickness={rimDepth+.05} depth={.076}
+      color="#a49c90" texture={texture}/>)}
   </group>;
 }
 export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true}:{
@@ -196,16 +129,24 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
   // Border/trim colors only use real manufacturer samples where available.
   // Otherwise the deck uses neutral material instead of inventing a color.
   const {map:borderMap}=useManufacturerTexture(borderName);
+  const fasciaName=project.values.fasciaMaterial==='match'||!project.values.fasciaMaterial
+    ?project.values.deckingMaterial:project.values.fasciaMaterial;
+  const {map:fasciaMap}=useManufacturerTexture(fasciaName);
+  const skirtName=project.values.skirtingColor||project.values.deckingMaterial;
+  const {map:skirtMap}=useManufacturerTexture(skirtName);
+  const stairName=project.values.stairTreadStyle==='match'||!project.values.stairTreadStyle
+    ?project.values.deckingMaterial:project.values.stairTreadStyle;
+  const {map:stairMap}=useManufacturerTexture(stairName);
   const borderTint=borderProduct?'#85807c':'#a1a6a9';
   return <group name="manufacturer-visualized-deck">
-    <StructuralDeck model={model} center={center} height={deckHeight}/>
+    <DeckStructure3D model={model} center={center} height={deckHeight}/>
     <PolygonSubstrate model={model} center={center} deckHeight={deckHeight}/>
     <VisibleDeckBoards model={model} center={center} height={deckHeight} boardName={project.values.deckingMaterial}/>
     <BorderBoards model={model} center={center} deckHeight={deckHeight} color={borderTint} texture={borderMap}/>
-    <FasciaAndSkirting model={model} center={center} height={deckHeight} values={project.values}/>
+    <DeckFascia model={model} center={center} height={deckHeight} texture={fasciaMap}/>
+    <DeckSkirting3D model={model} center={center} height={deckHeight} values={project.values} texture={skirtMap}/>
     <ManufacturerRailing3D model={model} values={project.values} center={center} deckHeight={deckHeight}/>
-    <DeckStairs model={model} center={center} height={deckHeight}
-      boardName={project.values.stairTreadStyle==='match'?project.values.deckingMaterial:project.values.stairTreadStyle}/>
+    <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values} texture={stairMap}/>
     {covered&&<RenaissanceCover3D model={model} project={project} center={center} deckHeight={deckHeight}/>}
     {!selected&&<group name="manufacturer-board-texture-not-yet-verified"/>}
   </group>;

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { railingPhotos, coverPhotos, type PhotoReference } from '../data/consultationPhotos';
 import type { ConsultationProject } from '../lib/consultationProject';
 import {
   deckVisualProducts, deckCollections, getDeckVisualProduct,
   railVisualProducts, getRailVisualProduct, coverVisualProducts, getCoverVisualProduct,
-  getCoverFinish, type RailVisualProduct, type RailInfill, type CoverFamily,
+  getCoverFinish, type RailVisualProduct, type RailInfill,
 } from '../data/visualCatalog';
 
 type Values=ConsultationProject['values'];
@@ -61,56 +62,52 @@ export function ManufacturerBoardPicker({values,onValues}:{
     </footer>
   </section>;
 }
-const RAIL_COLORS:Record<string,string>={
- 'white':'#e5e5e2','matte-white':'#e5e3dc','black':'#181c20','matte-black':'#222327',
- 'dark-bronze':'#58493e','matte-espresso':'#382d26','kona':'#6a4c35','khaki':'#aea389',
- 'pressure-treated':'#a38a64',
-};
-function RailStyleDiagram({rail,color,infill}:{
-  rail:RailVisualProduct;color:string;infill:RailInfill;
-}){
-  const metal=rail.family==='metal';
-  const width=rail.topWidthIn;
-  const topHeight=rail.topHeightIn;
-  const x0=25,x1=264,yTop=28,yBottom=145;
-  const circular=['round-black'].includes(infill);
-  const topRound=rail.geometry==='composite-radiance'||rail.geometry==='composite-premier';
-  const thickTop=rail.geometry==='pvc-pinnacle'||rail.geometry==='composite-drink'||
-    rail.geometry==='ire-drink'||width>=4.5;
-  const postW=Math.max(9,rail.postWidthIn*2.6);
-  return <svg viewBox="0 0 290 180" role="img" aria-label={rail.label+' sample railing geometry'}
-    className="manufacturer-rail-drawing">
-    <rect width="290" height="180" fill="#eff1f2"/>
-    {[x0,x1].map((x,i)=><g key={i}>
-      <rect x={x-postW/2} y={metal?yTop-8:yTop-12} width={postW} height={yBottom-yTop+26} fill={color}/>
-      <rect x={x-postW/2-2} y={yTop-15} width={postW+4} height={7} fill={color} opacity={.95}/>
-      <rect x={x-postW/2-4} y={yBottom+12} width={postW+8} height={5} fill={color}/>
-    </g>)}
-    {infill==='glass'?<rect x={x0+14} y={yTop+19} width={x1-x0-28} height={96}
-      fill="#96c9dd" opacity=".47" stroke={color} strokeWidth="3"/>:
-      infill==='horizontal-cable'?Array.from({length:8},(_,i)=>
-        <line key={i} x1={x0+13} x2={x1-13} y1={yTop+18+i*12} y2={yTop+18+i*12} stroke="#6e7477" strokeWidth="1.5"/>):
-      infill==='chippendale'||infill==='square-web'?<g stroke={color} strokeWidth={5}>
-        <rect x={x0+16} y={yTop+19} width={x1-x0-32} height={95} fill="none"/>
-        <path d={'M '+(x0+16)+' '+(yTop+19)+' L '+(x1-16)+' '+(yTop+114)+' M '+(x0+16)+' '+(yTop+114)+' L '+(x1-16)+' '+(yTop+19)}
-          fill="none"/>
-        {infill==='square-web'&&[x0+95,x0+159].map((x)=><line key={x} x1={x} y1={yTop+19} x2={x} y2={yTop+114}/>)}
-      </g>:
-      Array.from({length:metal?16:11},(_,i)=>{
-        const n=metal?16:11,x=x0+14+i*(x1-x0-28)/(n-1);
-        return <rect key={i} x={x-(circular?2:metal?3:5)} y={yTop+21}
-          width={circular?4:metal?6:10} height={91} fill={['round-black','square-black','aluminum'].includes(infill)?'#24282c':color} rx={circular?2:0}/>;
-      })}
-    <rect x={x0} y={yBottom-12} width={x1-x0} height={metal?9:13} rx={topRound?4:0} fill={color}/>
-    {thickTop
-      ? <rect x={x0-6} y={yTop} width={x1-x0+12} height={Math.max(11,topHeight*4.2)} rx={topRound?7:1}
-          fill={rail.geometry.includes('drink')?'#a88962':color} stroke={color} strokeWidth={2}/>
-      : <g>
-        <rect x={x0-4} y={yTop+6} width={x1-x0+8} height={Math.max(6,topHeight*3.5)} rx={topRound?6:1} fill={color}/>
-        {topRound&&<rect x={x0-7} y={yTop+3} width={x1-x0+14} height={6} rx={3} fill={color}/>}
-      </g>}
-    <text x="145" y="172" fontSize="9" fill="#475569" textAnchor="middle">Geometry preview · {rail.topWidthIn}" top · {rail.postWidthIn}" posts</text>
-  </svg>;
+/**
+ * An unavailable manufacturer CDN must not leave a blank card indefinitely.
+ * Start the deadline only when a lazy photo nears the viewport: starting it
+ * on mount would incorrectly time out photos further down long catalogs.
+ */
+function ProductPhoto({photo,name,fallback}:{photo?:PhotoReference;name:string;fallback:string}){
+  const [failed,setFailed]=useState(false);
+  const container=useRef<HTMLDivElement>(null);
+  const timer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  const loaded=useRef(false);
+  const cancelTimeout=()=>{
+    if(timer.current!==null){window.clearTimeout(timer.current);timer.current=null;}
+  };
+  useEffect(()=>{
+    setFailed(false);
+    loaded.current=false;
+    if(!photo?.url)return;
+    const beginDeliveryDeadline=()=>{
+      if(timer.current!==null||loaded.current)return;
+      timer.current=window.setTimeout(()=>{
+        timer.current=null;
+        if(!loaded.current)setFailed(true);
+      },12000);
+    };
+    let observer:IntersectionObserver|null=null;
+    if(container.current&&typeof IntersectionObserver!=='undefined'){
+      observer=new IntersectionObserver((entries)=>{
+        if(entries.some(entry=>entry.isIntersecting)){beginDeliveryDeadline();observer?.disconnect();}
+      },{rootMargin:'250px'});
+      observer.observe(container.current);
+    }else beginDeliveryDeadline();
+    return ()=>{observer?.disconnect();cancelTimeout();};
+  },[photo?.url]);
+  if(!photo||failed)return <div ref={container} className="manufacturer-photo manufacturer-photo--missing">
+    <strong>Manufacturer photograph unavailable</strong>
+    <span>View {name} in the manufacturer gallery to verify the finish.</span>
+    {fallback&&<small className="photo-source-text">Manufacturer gallery linked in product details</small>}
+  </div>;
+  return <div ref={container} className="manufacturer-photo">
+    <img src={photo.url} loading="lazy" alt={name+' installed manufacturer product photograph'}
+      referrerPolicy="no-referrer"
+      onLoad={()=>{loaded.current=true;cancelTimeout();}}
+      onError={()=>{cancelTimeout();setFailed(true);}}/>
+    <span className="photo-credit">{photo.credit}</span>
+    {photo.qualifier&&<span className="photo-qualifier">{photo.qualifier}</span>}
+  </div>;
 }
 export function ManufacturerRailPicker({values,onValues}:{
   values:Values;onValues:(values:Values)=>void;
@@ -131,7 +128,7 @@ export function ManufacturerRailPicker({values,onValues}:{
   };
   return <section className="consultation-option-card manufacturer-rail-picker">
     <header className="consultation-option-head">
-      <div><h4>Railing collections & real profile geometry</h4>
+      <div><h4>Railing systems · actual installation photos</h4>
         <p className="muted">Metal · PVC · Composite · Pressure-treated · Vinyl</p>
       </div>
       <div className="manufacturer-collection-tabs" role="group" aria-label="Railing material filters">
@@ -145,7 +142,7 @@ export function ManufacturerRailPicker({values,onValues}:{
         const active=selected.id===style.id;
         return <button type="button" className={'manufacturer-rail-card'+(active?' selected':'')} key={style.id}
           aria-pressed={active} onClick={()=>choose(style)}>
-          <RailStyleDiagram rail={style} color={RAIL_COLORS[style.colors[0]]??'#353535'} infill={style.infills[0]}/>
+          <ProductPhoto photo={railingPhotos[style.id]} name={style.label} fallback={style.sourcePage}/>
           <strong>{style.label}</strong>
           <small>{style.summary}</small>
           <span className="manufacturer-rail-family">{style.family.toUpperCase()} · {style.colors.join(' / ')}</span>
@@ -178,34 +175,13 @@ export function ManufacturerRailPicker({values,onValues}:{
     </div>
   </section>;
 }
-function CoverSilhouette({family,finish}:{family:CoverFamily;finish:string}){
-  const product=getCoverVisualProduct(family);
-  const color=getCoverFinish(finish);
-  if(family==='none')return <svg viewBox="0 0 260 145" role="img" aria-label="Uncovered deck"><rect width="260" height="145" fill="#eff2f3"/><path d="M24 108 L236 108 L222 117 L37 117Z" fill="#8f765e"/><text x="130" y="72" textAnchor="middle" fill="#64748b" fontSize="15">No roof</text></svg>;
-  return <svg viewBox="0 0 260 145" role="img" aria-label={family+' patio cover architectural family'}>
-    <rect width="260" height="145" fill="#e9eff3"/>
-    <rect x="22" y="112" width="218" height="5" fill="#977a5e"/>
-    <g fill={color} stroke="#4e5356" strokeWidth="1">
-      <rect x="35" y="36" width="7" height="75" rx="1"/>
-      <rect x="221" y="36" width="7" height="75" rx="1"/>
-      <path d="M27 35 L236 35 L240 42 L25 42Z"/>
-      {product.family==='solid-studio'&&<path d="M25 32 L235 25 L237 35 L25 42Z"/>}
-      {product.family==='solid-truss-ends'&&<><path d="M25 32 L235 25 L237 35 L25 42Z"/><path d="M41 40 L66 54 L89 40 M178 40 L201 54 L223 40" fill="none" strokeWidth="4"/></>}
-      {product.family==='full-trusses'&&<><path d="M25 28 L130 7 L237 28 L237 37 L25 37Z"/><path d="M42 40 L130 23 L218 40 L130 56 Z" fill="none" strokeWidth="3"/><line x1="130" y1="23" x2="130" y2="56" strokeWidth="3"/></>}
-      {product.family==='translucent'&&<><path d="M25 28 L236 28 L238 40 L25 40Z" fill="#c9e5eb" opacity=".85"/>{Array.from({length:8},(_,i)=><line key={i} x1={36+i*25} y1="23" x2={36+i*25} y2="46" strokeWidth="3"/>)}</>}
-      {product.family==='lattice'&&Array.from({length:13},(_,i)=><line key={i} x1={28+i*16} y1="26" x2={28+i*16} y2="46" strokeWidth="3"/>)}
-      {product.family==='louvered'&&Array.from({length:11},(_,i)=><path key={i} d={'M'+(30+i*18)+' 29 l11 8'} strokeWidth="5" strokeLinecap="round"/>)}
-    </g>
-    <text x="130" y="135" fill="#475569" fontSize="11" textAnchor="middle">{family} · manufacturer family diagram</text>
-  </svg>;
-}
 export function ManufacturerCoverPicker({project,onChange}:{
   project:ConsultationProject;onChange:(changes:Partial<ConsultationProject>)=>void;
 }){
   const selected=getCoverVisualProduct(project.coverFamily);
   return <section className="consultation-option-card manufacturer-cover-picker">
-    <header className="consultation-option-head"><div><h4>Renaissance patio cover collections</h4>
-      <p className="muted">Distinct studio, truss, translucent, lattice and louvered architectural geometry.</p></div>
+    <header className="consultation-option-head"><div><h4>Renaissance cover styles · installation gallery</h4>
+      <p className="muted">Choose a true manufacturer model. The 3D assembly follows this family and your selected frame profile.</p></div>
     </header>
     <div className="manufacturer-cover-grid">
       {coverVisualProducts.map((item)=><button type="button" key={item.id}
@@ -214,7 +190,7 @@ export function ManufacturerCoverPicker({project,onChange}:{
         onClick={()=>onChange({coverFamily:item.id,kind:item.id==='none'?'deck':'covered-deck',
           coverColor:item.colors.includes(project.coverColor)?project.coverColor:item.colors[0],
           coverRoofStyle:item.roofStyles.includes(project.coverRoofStyle??'studio')?project.coverRoofStyle:'studio'})}>
-        <CoverSilhouette family={item.id} finish={project.coverColor}/>
+        <ProductPhoto photo={coverPhotos[item.id]} name={item.name+' Renaissance'} fallback={item.sourcePage}/>
         <strong>{item.name}</strong>
         <small>{item.description}</small>
       </button>)}
@@ -227,6 +203,55 @@ export function ManufacturerCoverPicker({project,onChange}:{
           className={color===project.coverColor?'selected':''} onClick={()=>onChange({coverColor:color})}>
           <span style={{background:getCoverFinish(color)}}/>{color}</button>)}
       </div>
+      <div className="consultation-skirting-finish">
+        <label>Renaissance structural frame profile
+          <select value={project.coverFraming??'standard'}
+            onChange={e=>onChange({coverFraming:e.target.value as 'standard'|'hd'|'wide'|'wide-insert'})}>
+            <option value="standard">Standard (SD) · engineered extrusion</option>
+            <option value="hd">Heavy Duty (HD) · engineered extrusion</option>
+            <option value="wide">Wide (WD) · architectural open span</option>
+            <option value="wide-insert">Wide + insert · reinforced visual configuration</option>
+          </select></label>
+        <label>Cover placement
+          <select value={project.coverMount??'wall-attached'}
+            onChange={e=>onChange({coverMount:e.target.value as 'wall-attached'|'freestanding'})}>
+            <option value="wall-attached">Attached to house / existing structure</option>
+            <option value="freestanding">Freestanding · posts front and back</option>
+          </select></label>
+        <label>Screen walls
+          <select value={project.coverScreenStyle??'none'}
+            onChange={e=>onChange({coverScreenStyle:e.target.value as 'none'|'dolce-open-view'|'dolce-standard'})}>
+            <option value="none">No screens · open patio</option>
+            <option value="dolce-open-view">Dolce · open-view screened walls</option>
+            <option value="dolce-standard">Dolce · standard screened panels</option>
+          </select></label>
+      </div>
+      <div className="consultation-skirting-finish">
+        <label>Roof width (ft) · 0 = follow deck
+          <input type="number" min={0} max={100} step={.5} value={project.coverWidthFt??0}
+            onChange={e=>onChange({coverWidthFt:Number(e.target.value)})}/></label>
+        <label>Roof projection (ft) · 0 = follow deck
+          <input type="number" min={0} max={80} step={.5} value={project.coverProjectionFt??0}
+            onChange={e=>onChange({coverProjectionFt:Number(e.target.value)})}/></label>
+        <label>Clear headroom above deck (ft)
+          <input type="number" min={7} max={16} step={.25} value={project.coverHeightFt??9}
+            onChange={e=>onChange({coverHeightFt:Number(e.target.value)})}/></label>
+      </div>
+      <details className="consultation-subsettings">
+        <summary>Structural layout options · post placement & roof overhangs</summary>
+        <div className="consultation-subsettings-content consultation-skirting-finish">
+          <label>Front support posts (0 = initial layout)
+            <input type="number" min={0} max={18} step={1} value={project.coverPostCount??0}
+              onChange={e=>onChange({coverPostCount:Number(e.target.value)})}/></label>
+          <label>Side roof overhang (ft)
+            <input type="number" min={0} max={5} step={.25} value={project.coverSideOverhangFt??1}
+              onChange={e=>onChange({coverSideOverhangFt:Number(e.target.value)})}/></label>
+          <label>Front roof overhang (ft)
+            <input type="number" min={0} max={5} step={.25} value={project.coverFrontOverhangFt??1}
+              onChange={e=>onChange({coverFrontOverhangFt:Number(e.target.value)})}/></label>
+          <p className="consultation-visual-note">Post count and beam profile affect the visualization. Do not assume fewer posts are allowed without manufacturer's signed span schedule, site wind/snow load and engineering approval.</p>
+        </div>
+      </details>
       {selected.roofStyles.length>1&&<label>Roof shape
         <select value={project.coverRoofStyle??'studio'}
           onChange={(e)=>onChange({coverRoofStyle:e.target.value as 'studio'|'gable'})}>
@@ -239,6 +264,6 @@ export function ManufacturerCoverPicker({project,onChange}:{
         <input type="range" min={0} max={90} step={5} value={project.coverLouverAngle??12}
           onChange={(e)=>onChange({coverLouverAngle:Number(e.target.value)})}/></label>}
     </div>}
-    <p className="manufacturer-source-footer">3D profiles are based on verified architectural differences, but remain concept geometry. Exact Renaissance extrusion drawings, span schedules and cover BOM are not yet incorporated.</p>
+    <p className="manufacturer-source-footer">Models now distinguish Standard / Heavy Duty / Wide framing, lean-to / gable, freestanding posts and optional Dolce screens using the supplied Renaissance design drawings. Manufacturer engineering, exact extrusion dimensions, loads and supplier BOM still require an approved project configuration.</p>
   </section>;
 }

@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 export type P2=[number,number];
 export type P3=[number,number,number];
-export function Block({position,size,color,metalness=0,roughness=.72}:{
-  position:P3;size:P3;color:string;metalness?:number;roughness?:number;
+export function Block({position,size,color,metalness=0,roughness=.72,texture}:{
+  position:P3;size:P3;color:string;metalness?:number;roughness?:number;texture?:THREE.Texture|null;
 }){
   return <mesh position={position} castShadow receiveShadow>
     <boxGeometry args={size}/>
-    <meshStandardMaterial color={color} metalness={metalness} roughness={roughness}/>
+    {texture?<meshBasicMaterial color="#ffffff" map={texture} toneMapped={false}/>:<meshStandardMaterial color={color} metalness={metalness} roughness={roughness}/>}
   </mesh>;
 }
 export function Beam({start,end,height,thickness,depth,color,metalness=0,texture}:{
@@ -17,7 +17,7 @@ export function Beam({start,end,height,thickness,depth,color,metalness=0,texture
   return <mesh position={[(start[0]+end[0])/2,height,(start[1]+end[1])/2]}
     rotation={[0,-Math.atan2(dz,dx),0]} castShadow receiveShadow>
     <boxGeometry args={[len,thickness,depth]}/>
-    <meshStandardMaterial color={texture?'#ffffff':color} map={texture??undefined} metalness={metalness} roughness={.52}/>
+    {texture?<meshBasicMaterial color="#ffffff" map={texture} toneMapped={false}/>:<meshStandardMaterial color={color} metalness={metalness} roughness={.52}/>}
   </mesh>;
 }
 export function Rod({from,to,radius,color,metalness=.2,segments=8}:{

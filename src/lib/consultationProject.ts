@@ -24,6 +24,15 @@ export interface ConsultationProject {
   coverRoofStyle?: 'studio'|'gable';
   coverShadePercent?: number;
   coverLouverAngle?: number;
+  coverFraming?: 'standard'|'hd'|'wide'|'wide-insert';
+  coverMount?: 'wall-attached'|'freestanding';
+  coverScreenStyle?: 'none'|'dolce-open-view'|'dolce-standard';
+  coverPostCount?: number;
+  coverWidthFt?: number;
+  coverProjectionFt?: number;
+  coverHeightFt?: number;
+  coverSideOverhangFt?: number;
+  coverFrontOverhangFt?: number;
   photoPresent: boolean;
   calibration: PhotoCalibration;
   estimatingResponse: EstimateResponse | null;
@@ -53,7 +62,10 @@ export const makeConsultationProject = (id: string): ConsultationProject => ({
     railingVisualId:'tt-ire-modern',
     railingType:'aluminum',railingSystem:'timbertech-ire',
     railingTopProfile:'modern',railingColor:'black',railingInfill:'aluminum'},
-  coverFamily:'none',coverColor:'White',coverRoofStyle:'studio',coverShadePercent:65,coverLouverAngle:12,photoPresent:false,
+  coverFamily:'none',coverColor:'White',coverRoofStyle:'studio',coverShadePercent:65,coverLouverAngle:12,
+  coverFraming:'standard',coverMount:'wall-attached',coverScreenStyle:'none',coverPostCount:0,
+  coverWidthFt:0,coverProjectionFt:0,coverHeightFt:9,coverSideOverhangFt:1,coverFrontOverhangFt:1,
+  photoPresent:false,
   calibration:{scale:1,offsetX:0,offsetY:0,rotationDeg:0},
   estimatingResponse:null,
 });
@@ -67,6 +79,11 @@ export const loadConsultations = (): ConsultationProject[] => {
     return stored.filter(valid).map((p)=>({
       ...p,coverRoofStyle:p.coverRoofStyle??'studio',coverShadePercent:p.coverShadePercent??65,
       coverLouverAngle:p.coverLouverAngle??12,
+      coverFraming:p.coverFraming??'standard',coverMount:p.coverMount??'wall-attached',
+      coverScreenStyle:p.coverScreenStyle??'none',coverPostCount:p.coverPostCount??0,
+      coverWidthFt:p.coverWidthFt??0,coverProjectionFt:p.coverProjectionFt??0,
+      coverHeightFt:p.coverHeightFt??9,coverSideOverhangFt:p.coverSideOverhangFt??1,
+      coverFrontOverhangFt:p.coverFrontOverhangFt??1,
       client:{name:p.client?.name??'',address:p.client?.address??'',phone:p.client?.phone??'',email:p.client?.email??''},
       calibration:{scale:p.calibration?.scale??1,offsetX:p.calibration?.offsetX??0,offsetY:p.calibration?.offsetY??0,rotationDeg:p.calibration?.rotationDeg??0},
       values:{...deckDefaults,...p.values},
