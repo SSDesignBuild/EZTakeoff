@@ -14,8 +14,6 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm install --no-audit --no-fund
-      - name: Emit dependency lock for review
-        run: node -e "process.stdout.write('EZ_LOCK_START'+require('fs').readFileSync('package-lock.json').toString('base64')+'EZ_LOCK_END')"
+      - run: npm ci
       - run: npm test
       - run: npm run build
