@@ -10,7 +10,7 @@ export interface EstimateHandoffV1 {
   revision:number;
   exportedAt:string;
   customer:{name:string;address:string;phone:string;email:string};
-  project:{kind:string;coverFamily:string;coverColor:string;coverRoofStyle:string;photoAttachedToThisPayload:false};
+  project:{kind:string;coverFamily:string;coverColor:string;coverRoofStyle:string;coverFraming:string;coverMount:string;coverScreenStyle:string;photoAttachedToThisPayload:false};
   geometry:{footprint:{x:number;y:number}[];areaSqFt:number;deckHeightFt:number;stairCount:number};
   selections:Record<string,string|number|boolean>;
   materials:MaterialItem[];
@@ -22,7 +22,9 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
   const estimate=calculateEstimate('decks',project.values);
   const blockers=[...(estimate.validationIssues??[])];
   if(project.kind!=='deck')blockers.push('Covered-deck patio cover is visual-only; patio cover takeoff not included.');
-  if(project.coverFamily!=='none')blockers.push('Renaissance cover model is a manufacturer-family visualization, not a supplier-approved BOM; obtain certified drawings before pricing the cover.');
+  if(project.coverFamily!=='none')blockers.push('Renaissance frame/profile options are sales visualization based on example drawings only. An engineering-approved manufacturer configuration is required before roof/footing material ordering.');
+  if(project.coverScreenStyle&&project.coverScreenStyle!=='none')
+    blockers.push('Dolce screen style is a visual selection, not a supplier-verified screen room extrusion/cut BOM; approve separate screen-room takeoff.');
   if(typeof project.values.railingVisualId==='string' && !String(project.values.railingVisualId).startsWith('tt-ire-'))
     blockers.push('Selected railing style needs manufacturer-specific panel/kit takeoff verification; the standard railing BOM is not a verified match.');
   return {
@@ -30,11 +32,18 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
     projectId:project.id,revision:project.revision,exportedAt:new Date().toISOString(),
     customer:{...project.client},
     project:{kind:project.kind,coverFamily:project.coverFamily,coverColor:project.coverColor,
-      coverRoofStyle:project.coverRoofStyle??'studio',photoAttachedToThisPayload:false},
+      coverRoofStyle:project.coverRoofStyle??'studio',
+      coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
+      coverScreenStyle:project.coverScreenStyle??'none',photoAttachedToThisPayload:false},
     geometry:{footprint:deck.points,areaSqFt:deck.area,deckHeightFt:Number(project.values.deckHeight??0),stairCount:deck.stairCount},
     selections:{...project.values,coverRoofStyle:project.coverRoofStyle??'studio',
       coverShadePercent:project.coverShadePercent??65,coverLouverAngle:project.coverLouverAngle??12,
-      coverFamily:project.coverFamily,coverColor:project.coverColor},
+      coverFamily:project.coverFamily,coverColor:project.coverColor,
+      coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
+      coverScreenStyle:project.coverScreenStyle??'none',coverPostCount:project.coverPostCount??0,
+      coverWidthFt:project.coverWidthFt??0,coverProjectionFt:project.coverProjectionFt??0,
+      coverHeightFt:project.coverHeightFt??9,coverSideOverhangFt:project.coverSideOverhangFt??1,
+      coverFrontOverhangFt:project.coverFrontOverhangFt??1},
     materials:estimate.materials,blockers,
     assumptions:estimate.orderNotes,
   };
