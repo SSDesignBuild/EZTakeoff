@@ -1,0 +1,650 @@
+[
+  {
+    "id": "vintage-weathered-teak",
+    "manufacturer": "TimberTech",
+    "collection": "Vintage",
+    "color": "Weathered Teak",
+    "label": "TimberTech Vintage - Weathered Teak",
+    "family": "pvc",
+    "grain": "wire-brushed",
+    "swatch": "/manufacturer/timbertech/vintage-weathered-teak.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_15c48a071bddd278a3cc9b36c65c040cf95264bf3.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "vintage-cypress",
+    "manufacturer": "TimberTech",
+    "collection": "Vintage",
+    "color": "Cypress",
+    "label": "TimberTech Vintage - Cypress",
+    "family": "pvc",
+    "grain": "wire-brushed",
+    "swatch": "/manufacturer/timbertech/vintage-cypress.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1a866f091bc74c04df3c677383a0a4caa13fe607b.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "vintage-coastline",
+    "manufacturer": "TimberTech",
+    "collection": "Vintage",
+    "color": "Coastline",
+    "label": "TimberTech Vintage - Coastline",
+    "family": "pvc",
+    "grain": "wire-brushed",
+    "swatch": "/manufacturer/timbertech/vintage-coastline.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1b86dfdf6303913b3913c14247547f849f2af7dc2.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "vintage-mahogany",
+    "manufacturer": "TimberTech",
+    "collection": "Vintage",
+    "color": "Mahogany",
+    "label": "TimberTech Vintage - Mahogany",
+    "family": "pvc",
+    "grain": "wire-brushed",
+    "swatch": "/manufacturer/timbertech/vintage-mahogany.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_111667699327cc26ef5942007ea82d7bfc78c69ad.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "vintage-english-walnut",
+    "manufacturer": "TimberTech",
+    "collection": "Vintage",
+    "color": "English Walnut",
+    "label": "TimberTech Vintage - English Walnut",
+    "family": "pvc",
+    "grain": "wire-brushed",
+    "swatch": "/manufacturer/timbertech/vintage-english-walnut.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1e43b71b647fae20bec8f1b5131e5017fce4394f9.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "vintage-dark-hickory",
+    "manufacturer": "TimberTech",
+    "collection": "Vintage",
+    "color": "Dark Hickory",
+    "label": "TimberTech Vintage - Dark Hickory",
+    "family": "pvc",
+    "grain": "wire-brushed",
+    "swatch": "/manufacturer/timbertech/vintage-dark-hickory.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1eab30bc52fd7c1b0ed829dec37ce51169f313754.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "landmark-french-white-oak",
+    "manufacturer": "TimberTech",
+    "collection": "Landmark",
+    "color": "French White Oak",
+    "label": "TimberTech Landmark - French White Oak",
+    "family": "pvc",
+    "grain": "crosscut",
+    "swatch": "/manufacturer/timbertech/landmark-french-white-oak.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1391453ed4335b07004d2f2dac2d0094eb80dac0e.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "landmark-american-walnut",
+    "manufacturer": "TimberTech",
+    "collection": "Landmark",
+    "color": "American Walnut",
+    "label": "TimberTech Landmark - American Walnut",
+    "family": "pvc",
+    "grain": "crosscut",
+    "swatch": "/manufacturer/timbertech/landmark-american-walnut.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1a0fb6e36360727d3b2f215104686a2eff5bcf6d1.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "landmark-castle-gate",
+    "manufacturer": "TimberTech",
+    "collection": "Landmark",
+    "color": "Castle Gate",
+    "label": "TimberTech Landmark - Castle Gate",
+    "family": "pvc",
+    "grain": "crosscut",
+    "swatch": "/manufacturer/timbertech/landmark-castle-gate.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_18f90e13fbdc06388f953e408823875ba59aa2112.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "landmark-boardwalk",
+    "manufacturer": "TimberTech",
+    "collection": "Landmark",
+    "color": "Boardwalk",
+    "label": "TimberTech Landmark - Boardwalk",
+    "family": "pvc",
+    "grain": "crosscut",
+    "swatch": "/manufacturer/timbertech/landmark-boardwalk.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_189f66e640b45c8f4550343357587bbdf303cf263.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "harvest-toasted-wheat",
+    "manufacturer": "TimberTech",
+    "collection": "Harvest+",
+    "color": "Toasted Wheat",
+    "label": "TimberTech Harvest+ - Toasted Wheat",
+    "family": "pvc",
+    "grain": "cathedral",
+    "swatch": "/manufacturer/timbertech/harvest-toasted-wheat.webp",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1eb32df55a84f78681c9ae6b7d2c2e50382181af8.webp?format=webp&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "harvest-timber-gray",
+    "manufacturer": "TimberTech",
+    "collection": "Harvest+",
+    "color": "Timber Gray",
+    "label": "TimberTech Harvest+ - Timber Gray",
+    "family": "pvc",
+    "grain": "cathedral",
+    "swatch": "/manufacturer/timbertech/harvest-timber-gray.webp",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_13841ff99427708428acfb6e8146cf8cc4893caa8.webp?format=webp&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "harvest-slate-gray",
+    "manufacturer": "TimberTech",
+    "collection": "Harvest",
+    "color": "Slate Gray",
+    "label": "TimberTech Harvest - Slate Gray",
+    "family": "pvc",
+    "grain": "cathedral",
+    "swatch": "/manufacturer/timbertech/harvest-slate-gray.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_15cf45e9012fdfa30e011328645d3af919b791df2.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "harvest-kona",
+    "manufacturer": "TimberTech",
+    "collection": "Harvest",
+    "color": "Kona",
+    "label": "TimberTech Harvest - Kona",
+    "family": "pvc",
+    "grain": "cathedral",
+    "swatch": "/manufacturer/timbertech/harvest-kona.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1f5342bea5230ed9eda860945bb6c16b7ef49d51e.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "harvest-brownstone",
+    "manufacturer": "TimberTech",
+    "collection": "Harvest",
+    "color": "Brownstone",
+    "label": "TimberTech Harvest - Brownstone",
+    "family": "pvc",
+    "grain": "cathedral",
+    "swatch": "/manufacturer/timbertech/harvest-brownstone.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_14b1ba7881e2d4e6445e81ad11f3f8ab22b981380.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "legacy-whitewash-cedar",
+    "manufacturer": "TimberTech",
+    "collection": "Legacy",
+    "color": "Whitewash Cedar",
+    "label": "TimberTech Legacy - Whitewash Cedar",
+    "family": "composite",
+    "grain": "hand-scraped",
+    "swatch": "/manufacturer/timbertech/legacy-whitewash-cedar.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_16d7c8db6aed7fd074ad094d8f467b52e5421f81a.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "legacy-ashwood",
+    "manufacturer": "TimberTech",
+    "collection": "Legacy",
+    "color": "Ashwood",
+    "label": "TimberTech Legacy - Ashwood",
+    "family": "composite",
+    "grain": "hand-scraped",
+    "swatch": "/manufacturer/timbertech/legacy-ashwood.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_140ad7b06a97169563a5f4dafbe0700ab5328b0aa.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "legacy-pecan",
+    "manufacturer": "TimberTech",
+    "collection": "Legacy",
+    "color": "Pecan",
+    "label": "TimberTech Legacy - Pecan",
+    "family": "composite",
+    "grain": "hand-scraped",
+    "swatch": "/manufacturer/timbertech/legacy-pecan.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1315a5c019e476a3fb57363053babdc6edb6bc795.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "legacy-tigerwood",
+    "manufacturer": "TimberTech",
+    "collection": "Legacy",
+    "color": "Tigerwood",
+    "label": "TimberTech Legacy - Tigerwood",
+    "family": "composite",
+    "grain": "hand-scraped",
+    "swatch": "/manufacturer/timbertech/legacy-tigerwood.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_10b7427f247dfb8e8bccbeeb29014b1d2d94581a4.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "legacy-mocha",
+    "manufacturer": "TimberTech",
+    "collection": "Legacy",
+    "color": "Mocha",
+    "label": "TimberTech Legacy - Mocha",
+    "family": "composite",
+    "grain": "hand-scraped",
+    "swatch": "/manufacturer/timbertech/legacy-mocha.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1e224cc9d7eb4c92939fd1460322ba474c400a84b.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "legacy-espresso",
+    "manufacturer": "TimberTech",
+    "collection": "Legacy",
+    "color": "Espresso",
+    "label": "TimberTech Legacy - Espresso",
+    "family": "composite",
+    "grain": "hand-scraped",
+    "swatch": "/manufacturer/timbertech/legacy-espresso.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1299e3373c0dc3666ca5d7ad4d6edd2c5094d42e3.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "reserve-antique-leather",
+    "manufacturer": "TimberTech",
+    "collection": "Reserve",
+    "color": "Antique Leather",
+    "label": "TimberTech Reserve - Antique Leather",
+    "family": "composite",
+    "grain": "reclaimed",
+    "swatch": "/manufacturer/timbertech/reserve-antique-leather.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1a033e04ed1aad35dc839b877c074e689521ff415.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "reserve-dark-roast",
+    "manufacturer": "TimberTech",
+    "collection": "Reserve",
+    "color": "Dark Roast",
+    "label": "TimberTech Reserve - Dark Roast",
+    "family": "composite",
+    "grain": "reclaimed",
+    "swatch": "/manufacturer/timbertech/reserve-dark-roast.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_15d0fbbda99c4189497aba6f761bde310e038ca4a.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "reserve-driftwood",
+    "manufacturer": "TimberTech",
+    "collection": "Reserve",
+    "color": "Driftwood",
+    "label": "TimberTech Reserve - Driftwood",
+    "family": "composite",
+    "grain": "reclaimed",
+    "swatch": "/manufacturer/timbertech/reserve-driftwood.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1c9dc320746ee2164a779f4d852341676b512fc9.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "reserve-reclaimed-chestnut",
+    "manufacturer": "TimberTech",
+    "collection": "Reserve",
+    "color": "Reclaimed Chestnut",
+    "label": "TimberTech Reserve - Reclaimed Chestnut",
+    "family": "composite",
+    "grain": "reclaimed",
+    "swatch": "/manufacturer/timbertech/reserve-reclaimed-chestnut.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_10eff2980a282f83d558d1d24a8c03a3240f360d5.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "terrain-dark-oak",
+    "manufacturer": "TimberTech",
+    "collection": "Terrain+",
+    "color": "Dark Oak",
+    "label": "TimberTech Terrain+ - Dark Oak",
+    "family": "composite",
+    "grain": "subtle",
+    "swatch": "/manufacturer/timbertech/terrain-dark-oak.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_19f6f7c7feca6364440dfc6687f7022aae8da3304.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "terrain-natural-white-oak",
+    "manufacturer": "TimberTech",
+    "collection": "Terrain+",
+    "color": "Natural White Oak",
+    "label": "TimberTech Terrain+ - Natural White Oak",
+    "family": "composite",
+    "grain": "subtle",
+    "swatch": "/manufacturer/timbertech/terrain-natural-white-oak.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_10af5938e23d410ab76d1ee539d2373258563b1ac.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "terrain-weathered-oak",
+    "manufacturer": "TimberTech",
+    "collection": "Terrain+",
+    "color": "Weathered Oak",
+    "label": "TimberTech Terrain+ - Weathered Oak",
+    "family": "composite",
+    "grain": "subtle",
+    "swatch": "/manufacturer/timbertech/terrain-weathered-oak.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1b5a3d372bbe1f2437d9e1546c0f5e093dd7597c3.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "terrain-silver-maple",
+    "manufacturer": "TimberTech",
+    "collection": "Terrain",
+    "color": "Silver Maple",
+    "label": "TimberTech Terrain - Silver Maple",
+    "family": "composite",
+    "grain": "cathedral",
+    "swatch": "/manufacturer/timbertech/terrain-silver-maple.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1213cf75776f90582130c424e6d754ae87e514aed.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "terrain-brown-oak",
+    "manufacturer": "TimberTech",
+    "collection": "Terrain",
+    "color": "Brown Oak",
+    "label": "TimberTech Terrain - Brown Oak",
+    "family": "composite",
+    "grain": "cathedral",
+    "swatch": "/manufacturer/timbertech/terrain-brown-oak.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1c4c76eca122c803f8bddf45fd7ccc8b28d553a14.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "premier-natural-oak",
+    "manufacturer": "TimberTech",
+    "collection": "Premier+",
+    "color": "Natural Oak",
+    "label": "TimberTech Premier+ - Natural Oak",
+    "family": "composite",
+    "grain": "straight",
+    "swatch": "/manufacturer/timbertech/premier-natural-oak.webp",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1ab5763b6444dc36dc7ff3aca5aa558197b163dd1.webp?format=webp&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "prime-sea-salt-gray",
+    "manufacturer": "TimberTech",
+    "collection": "Prime+",
+    "color": "Sea Salt Gray",
+    "label": "TimberTech Prime+ - Sea Salt Gray",
+    "family": "composite",
+    "grain": "straight",
+    "swatch": "/manufacturer/timbertech/prime-sea-salt-gray.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1199b418555776b53785477d119221fb750af81b7.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "prime-coconut-husk",
+    "manufacturer": "TimberTech",
+    "collection": "Prime+",
+    "color": "Coconut Husk",
+    "label": "TimberTech Prime+ - Coconut Husk",
+    "family": "composite",
+    "grain": "straight",
+    "swatch": "/manufacturer/timbertech/prime-coconut-husk.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_12210cb9efcd4c85747021c7baeaed110c8525ed0.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "prime-dark-cocoa",
+    "manufacturer": "TimberTech",
+    "collection": "Prime+",
+    "color": "Dark Cocoa",
+    "label": "TimberTech Prime+ - Dark Cocoa",
+    "family": "composite",
+    "grain": "straight",
+    "swatch": "/manufacturer/timbertech/prime-dark-cocoa.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_1a7e3c1e2c53fc72c4ee3752ad3465fcb6ceeb347.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "premier-maritime-gray",
+    "manufacturer": "TimberTech",
+    "collection": "Premier",
+    "color": "Maritime Gray",
+    "label": "TimberTech Premier - Maritime Gray",
+    "family": "composite",
+    "grain": "straight",
+    "swatch": "/manufacturer/timbertech/premier-maritime-gray.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_154cd1f08018064e498dfc704a80b393a91f8672f.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  },
+  {
+    "id": "premier-dark-teak",
+    "manufacturer": "TimberTech",
+    "collection": "Premier",
+    "color": "Dark Teak",
+    "label": "TimberTech Premier - Dark Teak",
+    "family": "composite",
+    "grain": "straight",
+    "swatch": "/manufacturer/timbertech/premier-dark-teak.jpg",
+    "sourceUrl": "https://www.timbertech.com/products/decking-overview/deck-collections/media_149eb75c1be3e8a0844b2e4a9bfbc70672165a8a7.jpg?format=jpg&optimize=medium&width=750",
+    "sourcePage": "https://www.timbertech.com/products/decking-overview/deck-collections/",
+    "finish": "manufacturer color photograph",
+    "stockFt": [
+      16,
+      20
+    ],
+    "isVerifiedVisual": true
+  }
+]
