@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build" # TEMPORARY diagnostic: MUST restore strict gate
+  command = "npm run assets:sync && npm test && npm run build"
   publish = "dist"
 
 [[redirects]]

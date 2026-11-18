@@ -196,7 +196,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       plan.projectionTrussStationsFt.map((station,i)=>{
         const x=xMid+station;
         const roofAtFront=roofLineAtX({
-          xFt:x,midXFt:xMid,roofWidthFt:width,eaveFt,
+          xFt:x,midXFt:xMid,roofWidthFt:width,eaveFt:eaveY,
           gableRiseFt:gableRise,gable:shape==='gable',
           studioRearFt:roofRearY,studioFrontFt:roofFrontY,rear:false,
         });
@@ -211,12 +211,12 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       plan.projectionTrussStationsFt.map((station,i)=>{
         const x=xMid+station;
         const yBack=roofLineAtX({
-          xFt:x,midXFt:xMid,roofWidthFt:width,eaveFt,
+          xFt:x,midXFt:xMid,roofWidthFt:width,eaveFt:eaveY,
           gableRiseFt:gableRise,gable:shape==='gable',
           studioRearFt:roofRearY,studioFrontFt:roofFrontY,rear:true,
         });
         const yFront=roofLineAtX({
-          xFt:x,midXFt:xMid,roofWidthFt:width,eaveFt,
+          xFt:x,midXFt:xMid,roofWidthFt:width,eaveFt:eaveY,
           gableRiseFt:gableRise,gable:shape==='gable',
           studioRearFt:roofRearY,studioFrontFt:roofFrontY,rear:false,
         });

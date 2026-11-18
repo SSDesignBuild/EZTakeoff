@@ -50,6 +50,8 @@ assert.ok(!render.includes("Math.ceil(depth/7)+1"),'remove sideways generic full
 assert.ok(!render.includes("radius={.075}"),'remove cylinder proxy truss geometry');
 assert.ok(extrude.includes('shape.bezierCurveTo'),'tail needs a curved profile');
 assert.ok(extrude.includes('ExtrudeGeometry'),'contour must be a 3D mesh');
+assert.ok(!render.includes('roofWidthFt:width,eaveFt,'),
+  '3D roofline inputs must refer to the actual eaveY variable');
 assert.ok(!render.includes('x={x}frontZ=')&&!render.includes('}color={powder}'),
   'Contempo JSX attributes must have explicit separators in strict TypeScript');
 console.log('PASS roof-following Dolce screens, trapezoid mesh, true open-view panels, Classico projection trusses and Contempo curved 3D ends');
