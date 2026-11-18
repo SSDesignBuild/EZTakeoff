@@ -13,6 +13,12 @@ const marker=(s)=>String(s).replace(/[^A-Za-z0-9._-]+/g,'-').slice(0,78);
 if(step!=='PASS') {
  await writeFile('dist/index.html','<!doctype html><meta charset="utf-8"><title>Preview test diagnostics</title><p>Preview build under repair.</p>');
  await writeFile('dist/DIAG-STAGE-'+step+'.html','<!doctype html><p>Netlify-only preview diagnostics.</p>');
+ const errorLine=report.match(/(?:AssertionError(?: \[ERR_[A-Z_]+\])?|TypeError|ReferenceError|SyntaxError|Error):[^\n]*/)?.[0]??'NO-ERROR-LINE';
+ const stack=report.match(/(scripts\/[A-Za-z0-9._-]+\.cjs):(\d+):(\d+)/);
+ const errFile=marker('FAIL-'+step+'-'+(stack?.[1]?.split('/').pop()??'unknown')+
+   '-L'+(stack?.[2]??0)+'-'+errorLine.slice(0,65))+'.html';
+ await writeFile('dist/'+errFile,'<!doctype html><p>Netlify diagnostics only.</p>');
+
  for(const [i,m] of errors.slice(0,12).entries()) {
   const file=marker(m[1].split('/').pop());
   const name=marker('ERR'+(i+1)+'-'+file+'-line'+m[2]+'-TS'+m[4])+'.html';
