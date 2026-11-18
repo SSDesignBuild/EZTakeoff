@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build" # DIAGNOSTIC PREVIEW ONLY; RESTORE STRICT GATE BEFORE MERGE
+  command = "npm run assets:sync && npm test && npm run build"
   publish = "dist"
 
 [[redirects]]
