@@ -33,3 +33,19 @@ export function Rod({from,to,radius,color,metalness=.2,segments=8}:{
     <meshStandardMaterial color={color} metalness={metalness} roughness={.46}/>
   </mesh>;
 }
+
+/** A rectangular 2x member aligned to 3D endpoints, including sloping grade. */
+export function SlopedBeam({start,end,thickness,depth,color}:{
+  start:P3;end:P3;thickness:number;depth:number;color:string;
+}){
+  const a=new THREE.Vector3(...start),b=new THREE.Vector3(...end);
+  const diff=b.clone().sub(a),length=diff.length();
+  if(length<.005)return null;
+  const rotation=new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(1,0,0),diff.normalize());
+  return <mesh position={a.add(b).multiplyScalar(.5).toArray() as P3}
+    quaternion={rotation} castShadow receiveShadow>
+    <boxGeometry args={[length,thickness,depth]}/>
+    <meshStandardMaterial color={color} roughness={.73}/>
+  </mesh>;
+}

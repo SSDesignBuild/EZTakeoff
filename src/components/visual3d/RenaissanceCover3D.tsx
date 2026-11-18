@@ -1,6 +1,7 @@
 import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { getCoverVisualProduct, getCoverFinish } from '../../data/visualCatalog';
+import { maxReferenceOverhangFt } from '../../lib/renaissanceGuidance';
 import { Beam, Block, Rod, type P2 } from './Primitives';
 
 function DolceScreenRun({from,to,bottom,top,openView,finish}:{
@@ -32,8 +33,9 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   if(project.coverFamily==='none')return null;
   const frameWidth=project.coverWidthFt&&project.coverWidthFt>0?project.coverWidthFt:model.width;
   const frameDepth=project.coverProjectionFt&&project.coverProjectionFt>0?project.coverProjectionFt:model.depth;
-  const overhangSide=Math.max(0,Math.min(5,project.coverSideOverhangFt??1));
-  const overhangFront=Math.max(0,Math.min(5,project.coverFrontOverhangFt??1));
+  const referenceOverhangLimit=maxReferenceOverhangFt(project.coverFamily);
+  const overhangSide=Math.max(0,Math.min(referenceOverhangLimit,project.coverSideOverhangFt??1));
+  const overhangFront=Math.max(0,Math.min(referenceOverhangLimit,project.coverFrontOverhangFt??1));
   const width=frameWidth+2*overhangSide,depth=frameDepth+overhangFront;
   const xMid=(model.minX+model.maxX)/2-center[0],zMid=(model.minY+model.maxY)/2-center[1];
   const left=xMid-width/2,right=xMid+width/2;

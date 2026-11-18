@@ -26,7 +26,7 @@ function Scene({project,photoMode}:{project:ConsultationProject;photoMode:boolea
     <ManufacturerDeck3D model={model} project={project} center={center} deckHeight={height}/>
     {lower&&<ManufacturerDeck3D model={lower} project={project} center={center}
       deckHeight={Math.max(.35,Math.min(26,Number(project.values.lowerDeckHeight??3)))}
-      covered={false}/>}
+      covered={false} lowerTier/>}
     <mesh rotation={[-Math.PI/2,0,0]} position={[0,-.11,0]} receiveShadow>
       <planeGeometry args={[Math.max(70,span*3),Math.max(70,span*3)]}/>
       {photoMode

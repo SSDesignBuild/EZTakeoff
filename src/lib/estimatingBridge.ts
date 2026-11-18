@@ -2,6 +2,7 @@ import { calculateEstimate } from './estimate';
 import { buildDeckModel } from './deckModel';
 import type { ConsultationProject, EstimateResponse, EstimateTier } from './consultationProject';
 import type { MaterialItem } from './types';
+import { renaissanceReferenceIssues } from './renaissanceGuidance';
 
 export interface EstimateHandoffV1 {
   schemaVersion:1;
@@ -22,7 +23,13 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
   const estimate=calculateEstimate('decks',project.values);
   const blockers=[...(estimate.validationIssues??[])];
   if(project.kind!=='deck')blockers.push('Covered-deck patio cover is visual-only; patio cover takeoff not included.');
-  if(project.coverFamily!=='none')blockers.push('Renaissance frame/profile options are sales visualization based on example drawings only. An engineering-approved manufacturer configuration is required before roof/footing material ordering.');
+  if(project.coverFamily!=='none')blockers.push('Renaissance framing and the supplied span charts are for estimating only. Obtain an engineering-approved, project-specific configuration before structural material ordering.');
+  blockers.push(...renaissanceReferenceIssues({
+    family:project.coverFamily,
+    sideOverhangFt:Number(project.coverSideOverhangFt??1),
+    frontOverhangFt:Number(project.coverFrontOverhangFt??1),
+    postHeightFt:Number(project.coverHeightFt??9),
+  }));
   if(project.coverScreenStyle&&project.coverScreenStyle!=='none')
     blockers.push('Dolce screen style is a visual selection, not a supplier-verified screen room extrusion/cut BOM; approve separate screen-room takeoff.');
   if(typeof project.values.railingVisualId==='string' && !String(project.values.railingVisualId).startsWith('tt-ire-'))

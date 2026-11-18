@@ -3,15 +3,15 @@ import type * as THREE from 'three';
 import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { buildDeckSkirting } from '../../lib/deckSkirting';
-import { Block, Beam, type P2 } from './Primitives';
+import { Block, Beam, SlopedBeam, type P2 } from './Primitives';
 
-export function DeckSkirting3D({model,center,height,values,texture}:{
-  model:DeckModel;center:P2;height:number;
+export function DeckSkirting3D({model,center,height,values,texture,lowerTier=false}:{
+  model:DeckModel;center:P2;height:number;lowerTier?:boolean;
   values:ConsultationProject['values'];texture:THREE.Texture|null;
 }){
   const rimDepth=Math.max(3.5,Number(model.joistSize.split('x')[1]??8)-.75);
-  const plan=useMemo(()=>buildDeckSkirting(model.edgeSegments,model.exposedSegments,height,rimDepth,values),
-    [model,values,height,rimDepth]);
+  const plan=useMemo(()=>buildDeckSkirting(model.edgeSegments,model.exposedSegments,height,rimDepth,values,lowerTier?'lower':''),
+    [model,values,height,rimDepth,lowerTier]);
   if(!plan.enabled||plan.sides.length===0)return null;
   const top=height-(rimDepth+1)/12;
   const color=plan.options.material==='kdat'?'#a89572':
@@ -31,10 +31,14 @@ export function DeckSkirting3D({model,center,height,values,texture}:{
         {side.topRails.map((rail,i)=><Beam key={'top2x4-'+i}
           start={point(edge,rail.start)} end={point(edge,rail.end)}
           height={top-.12} thickness={.25} depth={.125} color="#977a58"/>)}
-        {side.bottomRails.map((rail,i)=><Beam key={'bottom2x4-'+i}
-          start={point(edge,rail.start)} end={point(edge,rail.end)}
-          height={Math.max(-2,top-(side.startHeightFt+side.endHeightFt)/2)+.15}
-          thickness={.25} depth={.125} color="#79644c"/>)}
+        {side.bottomRails.map((rail,i)=>{
+          const a=point(edge,rail.start),b=point(edge,rail.end);
+          const grade=(s:number)=>side.startHeightFt+(side.endHeightFt-side.startHeightFt)*s/side.lengthFt;
+          return <SlopedBeam key={'bottom2x4-'+i}
+            start={[a[0],top-grade(rail.start)+.15,a[1]]}
+            end={[b[0],top-grade(rail.end)+.15,b[1]]}
+            thickness={.25} depth={.125} color="#79644c"/>;
+        })}
         {side.verticals.map((v,i)=>{
           const [x,z]=point(edge,v.station);
           return <Block key={'stud2x4-'+i} position={[x,top-v.heightFt/2,z]}

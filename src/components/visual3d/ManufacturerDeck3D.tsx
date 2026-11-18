@@ -141,8 +141,8 @@ function DeckFascia({model,center,height,texture}:{model:DeckModel;center:P2;hei
       color="#a49c90" texture={texture}/>)}
   </group>;
 }
-export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true}:{
-  model:DeckModel;project:ConsultationProject;center:P2;deckHeight:number;covered?:boolean;
+export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true,lowerTier=false}:{
+  model:DeckModel;project:ConsultationProject;center:P2;deckHeight:number;covered?:boolean;lowerTier?:boolean;
 }){
   const selected=getDeckVisualProduct(project.values.deckingMaterial);
   const borderName=project.values.pictureFrameMaterial==='match'||!project.values.pictureFrameMaterial
@@ -166,7 +166,7 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
     <VisibleDeckBoards model={model} center={center} height={deckHeight} boardName={project.values.deckingMaterial}/>
     <BorderBoards model={model} center={center} deckHeight={deckHeight} color={borderTint} texture={borderMap}/>
     <DeckFascia model={model} center={center} height={deckHeight} texture={fasciaMap}/>
-    <DeckSkirting3D model={model} center={center} height={deckHeight} values={project.values} texture={skirtMap}/>
+    <DeckSkirting3D model={model} center={center} height={deckHeight} values={project.values} texture={skirtMap} lowerTier={lowerTier}/>
     <ManufacturerRailing3D model={model} values={project.values} center={center} deckHeight={deckHeight}/>
     <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values} texture={stairMap}/>
     {covered&&<RenaissanceCover3D model={model} project={project} center={center} deckHeight={deckHeight}/>}
