@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import * as THREE from 'three';
 import {
   inchToFoot,type RenaissanceExtrusionProfile,
-  RENAISSANCE_STRUCTURAL_GUTTER,RENAISSANCE_TRUSS,
+  RENAISSANCE_STRUCTURAL_GUTTER,RENAISSANCE_TRUSS,RENAISSANCE_SHADE_TUBE,
 } from '../../lib/renaissanceManufacturer';
 import type { P2 } from './Primitives';
 
@@ -33,15 +33,20 @@ export function RenaissanceHeader({start,end,midY,profile,color}:{
   const dx=end[0]-start[0],dz=end[1]-start[1],length=Math.hypot(dx,dz);
   const geometry=useMemo(()=>{
     if(length<.01)return null;
+    const w=inchToFoot(profile.headerDepthIn),h=inchToFoot(profile.headerHeightIn);
+    const t=inchToFoot(profile.headerWallIn);
+    const outside=outlineWithRibs(w,h),hole=new THREE.Path();
+    hole.moveTo(-w/2+t,-h/2+t);hole.lineTo(-w/2+t,h/2-t);
+    hole.lineTo(w/2-t,h/2-t);hole.lineTo(w/2-t,-h/2+t);hole.closePath();
+    outside.holes.push(hole);
     const g=new THREE.ExtrudeGeometry(
-      outlineWithRibs(inchToFoot(profile.headerDepthIn),inchToFoot(profile.headerHeightIn)),
-      {depth:length,steps:1,bevelEnabled:false,curveSegments:2},
+      outside,{depth:length,steps:1,bevelEnabled:false,curveSegments:2},
     );
     g.translate(0,0,-length/2);
     g.rotateY(Math.PI/2);
     g.computeVertexNormals();
     return g;
-  },[length,profile.headerDepthIn,profile.headerHeightIn]);
+  },[length,profile.headerDepthIn,profile.headerHeightIn,profile.headerWallIn]);
   if(!geometry)return null;
   return <mesh geometry={geometry}
     position={[(start[0]+end[0])/2,midY,(start[1]+end[1])/2]}
@@ -139,7 +144,7 @@ export function RenaissanceShadeTube({from,to,color}:{
   const delta=b.clone().sub(a),length=delta.length();
   const geometry=useMemo(()=>{
     if(length<.01)return null;
-    const outerIn=2,wallIn=.040;
+    const outerIn=RENAISSANCE_SHADE_TUBE.outsideWidthIn,wallIn=RENAISSANCE_SHADE_TUBE.wallIn;
     const w=inchToFoot(outerIn),t=inchToFoot(wallIn);
     const s=new THREE.Shape();
     s.moveTo(-w/2,-w/2);s.lineTo(w/2,-w/2);
