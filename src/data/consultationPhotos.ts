@@ -39,6 +39,14 @@ export const coverPhotos:Record<string,PhotoReference>={
     url:'https://images.squarespace-cdn.com/content/v1/56ad7e638a65e2a28605745b/ca3ef1f9-0bc3-4d11-baa7-77e64cf0d67a/moderno.jpg?format=1500w',
     source:'https://www.coloradosunroomandwindow.com/renaissance-patio-covers',
     credit:'Renaissance Moderno · installed example'},
+  'Contempo':{
+    url:'https://sunsolutions1.com/images/patio-covers/renaissance/Patio-Cover-Renaissance-Contempo.jpg',
+    source:'https://sunsolutions1.com/renaissance-patio-covers/',
+    credit:'Renaissance Contempo · installed solid roof with decorative truss ends'},
+  'Aria':{
+    url:'https://www.renaissancepatio.com/wp-content/uploads/2022/07/Aria-Pergola-Bronze-Deck-Renaissance_Patio.jpg',
+    source:'https://www.renaissancepatio.com/patio-image-gallery/aria/',
+    credit:'Renaissance Aria · manufacturer gallery installation on raised deck'},
   'Classico':{
     url:'https://images.squarespace-cdn.com/content/v1/56ad7e638a65e2a28605745b/502b9fa7-f361-4cb6-b139-a1e4abef9870/Classico.jpg',
     source:'https://www.coloradosunroomandwindow.com/renaissance-patio-covers',
