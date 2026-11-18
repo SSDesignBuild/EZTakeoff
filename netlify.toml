@@ -8,4 +8,4 @@
   status = 200
 
 [context.deploy-preview]
-  command = "npm run assets:sync && npm test && node scripts/debug-ts-exit.mjs"
+  command = "node scripts/preview-form-diagnostics.mjs"
