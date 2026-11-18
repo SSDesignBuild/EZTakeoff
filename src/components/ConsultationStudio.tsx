@@ -2,10 +2,11 @@ import { lazy, Suspense, useEffect, useMemo, useState, type ChangeEvent } from '
 import { useNavigate, useParams } from 'react-router-dom';
 import { DeckDesigner } from './DeckDesigner';
 import { DeckGateEditor } from './DeckGateEditor';
+import { ManufacturerBoardPicker, ManufacturerRailPicker, ManufacturerCoverPicker } from './ConsultationVisualPickers';
 import { buildDeckModel } from '../lib/deckModel';
 import { calculateEstimate } from '../lib/estimate';
 import { loadConsultations, saveConsultations, makeConsultationProject, updateConsultation,
-  boardProducts, coverProducts, isPricedRevision, type ConsultationProject,
+  isPricedRevision, type ConsultationProject,
   type PhotoCalibration } from '../lib/consultationProject';
 import { saveHousePhoto, readHousePhoto, deleteHousePhoto } from '../lib/consultationPhoto';
 import { createEstimateHandoff, parseEstimateResponse, makeAcceptedScope, downloadJson, selectedPricedTier } from '../lib/estimatingBridge';
@@ -18,8 +19,6 @@ const STEPS:{id:Step;name:string;hint:string}[]=[
   {id:'options',name:'3 · Choose finishes',hint:'Boards, borders, rails, skirting and cover'},
   {id:'render',name:'4 · Visualize & handoff',hint:'Live 3D, house overlay and estimator exchange'},
 ];
-const palette=(name:string)=>/coast|gray|grey|foggy|white|silver|stone|pebble|drift/i.test(name)?'#898e8d':
-  /dark|black|espresso|mocha|bronze|hickory/i.test(name)?'#514840':/redwood|mahogany|saddle/i.test(name)?'#8a6043':'#b39772';
 function savePreview(photoUrl:string|null,calibration:PhotoCalibration){
   const webgl=document.querySelector<HTMLCanvasElement>('.consultation-3d-frame canvas');
   if(!webgl)throw new Error('3D scene is not available.');
@@ -68,7 +67,6 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
   const [overlay,setOverlay]=useState(false);
   const [renderBusy,setRenderBusy]=useState(false);
   const [pricingBusy,setPricingBusy]=useState(false);
-  const [boardQuery,setBoardQuery]=useState('');
   const [bridgeError,setBridgeError]=useState('');
   const model=useMemo(()=>buildDeckModel(project.values),[project.values]);
   const estimate=useMemo(()=>calculateEstimate('decks',project.values),[project.values]);
@@ -119,7 +117,6 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
     finally{setRenderBusy(false);}
   };
   const changeStep=(next:Step)=>{setStep(next);window.scrollTo({top:0,behavior:'smooth'});};
-  const filteredBoards=boardProducts.filter((item)=>item.label.toLowerCase().includes(boardQuery.toLowerCase())).slice(0,80);
   return <div className="consultation-studio">
     <div className="consultation-titlebar">
       <div>
@@ -192,15 +189,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
         <h3>Build the outdoor living package</h3>
         <p>Pick products in a visual sequence. The product names come from the S&S takeoff catalog, so choices flow into the same material rules.</p>
       </div>
-      <div className="consultation-option-card">
-        <div className="consultation-option-head"><h4>Deck board collection & color</h4><input type="search" placeholder="Search Trex, TimberTech or a color" value={boardQuery} onChange={(e)=>setBoardQuery(e.target.value)}/></div>
-        <div className="consultation-swatch-grid">{filteredBoards.map((item)=><button key={item.value} type="button" className={'consultation-swatch'+(project.values.deckingMaterial===item.value?' selected':'')}
-          onClick={()=>onChange({values:{...project.values,deckingMaterial:item.value,deckingType:/pressure treated/i.test(item.value)?'pressure-treated':'composite'}})}>
-          <span className="consultation-swatch-color" style={{background:palette(item.label)}}/>
-          <span>{item.label}</span>
-        </button>)}</div>
-        <small className="muted">Color swatches are approximate digital placeholders, not manufacturer-approved color reproductions. Physical samples are required.</small>
-      </div>
+      <ManufacturerBoardPicker values={project.values} onValues={(values)=>onChange({values})}/>
       <div className="consultation-option-columns">
         <article className="consultation-option-card">
           <h4>Picture frame & breaker boards</h4>
@@ -212,20 +201,22 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
             {[0,1,2,3].map((n)=><option key={n} value={n}>{n===0?'None':n+' breaker course'+(n===1?'':'s')}</option>)}
           </select></label>
         </article>
+        <ManufacturerRailPicker values={project.values} onValues={(values)=>onChange({values})}/>
         <article className="consultation-option-card">
-          <h4>Railing & stairs</h4>
-          <label>Railing type<select value={String(project.values.railingType??'aluminum')} onChange={(e)=>setValue('railingType',e.target.value)}>
-            <option value="aluminum">Aluminum railing</option><option value="wood">Pressure-treated wood railing</option>
-            <option value="vinyl">Vinyl railing</option>
+          <h4>Stair options</h4>
+          <label>Stair width (ft)<input type="number" min={2} step={.5}
+            value={number(project.values.stairWidth,4)} onChange={(e)=>setValue('stairWidth',Number(e.target.value))}/></label>
+          <label>Tread material<select value={String(project.values.stairTreadStyle??'match')}
+            onChange={(e)=>setValue('stairTreadStyle',e.target.value)}>
+            <option value="match">Match deck board style</option>
+            <option value={String(project.values.deckingMaterial??'')}>{String(project.values.deckingMaterial??'Current deck board')}</option>
           </select></label>
-          <label>Railing product<select value={String(project.values.railingSystem??'standard')} onChange={(e)=>setValue('railingSystem',e.target.value)}>
-            <option value="standard">S&S standard railing</option><option value="timbertech-ire">TimberTech Impression Rail Express</option>
+          <label>Riser material<select value={String(project.values.stairRiserStyle??'auto')}
+            onChange={(e)=>setValue('stairRiserStyle',e.target.value)}>
+            <option value="auto">Standard coordinated riser</option>
+            <option value="match">Match deck board</option>
+            <option value="fascia">Match fascia trim</option>
           </select></label>
-          {project.values.railingSystem==='timbertech-ire'&&<label>Top rail profile<select value={String(project.values.railingTopProfile??'classic')} onChange={(e)=>setValue('railingTopProfile',e.target.value)}>
-            <option value="classic">Classic</option><option value="modern">Modern</option><option value="drink">Drink Rail</option>
-          </select></label>}
-          <label>Stair width (ft)<input type="number" min={2} step={.5} value={number(project.values.stairWidth,4)}
-            onChange={(e)=>setValue('stairWidth',Number(e.target.value))}/></label>
         </article>
         <article className="consultation-option-card">
           <h4>Skirting & gates</h4>
@@ -237,20 +228,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
           </select></label>}
           <p className="muted">Gate hardware, post layouts and exact skirting sides are still configured in Admin Takeoff for advanced ordering. Gate hardware can be entered below.</p>
         </article>
-        <article className="consultation-option-card">
-          <h4>Patio cover concept</h4>
-          <div className="consultation-cover-pills">
-            {coverProducts.map((item)=><button type="button" key={item}
-              className={project.coverFamily===item?'active':''}
-              onClick={()=>onChange({coverFamily:item,kind:item==='none'?'deck':'covered-deck'})}>
-              {item==='none'?'No cover':item}
-            </button>)}
-          </div>
-          {project.coverFamily!=='none'&&<label>Cover finish<select value={project.coverColor} onChange={(e)=>onChange({coverColor:e.target.value as ConsultationProject['coverColor']})}>
-            <option value="White">White</option><option value="Bronze">Bronze</option>
-          </select></label>}
-          <small className="muted">The cover is represented by preliminary 3D massing, not manufacturer-specific roof engineering or a cover material takeoff.</small>
-        </article>
+        <ManufacturerCoverPicker project={project} onChange={onChange}/>
       </div>
       <DeckGateEditor values={project.values} onValuesChange={updateValues}/>
     </section>}
