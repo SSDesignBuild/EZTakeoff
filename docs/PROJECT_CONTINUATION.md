@@ -20,3 +20,7 @@
 - Netlify runs asset download, npm test, npm run build and deploy; GitHub Actions workflow manual-only per user instruction to avoid paid CI builds.
 - Visualized patio/railing assemblies are manufacturer family approximations, not verified extrusion/engineering. For precise model engineering use manufacturer drawings and approvals. Commercial license/reuse rights for manufacturer images should be verified.
 - Preserve original Admin Takeoff and independent external estimator. New regression gate: scripts/test-visual-catalog.cjs.
+
+## Manufacturer asset delivery timeout fix (November 18, 2026)
+- Netlify uses scripts/sync-manufacturer-assets.mjs plus scripts/assetFetch.mjs to fetch official images with a 45-second aggregate network budget, 5.5-second per-request deadline **covering headers AND response body**, max two attempts, concurrency nine, image MIME and magic validation, and bounded image bytes. Optional local Netlify node_modules cache avoids repeat downloads when restored. Fail safely only when a required official photo cannot be delivered; nonrequired photos show an explicit unavailable state, never made-up colors.
+- Netlify writes public/manufacturer/timbertech/asset-status.json with actual delivered/undelivered availability and elapsed time. scripts/test-asset-delivery-timeout.cjs simulates a hanging image body and verifies cancellation. GitHub remains source-control only; Netlify runs build/test/publish.
