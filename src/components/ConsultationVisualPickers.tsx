@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { railingPhotos, coverPhotos, type PhotoReference } from '../data/consultationPhotos';
+import { hasRenaissanceReferenceChart, maxReferenceOverhangFt } from '../lib/renaissanceGuidance';
 import type { ConsultationProject } from '../lib/consultationProject';
 import {
   deckVisualProducts, deckCollections, getDeckVisualProduct,
@@ -179,6 +180,8 @@ export function ManufacturerCoverPicker({project,onChange}:{
   project:ConsultationProject;onChange:(changes:Partial<ConsultationProject>)=>void;
 }){
   const selected=getCoverVisualProduct(project.coverFamily);
+  const referenceCharted=hasRenaissanceReferenceChart(project.coverFamily);
+  const maxOverhang=maxReferenceOverhangFt(project.coverFamily);
   return <section className="consultation-option-card manufacturer-cover-picker">
     <header className="consultation-option-head"><div><h4>Renaissance cover styles · installation gallery</h4>
       <p className="muted">Choose a true manufacturer model. The 3D assembly follows this family and your selected frame profile.</p></div>
@@ -247,11 +250,16 @@ export function ManufacturerCoverPicker({project,onChange}:{
             <input type="number" min={0} max={18} step={1} value={project.coverPostCount??0}
               onChange={e=>onChange({coverPostCount:Number(e.target.value)})}/></label>
           <label>Side roof overhang (ft)
-            <input type="number" min={0} max={5} step={.25} value={project.coverSideOverhangFt??1}
-              onChange={e=>onChange({coverSideOverhangFt:Number(e.target.value)})}/></label>
+            <input type="number" min={0} max={maxOverhang} step={.25} value={project.coverSideOverhangFt??1}
+              onChange={e=>onChange({coverSideOverhangFt:Math.max(0,Math.min(maxOverhang,Number(e.target.value)||0))})}/></label>
           <label>Front roof overhang (ft)
-            <input type="number" min={0} max={5} step={.25} value={project.coverFrontOverhangFt??1}
-              onChange={e=>onChange({coverFrontOverhangFt:Number(e.target.value)})}/></label>
+            <input type="number" min={0} max={maxOverhang} step={.25} value={project.coverFrontOverhangFt??1}
+              onChange={e=>onChange({coverFrontOverhangFt:Math.max(0,Math.min(maxOverhang,Number(e.target.value)||0))})}/></label>
+          {referenceCharted&&<p className="consultation-engineering-note" role="status">
+            Florida Engineering estimating charts limit these roof overhangs to 1 ft and show a maximum post height of 15 ft.
+            Site-specific wind, exposure, projection, soil/footing and frame approval remain required.
+            Previously saved overhangs exceeding 1 ft will be flagged for review.
+          </p>}
           <p className="consultation-visual-note">Post count and beam profile affect the visualization. Do not assume fewer posts are allowed without manufacturer's signed span schedule, site wind/snow load and engineering approval.</p>
         </div>
       </details>

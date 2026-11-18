@@ -60,3 +60,9 @@ Only GitHub as repository; Netlify handles build/test/deploy; automatic paid Git
 - Lower-deck skirting now reads lowerSkirting* settings independently, rather than applying main-tier skirting automatically. Lower-grade bottom 2x4 rails follow each side's end-to-end grade. Check geometry before supplier ordering.
 - Regression gate scripts/test-consultation-design-accuracy.cjs covers decking spacing, breaker and 20-ft seam layout, polygon-contained board corners, rim winding/ply separation, dressed posts, lower-tier and sloped grade options.
 - Preserve all Admin Takeoff service tabs, stock planners, pricing boundary, photos privacy and Netlify-only automatic build/test workflow. Manufacturer-span validation, verified rail/cover BOM, automatic photo calibration, and browser WebGL QA are still pending.
+
+
+## Renaissance PDF guidance, Nov 18, 2026
+- User supplied a 21-page Florida Engineering LLC span-table reference for Moderno, Contempo, Classico, Fresco and Aria. Its contents are proprietary and labeled ESTIMATING ONLY, with site-specific engineering recommended. Do not store the source PDF or full tabulations in public GitHub or Netlify.
+- Applicable chart notes show 1-ft maximum roof overhang, 15-ft maximum post height, 1/4-in-per-ft minimum roof slope and 20-psf minimum live load. New limited envelope validation only constrains roof overhangs, flags unsafe saved overrides and confirms post-height review. It does not select approved spans or footings automatically.
+- Solé is not covered by this reference; do not invent Solé structural approval. Obtain written rights before reproducing engineer-owned tables and obtain project-specific structural signoff before BOM approval.
