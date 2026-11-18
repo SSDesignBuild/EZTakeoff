@@ -90,7 +90,8 @@ for(const strip of strips){
 const source=fs.readFileSync(path.resolve(__dirname,'../src/components/Consultation3D.tsx'),'utf8');
 assert.ok(source.includes('ManufacturerDeck3D')&&!source.includes('CoverConcept'));
 const deckSource=fs.readFileSync(path.resolve(__dirname,'../src/components/visual3d/ManufacturerDeck3D.tsx'),'utf8');
-assert.ok(deckSource.includes('InstancedMesh')&&deckSource.includes('TextureLoader')&&deckSource.includes('surfaceStrips'));
+assert.ok(deckSource.includes('InstancedMesh')&&deckSource.includes('new Image()')&&deckSource.includes('surfaceStrips'));
+assert.ok(deckSource.includes('setTimeout(fail,8500)')&&deckSource.includes("removeAttribute('src')"),'3D textures must abort stalled image delivery');
 const roofSource=fs.readFileSync(path.resolve(__dirname,'../src/components/visual3d/RenaissanceCover3D.tsx'),'utf8');
 for(const part of ['full-trusses','solid-truss-ends','translucent','lattice','louvered']){
   assert.ok(roofSource.includes(part),'Missing real family geometry '+part);
