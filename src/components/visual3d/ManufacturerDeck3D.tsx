@@ -78,8 +78,8 @@ function VisibleDeckBoards({model,center,height,boardName}:{
     </instancedMesh>
   </group>;
 }
-function BorderBoards({model,center,deckHeight,color}:{
-  model:DeckModel;center:P2;deckHeight:number;color:string;
+function BorderBoards({model,center,deckHeight,color,texture}:{
+  model:DeckModel;center:P2;deckHeight:number;color:string;texture:THREE.Texture|null;
 }){
   if(model.pictureFrameCount<=0)return null;
   return <group name="picture-frame-borders">
@@ -94,7 +94,7 @@ function BorderBoards({model,center,deckHeight,color}:{
         start={[from[0]+(along?inward:0),from[1]+(along?0:inward)]}
         end={[to[0]+(along?inward:0),to[1]+(along?0:inward)]}
         height={deckHeight+.07} thickness={.095} depth={.44}
-        color={color}/>;
+        color={color} texture={texture}/>;
     }))}
   </group>;
 }
@@ -111,7 +111,7 @@ function StructuralDeck({model,center,height}:{
     }))}
     {model.postLocations.map((post)=><group key={post.reference}>
       <Block position={[post.x-center[0],Math.max(.45,height-1.14)/2,post.y-center[1]]}
-        size={[model.postSize==='8x8'?.67:.5,Math.max(.45,height-1.14),model.postSize==='8x8'?.67:.5]}
+        size={[model.postSize === '8x8' ? .67 : .5,Math.max(.45,height-1.14),model.postSize==='8x8'?.67:.5]}
         color="#876b4e"/>
       <Block position={[post.x-center[0],.12,post.y-center[1]]}
         size={[.72,.24,.72]} color="#8d9391"/>
@@ -200,10 +200,7 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
     <StructuralDeck model={model} center={center} height={deckHeight}/>
     <PolygonSubstrate model={model} center={center} deckHeight={deckHeight}/>
     <VisibleDeckBoards model={model} center={center} height={deckHeight} boardName={project.values.deckingMaterial}/>
-    <BorderBoards model={model} center={center} deckHeight={deckHeight} color={borderTint}/>
-    {/* Matte-tex border accent only if its true manufacturer image is available. */}
-    {borderMap&&model.pictureFrameSegments.length>0&&
-      model.pictureFrameSegments.slice(0,0).map(()=>null)}
+    <BorderBoards model={model} center={center} deckHeight={deckHeight} color={borderTint} texture={borderMap}/>
     <FasciaAndSkirting model={model} center={center} height={deckHeight} values={project.values}/>
     <ManufacturerRailing3D model={model} values={project.values} center={center} deckHeight={deckHeight}/>
     <DeckStairs model={model} center={center} height={deckHeight}
