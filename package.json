@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "node ./node_modules/typescript/bin/tsc -b && node ./node_modules/vite/bin/vite.js build",
     "preview": "vite preview",
-    "test": "node scripts/test-stock-availability.cjs && node scripts/test-post-layout.cjs && node scripts/test-deck-skirting-railing.cjs && node scripts/test-wood-drink-rail-house-frame.cjs && node scripts/test-deck-workflow-beams.cjs && node scripts/test-deck-release-20261117.cjs && node scripts/test-consultation-foundation.cjs",
+    "test": "node scripts/test-stock-availability.cjs && node scripts/test-post-layout.cjs && node scripts/test-deck-skirting-railing.cjs && node scripts/test-wood-drink-rail-house-frame.cjs && node scripts/test-deck-workflow-beams.cjs && node scripts/test-deck-release-20261117.cjs && node scripts/test-consultation-foundation.cjs && node scripts/test-visual-catalog.cjs",
     "assets:sync": "node scripts/sync-manufacturer-assets.mjs"
   },
   "dependencies": {
