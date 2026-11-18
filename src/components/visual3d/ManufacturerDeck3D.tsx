@@ -123,13 +123,14 @@ function FasciaAndSkirting({model,center,height,values}:{
 }){
   const skirt=values.skirtingEnabled===true||values.skirtingEnabled==='true';
   const gap=.035,face=.4;
+  const skirtingCount=(length:number)=>Math.min(90,Math.max(1,Math.floor(length/(face+gap))));
   return <group name="fascia-and-deck-skirting">
     {model.exposedSegments.map((edge)=><group key={'fascia-'+edge.index}>
       <Beam start={[edge.start.x-center[0],edge.start.y-center[1]]}
         end={[edge.end.x-center[0],edge.end.y-center[1]]}
         height={height-.43} thickness={.65} depth={.075} color="#9c8a76"/>
-      {skirt&&Array.from({length:Math.min(90,Math.max(1,Math.floor(edge.length/(face+gap))))},(_,i,all)=>{
-        const t=(i+.5)/all.length;
+      {skirt&&Array.from({length:skirtingCount(edge.length)},(_,i)=>{
+        const t=(i+.5)/skirtingCount(edge.length);
         const x=edge.start.x+(edge.end.x-edge.start.x)*t-center[0],
           z=edge.start.y+(edge.end.y-edge.start.y)*t-center[1];
         const size=Math.max(.4,height-.7);
