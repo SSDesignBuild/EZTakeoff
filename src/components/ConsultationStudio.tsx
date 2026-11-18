@@ -6,7 +6,7 @@ import { buildDeckModel } from '../lib/deckModel';
 import { calculateEstimate } from '../lib/estimate';
 import { loadConsultations, saveConsultations, makeConsultationProject, updateConsultation,
   boardProducts, coverProducts, isPricedRevision, type ConsultationProject,
-  type CoverFamily, type PhotoCalibration } from '../lib/consultationProject';
+  type PhotoCalibration } from '../lib/consultationProject';
 import { saveHousePhoto, readHousePhoto, deleteHousePhoto } from '../lib/consultationPhoto';
 import { createEstimateHandoff, parseEstimateResponse, makeAcceptedScope, downloadJson, selectedPricedTier } from '../lib/estimatingBridge';
 
