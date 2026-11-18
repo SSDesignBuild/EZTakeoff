@@ -24,3 +24,9 @@
 ## Manufacturer asset delivery timeout fix (November 18, 2026)
 - Netlify uses scripts/sync-manufacturer-assets.mjs plus scripts/assetFetch.mjs to fetch official images with a 45-second aggregate network budget, 5.5-second per-request deadline **covering headers AND response body**, max two attempts, concurrency nine, image MIME and magic validation, and bounded image bytes. Optional local Netlify node_modules cache avoids repeat downloads when restored. Fail safely only when a required official photo cannot be delivered; nonrequired photos show an explicit unavailable state, never made-up colors.
 - Netlify writes public/manufacturer/timbertech/asset-status.json with actual delivered/undelivered availability and elapsed time. scripts/test-asset-delivery-timeout.cjs simulates a hanging image body and verifies cancellation. GitHub remains source-control only; Netlify runs build/test/publish.
+
+## Production deployment trigger safety (Nov 18, 2026)
+- GitHub Actions remains manual-only; routine validation and publication use Netlify exclusively.
+- GitHub squash-merge commit messages may include every feature-branch commit subject. A build-suppression token in any included subject can prevent Netlify from building the new main commit even if its title looks normal.
+- Do not add build-suppression directives to GitHub commit subjects/bodies on branches intended for a Netlify-connected squash merge.
+- Before announcing a production release, compare main HEAD to the Netlify production deploy commit and confirm that deploy is ready/published. A ready PR preview alone is not proof of production publication.
