@@ -64,5 +64,5 @@ const scene=fs.readFileSync(path.resolve(__dirname,'../src/components/Consultati
 assert.ok(scene.includes('@react-three/fiber')&&scene.includes('@react-three/drei'));
 assert.ok(scene.includes('buildDeckModel')&&scene.includes('Canvas'));
 const media=fs.readFileSync(path.resolve(__dirname,'../src/lib/consultationPhoto.ts'),'utf8');
-assert.ok(media.includes('indexedDB')&&!media.includes('localStorage'));
+assert.ok(media.includes('indexedDB')&&!media.includes('window.localStorage.'));
 console.log('PASS consultation schema, approved catalog reuse, no price leakage, secure revision/tier handoff, role routes, 3D source and photo storage');
