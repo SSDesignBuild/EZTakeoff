@@ -16,9 +16,9 @@ function Scene({project,photoMode}:{project:ConsultationProject;photoMode:boolea
   const height=Math.max(.35,Math.min(26,Number(project.values.deckHeight??5)));
   const span=Math.max(model.width,model.depth,12);
   return <>
-    <ambientLight intensity={.9}/>
-    <hemisphereLight args={['#e0ebfb','#b5a58e',.95]}/>
-    <directionalLight position={[span*.5,span*1.2,span*.8]} intensity={2.25} color="#fff7ed"
+    <ambientLight intensity={.48}/>
+    <hemisphereLight args={['#eef7f6','#c9bca8',.68]}/>
+    <directionalLight position={[span*.5,span*1.2,span*.8]} intensity={1.55} color="#fffdf7"
       castShadow shadow-mapSize-width={2048} shadow-mapSize-height={2048}
       shadow-camera-near={.5} shadow-camera-far={span*5}
       shadow-camera-left={-span*1.5} shadow-camera-right={span*1.5}
@@ -34,7 +34,7 @@ function Scene({project,photoMode}:{project:ConsultationProject;photoMode:boolea
         : <meshStandardMaterial color="#e9e8e3" roughness={1}/>}
     </mesh>
     <OrbitControls makeDefault enableDamping dampingFactor={.08}
-      minDistance={Math.max(5,span*.45)} maxDistance={span*6}
+      minDistance={Math.max(7,span*.68)} maxDistance={span*6}
       maxPolarAngle={Math.PI*.492}
       target={[0,Math.min(8,height/2),0]}/>
   </>;
@@ -59,7 +59,7 @@ export function Consultation3D({project,photoUrl,photoMode=false}:{
         <Canvas dpr={[1,1.7]} shadows
           camera={{position:[dimension*.82,height+dimension*.85,dimension*1.2],fov:48,near:.1,far:900}}
           gl={{antialias:true,alpha:photoMode,preserveDrawingBuffer:true,
-            toneMapping:THREE.ACESFilmicToneMapping,toneMappingExposure:1.25}}>
+            toneMapping:THREE.ACESFilmicToneMapping,toneMappingExposure:1.0}}>
           <Scene project={project} photoMode={photoMode}/>
         </Canvas>
       </Suspense>
