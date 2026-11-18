@@ -30,3 +30,18 @@
 - GitHub squash-merge commit messages may include every feature-branch commit subject. A build-suppression token in any included subject can prevent Netlify from building the new main commit even if its title looks normal.
 - Do not add build-suppression directives to GitHub commit subjects/bodies on branches intended for a Netlify-connected squash merge.
 - Before announcing a production release, compare main HEAD to the Netlify production deploy commit and confirm that deploy is ready/published. A ready PR preview alone is not proof of production publication.
+
+## Premium sales consultation / Renaissance drawing references (November 18, 2026)
+The user supplied seven confidential Renaissance engineer-style PDFs and a live UI video. DO NOT commit or publish these drawings, screenshots with personal info or raw customer data.
+Aria HD example: 12ft width x 14ft projection, 9ft posts, HD beam and posts, shade tubes about 4in apart and 2ft truss spacing.
+Contempo SD lean-to: 8ft frame x11ft projection, 9ft posts, extruded main beam SD.
+Fresco WD freestanding: 12ft x10ft, 9ft posts, four-post roof frame and sealed polycarbonate panels.
+Fresco WD attached: 18ft x14ft, 10ft posts with WD main beam.
+Moderno HD gable: 14ft total frame, 7ft each slope, higher ridge, HD beam/post and structural insulated roof.
+Moderno SD lean-to: 18ft x10ft, 9ft posts, 20ft x11ft roof, 3 posts in example at 9ft bays.
+Moderno SD + Dolce Open View: 12ft x10ft, 10ft posts, screen enclosure joined to structural roof.
+All sample drawings say ESTIMATE ONLY; field verify and obtain signed engineering for permits/construction; do not treat example spans as manufacturer-approved span tables.
+Style system: midnight navy and emerald/pearl + restrained champagne; real manufacturer product photographs instead of cartoon art, exact TimberTech swatch RGB on 3D top surfaces, expanded skirting incl sidedness/openings/slope/stairs/lower tier, hide technical structural defaults behind settings.
+New files: src/components/ConsultationSkirtingOptions.tsx, ConsultationTechnicalSettings.tsx, src/data/consultationPhotos.ts, src/components/visual3d/DeckStructure3D.tsx, DeckStairAssembly3D.tsx, DeckSkirting3D.tsx. Modified ManufacturerDeck3D, RenaissanceCover3D, consultation data and external estimate bridge.
+Renaissance render implements SD/HD/WD/Wide+Insert envelope, lean-to/gable roof family, freestanding layout, independent roof overhangs, Dolce-like screen assemblies and Fresco standing seams. Exact extrusion wall thickness/span schedules/roof BOM remain unverified, do not claim certified engineering.
+Only GitHub as repository; Netlify handles build/test/deploy; automatic paid GitHub Actions remains off.
