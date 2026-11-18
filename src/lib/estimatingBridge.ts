@@ -23,7 +23,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
   const estimate=calculateEstimate('decks',project.values);
   const blockers=[...(estimate.validationIssues??[])];
   if(project.kind!=='deck')blockers.push('Covered-deck patio cover is visual-only; patio cover takeoff not included.');
-  if(project.coverFamily!=='none')blockers.push('Renaissance framing and the supplied span charts are for estimating only. Obtain project-specific engineering approval before structural material ordering.');
+  if(project.coverFamily!=='none')blockers.push('Renaissance framing and the supplied span charts are for estimating only. Obtain an engineering-approved, project-specific configuration before structural material ordering.');
   blockers.push(...renaissanceReferenceIssues({
     family:project.coverFamily,
     sideOverhangFt:Number(project.coverSideOverhangFt??1),
