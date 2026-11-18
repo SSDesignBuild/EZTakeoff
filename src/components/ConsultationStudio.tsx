@@ -62,6 +62,7 @@ const number=(value:unknown,fall:number)=>Number.isFinite(Number(value))?Number(
 function ConsultationEditor({project,onChange}:{project:ConsultationProject;onChange:(changes:Partial<ConsultationProject>)=>void}){
   const [step,setStep]=useState<Step>('photo');
   const [photoUrl,setPhotoUrl]=useState<string|null>(null);
+  const [photoVersion,setPhotoVersion]=useState(0);
   const [photoError,setPhotoError]=useState('');
   const [notice,setNotice]=useState('');
   const [overlay,setOverlay]=useState(false);
@@ -81,7 +82,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
       else setPhotoUrl(null);
     }).catch((error)=>{if(alive)setPhotoError(String(error));});
     return ()=>{alive=false;if(activeUrl)URL.revokeObjectURL(activeUrl);};
-  },[project.id,project.photoPresent]);
+  },[project.id,project.photoPresent,photoVersion]);
   const setClient=(name:keyof ConsultationProject['client'],value:string)=>
     onChange({client:{...project.client,[name]:value}});
   const setValue=(key:string,value:string|number|boolean)=>
@@ -95,7 +96,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
     setPhotoError('');setNotice('');
     try{
       const saved=await saveHousePhoto(project.id,file);
-      onChange({photoPresent:true});
+      onChange({photoPresent:true});setPhotoVersion((n)=>n+1);
       setNotice('Photo saved privately on this browser ('+(saved.bytes/1024/1024).toFixed(1)+' MB).');
     }catch(error){setPhotoError(error instanceof Error?error.message:String(error));}
     event.target.value='';
@@ -147,7 +148,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
             <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onPhoto}/>
           </label>
           {!!photoUrl&&<button type="button" className="ghost-btn small-btn" onClick={async()=>{
-            await deleteHousePhoto(project.id);onChange({photoPresent:false});setNotice('Local property photo cleared.');
+            await deleteHousePhoto(project.id);onChange({photoPresent:false});setPhotoVersion((n)=>n+1);setNotice('Local property photo cleared.');
           }}>Remove saved photo</button>}
           {photoError&&<p role="alert">{photoError}</p>}
         </div>
