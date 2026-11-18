@@ -19,20 +19,42 @@ function useManufacturerTexture(name:unknown){
   useEffect(()=>{
     let alive=true;
     let texture:THREE.Texture|null=null;
-    setMap(null);setMissing(false);
-    if(!sample){setMissing(true);return;}
-    new THREE.TextureLoader().load(sample.swatch,(loaded)=>{
-      loaded.colorSpace=THREE.SRGBColorSpace;
-      loaded.wrapS=THREE.RepeatWrapping;
-      loaded.wrapT=THREE.RepeatWrapping;
-      loaded.anisotropy=8;
-      // The source is a real manufacturer board photo. Repetition is only a
-      // visual tiling strategy and not a production grain batch prediction.
-      loaded.repeat.set(1,1);
-      texture=loaded;
-      if(alive)setMap(loaded);else loaded.dispose();
-    },undefined,()=>{if(alive)setMissing(true);});
-    return ()=>{alive=false;if(texture)texture.dispose();};
+    const image=new Image();
+    let completed=false;
+    let deadline:ReturnType<typeof setTimeout>|null=null;
+    setMap(null);setMissing(!sample);
+    if(!sample)return ()=>{alive=false;};
+    const clear=()=>{if(deadline!==null){clearTimeout(deadline);deadline=null;}};
+    const fail=()=>{
+      if(!alive||completed)return;
+      completed=true;clear();setMap(null);setMissing(true);
+      image.onload=null;image.onerror=null;
+      image.removeAttribute('src'); // abort a stalled browser image delivery
+    };
+    image.decoding='async';
+    image.onload=()=>{
+      if(!alive||completed)return;
+      completed=true;clear();
+      // The very same first-party photograph used by the product card now
+      // becomes the true top-surface map. Do not tint it with generic colors.
+      texture=new THREE.Texture(image);
+      texture.colorSpace=THREE.SRGBColorSpace;
+      texture.wrapS=THREE.RepeatWrapping;
+      texture.wrapT=THREE.RepeatWrapping;
+      texture.anisotropy=8;
+      texture.repeat.set(1,1);
+      texture.needsUpdate=true;
+      setMap(texture);setMissing(false);
+    };
+    image.onerror=fail;
+    deadline=setTimeout(fail,8500);
+    image.src=sample.swatch;
+    return ()=>{
+      alive=false;clear();
+      image.onload=null;image.onerror=null;
+      if(!completed)image.removeAttribute('src');
+      texture?.dispose();
+    };
   },[sample?.swatch]);
   return {map,missing,hasVerifiedSource:!!sample};
 }
