@@ -6,3 +6,6 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+[context.deploy-preview]
+  command = "node scripts/premium-preview-diagnostics.mjs"
