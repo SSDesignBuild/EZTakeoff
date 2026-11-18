@@ -6,14 +6,14 @@ const FIELDS=[
   ['beamSizeChoice','Beam member size','auto','2x10','2x12','PSL'],
   ['postSizeChoice','Deck support post size','6x6','8x8'],
   ['frameFastenerChoice','Framing fasteners','framing-screws','collated-nails'],
-  ['connectorFastenerChoice','Connector installation','hanger-nails','connector-screws'],
+  ['connectorFastenerChoice','Connector installation','hanger-nails','approved-screws'],
 ] as const;
 const friendly:Record<string,string>={
   auto:'S&S automatic / span review',PSL:'Engineered PSL (requires design approval)',
   'framing-screws':'3″ structural-rated framing screws',
   'collated-nails':'3″ exterior ring-shank nails',
   'hanger-nails':'Approved joist-hanger nails',
-  'connector-screws':'Manufacturer-approved connector screws',
+  'approved-screws':'Manufacturer-approved connector screws',
 };
 export function ConsultationTechnicalSettings({values,onValuesChange}:{
   values:V;onValuesChange:(fn:(current:V)=>V)=>void;
