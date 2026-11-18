@@ -104,19 +104,60 @@ export function RenaissanceGutter({start,end,topY,color}:{
   </mesh>;
 }
 
-/** Rectangular 6 x 2-in open-air truss, not a round pipe/rod. */
+/**
+ * Ribbed 6x2-inch open-air truss silhouette from the Aria/Fresco part sheets.
+ * Both external dimensions are exact; unmeasured corner radii are omitted.
+ */
 export function RenaissanceTruss({from,to,color}:{
   from:[number,number,number];to:[number,number,number];color:string;
 }){
   const a=new THREE.Vector3(...from),b=new THREE.Vector3(...to);
   const delta=b.clone().sub(a),length=delta.length();
-  if(length<.01)return null;
+  const geometry=useMemo(()=>{
+    if(length<.01)return null;
+    const shape=outlineWithRibs(inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn),
+      inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn));
+    const g=new THREE.ExtrudeGeometry(shape,{depth:length,bevelEnabled:false,steps:1});
+    g.translate(0,0,-length/2);g.computeVertexNormals();
+    return g;
+  },[length]);
+  if(!geometry)return null;
   const quaternion=new THREE.Quaternion().setFromUnitVectors(
     new THREE.Vector3(0,0,1),delta.normalize());
-  return <mesh position={a.add(b).multiplyScalar(.5).toArray() as [number,number,number]}
+  return <mesh geometry={geometry}
+    position={a.add(b).multiplyScalar(.5).toArray() as [number,number,number]}
     quaternion={quaternion} castShadow receiveShadow>
-    <boxGeometry args={[inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn),
-      inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn),length]}/>
-    <meshStandardMaterial color={color} metalness={.36} roughness={.33}/>
+    <meshStandardMaterial color={color} metalness={.38} roughness={.32}/>
+  </mesh>;
+}
+
+/** Hollow 2x2-inch Aria shade tube, 0.040-in wall, as supplied in the detail. */
+export function RenaissanceShadeTube({from,to,color}:{
+  from:[number,number,number];to:[number,number,number];color:string;
+}){
+  const a=new THREE.Vector3(...from),b=new THREE.Vector3(...to);
+  const delta=b.clone().sub(a),length=delta.length();
+  const geometry=useMemo(()=>{
+    if(length<.01)return null;
+    const outerIn=2,wallIn=.040;
+    const w=inchToFoot(outerIn),t=inchToFoot(wallIn);
+    const s=new THREE.Shape();
+    s.moveTo(-w/2,-w/2);s.lineTo(w/2,-w/2);
+    s.lineTo(w/2,w/2);s.lineTo(-w/2,w/2);s.closePath();
+    const inset=w/2-t,hole=new THREE.Path();
+    hole.moveTo(-inset,-inset);hole.lineTo(-inset,inset);
+    hole.lineTo(inset,inset);hole.lineTo(inset,-inset);hole.closePath();
+    s.holes.push(hole);
+    const g=new THREE.ExtrudeGeometry(s,{depth:length,steps:1,bevelEnabled:false});
+    g.translate(0,0,-length/2);g.computeVertexNormals();
+    return g;
+  },[length]);
+  if(!geometry)return null;
+  const quaternion=new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0,0,1),delta.normalize());
+  return <mesh geometry={geometry}
+    position={a.add(b).multiplyScalar(.5).toArray() as [number,number,number]}
+    quaternion={quaternion} castShadow receiveShadow>
+    <meshStandardMaterial color={color} side={THREE.DoubleSide} metalness={.36} roughness={.32}/>
   </mesh>;
 }
