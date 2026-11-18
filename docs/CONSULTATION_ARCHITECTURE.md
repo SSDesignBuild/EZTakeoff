@@ -25,3 +25,12 @@
 4. Composable patio covers, screened enclosures, Eze-Breeze/sunroom modules with independent and combined takeoffs.
 5. Connect the user’s actual estimating app after obtaining its supported API, authentication, and tier response schema. Handoff JSON is already defined as a transport-neutral first version.
 6. Real browser smoke tests and visual snapshots on iPad/desktop; automated WebGL screenshot tests, non-rectangular polygon tests; QA against real-built reference photos.
+
+
+## Manufacturer catalog-driven visuals (2026-11-18)
+- 36 TimberTech board photographs are registered to actual collection/name/product image URLs and cached by Netlify build for first-party 3D texturing, not generated swatch hues.
+- Rail catalog contains metal IRE Classic/Modern/Drink, PVC Statement/Pinnacle, vinyl Reliance, composite Classic profiles and S&S wood pickets/black round balusters. IRE takeoffs remain coordinated; non-IRE variants explicitly blocked/flagged until verified kit BOM.
+- Renaissance families have visually distinct solid roof, truss ends, full trusses, translucent polycarbonate, lattice and pivoting louver models; palette White/Bronze/Sandstone/Black. Family geometry does not assert exact manufacturer extrusions, approved roof load spans, or cover takeoff.
+- Render chain: ConsultationVisualPickers -> consultation values -> visualCatalog -> Consultation3D -> modular manufacturer family 3D with custom-polygon-clipped deck board strips.
+- Build pipeline: Netlify runs manufacturer asset sync, tests and Vite. GitHub workflow is manual-only; do not turn on scheduled/push/PR GitHub Actions without permission.
+- Keep house-photo overlay manual and no AI-generated dimensional promises. Commercial image reuse rights should be reviewed.
