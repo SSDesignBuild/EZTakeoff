@@ -1,4 +1,5 @@
-import type { DeckModel, DeckPoint } from './deckModel';
+import type { DeckModel } from './deckModel';
+import type { DeckPoint } from './types';
 import { getCoverVisualProduct, getRailVisualProduct, getDeckVisualProduct } from '../data/visualCatalog';
 
 export interface SurfaceStrip {
