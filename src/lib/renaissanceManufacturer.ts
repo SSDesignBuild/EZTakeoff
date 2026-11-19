@@ -47,6 +47,14 @@ export const RENAISSANCE_TRUSS={
 export const RENAISSANCE_INSULATED_ROOF={
   defaultThicknessIn:3,standardPanelWidthIn:48,
 } as const;
+/** Visible architectural 6-1/2 x 3-9/16in roof edge extrusion, slope-faced. */
+export const RENAISSANCE_ARCHITECTURAL_GUTTER={
+  outsideWidthIn:6.5,outsideHeightIn:3.5625,wallIn:.065,
+} as const;
+/** Manufacturer 3in roof receiving-channel envelope; physical finish matches frame. */
+export const RENAISSANCE_ROOF_C_CHANNEL={
+  outsideWidthIn:2.0625,outsideHeightIn:3.5625,wallIn:.070,
+} as const;
 export const RENAISSANCE_STRUCTURAL_GUTTER={
   outsideWidthIn:5,outsideHeightIn:5,wallIn:.072,
 } as const;
@@ -108,7 +116,9 @@ export function makeRenaissanceFramePlan(input:RenaissancePlanInput):Renaissance
   const postCountPerRow=requested>=2?clamp(requested,2,18):automatic;
   const postXs=Array.from({length:postCountPerRow},(_,i)=>
     frameWidthFt*(i/(postCountPerRow-1))-frameWidthFt/2);
-  const trussCount=Math.max(2,Math.ceil(roofWidthFt/RENAISSANCE_TRUSS.spacingFt)+1);
+  const trussEdgeInsetFt=inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn/2);
+  const trussRunFt=Math.max(0,roofWidthFt-2*trussEdgeInsetFt);
+  const trussCount=Math.max(2,Math.ceil(trussRunFt/RENAISSANCE_TRUSS.spacingFt)+1);
   return {
     family:input.family,variant:profile.id,frameWidthFt,frameProjectionFt,
     roofWidthFt,roofProjectionFt,roofStartOffsetFt:-rearOverhangFt,
@@ -116,8 +126,10 @@ export function makeRenaissanceFramePlan(input:RenaissancePlanInput):Renaissance
     postHeightFt,deckHeightFt,backTopFt,frontTopFt,ridgeTopFt,
     pitchInPerFt,gable,attached,postCountPerRow,
     frontPostXsFt:postXs,rearPostXsFt:attached?[]:postXs,
+    // Stations are offsets from the ROOF CENTER, never the frame's left edge.
+    // SD example with 10ft roof centers at -5 to +5ft, minus half truss width.
     projectionTrussStationsFt:Array.from({length:trussCount},(_,i)=>
-      -sideOverhangFt+roofWidthFt*i/(trussCount-1)),
+      -trussRunFt/2+trussRunFt*i/(trussCount-1)),
   };
 }
 export const RENAISSANCE_ANONYMIZED_REFERENCE_CASES=[

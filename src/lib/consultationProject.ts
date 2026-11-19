@@ -1,8 +1,8 @@
 import { SERVICES } from '../data/services';
-import { deckVisualProducts, coverVisualProducts, type CoverColor, type CoverFamily } from '../data/visualCatalog';
+import { deckVisualProducts, coverVisualProducts, type CoverColor, type CoverFamily, type CoverRoofColor, type CoverCeilingFinish } from '../data/visualCatalog';
 
 export type ProjectKind = 'deck' | 'covered-deck';
-export type { CoverFamily, CoverColor } from '../data/visualCatalog';
+export type { CoverFamily, CoverColor, CoverRoofColor, CoverCeilingFinish } from '../data/visualCatalog';
 export interface ConsultationClient {
   name: string; address: string; phone: string; email: string;
 }
@@ -20,7 +20,9 @@ export interface ConsultationProject {
   client: ConsultationClient;
   values: Record<string,string|number|boolean>;
   coverFamily: CoverFamily;
-  coverColor: CoverColor;
+  coverColor: CoverColor; // Legacy field, retained as the aluminum FRAME finish.
+  coverRoofColor?: CoverRoofColor;
+  coverCeilingFinish?: CoverCeilingFinish;
   coverRoofStyle?: 'studio'|'gable';
   coverShadePercent?: number;
   coverLouverAngle?: number;
@@ -62,7 +64,7 @@ export const makeConsultationProject = (id: string): ConsultationProject => ({
     railingVisualId:'tt-ire-modern',
     railingType:'aluminum',railingSystem:'timbertech-ire',
     railingTopProfile:'modern',railingColor:'black',railingInfill:'aluminum'},
-  coverFamily:'none',coverColor:'White',coverRoofStyle:'studio',coverShadePercent:65,coverLouverAngle:12,
+  coverFamily:'none',coverColor:'White',coverRoofColor:'White',coverCeilingFinish:'White',coverRoofStyle:'studio',coverShadePercent:65,coverLouverAngle:12,
   coverFraming:'standard',coverMount:'wall-attached',coverScreenStyle:'none',coverPostCount:0,
   coverWidthFt:0,coverProjectionFt:0,coverHeightFt:9,coverSideOverhangFt:1,coverFrontOverhangFt:1,
   photoPresent:false,
@@ -77,7 +79,8 @@ export const loadConsultations = (): ConsultationProject[] => {
     const stored=JSON.parse(window.localStorage.getItem(KEY)??'[]') as unknown;
     if(!Array.isArray(stored))return [];
     return stored.filter(valid).map((p)=>({
-      ...p,coverRoofStyle:p.coverRoofStyle??'studio',coverShadePercent:p.coverShadePercent??65,
+      ...p,coverRoofColor:p.coverRoofColor??'White',coverCeilingFinish:p.coverCeilingFinish??'White',
+      coverRoofStyle:p.coverRoofStyle??'studio',coverShadePercent:p.coverShadePercent??65,
       coverLouverAngle:p.coverLouverAngle??12,
       coverFraming:p.coverFraming??'standard',coverMount:p.coverMount??'wall-attached',
       coverScreenStyle:p.coverScreenStyle??'none',coverPostCount:p.coverPostCount??0,
