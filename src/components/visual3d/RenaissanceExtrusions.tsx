@@ -4,6 +4,7 @@ import {
   inchToFoot,type RenaissanceExtrusionProfile,
   RENAISSANCE_ROOF_C_CHANNEL,RENAISSANCE_TRUSS,RENAISSANCE_SHADE_TUBE,
 } from '../../lib/renaissanceManufacturer';
+import type { P2 } from './Primitives';
 import type { GutterRun } from '../../lib/renaissanceGutterGeometry';
 import { architecturalGutterOutlineFt,miterAlongFt } from '../../lib/renaissanceGutterGeometry';
 
