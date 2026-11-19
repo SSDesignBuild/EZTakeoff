@@ -5,6 +5,7 @@ import { maxReferenceOverhangFt } from '../../lib/renaissanceGuidance';
 import { Beam, Block, SlopedBeam, type P2 } from './Primitives';
 import * as THREE from 'three';
 import { planDolceScreenProfile, roofLineAtX } from '../../lib/renaissanceDetailGeometry';
+import { planInsulatedRoofPanels, planDolceGableInfill } from '../../lib/renaissanceRoofGeometry';
 import {
   getRenaissanceExtrusion,makeRenaissanceFramePlan,inchToFoot,
   RENAISSANCE_INSULATED_ROOF,RENAISSANCE_SHADE_TUBE,
@@ -51,6 +52,44 @@ function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish}:{
         position={[x,bottom+m.heightFt/2,z]}
         size={[.092,m.heightFt,.092]} color={finish}/>;
     })}
+  </group>;
+}
+
+/**
+ * Gable front-screen infill above the horizontal header. Includes the
+ * open gable geometry instead of leaving a triangular hole in the render.
+ * Field-cut screen triangulation / structural extrusions are provisional.
+ */
+function DolceGableInfill({leftX,rightX,z,beamTopY,roofWidthFt,
+  ridgeRiseFt,panelThicknessFt,finish}:{
+  leftX:number;rightX:number;z:number;beamTopY:number;
+  roofWidthFt:number;ridgeRiseFt:number;panelThicknessFt:number;finish:string;
+}){
+  const plan=planDolceGableInfill({
+    frameWidthFt:rightX-leftX,roofWidthFt,ridgeRiseFt,
+    roofPanelThicknessFt:panelThicknessFt,
+  });
+  if(!plan)return null;
+  const shape=new THREE.Shape();
+  plan.contour.forEach((p,i)=>{
+    if(i===0)shape.moveTo(p.alongFt,p.riseFt);
+    else shape.lineTo(p.alongFt,p.riseFt);
+  });
+  shape.closePath();
+  const midX=(leftX+rightX)/2;
+  const sideY=beamTopY+plan.sideRiseFt,peakY=beamTopY+plan.peakRiseFt;
+  return <group name="dolce-gable-upper-screen-infill-concept">
+    <mesh position={[leftX,beamTopY,z]} receiveShadow>
+      <shapeGeometry args={[shape]}/>
+      <meshPhysicalMaterial color="#7c959e" side={THREE.DoubleSide}
+        transparent opacity={.18} depthWrite={false} roughness={.88}/>
+    </mesh>
+    <SlopedBeam start={[leftX,sideY,z]} end={[midX,peakY,z]}
+      thickness={.095} depth={.095} color={finish}/>
+    <SlopedBeam start={[midX,peakY,z]} end={[rightX,sideY,z]}
+      thickness={.095} depth={.095} color={finish}/>
+    <Block position={[midX,(beamTopY+peakY)/2,z]}
+      size={[.092,plan.peakRiseFt,.092]} color={finish}/>
   </group>;
 }
 
@@ -108,7 +147,11 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const shadeGapIn=Math.max(2,Math.min(6,4+(65-(project.coverShadePercent??65))*.08));
   const latticeCount=Math.max(2,Math.ceil((depth*12)/(RENAISSANCE_SHADE_TUBE.outsideWidthIn+shadeGapIn)));
   const louverCount=Math.max(4,Math.ceil(depth/.7));
-  const roofDepth=depth;
+  const roofPanelThicknessFt=inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn);
+  const studioPanels=planInsulatedRoofPanels(
+    width,RENAISSANCE_INSULATED_ROOF.standardPanelWidthIn);
+  const gablePanels=planInsulatedRoofPanels(
+    depth,RENAISSANCE_INSULATED_ROOF.standardPanelWidthIn);
   return <group name={'Renaissance-'+product.id} position={[0,0,0]}>
     {/* Manufacturer outside dimensions: SD/HD 3.875-in hollow columns,
         WD 6-in columns; SD/HD 7x2.75 and WD 7x4.875 headers. */}
@@ -143,41 +186,56 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     {/* Rectangular canopy is anchored to the deck's footprint bounding box.
         A custom L-shaped roof and its supporting load paths still require
         a separately approved engineered Renaissance layout. */}
-    {isSolid&&shape==='studio'&&<>
-      <mesh position={[xMid,roofY,roofMidZ]} rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow receiveShadow>
-        <boxGeometry args={[width,inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn),roofDepth]}/>
+    {/* Studio/lean-to: individual 48-inch insulated panel modules with a
+        trimmed last module and visible seam-cover lines. No continuous slab. */}
+    {isSolid&&shape==='studio'&&<group name="renaissance-modular-studio-roof">
+      {studioPanels.modules.map((panel,i)=><mesh key={'studio-insulated-panel-'+i}
+        position={[left+panel.centerFt,roofY,roofMidZ]}
+        rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow receiveShadow>
+        <boxGeometry args={[panel.widthFt,roofPanelThicknessFt,depth]}/>
         <meshStandardMaterial color={powder} metalness={.34} roughness={.31}/>
-      </mesh>
-      {/* Genuine 48-in panel modules with discreet longitudinal closure strips,
-          rather than generic round tubes drawn across an uninterrupted slab. */}
-      {Array.from({length:Math.max(1,Math.ceil(width/
-          inchToFoot(RENAISSANCE_INSULATED_ROOF.standardPanelWidthIn)))-1},(_,i)=>{
-        const panels=Math.max(1,Math.ceil(width/inchToFoot(RENAISSANCE_INSULATED_ROOF.standardPanelWidthIn)));
-        const x=left+width*(i+1)/panels;
-        return <SlopedBeam key={'panel-lock-'+i}
-          start={[x,roofRearY+.035,roofBackEdge]} end={[x,roofFrontY+.035,front]}
-          thickness={.045} depth={.055} color={shadowColor}/>;
+      </mesh>)}
+      {studioPanels.seamsFt.map((station,i)=>{
+        const x=left+station;
+        return <SlopedBeam key={'studio-panel-closure-'+i}
+          start={[x,roofRearY+roofPanelThicknessFt/2+.015,roofBackEdge]}
+          end={[x,roofFrontY+roofPanelThicknessFt/2+.015,front]}
+          thickness={.025} depth={.065} color={shadowColor}/>;
       })}
-      {/* The 5x5-in structural gutter is a distinct open extrusion, not three
-          stacked generic rectangles. */}
       <RenaissanceGutter start={[left,front]} end={[right,front]}
         topY={roofFrontY-.07} color={powder}/>
-    </>}
-    {isSolid&&shape==='gable'&&<>
-      {[-1,1].map((sign)=>{
+    </group>}
+    {/* Gable: insulated panel courses run from ridge to each side eave.
+        Each 48-inch roof module is measured along the FRONT/BACK projection;
+        the last is visibly cut. Main roof width and ridge rise are unchanged. */}
+    {isSolid&&shape==='gable'&&<group name="renaissance-modular-gable-roof">
+      {[-1,1].map(sign=>{
         const slope=Math.atan2(gableRise,width/2);
-        return <mesh key={'gable-panel-'+sign} castShadow receiveShadow
-          position={[xMid+sign*width/4,eaveY+gableRise/2,roofMidZ]} rotation={[0,0,-sign*slope]}>
-          <boxGeometry args={[Math.hypot(width/2,gableRise),inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn),depth]}/>
-          <meshStandardMaterial color={powder} metalness={.34} roughness={.34}/>
-        </mesh>;
+        const slopedWidthFt=Math.hypot(width/2,gableRise);
+        return <group key={'gable-half-'+sign}>
+          {gablePanels.modules.map((panel,i)=><mesh key={'gable-insulated-panel-'+sign+'-'+i}
+            position={[xMid+sign*width/4,eaveY+gableRise/2,roofBackEdge+panel.centerFt]}
+            rotation={[0,0,-sign*slope]} castShadow receiveShadow>
+            <boxGeometry args={[slopedWidthFt,roofPanelThicknessFt,panel.widthFt]}/>
+            <meshStandardMaterial color={powder} metalness={.34} roughness={.34}/>
+          </mesh>)}
+          {gablePanels.seamsFt.map((station,i)=>{
+            const z=roofBackEdge+station;
+            return <SlopedBeam key={'gable-panel-closure-'+sign+'-'+i}
+              start={[xMid,eaveY+gableRise+roofPanelThicknessFt/2+.02,z]}
+              end={[xMid+sign*width/2,eaveY+roofPanelThicknessFt/2+.02,z]}
+              thickness={.027} depth={.07} color={shadowColor}/>;
+          })}
+        </group>;
       })}
-      <Beam start={[xMid,back]} end={[xMid,front]} height={eaveY+gableRise+.1}
-        thickness={.18} depth={.13} color={shadowColor} metalness={.28}/>
-      {[-1,1].map((sign)=><Beam key={sign}
-        start={[xMid+sign*width/2,back]} end={[xMid+sign*width/2,front]}
-        height={eaveY+.08} thickness={.35} depth={.2} color={powder} metalness={.4}/>)}
-    </>}
+      <Beam start={[xMid,roofBackEdge]} end={[xMid,front]}
+        height={eaveY+gableRise+roofPanelThicknessFt/2+.04}
+        thickness={.07} depth={.11} color={shadowColor} metalness={.34}/>
+      <RenaissanceGutter start={[left,roofBackEdge]} end={[left,front]}
+        topY={eaveY-.07} color={powder}/>
+      <RenaissanceGutter start={[right,roofBackEdge]} end={[right,front]}
+        topY={eaveY-.07} color={powder}/>
+    </group>}
     {isSolid&&shape==='gable'&&
       // The 14-ft Moderno HD reference includes a central ridge support,
       // front tie beam, and two 7-ft sloping eaves.
@@ -309,6 +367,10 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         topTo={roofBack-headerHeight}
         openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>}
     </>}
+    {isSolid&&plan.gable&&(project.coverScreenStyle??'none')!=='none'&&
+      <DolceGableInfill leftX={frameLeft} rightX={frameRight} z={frameFront}
+        beamTopY={eaveY} roofWidthFt={width} ridgeRiseFt={gableRise}
+        panelThicknessFt={roofPanelThicknessFt} finish={powder}/>}
     {/* Solid-roof gutter is included above; Fresco uses its own snap channels. */}
   </group>;
 }
