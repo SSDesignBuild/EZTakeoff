@@ -166,3 +166,40 @@ export function RenaissanceShadeTube({from,to,color}:{
     <meshStandardMaterial color={color} side={THREE.DoubleSide} metalness={.36} roughness={.32}/>
   </mesh>;
 }
+
+
+/**
+ * Decorative truss-end silhouette from Contempo/Classico product imagery.
+ * Outside 2-in cross-section matches the documented projection truss envelope.
+ * Curved end cuts are visual approximations (not dimensioned manufacturer CAD).
+ *
+ * The upper edge follows the selected canopy; the tail stops at its front
+ * overhang. Extrusion thickness is the actual 2-inch visual member width.
+ */
+export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,color}:{
+  x:number;frontZ:number;topY:number;projectionFt:number;color:string;
+}){
+  const front=Math.max(.02,Math.min(1.25,projectionFt));
+  const geometry=useMemo(()=>{
+    const inner=.65;
+    const shape=new THREE.Shape();
+    shape.moveTo(-inner,0);
+    shape.lineTo(front,0);
+    shape.lineTo(front,-.16);
+    shape.bezierCurveTo(front-.04,-.29,front-.27,-.45,front-.44,-.48);
+    shape.bezierCurveTo(-.20,-.54,-.43,-.49,-inner,-.49);
+    shape.closePath();
+    const thickness=inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn);
+    const g=new THREE.ExtrudeGeometry(shape,{
+      depth:thickness,steps:1,bevelEnabled:false,curveSegments:12,
+    });
+    g.translate(0,0,-thickness/2);
+    // Shape X corresponds to roof projection (world +Z).
+    g.rotateY(-Math.PI/2);
+    g.computeVertexNormals();
+    return g;
+  },[front]);
+  return <mesh geometry={geometry} position={[x,topY,frontZ]} castShadow receiveShadow>
+    <meshStandardMaterial color={color} metalness={.4} roughness={.3}/>
+  </mesh>;
+}
