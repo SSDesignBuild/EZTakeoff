@@ -2235,3 +2235,15 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
   .consultation-technical-settings>summary{flex-wrap:wrap}
   .consultation-technical-settings>summary small{margin-left:0}
 }
+
+/* Independent frame, roof-exterior and ceiling finishes stay legible on site tablets. */
+.manufacturer-finish-system{display:grid;gap:1.1rem;background:color-mix(in srgb,var(--panel) 88%,var(--bg));
+ border:1px solid var(--border);border-radius:12px;padding:1rem}
+.manufacturer-finish-system>div{display:grid;gap:.45rem}
+.manufacturer-finish-system strong{font-size:.9rem;letter-spacing:.015em}
+.manufacturer-finish-system .muted{font-size:.79rem;margin:0;line-height:1.45}
+.manufacturer-finish-system .manufacturer-color-choices button{min-height:42px}
+.manufacturer-finish-system .manufacturer-color-choices button[aria-pressed="true"]{
+  outline:2px solid var(--accent);outline-offset:1px
+}
+@media(max-width:720px){.manufacturer-finish-system{padding:.75rem}}

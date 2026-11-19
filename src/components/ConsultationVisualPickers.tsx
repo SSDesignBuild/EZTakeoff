@@ -238,7 +238,9 @@ export function ManufacturerCoverPicker({project,onChange}:{
               aria-pressed={color===(project.coverCeilingFinish??'White')}
               className={color===(project.coverCeilingFinish??'White')?'selected':''}
               onClick={()=>onChange({coverCeilingFinish:color})}>
-              <span style={{background:getCoverCeilingFinish(color)}}/>{color}</button>)}
+              <span style={{background:color.includes('Wood Grain')
+                ? `repeating-linear-gradient(96deg, ${getCoverCeilingFinish(color)} 0 3px, ${color==='Mahogany Wood Grain'?'#4a2b23':'#dcc099'} 4px 6px, ${getCoverCeilingFinish(color)} 7px 10px)`
+                :getCoverCeilingFinish(color)}}/>{color}</button>)}
           </div>
           {String(project.coverCeilingFinish??'').includes('Wood Grain')&&
             <p className="consultation-visual-note">Wood-grain 3D preview is illustrative; confirm the Renaissance manufacturer sample before ordering.</p>}
