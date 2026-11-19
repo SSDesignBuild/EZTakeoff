@@ -77,7 +77,7 @@ for(const term of ['RenaissancePost','RenaissanceHeader','RenaissanceGutter','Re
 assert.ok(!render.includes("frameVariant==='hd'?{post:"),'remove generic hard-coded dimension ladder');
 assert.ok(extrusions.includes('new THREE.ExtrudeGeometry'),'member contours must be actual parametric meshes');
 assert.ok(extrusions.includes('outer.holes.push(inner)'),'posts must be hollow tubes, not solid cube approximations');
-assert.ok(extrusions.includes('RENAISSANCE_STRUCTURAL_GUTTER'),'gutter profile must not be triple rectangles');
+assert.ok(extrusions.includes('architecturalGutterOutlineFt'),'gutter must use the measured slope-faced architectural extrusion');
 for(const p of ['src/lib/renaissanceManufacturer.ts','src/components/visual3d/RenaissanceCover3D.tsx',
   'src/components/visual3d/RenaissanceExtrusions.tsx']){
   const c=read(p);

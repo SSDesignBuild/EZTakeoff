@@ -6,13 +6,15 @@ import { Beam, Block, SlopedBeam, type P2 } from './Primitives';
 import * as THREE from 'three';
 import { planDolceScreenProfile, roofLineAtX } from '../../lib/renaissanceDetailGeometry';
 import { planInsulatedRoofPanels, planDolceGableInfill } from '../../lib/renaissanceRoofGeometry';
+import { planWrapAroundGutter } from '../../lib/renaissanceGutterGeometry';
+import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
 import {
   getRenaissanceExtrusion,makeRenaissanceFramePlan,inchToFoot,
   RENAISSANCE_INSULATED_ROOF,RENAISSANCE_SHADE_TUBE,
 } from '../../lib/renaissanceManufacturer';
 import {
   RenaissancePost,RenaissanceHeader,RenaissanceGutter,RenaissanceTruss,RenaissanceShadeTube,
-  RenaissanceCurvedTrussEnd,
+  RenaissanceCurvedTrussEnd,RenaissanceReceivingChannel,RenaissanceDownspout,
 } from './RenaissanceExtrusions';
 
 /** Roof-following Dolce screen wall with real triangular mesh at sloping eaves. */
@@ -152,6 +154,11 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     width,RENAISSANCE_INSULATED_ROOF.standardPanelWidthIn);
   const gablePanels=planInsulatedRoofPanels(
     depth,RENAISSANCE_INSULATED_ROOF.standardPanelWidthIn);
+  const gutterRuns=planWrapAroundGutter({
+    leftFt:left,rightFt:right,rearFt:roofBackEdge,frontFt:front,
+    rearTopFt:shape==='gable'?eaveY:roofRearY,
+    frontTopFt:shape==='gable'?eaveY:roofFrontY,
+  });
   return <group name={'Renaissance-'+product.id} position={[0,0,0]}>
     {/* Manufacturer outside dimensions: SD/HD 3.875-in hollow columns,
         WD 6-in columns; SD/HD 7x2.75 and WD 7x4.875 headers. */}
@@ -193,7 +200,8 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         position={[left+panel.centerFt,roofY,roofMidZ]}
         rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow receiveShadow>
         <boxGeometry args={[panel.widthFt,roofPanelThicknessFt,depth]}/>
-        <meshStandardMaterial color={powder} metalness={.34} roughness={.31}/>
+        <RenaissancePanelMaterials roof={project.coverRoofColor??'White'}
+          ceiling={project.coverCeilingFinish??'White'}/>
       </mesh>)}
       {studioPanels.seamsFt.map((station,i)=>{
         const x=left+station;
@@ -202,8 +210,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           end={[x,roofFrontY+roofPanelThicknessFt/2+.015,front]}
           thickness={.025} depth={.065} color={shadowColor}/>;
       })}
-      <RenaissanceGutter start={[left,front]} end={[right,front]}
-        topY={roofFrontY-.07} color={powder}/>
+
     </group>}
     {/* Gable: insulated panel courses run from ridge to each side eave.
         Each 48-inch roof module is measured along the FRONT/BACK projection;
@@ -217,7 +224,8 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
             position={[xMid+sign*width/4,eaveY+gableRise/2,roofBackEdge+panel.centerFt]}
             rotation={[0,0,-sign*slope]} castShadow receiveShadow>
             <boxGeometry args={[slopedWidthFt,roofPanelThicknessFt,panel.widthFt]}/>
-            <meshStandardMaterial color={powder} metalness={.34} roughness={.34}/>
+            <RenaissancePanelMaterials roof={project.coverRoofColor??'White'}
+              ceiling={project.coverCeilingFinish??'White'}/>
           </mesh>)}
           {gablePanels.seamsFt.map((station,i)=>{
             const z=roofBackEdge+station;
@@ -231,10 +239,20 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       <Beam start={[xMid,roofBackEdge]} end={[xMid,front]}
         height={eaveY+gableRise+roofPanelThicknessFt/2+.04}
         thickness={.07} depth={.11} color={shadowColor} metalness={.34}/>
-      <RenaissanceGutter start={[left,roofBackEdge]} end={[left,front]}
-        topY={eaveY-.07} color={powder}/>
-      <RenaissanceGutter start={[right,roofBackEdge]} end={[right,front]}
-        topY={eaveY-.07} color={powder}/>
+
+    </group>}
+    {/* A connected 3-sided visible Renaissance gutter follows the left,
+        front and right eaves, with true 45-degree outside miters. No rear
+        gutter on wall-attached studio roofs: the C channel is at the wall. */}
+    {(isSolid||isTranslucent)&&<group name="renaissance-left-front-right-wrapped-architectural-gutter">
+      {gutterRuns.map(run=><RenaissanceGutter key={'gutter-'+run.id}
+        run={run} color={powder}/>)}
+      <RenaissanceDownspout x={right+inchToFoot(2)} z={front+inchToFoot(2)}
+        top={roofFrontY-inchToFoot(1.5)} bottom={deckHeight+inchToFoot(4)}
+        color={powder}/>
+      {attached&&shape==='studio'&&<RenaissanceReceivingChannel
+        fromX={left} toX={right} z={roofBackEdge}
+        y={roofRearY} color={powder}/>}
     </group>}
     {isSolid&&shape==='gable'&&
       // The 14-ft Moderno HD reference includes a central ridge support,

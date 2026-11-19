@@ -11,7 +11,7 @@ export interface EstimateHandoffV1 {
   revision:number;
   exportedAt:string;
   customer:{name:string;address:string;phone:string;email:string};
-  project:{kind:string;coverFamily:string;coverColor:string;coverRoofStyle:string;coverFraming:string;coverMount:string;coverScreenStyle:string;photoAttachedToThisPayload:false};
+  project:{kind:string;coverFamily:string;coverColor:string;coverRoofColor:string;coverCeilingFinish:string;coverRoofStyle:string;coverFraming:string;coverMount:string;coverScreenStyle:string;photoAttachedToThisPayload:false};
   geometry:{footprint:{x:number;y:number}[];areaSqFt:number;deckHeightFt:number;stairCount:number};
   selections:Record<string,string|number|boolean>;
   materials:MaterialItem[];
@@ -39,6 +39,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
     projectId:project.id,revision:project.revision,exportedAt:new Date().toISOString(),
     customer:{...project.client},
     project:{kind:project.kind,coverFamily:project.coverFamily,coverColor:project.coverColor,
+      coverRoofColor:project.coverRoofColor??'White',coverCeilingFinish:project.coverCeilingFinish??'White',
       coverRoofStyle:project.coverRoofStyle??'studio',
       coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
       coverScreenStyle:project.coverScreenStyle??'none',photoAttachedToThisPayload:false},
@@ -46,6 +47,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
     selections:{...project.values,coverRoofStyle:project.coverRoofStyle??'studio',
       coverShadePercent:project.coverShadePercent??65,coverLouverAngle:project.coverLouverAngle??12,
       coverFamily:project.coverFamily,coverColor:project.coverColor,
+      coverRoofColor:project.coverRoofColor??'White',coverCeilingFinish:project.coverCeilingFinish??'White',
       coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
       coverScreenStyle:project.coverScreenStyle??'none',coverPostCount:project.coverPostCount??0,
       coverWidthFt:project.coverWidthFt??0,coverProjectionFt:project.coverProjectionFt??0,

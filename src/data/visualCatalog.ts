@@ -119,7 +119,17 @@ export const getRailVisualProduct=(id:unknown):RailVisualProduct=>
   railVisualProducts.find((product)=>product.id===id)??railVisualProducts[0];
 
 export type CoverFamily='none'|'Moderno'|'Contempo'|'Classico'|'Fresco'|'Aria'|'Solé';
+/** Physical aluminum post/beam/gutter/C-channel/downspout coating. */
 export type CoverColor='White'|'Bronze'|'Sandstone'|'Black';
+/** Only these exterior roof panel factory finishes are offered. */
+export type CoverRoofColor='White'|'Silver'|'Sandstone';
+/** Interior panel face is independently selectable; wood grains are illustrative until manufacturer swatches are loaded. */
+export type CoverCeilingFinish=CoverColor|'Silver'|'Mahogany Wood Grain'|'Hickory Wood Grain';
+export const coverFrameColors:readonly CoverColor[]=['White','Bronze','Black','Sandstone'];
+export const coverRoofColors:readonly CoverRoofColor[]=['White','Silver','Sandstone'];
+export const coverCeilingFinishes:readonly CoverCeilingFinish[]=[
+  'White','Bronze','Sandstone','Black','Silver','Mahogany Wood Grain','Hickory Wood Grain',
+];
 export type CoverGeometry='solid-studio'|'solid-truss-ends'|'full-trusses'|'translucent'|'lattice'|'louvered';
 export interface CoverVisualProduct {
   id:CoverFamily;name:string;family:CoverGeometry;description:string;
@@ -160,3 +170,13 @@ export const getCoverVisualProduct=(id:unknown):CoverVisualProduct=>
 export const getCoverFinish=(finish:unknown):string=>
   finish==='Bronze'?'#574639':finish==='Sandstone'?'#b7a489':
   finish==='Black'?'#202225':'#deddd7';
+
+// Appearance swatches are screen approximations; physical sample approval is required.
+export const getCoverRoofFinish=(finish:CoverRoofColor|string|undefined):string=>
+  finish==='Silver'?'#c6cbd0':finish==='Sandstone'?'#b7a489':'#f0f1ef';
+export const getCoverCeilingFinish=(finish:CoverCeilingFinish|string|undefined):string=>
+  finish==='Silver'?'#c8ccd1':
+  finish==='Bronze'?'#574639':finish==='Sandstone'?'#b7a489':
+  finish==='Black'?'#202225':
+  finish==='Mahogany Wood Grain'?'#78513d':
+  finish==='Hickory Wood Grain'?'#b89970':'#f1f1ef';

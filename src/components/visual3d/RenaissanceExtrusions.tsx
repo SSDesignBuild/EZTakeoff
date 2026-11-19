@@ -2,9 +2,11 @@ import { useMemo } from 'react';
 import * as THREE from 'three';
 import {
   inchToFoot,type RenaissanceExtrusionProfile,
-  RENAISSANCE_STRUCTURAL_GUTTER,RENAISSANCE_TRUSS,RENAISSANCE_SHADE_TUBE,
+  RENAISSANCE_ROOF_C_CHANNEL,RENAISSANCE_TRUSS,RENAISSANCE_SHADE_TUBE,
 } from '../../lib/renaissanceManufacturer';
 import type { P2 } from './Primitives';
+import type { GutterRun } from '../../lib/renaissanceGutterGeometry';
+import { architecturalGutterOutlineFt,miterAlongFt } from '../../lib/renaissanceGutterGeometry';
 
 function outlineWithRibs(width:number,height:number){
   // Physical beam silhouette: repeated extrusion tongues along each vertical
@@ -82,31 +84,116 @@ export function RenaissancePost({x,z,bottom,top,profile,color}:{
   </mesh>;
 }
 
-/** Actual 5 x 5 x .072 structural gutter L section from SD drawing set. */
-export function RenaissanceGutter({start,end,topY,color}:{
-  start:P2;end:P2;topY:number;color:string;
+/**
+ * Measured Renaissance slope-faced ARCHITECTURAL gutter (not the 5x5 structural
+ * gutter channel). A 45° miter is applied to the ends of the extruded contour
+ * so the three sides meet cleanly at both outside corners.
+ *
+ * Local -X faces away from the roof. Local +Z is the drain run direction.
+ * A vertical shear follows roof grade, keeping the gutter section upright.
+ */
+export function RenaissanceGutter({run,color}:{
+  run:GutterRun;color:string;
 }){
-  const dx=end[0]-start[0],dz=end[1]-start[1],length=Math.hypot(dx,dz);
+  const dx=run.end[0]-run.start[0],dz=run.end[1]-run.start[1];
+  const length=Math.hypot(dx,dz);
   const geometry=useMemo(()=>{
     if(length<.01)return null;
-    const w=inchToFoot(RENAISSANCE_STRUCTURAL_GUTTER.outsideWidthIn);
-    const h=inchToFoot(RENAISSANCE_STRUCTURAL_GUTTER.outsideHeightIn);
-    const t=inchToFoot(RENAISSANCE_STRUCTURAL_GUTTER.wallIn);
+    const points=architecturalGutterOutlineFt();
     const s=new THREE.Shape();
-    s.moveTo(-w/2,-h/2);s.lineTo(w/2,-h/2);s.lineTo(w/2,h/2);
-    s.lineTo(w/2-t,h/2);s.lineTo(w/2-t,-h/2+t);
-    s.lineTo(-w/2+t,-h/2+t);s.lineTo(-w/2+t,h/2);
-    s.lineTo(-w/2,h/2);s.closePath();
+    points.forEach(([x,y],i)=>{
+      if(i===0)s.moveTo(x,y);else s.lineTo(x,y);
+    });
+    s.closePath();
     const g=new THREE.ExtrudeGeometry(s,{depth:length,steps:1,bevelEnabled:false});
-    g.translate(0,0,-length/2);g.rotateY(Math.PI/2);g.computeVertexNormals();
+    const pos=g.getAttribute('position');
+    for(let i=0;i<pos.count;i++){
+      const along=pos.getZ(i),outside=pos.getX(i);
+      const isStart=along<length/2;
+      const miter=miterAlongFt(outside,isStart,!isStart,run);
+      const grade=(run.endTopFt-run.startTopFt)*along/length;
+      pos.setZ(i,along+miter-length/2);
+      pos.setY(i,pos.getY(i)+grade);
+    }
+    pos.needsUpdate=true;g.computeVertexNormals();
+    return g;
+  },[length,run.startTopFt,run.endTopFt,run.miterStart,run.miterEnd]);
+  if(!geometry)return null;
+  const rotationY=Math.atan2(dx,dz);
+  return <mesh geometry={geometry}
+    position={[(run.start[0]+run.end[0])/2,run.startTopFt,
+      (run.start[1]+run.end[1])/2]}
+    rotation={[0,rotationY,0]} castShadow receiveShadow>
+    <meshStandardMaterial color={color} metalness={.42} roughness={.31} side={THREE.DoubleSide}/>
+  </mesh>;
+}
+
+/**
+ * 3-inch roof receiving C-channel at the building-side attachment.
+ * Dimensions are the outside 2-1/16 x 3-9/16 in profile from supplied
+ * Renaissance part drawing. Not shown on freestanding covers.
+ */
+export function RenaissanceReceivingChannel({fromX,toX,z,y,color}:{
+  fromX:number;toX:number;z:number;y:number;color:string;
+}){
+  const length=toX-fromX;
+  const geometry=useMemo(()=>{
+    if(length<.01)return null;
+    const w=inchToFoot(RENAISSANCE_ROOF_C_CHANNEL.outsideWidthIn);
+    const h=inchToFoot(RENAISSANCE_ROOF_C_CHANNEL.outsideHeightIn);
+    const t=inchToFoot(RENAISSANCE_ROOF_C_CHANNEL.wallIn);
+    const s=new THREE.Shape();
+    s.moveTo(-w/2,-h/2);s.lineTo(w/2,-h/2);
+    s.lineTo(w/2,h/2);s.lineTo(-w/2,h/2);
+    s.lineTo(-w/2,h/2-t);s.lineTo(w/2-t,h/2-t);
+    s.lineTo(w/2-t,-h/2+t);s.lineTo(-w/2,-h/2+t);s.closePath();
+    const g=new THREE.ExtrudeGeometry(s,{depth:length,steps:1,bevelEnabled:false});
+    g.translate(0,0,-length/2);g.rotateY(Math.PI/2);
+    g.computeVertexNormals();
     return g;
   },[length]);
   if(!geometry)return null;
-  return <mesh geometry={geometry}
-    position={[(start[0]+end[0])/2,topY-inchToFoot(RENAISSANCE_STRUCTURAL_GUTTER.outsideHeightIn)/2,
-      (start[1]+end[1])/2]} rotation={[0,-Math.atan2(dz,dx),0]} castShadow receiveShadow>
+  return <mesh geometry={geometry} position={[(fromX+toX)/2,y,z]}
+    castShadow receiveShadow>
     <meshStandardMaterial color={color} metalness={.4} roughness={.3} side={THREE.DoubleSide}/>
   </mesh>;
+}
+
+/**
+ * Exterior gutter drop / rectangular aluminum downspout preview.
+ * Routing, section size and actual elbow are NOT specified on the drawings;
+ * finish matches the framing, and this is a visualization placeholder
+ * pending an approved downspout schedule, not a material-order quantity.
+ */
+export function RenaissanceDownspout({x,z,top,bottom,color}:{
+  x:number;z:number;top:number;bottom:number;color:string;
+}){
+  const height=Math.max(0,top-bottom);
+  const geometry=useMemo(()=>{
+    if(height<.05)return null;
+    const w=inchToFoot(2),d=inchToFoot(3),t=inchToFoot(.045);
+    const s=new THREE.Shape();
+    s.moveTo(-w/2,-d/2);s.lineTo(w/2,-d/2);
+    s.lineTo(w/2,d/2);s.lineTo(-w/2,d/2);s.closePath();
+    const hole=new THREE.Path();
+    hole.moveTo(-w/2+t,-d/2+t);hole.lineTo(-w/2+t,d/2-t);
+    hole.lineTo(w/2-t,d/2-t);hole.lineTo(w/2-t,-d/2+t);hole.closePath();
+    s.holes.push(hole);
+    const g=new THREE.ExtrudeGeometry(s,{depth:height,bevelEnabled:false,steps:1});
+    g.rotateX(-Math.PI/2);g.computeVertexNormals();
+    return g;
+  },[height]);
+  if(!geometry)return null;
+  return <group name="renaissance-gutter-drop-and-downspout">
+    <mesh geometry={geometry} position={[x,bottom,z]} castShadow receiveShadow>
+      <meshStandardMaterial color={color} side={THREE.DoubleSide} metalness={.32} roughness={.35}/>
+    </mesh>
+    {[.22,.74].map((fraction,i)=><mesh key={'downspout-strap-'+i}
+      position={[x,bottom+height*fraction,z]} castShadow>
+      <boxGeometry args={[inchToFoot(2.55),inchToFoot(.5),inchToFoot(3.4)]}/>
+      <meshStandardMaterial color={color} metalness={.4} roughness={.34}/>
+    </mesh>)}
+  </group>;
 }
 
 /**

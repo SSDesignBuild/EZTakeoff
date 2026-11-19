@@ -5,7 +5,10 @@ import type { ConsultationProject } from '../lib/consultationProject';
 import {
   deckVisualProducts, deckCollections, getDeckVisualProduct,
   railVisualProducts, getRailVisualProduct, coverVisualProducts, getCoverVisualProduct,
-  getCoverFinish, type RailVisualProduct, type RailInfill,
+  getCoverFinish, getCoverRoofFinish, getCoverCeilingFinish,
+  coverFrameColors,coverRoofColors,coverCeilingFinishes,
+  type CoverColor,type CoverRoofColor,type CoverCeilingFinish,
+  type RailVisualProduct, type RailInfill,
 } from '../data/visualCatalog';
 
 type Values=ConsultationProject['values'];
@@ -204,10 +207,44 @@ export function ManufacturerCoverPicker({project,onChange}:{
     {project.coverFamily!=='none'&&<div className="manufacturer-cover-options">
       <div><strong>{selected.name}</strong><small>{selected.description}</small>
         <a href={selected.sourcePage} target="_blank" rel="noreferrer">View Renaissance product page</a></div>
-      <div className="manufacturer-color-choices">
-        {selected.colors.map((color)=><button type="button" key={color} aria-pressed={color===project.coverColor}
-          className={color===project.coverColor?'selected':''} onClick={()=>onChange({coverColor:color})}>
-          <span style={{background:getCoverFinish(color)}}/>{color}</button>)}
+      <div className="manufacturer-finish-system">
+        <div>
+          <strong>Aluminum framing</strong>
+          <p className="muted">Posts, beams, gutters, wall C-channel and downspouts share this color.</p>
+          <div className="manufacturer-color-choices" role="group" aria-label="Aluminum framing finish">
+            {coverFrameColors.map((color:CoverColor)=><button type="button" key={color}
+              aria-pressed={color===project.coverColor}
+              className={color===project.coverColor?'selected':''}
+              onClick={()=>onChange({coverColor:color})}>
+              <span style={{background:getCoverFinish(color)}}/>{color}</button>)}
+          </div>
+        </div>
+        <div>
+          <strong>Exterior roof panel color</strong>
+          <p className="muted">Top of the insulated roof · white, silver or sandstone only.</p>
+          <div className="manufacturer-color-choices" role="group" aria-label="Exterior roof color">
+            {coverRoofColors.map((color:CoverRoofColor)=><button type="button" key={color}
+              aria-pressed={color===(project.coverRoofColor??'White')}
+              className={color===(project.coverRoofColor??'White')?'selected':''}
+              onClick={()=>onChange({coverRoofColor:color})}>
+              <span style={{background:getCoverRoofFinish(color)}}/>{color}</button>)}
+          </div>
+        </div>
+        <div>
+          <strong>Ceiling / underside of roof panels</strong>
+          <p className="muted">Choose the interior-facing finish independently of the roof and frame.</p>
+          <div className="manufacturer-color-choices" role="group" aria-label="Ceiling underside finish">
+            {coverCeilingFinishes.map((color:CoverCeilingFinish)=><button type="button" key={color}
+              aria-pressed={color===(project.coverCeilingFinish??'White')}
+              className={color===(project.coverCeilingFinish??'White')?'selected':''}
+              onClick={()=>onChange({coverCeilingFinish:color})}>
+              <span style={{background:color.includes('Wood Grain')
+                ? `repeating-linear-gradient(96deg, ${getCoverCeilingFinish(color)} 0 3px, ${color==='Mahogany Wood Grain'?'#4a2b23':'#dcc099'} 4px 6px, ${getCoverCeilingFinish(color)} 7px 10px)`
+                :getCoverCeilingFinish(color)}}/>{color}</button>)}
+          </div>
+          {String(project.coverCeilingFinish??'').includes('Wood Grain')&&
+            <p className="consultation-visual-note">Wood-grain 3D preview is illustrative; confirm the Renaissance manufacturer sample before ordering.</p>}
+        </div>
       </div>
       <div className="consultation-skirting-finish">
         <label>Renaissance structural frame profile
