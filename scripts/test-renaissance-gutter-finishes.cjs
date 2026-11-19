@@ -109,6 +109,12 @@ assert.ok(mat.includes('material-2')&&mat.includes('material-3'),
   'the roof top and underside must be independent materials');
 assert.ok(mat.includes('illustrativeWoodTexture')&&mat.includes('Hickory Wood Grain'));
 assert.ok(picker.includes('coverRoofColors.map')&&picker.includes('coverCeilingFinishes.map'));
+assert.ok(picker.includes("const hasInsulatedPanels=['solid-studio','solid-truss-ends','full-trusses'].includes(selected.family)"));
+assert.ok((picker.match(/\{hasInsulatedPanels&&<div>/g)||[]).length===2,
+  'Roof and ceiling finish choices must not appear on Aria, Fresco or Solé');
+assert.ok(renderer.includes("attached&&shape==='studio'&&isSolid&&<RenaissanceReceivingChannel"),
+  'The 3-inch insulated roof receiver should not be used on Fresco polycarbonate');
+
 const scene=read('src/components/Consultation3D.tsx');
 assert.ok(scene.includes("project.coverRoofColor??'White'"));
 console.log('PASS centered Classico/Aria/Fresco truss layout, 6.5-in manufacturer gutter section, connected 3-side 45deg miters, separated roof/ceiling/frame finishes and estimator compatibility');

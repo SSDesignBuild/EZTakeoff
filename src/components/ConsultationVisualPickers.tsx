@@ -185,6 +185,9 @@ export function ManufacturerCoverPicker({project,onChange}:{
   const selected=getCoverVisualProduct(project.coverFamily);
   const referenceCharted=hasRenaissanceReferenceChart(project.coverFamily);
   const maxOverhang=maxReferenceOverhangFt(project.coverFamily);
+  // Fresco translucent panels, Aria shade tubes and Solé louvers do not use
+  // the insulated-roof panel skins available to Moderno/Contempo/Classico.
+  const hasInsulatedPanels=['solid-studio','solid-truss-ends','full-trusses'].includes(selected.family);
   return <section className="consultation-option-card manufacturer-cover-picker">
     <header className="consultation-option-head"><div><h4>Renaissance cover styles · installation gallery</h4>
       <p className="muted">Choose a true manufacturer model. The 3D assembly follows this family and your selected frame profile.</p></div>
@@ -210,7 +213,7 @@ export function ManufacturerCoverPicker({project,onChange}:{
       <div className="manufacturer-finish-system">
         <div>
           <strong>Aluminum framing</strong>
-          <p className="muted">Posts, beams, gutters, wall C-channel and downspouts share this color.</p>
+          <p className="muted">Posts, beams and installed matching components (gutters, C-channel, downspouts) share this color.</p>
           <div className="manufacturer-color-choices" role="group" aria-label="Aluminum framing finish">
             {coverFrameColors.map((color:CoverColor)=><button type="button" key={color}
               aria-pressed={color===project.coverColor}
@@ -219,7 +222,7 @@ export function ManufacturerCoverPicker({project,onChange}:{
               <span style={{background:getCoverFinish(color)}}/>{color}</button>)}
           </div>
         </div>
-        <div>
+        {hasInsulatedPanels&&<div>
           <strong>Exterior roof panel color</strong>
           <p className="muted">Top of the insulated roof · white, silver or sandstone only.</p>
           <div className="manufacturer-color-choices" role="group" aria-label="Exterior roof color">
@@ -229,8 +232,8 @@ export function ManufacturerCoverPicker({project,onChange}:{
               onClick={()=>onChange({coverRoofColor:color})}>
               <span style={{background:getCoverRoofFinish(color)}}/>{color}</button>)}
           </div>
-        </div>
-        <div>
+        </div>}
+        {hasInsulatedPanels&&<div>
           <strong>Ceiling / underside of roof panels</strong>
           <p className="muted">Choose the interior-facing finish independently of the roof and frame.</p>
           <div className="manufacturer-color-choices" role="group" aria-label="Ceiling underside finish">
@@ -244,7 +247,7 @@ export function ManufacturerCoverPicker({project,onChange}:{
           </div>
           {String(project.coverCeilingFinish??'').includes('Wood Grain')&&
             <p className="consultation-visual-note">Wood-grain 3D preview is illustrative; confirm the Renaissance manufacturer sample before ordering.</p>}
-        </div>
+        </div>}
       </div>
       <div className="consultation-skirting-finish">
         <label>Renaissance structural frame profile

@@ -250,7 +250,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       <RenaissanceDownspout x={right+inchToFoot(2)} z={front+inchToFoot(2)}
         top={roofFrontY-inchToFoot(1.5)} bottom={deckHeight+inchToFoot(4)}
         color={powder}/>
-      {attached&&shape==='studio'&&<RenaissanceReceivingChannel
+      {attached&&shape==='studio'&&isSolid&&<RenaissanceReceivingChannel
         fromX={left} toX={right} z={roofBackEdge}
         y={roofRearY} color={powder}/>}
     </group>}

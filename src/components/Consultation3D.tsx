@@ -72,7 +72,10 @@ export function Consultation3D({project,photoUrl,photoMode=false}:{
       <span>{board?board.collection+' / '+board.color+' — TimberTech photo texture':
         'Deck manufacturer swatch not verified; neutral presentation material'}</span>
       <span>{rail.label}</span>
-      {project.coverFamily!=='none'&&<span>Renaissance {cover.name} · Frame: {project.coverColor} · Roof: {project.coverRoofColor??'White'} · Ceiling: {project.coverCeilingFinish??'White'} · concept dimensions</span>}
+      {project.coverFamily!=='none'&&<span>Renaissance {cover.name} · Frame: {project.coverColor}
+        {['solid-studio','solid-truss-ends','full-trusses'].includes(cover.family)
+          ?` · Roof: ${project.coverRoofColor??'White'} · Ceiling: ${project.coverCeilingFinish??'White'}`
+          :''} · concept dimensions</span>}
     </div>
   </div>;
 }
