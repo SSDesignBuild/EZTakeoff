@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { getDeckVisualProduct } from '../../data/visualCatalog';
-import { surfaceStrips } from '../../lib/visualGeometry';
-import { resolvePictureFrameMaterials } from '../../lib/deckTrimSelection';
+import { surfaceStrips, breakerVisualStrips } from '../../lib/visualGeometry';
+import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials, resolveFasciaMaterial, resolveStairSideFasciaMaterial } from '../../lib/deckTrimSelection';
 import { Beam, type P2 } from './Primitives';
 import { DeckStructure3D } from './DeckStructure3D';
 import { DeckStairAssembly3D } from './DeckStairAssembly3D';
@@ -148,10 +148,31 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
       return <DeckTrimBeam key={'frame-'+edge.index+'-'+i}
         start={[from[0]+(along?inward:0),from[1]+(along?0:inward)]}
         end={[to[0]+(along?inward:0),to[1]+(along?0:inward)]}
-        height={deckHeight+.07}
+        height={deckHeight+.015}
         texture={maps[Math.min(i,2)]??null}
         color={colors[Math.min(i,2)]??'#9e9d97'}/>;
     }))}
+  </group>;
+}
+/** Cross-field breaker courses use their selected real manufacturer swatch. */
+function BreakerBoards({model,center,height,maps,colors}:{
+  model:DeckModel;center:P2;height:number;maps:(THREE.Texture|null)[];
+  colors:string[];
+}){
+  const strips=useMemo(()=>breakerVisualStrips(model),[model]);
+  if(!strips.length)return null;
+  return <group name="independently-selected-perpendicular-breaker-boards">
+    {strips.map((strip,i)=>{
+      const start:P2=strip.axis==='x'
+        ?[strip.startFt-center[0],strip.z-center[1]]
+        :[strip.x-center[0],strip.startFt-center[1]];
+      const end:P2=strip.axis==='x'
+        ?[strip.endFt-center[0],strip.z-center[1]]
+        :[strip.x-center[0],strip.endFt-center[1]];
+      return <DeckTrimBeam key={'breaker-course-'+strip.course+'-'+i}
+        start={start} end={end} height={height+.015}
+        texture={maps[strip.course]??null} color={colors[strip.course]??'#a1a6a9'}/>;
+    })}
   </group>;
 }
 function DeckFascia({model,center,height,texture}:{model:DeckModel;center:P2;height:number;texture:THREE.Texture|null}){
@@ -175,9 +196,17 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
   const borderMaps=[borderMap1,borderMap2,borderMap3];
   const borderColors=borderNames.map(name=>
     getDeckVisualProduct(name)?'#99948a':'#a1a6a9');
-  const fasciaName=project.values.fasciaMaterial==='match'||!project.values.fasciaMaterial
-    ?project.values.deckingMaterial:project.values.fasciaMaterial;
+  const breakerNames=resolveBreakerBoardMaterials(project.values);
+  const {map:breakerMap1}=useManufacturerTexture(model.breakerBoardCount>0?breakerNames[0]:null);
+  const {map:breakerMap2}=useManufacturerTexture(model.breakerBoardCount>1?breakerNames[1]:null);
+  const {map:breakerMap3}=useManufacturerTexture(model.breakerBoardCount>2?breakerNames[2]:null);
+  const breakerMaps=[breakerMap1,breakerMap2,breakerMap3];
+  const breakerColors=breakerNames.map(name=>
+    getDeckVisualProduct(name)?'#99948a':'#a1a6a9');
+  const fasciaName=resolveFasciaMaterial(project.values);
   const {map:fasciaMap}=useManufacturerTexture(fasciaName);
+  const stairFasciaName=resolveStairSideFasciaMaterial(project.values);
+  const {map:stairFasciaMap}=useManufacturerTexture(stairFasciaName);
   const skirtName=project.values.skirtingColor||project.values.deckingMaterial;
   const {map:skirtMap}=useManufacturerTexture(skirtName);
   const stairName=project.values.stairTreadStyle==='match'||!project.values.stairTreadStyle
@@ -188,10 +217,12 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
     <PolygonSubstrate model={model} center={center} deckHeight={deckHeight}/>
     <VisibleDeckBoards model={model} center={center} height={deckHeight} boardName={project.values.deckingMaterial}/>
     <BorderBoards model={model} center={center} deckHeight={deckHeight} maps={borderMaps} colors={borderColors}/>
+    <BreakerBoards model={model} center={center} height={deckHeight} maps={breakerMaps} colors={breakerColors}/>
     <DeckFascia model={model} center={center} height={deckHeight} texture={fasciaMap}/>
     <DeckSkirting3D model={model} center={center} height={deckHeight} values={project.values} texture={skirtMap} lowerTier={lowerTier}/>
     <ManufacturerRailing3D model={model} values={project.values} center={center} deckHeight={deckHeight}/>
-    <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values} texture={stairMap}/>
+    <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values}
+      texture={stairMap} fasciaTexture={stairFasciaMap}/>
     {covered&&<RenaissanceCover3D model={model} project={project} center={center} deckHeight={deckHeight}/>}
     {!selected&&<group name="manufacturer-board-texture-not-yet-verified"/>}
   </group>;
