@@ -41,8 +41,16 @@ export function ConsultationDeckFinishes({values,onValues}:{
   const change=(field:string,value:string|number|boolean)=>onValues({...values,[field]:value});
   const frameChange=(index:number,next:string)=>{
     const key=index===0?'pictureFrameMaterial':'pictureFrameMaterial'+(index+1);
-    const updated={...values,[key]:next};
-    const all=[1,2,3].map(n=>String(updated[n===1?'pictureFrameMaterial':'pictureFrameMaterial'+n]??'match'));
+    const startedMatching=values.borderSameBoard!==false;
+    const updated={...values,
+      pictureFrameMaterial:startedMatching?'match':values.pictureFrameMaterial,
+      pictureFrameMaterial2:startedMatching?'match':values.pictureFrameMaterial2,
+      pictureFrameMaterial3:startedMatching?'match':values.pictureFrameMaterial3,
+      [key]:next,
+    };
+    const active=Math.max(1,Math.min(3,Number(values.pictureFrameCount??1)));
+    const all=Array.from({length:active},(_,i)=>
+      String(updated[i===0?'pictureFrameMaterial':'pictureFrameMaterial'+(i+1)]??'match'));
     updated.borderSameBoard=all.every(v=>v==='match');
     onValues(updated);
   };

@@ -506,11 +506,11 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const actualDeckSide=stairSideFasciaActual(deck);
   const sourceLowerSide=lowerDeck?stairSideFasciaRun(lowerDeck):0;
   const actualLowerSide=lowerDeck?stairSideFasciaActual(lowerDeck):0;
-  const deckFasciaLfForOrder=Math.max(0,
+  const deckFasciaLfForOrder=isPressureTreatedDecking?0:Math.max(0,
     deck.fasciaLf-(!stairRiserUsesFascia&&!isPressureTreatedDecking?
       stairBoardRunLf(deck)*deck.stairRisers:0)-sourceDeckSide+
     (independentStairSideFascia?0:actualDeckSide));
-  const lowerFasciaLfForOrder=lowerDeck?Math.max(0,lowerDeck.fasciaLf-
+  const lowerFasciaLfForOrder=lowerDeck&&!isPressureTreatedDecking?Math.max(0,lowerDeck.fasciaLf-
     (!stairRiserUsesFascia&&!isPressureTreatedDecking?
       stairBoardRunLf(lowerDeck)*lowerDeck.stairRisers:0)-sourceLowerSide+
     (independentStairSideFascia?0:actualLowerSide)):0;
