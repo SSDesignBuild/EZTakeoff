@@ -39,8 +39,9 @@ function Scene({project,photoMode}:{project:ConsultationProject;photoMode:boolea
       target={[0,Math.min(8,height/2),0]}/>
   </>;
 }
-export function Consultation3D({project,photoUrl,photoMode=false}:{
+export function Consultation3D({project,photoUrl,photoMode=false,viewportHeight=740}:{
   project:ConsultationProject;photoUrl:string|null;photoMode?:boolean;
+  viewportHeight?:number;
 }){
   const model=useMemo(()=>buildDeckModel(project.values),[project.values]);
   const dimension=Math.max(model.width,model.depth,12);
@@ -48,7 +49,8 @@ export function Consultation3D({project,photoUrl,photoMode=false}:{
   const board=getDeckVisualProduct(project.values.deckingMaterial);
   const rail=getRailVisualProduct(project.values.railingVisualId);
   const cover=getCoverVisualProduct(project.coverFamily);
-  return <div className={'consultation-3d-frame'+(photoMode?' with-photo':'')}>
+  return <div className={'consultation-3d-frame'+(photoMode?' with-photo':'')}
+    style={{height:Math.max(450,Math.min(1200,viewportHeight))}}>
     {photoMode&&photoUrl&&<img className="consultation-house-background" src={photoUrl}
       alt="Client property used as the background for a manually aligned concept model"/>}
     <div className="consultation-3d-canvas" style={photoMode?{

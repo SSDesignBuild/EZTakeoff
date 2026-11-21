@@ -155,6 +155,11 @@ export function ManufacturerRailPicker({values,onValues}:{
     </div>
     <div className="manufacturer-selected-rail">
       <strong>{selected.label}</strong>
+      <div className="manufacturer-selected-rail-hero">
+        <ProductPhoto photo={railingPhotos[selected.id]}
+          name={selected.label} fallback={selected.sourcePage}/>
+        <p className="muted">Larger manufacturer style reference. Compare actual infill, top profile and posts before confirming.</p>
+      </div>
       <div className="manufacturer-rail-config">
         <label>Railing finish
           <select value={selected.colors.includes(selectedColor)?selectedColor:selected.colors[0]}

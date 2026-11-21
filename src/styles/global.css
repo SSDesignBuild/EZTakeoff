@@ -2291,3 +2291,27 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .renaissance-door-config select,.renaissance-door-config input{min-width:0;width:100%}
 .renaissance-door-config small{grid-column:1/-1}
 @media(max-width:650px){.renaissance-door-config{grid-template-columns:1fr}}
+
+/* Larger, uncropped manufacturer rail references and flexible client 3D presentation. */
+.manufacturer-rail-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));gap:1rem}
+.manufacturer-rail-card .manufacturer-photo{height:240px;min-height:240px}
+.manufacturer-rail-card .manufacturer-photo img{object-fit:contain;object-position:center;padding:.2rem}
+.manufacturer-rail-card{min-height:360px;padding-bottom:.65rem}
+.manufacturer-selected-rail-hero{width:100%;max-width:860px}
+.manufacturer-selected-rail-hero .manufacturer-photo{height:clamp(260px,36vw,430px);
+  border-radius:12px;border:1px solid var(--border);background:#eef0ee}
+.manufacturer-selected-rail-hero .manufacturer-photo img{object-fit:contain;object-position:center}
+.manufacturer-selected-rail-hero .muted{margin:.4rem 0 .9rem}
+.consultation-viewport-resize{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;font-size:.8rem}
+.consultation-viewport-resize input[type=range]{min-width:150px;width:210px;accent-color:var(--accent)}
+.consultation-3d-frame{min-height:450px;transition:height .12s ease}
+@media(max-width:720px){
+  .manufacturer-rail-grid{grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr))}
+  .manufacturer-rail-card .manufacturer-photo{height:210px;min-height:210px}
+  .manufacturer-selected-rail-hero .manufacturer-photo{height:280px}
+}
+@media(max-width:560px){
+  .manufacturer-rail-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem}
+  .manufacturer-rail-card{min-height:290px}
+  .manufacturer-rail-card .manufacturer-photo{height:175px;min-height:175px}
+}

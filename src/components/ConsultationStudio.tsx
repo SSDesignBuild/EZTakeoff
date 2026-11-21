@@ -70,6 +70,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
   const [notice,setNotice]=useState('');
   const [overlay,setOverlay]=useState(false);
   const [renderBusy,setRenderBusy]=useState(false);
+  const [viewportHeight,setViewportHeight]=useState(740);
   const [pricingBusy,setPricingBusy]=useState(false);
   const [bridgeError,setBridgeError]=useState('');
   const model=useMemo(()=>buildDeckModel(project.values),[project.values]);
@@ -240,9 +241,17 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
         <button type="button" className={overlay?'active':''} onClick={()=>setOverlay(true)} disabled={!photoUrl}>Overlay on house photo</button>
         <button type="button" className="secondary-btn small-btn" disabled={renderBusy} onClick={preview}>
           {renderBusy?'Exporting…':'Download concept PNG'}</button>
+        <label className="consultation-viewport-resize">3D view height · {viewportHeight}px
+          <input type="range" min={450} max={1200} step={25} value={viewportHeight}
+            onChange={e=>setViewportHeight(Number(e.target.value))}/>
+        </label>
+        <button type="button" className="ghost-btn small-btn"
+          onClick={()=>setViewportHeight(current=>current>=1125?740:1150)}>
+          {viewportHeight>=1125?'Standard view':'Expand view'}</button>
       </div>
       <Suspense fallback={<div className="consultation-3d-loading">Loading professional 3D viewer…</div>}>
-        <Live3D project={project} photoUrl={photoUrl} photoMode={overlay}/>
+        <Live3D project={project} photoUrl={photoUrl} photoMode={overlay}
+          viewportHeight={viewportHeight}/>
       </Suspense>
       {overlay&&<div className="consultation-calibration">
         <p className="muted">Align the preliminary 3D perspective by hand. Use the 3D viewport to orbit the design, then move and scale it on the home photograph.</p>
