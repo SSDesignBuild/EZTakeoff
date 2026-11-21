@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build > /tmp/ez-tsc-errors.txt 2>&1; code=$?; mkdir -p dist; grep -E 'error TS[0-9]+|error:|^> |^src/' /tmp/ez-tsc-errors.txt > dist/__qa_compiler_errors.txt || true; echo EXIT_CODE=$code >> dist/__qa_compiler_errors.txt; exit 0" # TEMPORARY disposable compiler diagnostics: restore full test/build gate before merge
+  command = "npm run build >/tmp/ez-test-compile.txt 2>&1; status=$?; [ $status -eq 0 ] && exit 0; n=0; grep -q 'ConsultationDeckFinishes' /tmp/ez-test-compile.txt && n=$((n+1)); grep -q 'ManufacturerDeck3D' /tmp/ez-test-compile.txt && n=$((n+2)); grep -q 'visualGeometry' /tmp/ez-test-compile.txt && n=$((n+4)); grep -q 'RenaissanceExtrusions' /tmp/ez-test-compile.txt && n=$((n+8)); grep -q 'RenaissanceCover3D' /tmp/ez-test-compile.txt && n=$((n+16)); grep -q 'DeckStairAssembly3D' /tmp/ez-test-compile.txt && n=$((n+32)); grep -q 'estimate.ts' /tmp/ez-test-compile.txt && n=$((n+64)); [ $n -eq 0 ] && exit 99; exit $((n+10))" # TEMPORARY: compile-error file classifier, restore strict gate before release
   publish = "dist"
 
 [[redirects]]
