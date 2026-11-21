@@ -147,6 +147,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const [draggingPost, setDraggingPost] = useState<{ beamIndex: number; id: string } | null>(null);
   const [selectedPost, setSelectedPost] = useState<{ beamIndex: number; id: string } | null>(null);
   const [postFeedback, setPostFeedback] = useState('');
+  const [railingFeedback,setRailingFeedback]=useState('');
   const [draggingStair, setDraggingStair] = useState(false);
   const [activeStairIndex, setActiveStairIndex] = useState(0);
   const [drawingSequence, setDrawingSequence] = useState(points.length === 0);
@@ -366,8 +367,11 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
 
   const toggleRailingEdge = (edgeIndex: number) => {
     const next = new Set(railingEdges);
-    if (next.has(edgeIndex)) next.delete(edgeIndex); else next.add(edgeIndex);
+    const removed=next.has(edgeIndex);
+    if(removed)next.delete(edgeIndex);else next.add(edgeIndex);
     updateNumberArray(tierKey('manualRailingEdges'), Array.from(next.values()));
+    setRailingFeedback('Edge '+(edgeIndex+1)+' · '+(removed?'Railing removed':'Railing added')
+      +' · '+next.size+' selected edge(s)');
   };
 
   const toggleHouseEdge = (edgeIndex: number) => {
@@ -815,7 +819,29 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
               const isHouse = houseEdges.has(segment.index) || model.houseEdgeIndices.includes(segment.index);
               const isStairEdge = Number(values.stairEdgeIndex ?? -1) === segment.index;
               const edgeClass = isHouse ? 'interactive-edge active-house' : isRailing ? 'interactive-edge active-railing' : isStairEdge ? 'interactive-edge active-stair' : 'interactive-edge';
-              return <g key={`edge-${segment.index}`}><line x1={start.x} y1={start.y} x2={end.x} y2={end.y} className={edgeClass} onClick={() => { if (mode === 'points') insertPointAtEdge(segment.index); if (mode === 'house') toggleHouseEdge(segment.index); if (mode === 'railing') toggleRailingEdge(segment.index); if (mode === 'stairs') selectStairEdge(segment.index); }} /><circle cx={mid.x} cy={mid.y} r={6} className="edge-midpoint" />{isHouse && <text x={mid.x} y={mid.y - 12} textAnchor="middle" className="deck-point-label">HOUSE</text>}</g>;
+              return <g key={`edge-${segment.index}`}>
+                {mode==='railing'&&<line x1={start.x} y1={start.y} x2={end.x} y2={end.y}
+                  stroke={isRailing?'#0db989':'#7e8b99'} strokeWidth={isRailing?9:6}
+                  strokeDasharray={isRailing?undefined:'12 9'} opacity={.9}
+                  pointerEvents="none"/>}
+                <line x1={start.x} y1={start.y} x2={end.x} y2={end.y}
+                  className={edgeClass} onClick={()=>{
+                    if(mode==='points')insertPointAtEdge(segment.index);
+                    if(mode==='house')toggleHouseEdge(segment.index);
+                    if(mode==='railing')toggleRailingEdge(segment.index);
+                    if(mode==='stairs')selectStairEdge(segment.index);
+                  }}/>
+                <circle cx={mid.x} cy={mid.y} r={6} className="edge-midpoint" pointerEvents="none"/>
+                {mode==='railing'&&<>
+                  <rect x={mid.x-37} y={mid.y-24} width={74} height={19}
+                    rx={6} fill={isRailing?'#0d7859':'#596574'} pointerEvents="none"/>
+                  <text x={mid.x} y={mid.y-11} textAnchor="middle"
+                    fill="#ffffff" fontSize={12} fontWeight="700"
+                    pointerEvents="none">{isRailing?'RAIL ✓':'NO RAIL'}</text>
+                </>}
+                {isHouse&&mode!=='railing'&&<text x={mid.x} y={mid.y-12}
+                  textAnchor="middle" className="deck-point-label">HOUSE</text>}
+              </g>;
             })}
             {!drawingSequence && model.beamLines.map((beam, index) => {
               const pointOnBeam = (station: number) => model.joistDirection === 'vertical'
@@ -974,7 +1000,15 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           </div>}
           {mode === 'railing' && <div className="callout-box compact-card">
             <h4>Choose railing edges</h4>
-            <p className="muted">Click each exposed edge that needs a railing. Adjust railing system, height and materials in the next Stairs & railing step. Selected edges: {[...railingEdges].map((i) => 'E' + (i + 1)).join(', ') || 'none'}.</p>
+            <p className="muted">Solid green = railing selected, gray dashed = no railing. Click any deck edge to toggle and confirm it below. Stairs remain open unless a gate is specified. {railingEdges.size} of {model.edgeSegments.length} edges selected.</p>
+             <p role="status" className="deck-designer-feedback">{railingFeedback||'Click an edge to add or remove railing.'}</p>
+             <div className="tag-row">{model.edgeSegments.map(edge=>
+               <button type="button" key={'rail-edge-status-'+edge.index}
+                 className={railingEdges.has(edge.index)?'secondary-btn small-btn':'ghost-btn small-btn'}
+                 aria-pressed={railingEdges.has(edge.index)}
+                 onClick={()=>toggleRailingEdge(edge.index)}>
+                 E{edge.index+1}: {railingEdges.has(edge.index)?'✓ railing':'— no rail'}
+               </button>)}</div>
           </div>}
           {mode === 'points' && <div className="callout-box compact-card"><h4>Reset</h4><button type="button" className="ghost-btn block-btn" onClick={resetShape}>Reset shape and manual overrides</button></div>}
           {mode === 'points' && <div className="callout-box compact-card workflow-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Viewport</span><strong>{feetAndInches(viewFeet)} × {feetAndInches(viewFeet)}</strong></div><div><span>Origin</span><strong>{feetAndInches(limits.minX)} , {feetAndInches(limits.minY)}</strong></div></div></div>}
