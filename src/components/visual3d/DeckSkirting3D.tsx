@@ -39,6 +39,7 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
       const edge=model.edgeSegments.find(e=>e.index===side.edgeIndex);
       if(!edge)return null;
       const face=Math.max(.10,plan.options.faceIn/12);
+      const yaw=-Math.atan2(edge.end.y-edge.start.y,edge.end.x-edge.start.x);
       return <group key={'skirt-side-'+side.edgeIndex}>
         {side.topRails.map((rail,i)=><Beam key={'top2x4-'+i}
           start={point(edge,rail.start)} end={point(edge,rail.end)}
@@ -53,17 +54,19 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
         })}
         {side.verticals.map((v,i)=>{
           const [x,z]=point(edge,v.station);
-          return <Block key={'stud2x4-'+i} position={[x,top-v.heightFt/2,z]}
-            size={[edge.orientation==='horizontal'?.125:.292,v.heightFt,edge.orientation==='horizontal'?.292:.125]}
-            color="#867054"/>;
+          return <group key={'stud2x4-'+i} position={[x,top-v.heightFt/2,z]}
+            rotation={[0,yaw,0]}>
+            <Block position={[0,0,0]} size={[.125,v.heightFt,.292]} color="#867054"/>
+          </group>;
         })}
         {plan.options.orientation==='vertical'
           ? side.finish.map((v,i)=>{
             const [x,z]=point(edge,Math.min(side.lengthFt,v.station+face/2),'finish');
-            return <Block key={'vertical-finish-'+i} position={[x,top-v.heightFt/2,z]}
-              size={[edge.orientation==='horizontal'?face:.082,v.heightFt,
-                edge.orientation==='horizontal'?.082:face]}
-              color={color} texture={showPhoto?texture:null}/>;
+            return <group key={'vertical-finish-'+i}
+              position={[x,top-v.heightFt/2,z]} rotation={[0,yaw,0]}>
+              <Block position={[0,0,0]} size={[face,v.heightFt,.082]}
+                color={color} texture={showPhoto?texture:null}/>
+            </group>;
           })
           :side.courses.map((course,i)=>{
             const a=point(edge,course.start,'finish'),b=point(edge,course.end,'finish');
@@ -81,11 +84,11 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
           const middle=opening.offset+opening.width/2;
           const [x,z]=point(edge,middle,'finish');
           const width=Math.max(.2,opening.width-.09);
-          const isHorizontal=edge.orientation==='horizontal';
           return <group key={'access-gate-leaf-'+i} name="placed-hinged-skirting-access-gate">
-            <Block position={[x,top-h/2,z]}
-              size={[isHorizontal?width:.075,h,isHorizontal?.075:width]}
-              color={color} texture={showPhoto?texture:null}/>
+            <group position={[x,top-h/2,z]} rotation={[0,yaw,0]}>
+              <Block position={[0,0,0]} size={[width,h,.075]}
+                color={color} texture={showPhoto?texture:null}/>
+            </group>
             {[opening.offset+.12,opening.offset+opening.width-.12].map((station,k)=>{
               const [sx,sz]=point(edge,station,'finish');
               return <Block key={'access-gate-stile-'+k} position={[sx,top-h/2,sz]}
