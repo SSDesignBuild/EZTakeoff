@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build >/tmp/ez-error.txt 2>&1; grep -q 'ConsultationStudio.tsx' /tmp/ez-error.txt && exit 11; exit 0" # TEMPORARY TypeScript diagnostic, restore full tests before merge
+  command = "npm run assets:sync && npm test && npm run build"
   publish = "dist"
 
 [[redirects]]

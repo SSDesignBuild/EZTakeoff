@@ -195,7 +195,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
       </div>
       <ManufacturerBoardPicker values={project.values} onValues={(values)=>onChange({values})}/>
       <div className="consultation-option-columns">
-        <ConsultationDeckFinishes values={project.values} onValues={updateValues}/>
+        <ConsultationDeckFinishes values={project.values} onValues={(values)=>onChange({values})}/>
         <ManufacturerRailPicker values={project.values} onValues={(values)=>onChange({values})}/>
         <article className="consultation-option-card">
           <h4>Stair options</h4>
@@ -211,7 +211,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
             <option value="profiled">Cut to follow the stringer</option>
             <option value="straight">Straight clean fascia</option>
           </select></label>
-          <StairFasciaFinishSelect values={project.values} onValues={updateValues}/>
+          <StairFasciaFinishSelect values={project.values} onValues={(values)=>onChange({values})}/>
           <label>Riser material<select value={String(project.values.stairRiserStyle??'auto')}
             onChange={(e)=>setValue('stairRiserStyle',e.target.value)}>
             <option value="auto">Standard coordinated riser</option>
