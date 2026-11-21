@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build >/tmp/ez-compiler.txt 2>&1; grep -Eq 'src/(components/visual3d/(RenaissanceExtrusions|RenaissanceCover3D)|lib/renaissanceDownspoutRouting)' /tmp/ez-compiler.txt && exit 11; exit 0" # TEMPORARY diagnostic only; strict gate must be restored
+  command = "npm run build >/tmp/ez-compiler.txt 2>&1; grep -q 'RenaissanceExtrusions.tsx' /tmp/ez-compiler.txt && exit 11; exit 0" # TEMPORARY isolate exact broken TSX source; revert before merge
   publish = "dist"
 
 [[redirects]]
