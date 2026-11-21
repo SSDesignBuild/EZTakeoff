@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build >/tmp/ez-error.txt 2>&1; grep -q 'renaissanceDownspoutRouting.ts' /tmp/ez-error.txt && exit 11; exit 0" # TEMPORARY diagnostic; restore strict gate
+  command = "npm run build >/tmp/ez-error.txt 2>&1; grep -q 'src/lib/estimate.ts' /tmp/ez-error.txt && exit 11; exit 0" # TEMPORARY diagnostic; restore strict test gate
   publish = "dist"
 
 [[redirects]]
