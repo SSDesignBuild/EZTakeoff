@@ -13,6 +13,7 @@ import { loadConsultations, saveConsultations, makeConsultationProject, updateCo
 import { saveHousePhoto, readHousePhoto, deleteHousePhoto } from '../lib/consultationPhoto';
 import { createEstimateHandoff, parseEstimateResponse, makeAcceptedScope, downloadJson, selectedPricedTier } from '../lib/estimatingBridge';
 import { ConsultationDeckFinishes, StairFasciaFinishSelect } from './ConsultationDeckFinishes';
+import { deckVisualProducts } from '../data/visualCatalog';
 
 const Live3D=lazy(()=>import('./Consultation3D').then((module)=>({default:module.Consultation3D})));
 type Step='photo'|'layout'|'options'|'render';
@@ -204,7 +205,9 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
           <label>Tread material<select value={String(project.values.stairTreadStyle??'match')}
             onChange={(e)=>setValue('stairTreadStyle',e.target.value)}>
             <option value="match">Match deck board style</option>
-            <option value={String(project.values.deckingMaterial??'')}>{String(project.values.deckingMaterial??'Current deck board')}</option>
+            {deckVisualProducts.map(board=><option key={board.id} value={board.label}>
+              {board.collection} · {board.color}
+            </option>)}
           </select></label>
           <label>Stair fascia edge<select value={String(project.values.stairFasciaStyle??'profiled')}
             onChange={(e)=>setValue('stairFasciaStyle',e.target.value)}>
@@ -217,6 +220,10 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
             <option value="auto">Standard coordinated riser</option>
             <option value="match">Match deck board</option>
             <option value="fascia">Match fascia trim</option>
+            <option value="open">Open risers (subject to approved code)</option>
+            {deckVisualProducts.map(board=><option key={board.id} value={board.label}>
+              {board.collection} · {board.color}
+            </option>)}
           </select></label>
         </article>
         <ConsultationSkirtingOptions values={project.values} onValuesChange={updateValues}/>

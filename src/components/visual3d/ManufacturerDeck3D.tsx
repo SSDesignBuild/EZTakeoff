@@ -229,6 +229,11 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
   const stairName=project.values.stairTreadStyle==='match'||!project.values.stairTreadStyle
     ?project.values.deckingMaterial:project.values.stairTreadStyle;
   const {map:stairMap}=useManufacturerTexture(stairName);
+  const riserStyle=String(project.values.stairRiserStyle??'auto');
+  const riserName=riserStyle==='fascia'||(riserStyle==='auto'&&project.values.deckingType!=='pressure-treated')
+    ?fasciaName:riserStyle==='auto'||riserStyle==='match'
+      ?String(project.values.deckingMaterial):riserStyle;
+  const {map:riserMap}=useManufacturerTexture(riserName);
   return <group name="manufacturer-visualized-deck">
     <DeckStructure3D model={model} center={center} height={deckHeight}/>
     <PolygonSubstrate model={model} center={center} deckHeight={deckHeight}/>
@@ -239,7 +244,8 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
     <DeckSkirting3D model={model} center={center} height={deckHeight} values={project.values} texture={skirtMap} lowerTier={lowerTier}/>
     <ManufacturerRailing3D model={model} values={project.values} center={center} deckHeight={deckHeight}/>
     <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values}
-      texture={stairMap} fasciaTexture={stairFasciaMap}/>
+      texture={stairMap} fasciaTexture={stairFasciaMap}
+      riserTexture={riserMap} skirtTexture={skirtMap}/>
     {covered&&<RenaissanceCover3D model={model} project={project} center={center} deckHeight={deckHeight}/>}
     {!selected&&<group name="manufacturer-board-texture-not-yet-verified"/>}
   </group>;
