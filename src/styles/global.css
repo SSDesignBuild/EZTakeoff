@@ -2281,3 +2281,13 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 .consultation-access-row label{display:grid;gap:.3rem}
 .consultation-access-row select,.consultation-access-row input{width:100%;min-width:0;min-height:40px}
 @media(max-width:900px){.consultation-access-row{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Screen/railing integration + real 3068 door option controls. */
+.renaissance-screen-options{grid-column:1/-1;display:grid;gap:.7rem;padding:.9rem;border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+.renaissance-screen-options>strong{font-size:.95rem}
+.renaissance-screen-options label{display:grid;gap:.3rem}
+.renaissance-door-config{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem}
+.renaissance-door-config label{min-width:0}
+.renaissance-door-config select,.renaissance-door-config input{min-width:0;width:100%}
+.renaissance-door-config small{grid-column:1/-1}
+@media(max-width:650px){.renaissance-door-config{grid-template-columns:1fr}}
