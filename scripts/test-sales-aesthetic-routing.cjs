@@ -42,7 +42,7 @@ const swatch={
   fasciaMaterial:styles[5],stairFasciaMaterial:styles[1],
   stairFasciaStyle:'straight',
   deckShape:JSON.stringify([[0,0],[18,0],[18,12],[0,12]].map(([x,y])=>({x,y}))),
-  deckHeight:5,stairRise:5,stairCount:1,stairWidth:4,
+  deckHeight:5,stairRise:5,stairCount:1,stairEdgeIndex:2,stairWidth:4,
   deckingType:'composite',
 };
 assert.deepEqual(trim.resolvePictureFrameMaterials(swatch),
