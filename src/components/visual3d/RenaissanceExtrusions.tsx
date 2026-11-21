@@ -166,53 +166,75 @@ export function RenaissanceReceivingChannel({fromX,toX,z,y,color}:{
  * The 75-degree elbow radius and the field routing are visual approximations,
  * not a manufacturer-certified elbow SKU or installation quantity.
  */
-function routedDownspoutGeometry(layout:DownspoutLayout):THREE.ExtrudeGeometry{
+type RoutedSection={
+  geometry:THREE.ExtrudeGeometry;
+  position:[number,number,number];rotation:THREE.Quaternion;
+};
+/**
+ * Production downspouts have straight 2x3-in aluminum tube sections and
+ * separate A/B elbows. A global Catmull-Rom curve causes warped soft hoses,
+ * especially at the eave: each section below is now truly straight.
+ */
+function routedDownspoutSections(layout:DownspoutLayout):RoutedSection[]{
   const w=inchToFoot(2),d=inchToFoot(3),t=inchToFoot(.045);
   const outer=new THREE.Shape();
   outer.moveTo(-w/2,-d/2);outer.lineTo(w/2,-d/2);
   outer.lineTo(w/2,d/2);outer.lineTo(-w/2,d/2);outer.closePath();
-  const inner=new THREE.Path();
-  inner.moveTo(-w/2+t,-d/2+t);inner.lineTo(-w/2+t,d/2-t);
-  inner.lineTo(w/2-t,d/2-t);inner.lineTo(w/2-t,-d/2+t);inner.closePath();
-  outer.holes.push(inner);
-  // Frenet-frame extrusion follows rounded elbows rather than separate
-  // boxes suspended in space; every vertical station belongs to a post.
-  const path=new THREE.CatmullRomCurve3(
-    layout.points.map(p=>new THREE.Vector3(p[0],p[1],p[2])),
-    false,'centripetal',.22,
-  );
-  const g=new THREE.ExtrudeGeometry(outer,{
-    extrudePath:path,steps:Math.max(80,layout.points.length*16),
-    bevelEnabled:false,curveSegments:12,
+  const hole=new THREE.Path();
+  hole.moveTo(-w/2+t,-d/2+t);hole.lineTo(-w/2+t,d/2-t);
+  hole.lineTo(w/2-t,d/2-t);hole.lineTo(w/2-t,-d/2+t);hole.closePath();
+  outer.holes.push(hole);
+  return layout.points.slice(1).flatMap((point,i)=>{
+    const from=new THREE.Vector3(...layout.points[i]);
+    const to=new THREE.Vector3(...point);
+    const direction=to.clone().sub(from),length=direction.length();
+    if(length<.02)return [];
+    // Real hollow rectangular extrusion, including terminal open ends.
+    const g=new THREE.ExtrudeGeometry(outer,{
+      depth:length+.014,steps:1,bevelEnabled:false,curveSegments:1,
+    });
+    g.translate(0,0,-(length+.014)/2);
+    g.computeVertexNormals();
+    const rotation=new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0,0,1),direction.normalize());
+    return [{geometry:g,
+      position:from.add(to).multiplyScalar(.5).toArray() as [number,number,number],
+      rotation}];
   });
-  g.computeVertexNormals();
-  return g;
 }
 export function RenaissanceDownspout({layout,color}:{
   layout:DownspoutLayout;color:string;
 }){
-  const geometry=useMemo(()=>routedDownspoutGeometry(layout),[layout]);
-  useEffect(()=>()=>geometry.dispose(),[geometry]);
+  const sections=useMemo(()=>routedDownspoutSections(layout),[layout]);
+  useEffect(()=>()=>sections.forEach(section=>section.geometry.dispose()),[sections]);
   return <group name="post-mounted-rectangular-downspout-with-A-and-B-elbows">
-    <mesh geometry={geometry} castShadow receiveShadow>
+    {sections.map((section,i)=><mesh key={'straight-pipe-section-'+i}
+      geometry={section.geometry} position={section.position}
+      quaternion={section.rotation} castShadow receiveShadow>
       <meshStandardMaterial color={color} side={THREE.DoubleSide}
-        metalness={.39} roughness={.31}/>
-    </mesh>
+        metalness={.38} roughness={.32}/>
+    </mesh>)}
     {/* A and B elbow ferrules are modeled at the actual transitions,
         not at arbitrary locations on a dangling vertical cylinder. */}
     {layout.elbows.map((elbow,i)=>{
       const p=layout.points[elbow.atIndex];
       const before=layout.points[Math.max(0,elbow.atIndex-1)];
       const after=layout.points[Math.min(layout.points.length-1,elbow.atIndex+1)];
-      const normal=new THREE.Vector3(
-        after[0]-before[0],after[1]-before[1],after[2]-before[2]).normalize();
-      const rotation=new THREE.Quaternion().setFromUnitVectors(
-        new THREE.Vector3(0,1,0),normal);
-      return <mesh key={'elbow-'+i} name={'downspout-'+elbow.type+'-elbow-'+elbow.location}
-        position={[p[0],p[1],p[2]]} quaternion={rotation} castShadow>
-        <boxGeometry args={[inchToFoot(2.13),inchToFoot(.42),inchToFoot(3.13)]}/>
-        <meshStandardMaterial color={color} metalness={.43} roughness={.28}/>
-      </mesh>;
+      const center=new THREE.Vector3(...p);
+      const directions=[before,after].map(other=>
+        new THREE.Vector3(other[0]-p[0],other[1]-p[1],other[2]-p[2]).normalize());
+      return <group key={'elbow-'+i} name={'downspout-'+elbow.type+'-elbow-'+elbow.location}>
+        {directions.map((vector,j)=>{
+          const q=new THREE.Quaternion().setFromUnitVectors(
+            new THREE.Vector3(0,0,1),vector);
+          const pos=center.clone().addScaledVector(vector,inchToFoot(.7)).toArray() as [number,number,number];
+          return <mesh key={'die-cast-sleeve-'+j} position={pos}
+            quaternion={q} castShadow receiveShadow>
+            <boxGeometry args={[inchToFoot(2.12),inchToFoot(3.12),inchToFoot(1.8)]}/>
+            <meshStandardMaterial color={color} metalness={.44} roughness={.30}/>
+          </mesh>;
+        })}
+      </group>;
     })}
     {/* Straps terminate on the actual nearest cover/deck POST centers. */}
     {layout.straps.map((strap,i)=>{

@@ -49,6 +49,8 @@ export function planRenaissanceDownspout(input:{
   if(elevated&&!validDeck.length)return null;
   const deckPost=elevated?validDeck.reduce((best,p)=>
     distance(p,coverPost)<distance(best,coverPost)?p:best):null;
+  // A long free-spanning jog is not a viable post-mounted route.
+  if(deckPost&&distance(deckPost,coverPost)>2.5)return null;
   // 2x3 in rectangular pipe is secured directly to the FRONT face of the
   // cover/deck post, not floating diagonally beside both faces.
   const face=(post:PostXZ,width:number):PostXZ=>
