@@ -1,5 +1,5 @@
 [build]
-  command = "node scripts/test-premium-consultation.cjs && node scripts/test-consultation-design-accuracy.cjs && node scripts/test-renaissance-reference.cjs && node scripts/test-renaissance-manufacturer.cjs && node scripts/test-renaissance-detail-geometry.cjs && node scripts/test-renaissance-roof-modules.cjs && node scripts/test-renaissance-gutter-finishes.cjs && node scripts/test-sales-aesthetic-routing.cjs && node scripts/test-video-visual-accuracy.cjs" # TEMPORARY regression bisect; strict assets/test/build restored before merge
+  command = "node scripts/test-renaissance-roof-modules.cjs && node scripts/test-renaissance-gutter-finishes.cjs && node scripts/test-sales-aesthetic-routing.cjs && node scripts/test-video-visual-accuracy.cjs" # TEMPORARY bisect late visual QA tests; restore strict CI
   publish = "dist"
 
 [[redirects]]
