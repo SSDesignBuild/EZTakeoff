@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import {
   inchToFoot,type RenaissanceExtrusionProfile,
@@ -7,6 +7,7 @@ import {
 import type { P2 } from './Primitives';
 import type { GutterRun } from '../../lib/renaissanceGutterGeometry';
 import { architecturalGutterOutlineFt,miterAlongFt } from '../../lib/renaissanceGutterGeometry';
+import type { DownspoutLayout } from '../../lib/renaissanceDownspoutRouting';
 
 function outlineWithRibs(width:number,height:number){
   // Physical beam silhouette: repeated extrusion tongues along each vertical
@@ -160,39 +161,80 @@ export function RenaissanceReceivingChannel({fromX,toX,z,y,color}:{
 }
 
 /**
- * Exterior gutter drop / rectangular aluminum downspout preview.
- * Routing, section size and actual elbow are NOT specified on the drawings;
- * finish matches the framing, and this is a visualization placeholder
- * pending an approved downspout schedule, not a material-order quantity.
+ * Actual rectangular 2x3-in hollow aluminum downspout geometry, routed
+ * through paired A/B elbows and attached to structural posts with straps.
+ * The 75-degree elbow radius and the field routing are visual approximations,
+ * not a manufacturer-certified elbow SKU or installation quantity.
  */
-export function RenaissanceDownspout({x,z,top,bottom,color}:{
-  x:number;z:number;top:number;bottom:number;color:string;
+function routedDownspoutGeometry(layout:DownspoutLayout):THREE.ExtrudeGeometry{
+  const w=inchToFoot(2),d=inchToFoot(3),t=inchToFoot(.045);
+  const outer=new THREE.Shape();
+  outer.moveTo(-w/2,-d/2);outer.lineTo(w/2,-d/2);
+  outer.lineTo(w/2,d/2);outer.lineTo(-w/2,d/2);outer.closePath();
+  const inner=new THREE.Path();
+  inner.moveTo(-w/2+t,-d/2+t);inner.lineTo(-w/2+t,d/2-t);
+  inner.lineTo(w/2-t,d/2-t);inner.lineTo(w/2-t,-d/2+t);inner.closePath();
+  outer.holes.push(inner);
+  // Frenet-frame extrusion follows rounded elbows rather than separate
+  // boxes suspended in space; every vertical station belongs to a post.
+  const path=new THREE.CatmullRomCurve3(
+    layout.points.map(p=>new THREE.Vector3(p[0],p[1],p[2])),
+    false,'centripetal',.22,
+  );
+  const g=new THREE.ExtrudeGeometry(outer,{
+    extrudePath:path,steps:Math.max(80,layout.points.length*16),
+    bevelEnabled:false,curveSegments:12,
+  });
+  g.computeVertexNormals();
+  return g;
+}
+export function RenaissanceDownspout({layout,color}:{
+  layout:DownspoutLayout;color:string;
 }){
-  const height=Math.max(0,top-bottom);
-  const geometry=useMemo(()=>{
-    if(height<.05)return null;
-    const w=inchToFoot(2),d=inchToFoot(3),t=inchToFoot(.045);
-    const s=new THREE.Shape();
-    s.moveTo(-w/2,-d/2);s.lineTo(w/2,-d/2);
-    s.lineTo(w/2,d/2);s.lineTo(-w/2,d/2);s.closePath();
-    const hole=new THREE.Path();
-    hole.moveTo(-w/2+t,-d/2+t);hole.lineTo(-w/2+t,d/2-t);
-    hole.lineTo(w/2-t,d/2-t);hole.lineTo(w/2-t,-d/2+t);hole.closePath();
-    s.holes.push(hole);
-    const g=new THREE.ExtrudeGeometry(s,{depth:height,bevelEnabled:false,steps:1});
-    g.rotateX(-Math.PI/2);g.computeVertexNormals();
-    return g;
-  },[height]);
-  if(!geometry)return null;
-  return <group name="renaissance-gutter-drop-and-downspout">
-    <mesh geometry={geometry} position={[x,bottom,z]} castShadow receiveShadow>
-      <meshStandardMaterial color={color} side={THREE.DoubleSide} metalness={.32} roughness={.35}/>
+  const geometry=useMemo(()=>routedDownspoutGeometry(layout),[layout]);
+  useEffect(()=>()=>geometry.dispose(),[geometry]);
+  return <group name="post-mounted-rectangular-downspout-with-A-and-B-elbows">
+    <mesh geometry={geometry} castShadow receiveShadow>
+      <meshStandardMaterial color={color} side={THREE.DoubleSide}
+        metalness={.39} roughness={.31}/>
     </mesh>
-    {[.22,.74].map((fraction,i)=><mesh key={'downspout-strap-'+i}
-      position={[x,bottom+height*fraction,z]} castShadow>
-      <boxGeometry args={[inchToFoot(2.55),inchToFoot(.5),inchToFoot(3.4)]}/>
-      <meshStandardMaterial color={color} metalness={.4} roughness={.34}/>
-    </mesh>)}
+    {/* A and B elbow ferrules are modeled at the actual transitions,
+        not at arbitrary locations on a dangling vertical cylinder. */}
+    {layout.elbows.map((elbow,i)=>{
+      const p=layout.points[elbow.atIndex];
+      const before=layout.points[Math.max(0,elbow.atIndex-1)];
+      const after=layout.points[Math.min(layout.points.length-1,elbow.atIndex+1)];
+      const normal=new THREE.Vector3(
+        after[0]-before[0],after[1]-before[1],after[2]-before[2]).normalize();
+      const rotation=new THREE.Quaternion().setFromUnitVectors(
+        new THREE.Vector3(0,1,0),normal);
+      return <mesh key={'elbow-'+i} name={'downspout-'+elbow.type+'-elbow-'+elbow.location}
+        position={[p[0],p[1],p[2]]} quaternion={rotation} castShadow>
+        <boxGeometry args={[inchToFoot(2.13),inchToFoot(.42),inchToFoot(3.13)]}/>
+        <meshStandardMaterial color={color} metalness={.43} roughness={.28}/>
+      </mesh>;
+    })}
+    {/* Straps terminate on the actual nearest cover/deck POST centers. */}
+    {layout.straps.map((strap,i)=>{
+      const [x,y,z]=strap.at,[px,pz]=strap.post;
+      const depth=Math.hypot(x-px,z-pz);
+      return <group key={'post-strap-'+i} name={'downspout-attached-'+strap.kind+'-post'}>
+        <mesh position={[x,y,z]} castShadow>
+          <boxGeometry args={[inchToFoot(2.6),inchToFoot(.45),inchToFoot(3.35)]}/>
+          <meshStandardMaterial color={color} metalness={.46} roughness={.31}/>
+        </mesh>
+        <mesh position={[(x+px)/2,y,(z+pz)/2]}
+          rotation={[0,-Math.atan2(z-pz,x-px),0]} castShadow>
+          <boxGeometry args={[Math.max(.03,depth),.05,.055]}/>
+          <meshStandardMaterial color={color} metalness={.45} roughness={.31}/>
+        </mesh>
+        {[-1,1].map(sign=><mesh key={'strap-screw-'+sign}
+          position={[x+sign*inchToFoot(.82),y,z+inchToFoot(1.8)]}>
+          <sphereGeometry args={[inchToFoot(.075),8,5]}/>
+          <meshStandardMaterial color="#666a6d" metalness={.8} roughness={.3}/>
+        </mesh>)}
+      </group>;
+    })}
   </group>;
 }
 
