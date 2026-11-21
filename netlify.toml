@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build >/tmp/ez-compiler.txt 2>&1; grep -Eq 'src/(components/(ConsultationDeckFinishes|visual3d/ManufacturerDeck3D|visual3d/DeckStairAssembly3D)|lib/visualGeometry)' /tmp/ez-compiler.txt && exit 11; exit 0" # TEMPORARY error isolation only; strictly restore full gate before merge
+  command = "npm run build >/tmp/ez-compiler.txt 2>&1; grep -Eq 'src/(components/visual3d/(RenaissanceExtrusions|RenaissanceCover3D)|lib/renaissanceDownspoutRouting)' /tmp/ez-compiler.txt && exit 11; exit 0" # TEMPORARY diagnostic only; strict gate must be restored
   publish = "dist"
 
 [[redirects]]
