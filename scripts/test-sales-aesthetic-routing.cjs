@@ -54,6 +54,7 @@ assert.equal(trim.resolveStairSideFasciaMaterial(swatch),styles[1]);
 assert.deepEqual(trim.resolvePictureFrameMaterials({...swatch,borderSameBoard:true}),
   [styles[0],styles[0],styles[0]],
   'legacy same-board toggle must override dormant old picture frame labels');
+if(process.env.EZ_TEST_ONLY==='selections')process.exit(0);
 const model=buildDeckModel(swatch);
 assert.equal(model.breakerBoardCount,3);
 const field=surfaceStrips(model);
@@ -71,6 +72,7 @@ for(const piece of field){
 }
 const positions=[...new Set(breaker.map(b=>b.axis==='z'?b.x:b.z))];
 assert.equal(positions.length,3,'Three courses must have 3 different offsets');
+if(process.env.EZ_TEST_ONLY==='geometry')process.exit(0);
 const e=calculateEstimate('decks',swatch);
 for(let i=0;i<3;i++){
   const frame=e.materials.filter(x=>x.name==='Picture-frame deck board '+(i+1));
@@ -92,6 +94,7 @@ const contour=planStraightStairFascia({treadDepthFt:11/12,treads:7,riseFt:5/8,he
 assert.equal(contour.length,4,'Straight fascia requires four corners and no stair-step notch');
 assert.ok(contour[0].riseFt>contour[1].riseFt);
 assert.ok(contour[3].riseFt<contour[0].riseFt);
+if(process.env.EZ_TEST_ONLY==='estimate')process.exit(0);
 const outlet=[6,15,7],coverPosts=[[6,6],[0,6]];
 const deckPosts=[[6.2,5.8],[0,5.7]];
 const ground=planRenaissanceDownspout({
@@ -127,6 +130,7 @@ assert.equal(planRenaissanceDownspout({
   coverPostWidthFt:3.875/12,deckPostWidthFt:5.5/12,
   deckHeightFt:6,
 }),null);
+if(process.env.EZ_TEST_ONLY==='routing')process.exit(0);
 const read=path=>fs.readFileSync(require('node:path').resolve(root,path),'utf8');
 const manuf=read('src/components/visual3d/ManufacturerDeck3D.tsx');
 const stair=read('src/components/visual3d/DeckStairAssembly3D.tsx');

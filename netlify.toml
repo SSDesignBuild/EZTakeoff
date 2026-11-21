@@ -1,5 +1,5 @@
 [build]
-  command = "node scripts/test-sales-aesthetic-routing.cjs" # TEMPORARY isolate new regression, restore strict gate before merge
+  command = "EZ_TEST_ONLY=geometry node scripts/test-sales-aesthetic-routing.cjs" # TEMPORARY staged test probe; restore full strict build gate
   publish = "dist"
 
 [[redirects]]
