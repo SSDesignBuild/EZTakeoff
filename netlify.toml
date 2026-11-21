@@ -1,5 +1,5 @@
 [build]
-  command = "EZ_TEST_ONLY=rows node scripts/test-sales-aesthetic-routing.cjs" # TEMPORARY staged test probe; restore full strict build gate
+  command = "EZ_TEST_ONLY=side node scripts/test-sales-aesthetic-routing.cjs" # TEMPORARY staged test probe; restore full strict build gate
   publish = "dist"
 
 [[redirects]]

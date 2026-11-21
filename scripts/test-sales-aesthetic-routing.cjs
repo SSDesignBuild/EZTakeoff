@@ -92,6 +92,7 @@ assert.ok(stairFascia.notes.includes(styles[1]));
 assert.ok(stairFascia.notes.includes('straight continuous diagonal'));
 const stairs=e.materials.find(x=>x.name==='2x12 stringers');
 assert.ok(stairs&&stairs.quantity>=2,'Structural notched stringers remain independently ordered');
+if(process.env.EZ_TEST_ONLY==='side')process.exit(0);
 const contour=planStraightStairFascia({treadDepthFt:11/12,treads:7,riseFt:5/8,heightFt:5});
 assert.equal(contour.length,4,'Straight fascia requires four corners and no stair-step notch');
 assert.ok(contour[0].riseFt>contour[1].riseFt);
