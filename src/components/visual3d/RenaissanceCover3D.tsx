@@ -10,6 +10,8 @@ import { planWrapAroundGutter } from '../../lib/renaissanceGutterGeometry';
 import { planRenaissanceDownspout } from '../../lib/renaissanceDownspoutRouting';
 import { actualPostWidthFt } from '../../lib/visualStructure';
 import { seatCanopyPost } from '../../lib/coverDeckPlacement';
+import { planPcaDoorOnWall, type PcaDoorModel,type PcaPetDoor,type ScreenDoorWall } from '../../lib/pcaScreenDoorGeometry';
+import { PcaScreenDoor3D } from './PcaScreenDoor3D';
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
 import {
   getRenaissanceExtrusion,makeRenaissanceFramePlan,inchToFoot,
@@ -21,9 +23,10 @@ import {
 } from './RenaissanceExtrusions';
 
 /** Roof-following Dolce screen wall with real triangular mesh at sloping eaves. */
-function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish}:{
+function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish,treatment='screens-only'}:{
   from:P2;to:P2;bottom:number;topFrom:number;topTo:number;
   openView:boolean;finish:string;
+  treatment?:'integrated-kick'|'integrated-picket'|'inside'|'outside'|'screens-only';
 }){
   const profile=planDolceScreenProfile({
     from,to,bottomFt:bottom,topFromFt:topFrom,topToFt:topTo,openView,
@@ -57,6 +60,78 @@ function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish}:{
         position={[x,bottom+m.heightFt/2,z]}
         size={[.092,m.heightFt,.092]} color={finish}/>;
     })}
+    {treatment==='integrated-kick'&&<group name="integrated-Dolce-24in-aluminum-kick-panel">
+      <mesh position={[from[0],bottom,from[1]]} rotation={[0,-Math.atan2(dz,dx),0]}>
+        <planeGeometry args={[profile.lengthFt,2]}/>
+        <meshStandardMaterial color={finish} metalness={.38} roughness={.34}
+          side={THREE.DoubleSide}/>
+      </mesh>
+      <Beam start={from} end={to} height={bottom+2}
+        thickness={.12} depth={.10} color={finish}/>
+    </group>}
+    {treatment==='integrated-picket'&&<group name="integrated-Dolce-guard-picket-panel">
+      <Beam start={from} end={to} height={bottom+3.0}
+        thickness={.12} depth={.12} color={finish}/>
+      {Array.from({length:Math.max(2,Math.ceil(profile.lengthFt/.43)-1)},(_,i)=>{
+        const t=(i+1)/Math.max(2,Math.ceil(profile.lengthFt/.43));
+        return <Block key={'Dolce-integrated-picket-'+i}
+          position={[from[0]+dx*t,bottom+1.55,from[1]+dz*t]}
+          size={[.055,2.88,.055]} color={finish}/>;
+      })}
+    </group>}
+  </group>;
+}
+
+type DolceTreatment='integrated-kick'|'integrated-picket'|'inside'|'outside'|'screens-only';
+type ScreenDoorDetail={
+  enabled:boolean;wall:ScreenDoorWall;positionPercent:number;
+  model:PcaDoorModel;pet:PcaPetDoor;finish:string;hinge:'left'|'right';
+  swing:'in'|'out';kickPlateIn:number;
+};
+function DolceScreenWall({id,from,to,bottom,topFrom,topTo,openView,finish,treatment,
+  door,center}:{id:ScreenDoorWall;from:P2;to:P2;bottom:number;topFrom:number;topTo:number;
+  openView:boolean;finish:string;treatment:DolceTreatment;
+  door:ScreenDoorDetail;center:P2;
+}){
+  const dx=to[0]-from[0],dz=to[1]-from[1],length=Math.hypot(dx,dz);
+  if(length<.05)return null;
+  // For distinct railing/screen assemblies, do not put both systems in the
+  // same plane. Inside/outside offset is relative to the cover center.
+  const midpoint:P2=[(from[0]+to[0])/2,(from[1]+to[1])/2];
+  const inside:P2=[center[0]-midpoint[0],center[1]-midpoint[1]];
+  const vlen=Math.hypot(...inside);
+  const offset=(treatment==='inside'?.28:treatment==='outside'?-.28:0);
+  const displacement:P2=vlen>.01?[inside[0]/vlen*offset,inside[1]/vlen*offset]:[0,0];
+  const f:P2=[from[0]+displacement[0],from[1]+displacement[1]];
+  const t:P2=[to[0]+displacement[0],to[1]+displacement[1]];
+  const along=(v:number):P2=>[f[0]+(t[0]-f[0])*v,f[1]+(t[1]-f[1])*v];
+  const atTop=(v:number)=>topFrom+(topTo-topFrom)*v;
+  const opening=door.enabled&&door.wall===id?
+    planPcaDoorOnWall(length,door.positionPercent):null;
+  const common={bottom,openView,finish,treatment};
+  if(!opening)return <DolceScreenRun from={f} to={t} topFrom={topFrom}
+    topTo={topTo} {...common}/>;
+  const a=opening.startFt/length,b=opening.endFt/length;
+  const start=along(a),end=along(b);
+  const doorHeight=80/12;
+  // If headroom cannot physically accommodate a 6'8" door, do not render
+  // a door punching through the roof; show a full wall pending redesign.
+  if(Math.min(atTop(a),atTop(b))-bottom<doorHeight+.08)return <group
+    name="PCA-door-height-blocked-by-cover-clearance">
+    <DolceScreenRun from={f} to={t} topFrom={topFrom} topTo={topTo} {...common}/>
+  </group>;
+  return <group name={'screen-wall-'+id+'-with-PCA-3068-door-cutout'}>
+    {opening.startFt>.10&&<DolceScreenRun from={f} to={start}
+      topFrom={topFrom} topTo={atTop(a)} {...common}/>}
+    {length-opening.endFt>.10&&<DolceScreenRun from={end} to={t}
+      topFrom={atTop(b)} topTo={topTo} {...common}/>}
+    <PcaScreenDoor3D from={start} to={end} bottom={bottom}
+      finish={door.finish} model={door.model} pet={door.pet}
+      kickPlateIn={door.kickPlateIn} hinge={door.hinge} swing={door.swing}/>
+    {(Math.min(atTop(a),atTop(b))-bottom-doorHeight)>.14&&
+      <DolceScreenRun from={start} to={end}
+        bottom={bottom+doorHeight} topFrom={atTop(a)} topTo={atTop(b)}
+        openView={true} finish={finish} treatment="screens-only"/>}
   </group>;
 }
 
@@ -402,24 +477,37 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           <meshStandardMaterial color={powder} metalness={.43} roughness={.3}/>
         </mesh>)}
     </>}
-    {(project.coverScreenStyle??'none')!=='none'&&<>
-      <DolceScreenRun from={[frameLeft,frameFront]} to={[frameRight,frameFront]}
-        bottom={deckHeight+.12} topFrom={roofFront-headerHeight}
-        topTo={roofFront-headerHeight}
-        openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>
-      <DolceScreenRun from={[frameLeft,back]} to={[frameLeft,frameFront]}
-        bottom={deckHeight+.12} topFrom={roofBack-headerHeight}
-        topTo={roofFront-headerHeight}
-        openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>
-      <DolceScreenRun from={[frameRight,back]} to={[frameRight,frameFront]}
-        bottom={deckHeight+.12} topFrom={roofBack-headerHeight}
-        topTo={roofFront-headerHeight}
-        openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>
-      {!attached&&<DolceScreenRun from={[frameLeft,back]} to={[frameRight,back]}
-        bottom={deckHeight+.12} topFrom={roofBack-headerHeight}
-        topTo={roofBack-headerHeight}
-        openView={project.coverScreenStyle==='dolce-open-view'} finish={powder}/>}
-    </>}
+    {(project.coverScreenStyle??'none')!=='none'&&<group name="Dolce-integrated-screen-room-with-actual-access">
+      {([
+        {id:'front' as const,from:[frameLeft,frameFront] as P2,to:[frameRight,frameFront] as P2,
+          topFrom:roofFront-headerHeight,topTo:roofFront-headerHeight},
+        {id:'left' as const,from:[frameLeft,back] as P2,to:[frameLeft,frameFront] as P2,
+          topFrom:roofBack-headerHeight,topTo:roofFront-headerHeight},
+        {id:'right' as const,from:[frameRight,back] as P2,to:[frameRight,frameFront] as P2,
+          topFrom:roofBack-headerHeight,topTo:roofFront-headerHeight},
+        ...(!attached?[{id:'rear' as const,
+          from:[frameLeft,back] as P2,to:[frameRight,back] as P2,
+          topFrom:roofBack-headerHeight,topTo:roofBack-headerHeight}]:[]),
+      ]).map(wall=><DolceScreenWall key={'Dolce-wall-'+wall.id} {...wall}
+        bottom={deckHeight+.12}
+        openView={project.coverScreenStyle==='dolce-open-view'}
+        finish={powder} center={[xMid,zMid]}
+        treatment={project.coverScreenRailTreatment??'integrated-kick'}
+        door={{
+          enabled:project.coverDoorEnabled!==false,
+          wall:project.coverDoorSide??'front',
+          positionPercent:project.coverDoorPositionPercent??50,
+          model:project.coverDoorModel??'A-100',
+          pet:project.coverDoorPet??'none',
+          finish:project.coverDoorFinish&&project.coverDoorFinish!=='match'
+            ?getCoverFinish(project.coverDoorFinish==='Clay'?'Sandstone':project.coverDoorFinish)
+            :powder,
+          hinge:project.coverDoorHinge??'left',
+          swing:project.coverDoorSwing??'out',
+          kickPlateIn:project.coverDoorKickPlateIn??8,
+        }}/>
+      )}
+    </group>}
     {isSolid&&plan.gable&&(project.coverScreenStyle??'none')!=='none'&&
       <DolceGableInfill leftX={frameLeft} rightX={frameRight} z={frameFront}
         beamTopY={eaveY} roofWidthFt={width} ridgeRiseFt={gableRise}
