@@ -242,7 +242,13 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
     <BreakerBoards model={model} center={center} height={deckHeight} maps={breakerMaps} colors={breakerColors}/>
     <DeckFascia model={model} center={center} height={deckHeight} texture={fasciaMap}/>
     <DeckSkirting3D model={model} center={center} height={deckHeight} values={project.values} texture={skirtMap} lowerTier={lowerTier}/>
-    <ManufacturerRailing3D model={model} values={project.values} center={center} deckHeight={deckHeight}/>
+    <ManufacturerRailing3D model={model} values={project.values} center={center}
+      deckHeight={deckHeight}
+      screenIntegrated={covered&&project.coverScreenStyle!=='none'&&
+        !['inside','outside'].includes(project.coverScreenRailTreatment??'integrated-kick')}
+      screenDoorSide={covered&&project.coverScreenStyle!=='none'&&project.coverDoorEnabled!==false
+        ?(project.coverDoorSide??'front'):undefined}
+      screenDoorPercent={project.coverDoorPositionPercent??50}/>
     <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values}
       texture={stairMap} fasciaTexture={stairFasciaMap}
       riserTexture={riserMap} skirtTexture={skirtMap}/>

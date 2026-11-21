@@ -61,7 +61,8 @@ function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish,treatment=
         size={[.092,m.heightFt,.092]} color={finish}/>;
     })}
     {treatment==='integrated-kick'&&<group name="integrated-Dolce-24in-aluminum-kick-panel">
-      <mesh position={[from[0],bottom,from[1]]} rotation={[0,-Math.atan2(dz,dx),0]}>
+      <mesh position={[(from[0]+to[0])/2,bottom+1,(from[1]+to[1])/2]}
+        rotation={[0,-Math.atan2(dz,dx),0]}>
         <planeGeometry args={[profile.lengthFt,2]}/>
         <meshStandardMaterial color={finish} metalness={.38} roughness={.34}
           side={THREE.DoubleSide}/>
