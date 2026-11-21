@@ -1,4 +1,4 @@
-import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials } from './deckTrimSelection';
+import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials, resolveStairSideFasciaMaterial } from './deckTrimSelection';
 import { parseGableSections, parseSections, parseSunroomSections } from './sectioning';
 import { buildDeckModel, buildLowerTierDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem, SectionConfig } from './types';
@@ -475,6 +475,9 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const deckingStyleInfo = splitDeckStyle(deckingMaterial);
   const fasciaMaterial = resolveBoardStyle(inputs.fasciaMaterial);
   const fasciaStyleInfo = splitDeckStyle(fasciaMaterial);
+  const stairSideFasciaMaterial=resolveStairSideFasciaMaterial(inputs);
+  const stairSideFasciaStyleInfo=splitDeckStyle(stairSideFasciaMaterial);
+  const independentStairSideFascia=stairSideFasciaMaterial!==fasciaMaterial;
   const stairTreadMaterial = resolveBoardStyle(inputs.stairTreadStyle);
   const stairRiserChoice = String(inputs.stairRiserStyle ?? 'auto');
   const stairRiserUsesFascia = stairRiserChoice === 'fascia' || (stairRiserChoice === 'auto' && !isPressureTreatedDecking);
@@ -490,10 +493,30 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     +(lowerDeck?stairBoardRunLf(lowerDeck)*(lowerDeck.stairTreadsPerRun*2+(!stairRiserUsesFascia?lowerDeck.stairRisers*2:0)):0);
   // Standard composite deck fascia traditionally includes stair risers.
   // Remove those faces when a separately specified riser deck board is ordered.
-  const deckFasciaLfForOrder=Math.max(0,deck.fasciaLf-(!stairRiserUsesFascia&&!isPressureTreatedDecking?stairBoardRunLf(deck)*deck.stairRisers:0));
+  // The existing model includes stair side fascia at horizontal RUN length.
+  // A clean straight cut is a single diagonal board and needs its actual
+  // sloped length; the notched choice retains the legacy run allowance.
+  const stairSideFasciaRun=(tier:typeof deck)=>
+    tier.stairCount*Math.max(0,tier.stairRunFt)*2;
+  const stairSideFasciaActual=(tier:typeof deck)=>
+    tier.stairCount*2*(inputs.stairFasciaStyle==='straight'
+      ?Math.hypot(Math.max(0,tier.stairRunFt),Math.max(0,tier.stairRiseFt))
+      :Math.max(0,tier.stairRunFt));
+  const sourceDeckSide=stairSideFasciaRun(deck);
+  const actualDeckSide=stairSideFasciaActual(deck);
+  const sourceLowerSide=lowerDeck?stairSideFasciaRun(lowerDeck):0;
+  const actualLowerSide=lowerDeck?stairSideFasciaActual(lowerDeck):0;
+  const deckFasciaLfForOrder=Math.max(0,
+    deck.fasciaLf-(!stairRiserUsesFascia&&!isPressureTreatedDecking?
+      stairBoardRunLf(deck)*deck.stairRisers:0)-sourceDeckSide+
+    (independentStairSideFascia?0:actualDeckSide));
   const lowerFasciaLfForOrder=lowerDeck?Math.max(0,lowerDeck.fasciaLf-
-    (!stairRiserUsesFascia&&!isPressureTreatedDecking?stairBoardRunLf(lowerDeck)*lowerDeck.stairRisers:0)):0;
-  const totalFasciaBoardLf=deckFasciaLfForOrder+lowerFasciaLfForOrder;
+    (!stairRiserUsesFascia&&!isPressureTreatedDecking?
+      stairBoardRunLf(lowerDeck)*lowerDeck.stairRisers:0)-sourceLowerSide+
+    (independentStairSideFascia?0:actualLowerSide)):0;
+  const separateStairSideFasciaLf=independentStairSideFascia&&
+    !isPressureTreatedDecking?actualDeckSide+actualLowerSide:0;
+  const totalFasciaBoardLf=deckFasciaLfForOrder+lowerFasciaLfForOrder+separateStairSideFasciaLf;
   const colorMatchedTrimFastenerPoints = Math.ceil((pictureFrameBoardLf + stairDeckBoardLf + totalFasciaBoardLf) * 2);
   const totalDeckAreaForNails = Math.max(0, Number(deck.area || 0)) + (lowerDeck ? Math.max(0, Number(lowerDeck.area || 0)) : 0);
   const connectorNails = (deck.joistHangers + deck.postBases + deck.lateralLoadBrackets + deck.rafterTies) * 10 + (lowerDeck ? (lowerDeck.joistHangers + lowerDeck.postBases + lowerDeck.lateralLoadBrackets + lowerDeck.rafterTies) * 10 : 0);
@@ -680,6 +703,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     ] : []),
     ...(deckFasciaLfForOrder > 0 ? [toMaterial('Fascia board', 'Trim', Math.ceil(deckFasciaLfForOrder/12), 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${deckFasciaLfForOrder.toFixed(1)} lf for deck perimeter/stringer sides ${stairRiserUsesFascia ? 'including standard stair fascia risers' : '(separate riser boards are listed under Stairs)'}. Fascia style: ${fasciaMaterial}.`)] : []),
     ...(lowerFasciaLfForOrder > 0 ? [toMaterial('Lower-tier fascia board', 'Lower tier trim', Math.ceil(lowerFasciaLfForOrder/12), 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${lowerFasciaLfForOrder.toFixed(1)} lf lower deck fascia; separate riser boards where chosen. Style: ${fasciaMaterial}.`)] : []),
+    ...(separateStairSideFasciaLf > 0 ? [toMaterial('Stair side fascia board', 'Stairs', Math.ceil(separateStairSideFasciaLf/12), 'boards', '12 ft fascia boards', stairSideFasciaStyleInfo.color, `${separateStairSideFasciaLf.toFixed(1)} lf for both exposed stair stringer sides. Finish ${stairSideFasciaMaterial}, ${inputs.stairFasciaStyle==='straight'?'straight continuous diagonal edge':'notched stringer-following edge'}. Verify individual stock cut lengths on site.`)] : []),
   );
   if (deck.stairStringers > 0) {
     materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringerBoardCount, 'boards', `${deck.stairStringerLength} ft stock`, framingWoodGrade, `${deck.stairStringers} stringer cut(s) at about ${feetAndInches(deck.stairStringerCutLength)} each · 12 in. O.C. · ${deck.stairRisers} risers / ${deck.stairTreadsPerRun} treads per run`));
