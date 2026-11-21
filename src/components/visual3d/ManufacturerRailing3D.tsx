@@ -1,6 +1,8 @@
 import type { DeckModel } from '../../lib/deckModel';
 import { getRailVisualProduct, railVisualProducts, type RailVisualProduct } from '../../data/visualCatalog';
 import { Beam, Block, Rod, type P2, type P3 } from './Primitives';
+import { parseDeckGates } from '../../lib/deckGates';
+import { subtractRailingOpenings } from '../../lib/salesRailOpenings';
 
 type Values=Record<string,string|number|boolean>;
 const colors:Record<string,string>={
@@ -31,13 +33,27 @@ export function ManufacturerRailing3D({model,values,center,deckHeight}:{
   const postWidth=style.postWidthIn/12;
   const hideCap=['flush-top','flush-drink'].includes(String(values.railingPostTermination));
   const edgeMap=new Map(model.edgeSegments.map((edge)=>[edge.index,edge]));
+  const gates=parseDeckGates(values.deckGateEntries);
+  const gatePlacements=gates.flatMap(gate=>{
+    const edge=edgeMap.get(gate.edgeIndex??-1);
+    if(!edge)return [];
+    const stair=gate.placement==='stairs'?model.stairPlacements.find(s=>s.edgeIndex===edge.index):undefined;
+    const width=Math.min(edge.length,Math.max(.5,stair?.width??gate.widthFt));
+    const start=Math.min(Math.max(0,edge.length-width),Math.max(0,stair?.offset??gate.offsetFt??0));
+    return [{...gate,edgeIndex:edge.index,start,end:start+width}];
+  });
+  const stairOpenings=model.stairPlacements.filter(s=>s.edgeIndex!==null)
+    .map(s=>({edgeIndex:s.edgeIndex!,startFt:s.offset,endFt:s.offset+s.width}));
+  const gateOpenings=gatePlacements.map(g=>({edgeIndex:g.edgeIndex,startFt:g.start,endFt:g.end}));
+  const visibleRails=subtractRailingOpenings(model.railCoverage,
+    [...stairOpenings,...gateOpenings],.08);
   const startCoords=(edge:typeof model.edgeSegments[number],position:number):P2=>{
     const t=Math.max(0,Math.min(1,position/Math.max(.001,edge.length)));
     return [edge.start.x+(edge.end.x-edge.start.x)*t-center[0],
       edge.start.y+(edge.end.y-edge.start.y)*t-center[1]];
   };
   return <group name={'railing-'+style.id}>
-    {model.railCoverage.map((coverage,index)=>{
+    {visibleRails.map((coverage,index)=>{
       const edge=edgeMap.get(coverage.edgeIndex);
       if(!edge)return null;
       const runLength=coverage.end-coverage.start;
@@ -107,6 +123,39 @@ export function ManufacturerRailing3D({model,values,center,deckHeight}:{
                   size={[wooden ? .12 : metallic ? .048 : .12,yTop-yBottom-.32,wooden ? .12 : metallic ? .048 : .12]}
                   color={balusterColor} metalness={metallic ? .65 : .02}/>;
           })}
+      </group>;
+    })}
+    {/* Gates replace a railing run only where explicitly placed.
+        Stair entrances otherwise remain open and never have a rail
+        running straight across the treads. */}
+    {gatePlacements.map(gate=>{
+      const edge=edgeMap.get(gate.edgeIndex);
+      if(!edge)return null;
+      const start=startCoords(edge,gate.start+.04);
+      const end=startCoords(edge,gate.end-.04);
+      const length=gate.end-gate.start-.08;
+      if(length<=.2)return null;
+      const top=Math.min(yTop,deckHeight+gate.heightFt);
+      const bottom=deckHeight+.22;
+      const hingeStart=start;
+      return <group key={'rail-gate-'+gate.id} name="visible-selectable-railing-gate">
+        <Beam start={start} end={end} height={bottom+.09}
+          thickness={.14} depth={.13} color={color}/>
+        <Beam start={start} end={end} height={top-.09}
+          thickness={.14} depth={.13} color={color}/>
+        {[start,end].map((p,i)=><Block key={'gate-upright-'+i}
+          position={[p[0],(top+bottom)/2,p[1]]}
+          size={[.13,top-bottom,.13]} color={color}/>)}
+        {Array.from({length:Math.max(2,Math.ceil(length/.4)-1)},(_,i)=>{
+          const t=(i+1)/(Math.ceil(length/.4)+1);
+          return <Block key={'gate-picket-'+i}
+            position={[start[0]+(end[0]-start[0])*t,(top+bottom)/2,
+              start[1]+(end[1]-start[1])*t]}
+            size={[.045,top-bottom-.2,.045]} color={color}/>;
+        })}
+        {[.24,.70].map((fraction,i)=><Block key={'gate-hinge-'+i}
+          position={[hingeStart[0],bottom+(top-bottom)*fraction,hingeStart[1]]}
+          size={[.17,.16,.17]} color="#58606a" metalness={.52}/>)}
       </group>;
     })}
   </group>;

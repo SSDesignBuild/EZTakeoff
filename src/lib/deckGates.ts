@@ -5,6 +5,10 @@ export interface DeckGate {
   label: string;
   heightFt: number;
   widthFt: number;
+  /** Placement on a real deck perimeter edge. Missing values are legacy drafts. */
+  edgeIndex?:number;
+  offsetFt?:number;
+  placement?:'stairs'|'edge';
 }
 export interface GateHardwarePlan {
   gates: DeckGate[];
@@ -26,6 +30,9 @@ export function parseDeckGates(raw: unknown): DeckGate[] {
         label:String(g.label??('Gate '+(i+1))),
         heightFt:Number(g.heightFt??4),
         widthFt:Number(g.widthFt??3),
+        edgeIndex:g.edgeIndex===undefined?undefined:Number(g.edgeIndex),
+        offsetFt:g.offsetFt===undefined?undefined:Number(g.offsetFt),
+        placement:g.placement==='stairs'?'stairs':'edge' as const,
       }));
   }catch{return [];}
 }
@@ -40,6 +47,10 @@ export function planDeckGateHardware(raw: unknown): GateHardwarePlan {
       issues.push('Gate '+(index+1)+': specify a valid height in feet.');
     if(!Number.isFinite(gate.widthFt)||gate.widthFt<=0||gate.widthFt>12)
       issues.push('Gate '+(index+1)+': specify a valid width in feet.');
+    if(gate.edgeIndex!==undefined&&(!Number.isInteger(gate.edgeIndex)||gate.edgeIndex<0))
+      issues.push('Gate '+(index+1)+': choose a valid deck edge.');
+    if(gate.offsetFt!==undefined&&(!Number.isFinite(gate.offsetFt)||gate.offsetFt<0))
+      issues.push('Gate '+(index+1)+': specify a valid edge offset.');
   });
   const safe=gates.filter((g)=>Number.isFinite(g.heightFt)&&g.heightFt>0&&g.heightFt<=12&&Number.isFinite(g.widthFt)&&g.widthFt>0&&g.widthFt<=12);
   const tall=safe.filter((gate)=>gate.heightFt>4);
