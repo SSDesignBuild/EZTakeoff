@@ -17,10 +17,22 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
   const color=plan.options.material==='kdat'?'#a89572':
     plan.options.material==='pvc'?'#cdd0cd':'#bab3a9';
   const showPhoto=plan.options.material!=='kdat';
-  const point=(edge:typeof model.edgeSegments[number],s:number):P2=>{
+  const winding=model.points.reduce((sum,p,i)=>{
+    const q=model.points[(i+1)%model.points.length];
+    return sum+p.x*q.y-q.x*p.y;
+  },0);
+  const outwardSign=winding>=0?1:-1;
+  // Finish planks sit OUTSIDE the 2x4 support frame, leaving the real framing
+  // hidden behind finished skirting rather than exposed in front of it.
+  const point=(edge:typeof model.edgeSegments[number],s:number,
+    layer:'frame'|'finish'|'jamb'='frame'):P2=>{
     const t=Math.min(1,Math.max(0,s/Math.max(.001,edge.length)));
-    return [edge.start.x+(edge.end.x-edge.start.x)*t-center[0],
-      edge.start.y+(edge.end.y-edge.start.y)*t-center[1]];
+    const dx=(edge.end.x-edge.start.x)/Math.max(.001,edge.length),
+      dy=(edge.end.y-edge.start.y)/Math.max(.001,edge.length);
+    const nx=dy*outwardSign,ny=-dx*outwardSign;
+    const offset=layer==='finish'?.075:layer==='jamb'?.02:-.155;
+    return [edge.start.x+(edge.end.x-edge.start.x)*t-center[0]+nx*offset,
+      edge.start.y+(edge.end.y-edge.start.y)*t-center[1]+ny*offset];
   };
   return <group name="exact-deck-skirting-selected-sides-access-and-grade">
     {plan.sides.map(side=>{
@@ -47,14 +59,14 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
         })}
         {plan.options.orientation==='vertical'
           ? side.finish.map((v,i)=>{
-            const [x,z]=point(edge,Math.min(side.lengthFt,v.station+face/2));
+            const [x,z]=point(edge,Math.min(side.lengthFt,v.station+face/2),'finish');
             return <Block key={'vertical-finish-'+i} position={[x,top-v.heightFt/2,z]}
               size={[edge.orientation==='horizontal'?face:.082,v.heightFt,
                 edge.orientation==='horizontal'?.082:face]}
               color={color} texture={showPhoto?texture:null}/>;
           })
           :side.courses.map((course,i)=>{
-            const a=point(edge,course.start),b=point(edge,course.end);
+            const a=point(edge,course.start,'finish'),b=point(edge,course.end,'finish');
             const y=top-(course.row*(plan.options.faceIn+plan.options.gapIn)/12)-course.depthFt/2;
             return <Beam key={'horizontal-finish-'+i} start={a} end={b}
               height={y} thickness={course.depthFt} depth={.09}
@@ -63,7 +75,7 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
         {/* Clear openings are excluded by the exact skirting cut model.
             Show their jamb boundaries, not fake solid infill. */}
         {side.openings.map((opening,i)=>[opening.offset,opening.offset+opening.width].map((s,k)=>{
-          const [x,z]=point(edge,s);
+          const [x,z]=point(edge,s,'jamb');
           return <Block key={'jamb-'+i+'-'+k} position={[x,top-(side.startHeightFt+side.endHeightFt)/4,z]}
             size={[.12,(side.startHeightFt+side.endHeightFt)/2,.12]} color="#81694d"/>;
         }))}
