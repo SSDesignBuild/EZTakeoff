@@ -74,6 +74,7 @@ const positions=[...new Set(breaker.map(b=>b.axis==='z'?b.x:b.z))];
 assert.equal(positions.length,3,'Three courses must have 3 different offsets');
 if(process.env.EZ_TEST_ONLY==='geometry')process.exit(0);
 const e=calculateEstimate('decks',swatch);
+if(process.env.EZ_TEST_ONLY==='estimateCalculated')process.exit(0);
 for(let i=0;i<3;i++){
   const frame=e.materials.filter(x=>x.name==='Picture-frame deck board '+(i+1));
   assert.ok(frame.length>0,'Missing independent picture-frame quantity '+(i+1));
