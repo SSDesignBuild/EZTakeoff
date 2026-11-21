@@ -85,6 +85,7 @@ for(let i=0;i<3;i++){
   assert.ok(breakRows.every(x=>x.notes.includes([styles[3],styles[4],styles[0]][i])),
     'Breaker material list must agree with chosen 3D swatch');
 }
+if(process.env.EZ_TEST_ONLY==='rows')process.exit(0);
 const stairFascia=e.materials.find(x=>x.name==='Stair side fascia board');
 assert.ok(stairFascia,'Contrasting side fascia needs separate material quantity');
 assert.ok(stairFascia.notes.includes(styles[1]));
