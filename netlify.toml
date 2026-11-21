@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build >/tmp/ez-compiler.txt 2>&1; grep -q 'RenaissanceExtrusions.tsx' /tmp/ez-compiler.txt && exit 11; exit 0" # TEMPORARY isolate exact broken TSX source; revert before merge
+  command = "npm run build >/tmp/ez-compiler.txt 2>&1; grep -q 'RenaissanceCover3D.tsx' /tmp/ez-compiler.txt && exit 11; exit 0" # TEMPORARY diagnose source; restore strict gate
   publish = "dist"
 
 [[redirects]]
