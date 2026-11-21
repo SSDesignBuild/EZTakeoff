@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import type { DeckModel, StairPlacement } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { Block, type P2 } from './Primitives';
+import { planStraightStairFascia } from '../../lib/stairFasciaGeometry';
 
 const riseFor=(model:DeckModel,height:number)=>height/Math.max(1,model.stairRisers);
 function makeStringer(runFt:number,treads:number,riseFt:number,height:number){
@@ -22,9 +23,24 @@ function makeStringer(runFt:number,treads:number,riseFt:number,height:number){
   geo.computeVertexNormals();
   return geo;
 }
-function Flight({placement,model,center,height,values,texture}:{
+function makeStraightFascia(runFt:number,treads:number,riseFt:number,height:number){
+  const contour=planStraightStairFascia({
+    treadDepthFt:runFt,treads,riseFt,heightFt:height,
+  });
+  const shape=new THREE.Shape();
+  contour.forEach((p,i)=>{
+    if(i===0)shape.moveTo(p.runFt,p.riseFt);
+    else shape.lineTo(p.runFt,p.riseFt);
+  });
+  shape.closePath();
+  const geo=new THREE.ExtrudeGeometry(shape,{depth:.125,steps:1,bevelEnabled:false});
+  geo.computeVertexNormals();
+  return geo;
+}
+function Flight({placement,model,center,height,values,texture,fasciaTexture}:{
   placement:StairPlacement;model:DeckModel;center:P2;height:number;
   values:ConsultationProject['values'];texture:THREE.Texture|null;
+  fasciaTexture:THREE.Texture|null;
 }){
   const start=placement.start!,end=placement.end!;
   const dx=end.x-start.x,dz=end.y-start.y;
@@ -40,7 +56,9 @@ function Flight({placement,model,center,height,values,texture}:{
   const run=treads*treadDepth;
   const stringers=Math.max(2,Math.ceil(width)+1);
   const geo=useMemo(()=>makeStringer(treadDepth,treads,rise,height),[treadDepth,treads,rise,height]);
-  useEffect(()=>()=>geo.dispose(),[geo]);
+  const straightFasciaGeo=useMemo(()=>makeStraightFascia(treadDepth,treads,rise,height),
+    [treadDepth,treads,rise,height]);
+  useEffect(()=>()=>{geo.dispose();straightFasciaGeo.dispose();},[geo,straightFasciaGeo]);
   const skirt=values.skirtingEnabled===true&&values.skirtingStairsEnabled!==false;
   const boardFace=Math.max(.25,Number(values.skirtingFaceIn??4.5)/12);
   const boardGap=Math.max(0,Number(values.skirtingGapIn??.25)/12);
@@ -48,6 +66,7 @@ function Flight({placement,model,center,height,values,texture}:{
   const finish=values.skirtingMaterial==='pvc'?'#d8dad6':values.skirtingMaterial==='composite'?
     '#bcb5aa':'#b19a79';
   const fascia=values.stairStringerFascia!==false;
+  const fasciaStyle=values.stairFasciaStyle==='straight'?'straight':'profiled';
   return <group name={'stair-flight-'+placement.edgeIndex}
     position={[(start.x+end.x)/2-center[0],0,(start.y+end.y)/2-center[1]]}
     rotation={[0,yaw,0]}>
@@ -83,8 +102,10 @@ function Flight({placement,model,center,height,values,texture}:{
     {[-1,1].map((sign)=>{
       const x=sign*(width/2+.08),n=Math.max(2,Math.ceil(run/(boardFace+boardGap)));
       return <group key={'stair-side-'+sign}>
-        {fascia&&<mesh geometry={geo} position={[x,0,0]} rotation={[0,-Math.PI/2,0]} castShadow>
-          <meshStandardMaterial color="#a99a89" roughness={.8}/>
+        {fascia&&<mesh geometry={fasciaStyle==='straight'?straightFasciaGeo:geo}
+          position={[x,0,0]} rotation={[0,-Math.PI/2,0]} castShadow receiveShadow>
+          <meshStandardMaterial color={fasciaTexture?'#ffffff':'#a99a89'}
+            map={fasciaTexture} roughness={.78}/>
         </mesh>}
         {skirt&&(horizontal
           ?Array.from({length:Math.ceil(height/(boardFace+boardGap))},(_,i)=>{
@@ -109,14 +130,16 @@ function Flight({placement,model,center,height,values,texture}:{
     })}
   </group>;
 }
-export function DeckStairAssembly3D({model,center,height,values,texture}:{
+export function DeckStairAssembly3D({model,center,height,values,texture,fasciaTexture}:{
   model:DeckModel;center:P2;height:number;
   values:ConsultationProject['values'];texture:THREE.Texture|null;
+  fasciaTexture:THREE.Texture|null;
 }){
   if(!model.stairCount||!model.stairPlacements.length)return null;
-  return <group name="cut-stair-stringer-framing-and-fascia">
+  return <group name="stair-stringer-framing-and-selectable-fascia">
     {model.stairPlacements.filter(item=>item.start&&item.end&&item.edgeIndex!==null).map((placement,i)=>
       <Flight key={placement.edgeIndex+'-'+i} placement={placement} model={model}
-        center={center} height={height} values={values} texture={texture}/>)}
+        center={center} height={height} values={values} texture={texture}
+        fasciaTexture={fasciaTexture}/>)}
   </group>;
 }

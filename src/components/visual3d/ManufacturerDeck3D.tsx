@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { getDeckVisualProduct } from '../../data/visualCatalog';
-import { surfaceStrips } from '../../lib/visualGeometry';
+import { surfaceStrips, breakerVisualStrips } from '../../lib/visualGeometry';
+import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials, resolveFasciaMaterial, resolveStairSideFasciaMaterial } from '../../lib/deckTrimSelection';
 import { Beam, type P2 } from './Primitives';
 import { DeckStructure3D } from './DeckStructure3D';
 import { DeckStairAssembly3D } from './DeckStairAssembly3D';
@@ -111,24 +112,67 @@ function VisibleDeckBoards({model,center,height,boardName}:{
     </instancedMesh>
   </group>;
 }
-function BorderBoards({model,center,deckHeight,color,texture}:{
-  model:DeckModel;center:P2;deckHeight:number;color:string;texture:THREE.Texture|null;
+/**
+ * Uses the SAME manufacturer top-surface photograph/material pipeline as
+ * VisibleDeckBoards. A frame board isn't a white default Beam proxy anymore.
+ */
+function DeckTrimBeam({start,end,height,texture,color}:{
+  start:P2;end:P2;height:number;texture:THREE.Texture|null;color:string;
+}){
+  const dx=end[0]-start[0],dz=end[1]-start[1],length=Math.hypot(dx,dz);
+  if(length<.005)return null;
+  return <mesh position={[(start[0]+end[0])/2,height,(start[1]+end[1])/2]}
+    rotation={[0,-Math.atan2(dz,dx),0]} castShadow receiveShadow>
+    <boxGeometry args={[length,.095,.44]}/>
+    {texture?<>
+      <meshStandardMaterial attach="material-0" color="#ffffff" map={texture} roughness={.78}/>
+      <meshStandardMaterial attach="material-1" color="#ffffff" map={texture} roughness={.78}/>
+      <meshBasicMaterial attach="material-2" color="#ffffff" map={texture} toneMapped={false}/>
+      <meshStandardMaterial attach="material-3" color="#847d75" roughness={.83}/>
+      <meshStandardMaterial attach="material-4" color="#ffffff" map={texture} roughness={.78}/>
+      <meshStandardMaterial attach="material-5" color="#ffffff" map={texture} roughness={.78}/>
+    </>:<meshStandardMaterial color={color} roughness={.82}/>}
+  </mesh>;
+}
+function BorderBoards({model,center,deckHeight,maps,colors}:{
+  model:DeckModel;center:P2;deckHeight:number;
+  maps:(THREE.Texture|null)[];colors:string[];
 }){
   if(model.pictureFrameCount<=0)return null;
   return <group name="picture-frame-borders">
     {model.pictureFrameSegments.map((edge)=>Array.from({length:model.pictureFrameCount},(_,i)=>{
-      // Reusing exact perimeter edges keeps house-side selection consistent
-      // with the authoritative takeoff; visual corner miters remain indicative.
       const from:P2=[edge.start.x-center[0],edge.start.y-center[1]],
         to:P2=[edge.end.x-center[0],edge.end.y-center[1]];
       const inward=.18+i*.48;
       const along=Number(edge.orientation==='vertical');
-      return <Beam key={'frame-'+edge.index+'-'+i}
+      return <DeckTrimBeam key={'frame-'+edge.index+'-'+i}
         start={[from[0]+(along?inward:0),from[1]+(along?0:inward)]}
         end={[to[0]+(along?inward:0),to[1]+(along?0:inward)]}
-        height={deckHeight+.07} thickness={.095} depth={.44}
-        color={color} texture={texture}/>;
+        height={deckHeight+.015}
+        texture={maps[Math.min(i,2)]??null}
+        color={colors[Math.min(i,2)]??'#9e9d97'}/>;
     }))}
+  </group>;
+}
+/** Cross-field breaker courses use their selected real manufacturer swatch. */
+function BreakerBoards({model,center,height,maps,colors}:{
+  model:DeckModel;center:P2;height:number;maps:(THREE.Texture|null)[];
+  colors:string[];
+}){
+  const strips=useMemo(()=>breakerVisualStrips(model),[model]);
+  if(!strips.length)return null;
+  return <group name="independently-selected-perpendicular-breaker-boards">
+    {strips.map((strip,i)=>{
+      const start:P2=strip.axis==='x'
+        ?[strip.startFt-center[0],strip.z-center[1]]
+        :[strip.x-center[0],strip.startFt-center[1]];
+      const end:P2=strip.axis==='x'
+        ?[strip.endFt-center[0],strip.z-center[1]]
+        :[strip.x-center[0],strip.endFt-center[1]];
+      return <DeckTrimBeam key={'breaker-course-'+strip.course+'-'+i}
+        start={start} end={end} height={height+.015}
+        texture={maps[strip.course]??null} color={colors[strip.course]??'#a1a6a9'}/>;
+    })}
   </group>;
 }
 function DeckFascia({model,center,height,texture}:{model:DeckModel;center:P2;height:number;texture:THREE.Texture|null}){
@@ -145,30 +189,40 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
   model:DeckModel;project:ConsultationProject;center:P2;deckHeight:number;covered?:boolean;lowerTier?:boolean;
 }){
   const selected=getDeckVisualProduct(project.values.deckingMaterial);
-  const borderName=project.values.pictureFrameMaterial==='match'||!project.values.pictureFrameMaterial
-    ?project.values.deckingMaterial:project.values.pictureFrameMaterial;
-  const borderProduct=getDeckVisualProduct(borderName);
-  // Border/trim colors only use real manufacturer samples where available.
-  // Otherwise the deck uses neutral material instead of inventing a color.
-  const {map:borderMap}=useManufacturerTexture(borderName);
-  const fasciaName=project.values.fasciaMaterial==='match'||!project.values.fasciaMaterial
-    ?project.values.deckingMaterial:project.values.fasciaMaterial;
+  const borderNames=resolvePictureFrameMaterials(project.values);
+  const {map:borderMap1}=useManufacturerTexture(borderNames[0]);
+  const {map:borderMap2}=useManufacturerTexture(borderNames[1]);
+  const {map:borderMap3}=useManufacturerTexture(borderNames[2]);
+  const borderMaps=[borderMap1,borderMap2,borderMap3];
+  const borderColors=borderNames.map(name=>
+    getDeckVisualProduct(name)?'#99948a':'#a1a6a9');
+  const breakerNames=resolveBreakerBoardMaterials(project.values);
+  const {map:breakerMap1}=useManufacturerTexture(model.breakerBoardCount>0?breakerNames[0]:null);
+  const {map:breakerMap2}=useManufacturerTexture(model.breakerBoardCount>1?breakerNames[1]:null);
+  const {map:breakerMap3}=useManufacturerTexture(model.breakerBoardCount>2?breakerNames[2]:null);
+  const breakerMaps=[breakerMap1,breakerMap2,breakerMap3];
+  const breakerColors=breakerNames.map(name=>
+    getDeckVisualProduct(name)?'#99948a':'#a1a6a9');
+  const fasciaName=resolveFasciaMaterial(project.values);
   const {map:fasciaMap}=useManufacturerTexture(fasciaName);
+  const stairFasciaName=resolveStairSideFasciaMaterial(project.values);
+  const {map:stairFasciaMap}=useManufacturerTexture(stairFasciaName);
   const skirtName=project.values.skirtingColor||project.values.deckingMaterial;
   const {map:skirtMap}=useManufacturerTexture(skirtName);
   const stairName=project.values.stairTreadStyle==='match'||!project.values.stairTreadStyle
     ?project.values.deckingMaterial:project.values.stairTreadStyle;
   const {map:stairMap}=useManufacturerTexture(stairName);
-  const borderTint=borderProduct?'#85807c':'#a1a6a9';
   return <group name="manufacturer-visualized-deck">
     <DeckStructure3D model={model} center={center} height={deckHeight}/>
     <PolygonSubstrate model={model} center={center} deckHeight={deckHeight}/>
     <VisibleDeckBoards model={model} center={center} height={deckHeight} boardName={project.values.deckingMaterial}/>
-    <BorderBoards model={model} center={center} deckHeight={deckHeight} color={borderTint} texture={borderMap}/>
+    <BorderBoards model={model} center={center} deckHeight={deckHeight} maps={borderMaps} colors={borderColors}/>
+    <BreakerBoards model={model} center={center} height={deckHeight} maps={breakerMaps} colors={breakerColors}/>
     <DeckFascia model={model} center={center} height={deckHeight} texture={fasciaMap}/>
     <DeckSkirting3D model={model} center={center} height={deckHeight} values={project.values} texture={skirtMap} lowerTier={lowerTier}/>
     <ManufacturerRailing3D model={model} values={project.values} center={center} deckHeight={deckHeight}/>
-    <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values} texture={stairMap}/>
+    <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values}
+      texture={stairMap} fasciaTexture={stairFasciaMap}/>
     {covered&&<RenaissanceCover3D model={model} project={project} center={center} deckHeight={deckHeight}/>}
     {!selected&&<group name="manufacturer-board-texture-not-yet-verified"/>}
   </group>;

@@ -49,7 +49,7 @@ const sections: Record<Exclude<StepId, 'layout' | 'review'>, { title: string; no
   ],
   'stairs-railing': [
     { title: '1 · Stair geometry and railing', note: 'Place stairs in the drawing step, then set widths, rises and left/right railing.',
-      keys: ['stairCount', 'stairWidth', 'stairRise', 'stairTreadStyle', 'stairRiserStyle', 'stairRailingLeft', 'stairRailingRight', 'lowerStairRailingLeft', 'lowerStairRailingRight'] },
+      keys: ['stairCount', 'stairWidth', 'stairRise', 'stairTreadStyle', 'stairRiserStyle', 'stairFasciaStyle', 'stairFasciaMaterial', 'stairRailingLeft', 'stairRailingRight', 'lowerStairRailingLeft', 'lowerStairRailingRight'] },
     { title: '2 · Railing system', note: 'Choose standard or TimberTech and configure compatible profiles, infill and posts.',
       keys: ['railingType', 'lowerRailingType', 'spindleType', 'railingSystem', 'railingTopProfile', 'railingColor', 'railingInfill', 'railingHeightIn', 'railingPostSize', 'railingPostTermination', 'railingPostCap', 'railingManufacturerConfirmed'] },
     { title: '3 · Drink rail and railing lumber', note: 'Pressure-treated wood drink rails can use 5/4×6, 2×6, 2×8, 2×10 or 2×12 stock.',
