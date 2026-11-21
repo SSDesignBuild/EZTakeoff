@@ -9,6 +9,7 @@ import { planInsulatedRoofPanels, planDolceGableInfill } from '../../lib/renaiss
 import { planWrapAroundGutter } from '../../lib/renaissanceGutterGeometry';
 import { planRenaissanceDownspout } from '../../lib/renaissanceDownspoutRouting';
 import { actualPostWidthFt } from '../../lib/visualStructure';
+import { seatCanopyPost } from '../../lib/coverDeckPlacement';
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
 import {
   getRenaissanceExtrusion,makeRenaissanceFramePlan,inchToFoot,
@@ -120,10 +121,25 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const width=plan.roofWidthFt,depth=plan.roofProjectionFt;
   const xMid=(model.minX+model.maxX)/2-center[0],zMid=(model.minY+model.maxY)/2-center[1];
   const left=xMid-width/2,right=xMid+width/2;
-  const frameLeft=xMid-frameWidth/2,frameRight=xMid+frameWidth/2;
-  const back=zMid-frameDepth/2,frameFront=back+frameDepth;
-  const roofBackEdge=back-plan.rearOverhangFt;
-  const front=frameFront+plan.frontOverhangFt;
+  const theoreticalBack=zMid-frameDepth/2,theoreticalFront=theoreticalBack+frameDepth;
+  const postFootprintFt=inchToFoot(profile.postOutsideIn+1.8);
+  const seat=(x:number,z:number):P2|null=>{
+    const fitted=seatCanopyPost([x+center[0],z+center[1]],model.points,postFootprintFt);
+    return fitted?[fitted[0]-center[0],fitted[1]-center[1]]:null;
+  };
+  // Preserve the roof envelope while seating every COLUMN and its base plate
+  // completely inside the deck footprint (including non-rectangular plans).
+  const frontPosts=plan.frontPostXsFt.map(x=>seat(xMid+x,theoreticalFront))
+    .filter((p):p is P2=>p!==null);
+  const rearPosts=plan.rearPostXsFt.map(x=>seat(xMid+x,theoreticalBack))
+    .filter((p):p is P2=>p!==null);
+  const allPosts=[...frontPosts,...rearPosts];
+  const frameLeft=frontPosts.length?Math.min(...frontPosts.map(p=>p[0])):xMid-frameWidth/2;
+  const frameRight=frontPosts.length?Math.max(...frontPosts.map(p=>p[0])):xMid+frameWidth/2;
+  const back=rearPosts.length?rearPosts.reduce((a,p)=>a+p[1],0)/rearPosts.length:theoreticalBack;
+  const frameFront=frontPosts.length?frontPosts.reduce((a,p)=>a+p[1],0)/frontPosts.length:theoreticalFront;
+  const roofBackEdge=theoreticalBack-plan.rearOverhangFt;
+  const front=theoreticalFront+plan.frontOverhangFt;
   const roofMidZ=(roofBackEdge+front)/2;
   const powder=getCoverFinish(project.coverColor);
   const shadowColor=project.coverColor==='White'?'#c1c5c5':project.coverColor==='Sandstone'?'#938271':
@@ -138,9 +154,6 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const roofY=(roofRearY+roofFrontY)/2;
   const slopeRise=roofRearY-roofFrontY;
   const gableRise=plan.ridgeTopFt-plan.backTopFt;
-  const frontPosts=plan.frontPostXsFt.map((x):P2=>[xMid+x,frameFront]);
-  const rearPosts=plan.rearPostXsFt.map((x):P2=>[xMid+x,back]);
-  const allPosts=[...frontPosts,...rearPosts];
   const isSolid=product.family==='solid-studio'||product.family==='solid-truss-ends'||product.family==='full-trusses';
   const isTranslucent=product.family==='translucent';
   const isLattice=product.family==='lattice';
@@ -166,10 +179,10 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   // Prefer the rightmost actual cover post which is also near a real deck
   // support. Outlet location is at the front gutter, not an arbitrary drop.
   const compatible=frontPosts.filter(post=>
-    deckSupportPosts.some(under=>Math.hypot(under[0]-post[0],under[1]-post[1])<3));
+    deckSupportPosts.some(under=>Math.hypot(under[0]-post[0],under[1]-post[1])<2.2));
   const frontPost=(compatible[compatible.length-1]??frontPosts[frontPosts.length-1]) as P2|undefined;
   const downspout=frontPost?planRenaissanceDownspout({
-    outlet:[frontPost[0],roofFrontY-inchToFoot(1.5),front+inchToFoot(1)],
+    outlet:[frontPost[0],roofFrontY-inchToFoot(1.5),front],
     coverPosts:frontPosts,deckPosts:deckSupportPosts,
     coverPostWidthFt:inchToFoot(profile.postOutsideIn),
     deckPostWidthFt:actualPostWidthFt(model.postSize),
@@ -186,8 +199,8 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       return <group key={'renaissance-column-'+i}>
         <RenaissancePost x={x} z={z} bottom={deckHeight} top={topY}
           profile={profile} color={powder}/>
-        {attached&&<Block position={[x,deckHeight+.009,z]}
-          size={[baseOutside,.018,baseOutside]} color={shadowColor} metalness={.42}/>}
+        <Block position={[x,deckHeight+.009,z]}
+          size={[baseOutside,.018,baseOutside]} color={shadowColor} metalness={.42}/>
         <Block position={[x,topY-.008,z]}
           size={[postCap,.05,postCap]} color={powder} metalness={.38}/>
         {/* Physical header clips and fastener head placements, not fake oversized collars. */}
