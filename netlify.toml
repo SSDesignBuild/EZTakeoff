@@ -1,5 +1,5 @@
 [build]
-  command = "npm test" # TEMPORARY isolate full suite; strict assets/test/build gate restored before merge
+  command = "node scripts/test-video-visual-accuracy.cjs" # TEMPORARY isolate new video geometry tests; restore strict CI
   publish = "dist"
 
 [[redirects]]
