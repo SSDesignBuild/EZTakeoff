@@ -72,6 +72,34 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
               height={y} thickness={course.depthFt} depth={.09}
               color={color} texture={showPhoto?texture:null}/>;
           })}
+        {/* Hinged access gate leaf is actually modeled in its chosen gap,
+            with inset framing, vertical/horizontal selected finish and hinges. */}
+        {side.openings.filter(opening=>opening.kind==='hinged-gate').map((opening,i)=>{
+          const h=Math.max(.3,
+            (side.startHeightFt+(side.endHeightFt-side.startHeightFt)*
+              (opening.offset+opening.width/2)/side.lengthFt)-.18);
+          const middle=opening.offset+opening.width/2;
+          const [x,z]=point(edge,middle,'finish');
+          const width=Math.max(.2,opening.width-.09);
+          const isHorizontal=edge.orientation==='horizontal';
+          return <group key={'access-gate-leaf-'+i} name="placed-hinged-skirting-access-gate">
+            <Block position={[x,top-h/2,z]}
+              size={[isHorizontal?width:.075,h,isHorizontal?.075:width]}
+              color={color} texture={showPhoto?texture:null}/>
+            {[opening.offset+.12,opening.offset+opening.width-.12].map((station,k)=>{
+              const [sx,sz]=point(edge,station,'finish');
+              return <Block key={'access-gate-stile-'+k} position={[sx,top-h/2,sz]}
+                size={[.08,h,.08]} color="#8c7357"/>;
+            })}
+            {[.25,.75].map((portion,k)=>{
+              const [hx,hz]=point(edge,opening.offset,'jamb');
+              return <Block key={'access-gate-hinge-'+k} position={[hx,top-h*portion,hz]}
+                size={[.14,.13,.14]} color="#565b5f" metalness={.4}/>;
+            })}
+            <Block position={[x,top-h*.5,z]}
+              size={[.11,.13,.11]} color="#555c60" metalness={.42}/>
+          </group>;
+        })}
         {/* Clear openings are excluded by the exact skirting cut model.
             Show their jamb boundaries, not fake solid infill. */}
         {side.openings.map((opening,i)=>[opening.offset,opening.offset+opening.width].map((s,k)=>{

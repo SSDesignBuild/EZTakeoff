@@ -35,7 +35,7 @@ export function ConsultationSkirtingOptions({values,onValuesChange}:{
     const next=picked.includes(index)?picked.filter(n=>n!==index):[...picked,index].sort((a,b)=>a-b);
     change({skirtingEdges:JSON.stringify(next),skirtingGradeConfirmed:false});
   };
-  const addAccess=(kind:'opening'|'removable')=>{
+  const addAccess=(kind:'opening'|'removable'|'hinged-gate')=>{
     const edge=exposed.find(e=>picked.includes(e.index))??exposed[0];
     if(!edge)return;
     const width=Math.min(3,edge.length*.45);
@@ -110,8 +110,42 @@ export function ConsultationSkirtingOptions({values,onValuesChange}:{
         <div className="consultation-cover-pills">
           <button type="button" onClick={()=>addAccess('opening')}>+ Add access opening</button>
           <button type="button" onClick={()=>addAccess('removable')}>+ Removable access panel</button>
+          <button type="button" onClick={()=>addAccess('hinged-gate')}>+ Hinged skirting gate</button>
         </div>
       </div>
+      {!!openings.length&&<div className="consultation-access-placement">
+        <strong className="consultation-small-heading">Access openings & gates — exact location</strong>
+        {openings.map((opening,index)=>{
+          const edge=deck.edgeSegments.find(e=>e.index===opening.edgeIndex);
+          const changeOpening=(data:Partial<SkirtOpening>)=>
+            change({skirtingOpenings:JSON.stringify(openings.map((o,i)=>i===index?{...o,...data}:o)),
+              skirtingGradeConfirmed:false});
+          return <div className="consultation-access-row" key={'access-'+index}>
+            <label>Type<select value={opening.kind}
+              onChange={e=>changeOpening({kind:e.target.value as SkirtOpening['kind']})}>
+              <option value="opening">Uncovered opening</option>
+              <option value="removable">Removable access panel</option>
+              <option value="hinged-gate">Hinged skirting gate</option>
+            </select></label>
+            <label>Deck side<select value={opening.edgeIndex}
+              onChange={e=>changeOpening({edgeIndex:Number(e.target.value),offset:0})}>
+              {exposed.filter(edge=>picked.includes(edge.index)).map(edge=>
+                <option key={edge.index} value={edge.index}>Side {edge.index+1} · {edge.length.toFixed(1)} ft</option>)}
+            </select></label>
+            <label>From corner (ft)<input type="number" min={0} step={.25}
+              max={Math.max(0,(edge?.length??0)-opening.width)}
+              value={opening.offset}
+              onChange={e=>changeOpening({offset:Number(e.target.value)})}/></label>
+            <label>Opening width (ft)<input type="number" min={1} step={.25}
+              max={Math.max(1,(edge?.length??0)-opening.offset)}
+              value={opening.width}
+              onChange={e=>changeOpening({width:Number(e.target.value)})}/></label>
+            <button type="button" className="ghost-btn small-btn"
+              onClick={()=>change({skirtingOpenings:JSON.stringify(openings.filter((_,i)=>i!==index))})}>Remove</button>
+          </div>;
+        })}
+        <small className="muted">Offsets are measured from the start corner of the selected deck side. Changes update the cut plan and 3D.</small>
+      </div>}
       <div className="consultation-skirt-summary">
         <span>{plan.sides.length} deck side(s)</span>
         <span>{stairs.sides.length} stair side panels</span>
