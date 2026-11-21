@@ -105,3 +105,11 @@ Only GitHub as repository; Netlify handles build/test/deploy; automatic paid Git
 ## Nov 18 2026 follow-up — finish option relevance
 - Roof exterior and ceiling finish selectors are shown only for insulated solid panels (Moderno, Contempo, Classico). Aria shade-tube pergolas, Fresco translucent polycarbonate roofs, and Solé motorized louvered covers expose only the framing finish; no misleading insulated-roof skin choices. Existing saved roof/ceiling preferences remain retained for switching back to a solid system.
 - The 3in insulated roof C channel is drawn only with wall-attached solid-roof families, not Fresco which has a distinct polycarbonate connection detail. Existing architecture/finish and material estimating safeguards remain unchanged.
+
+
+## November 21, 2026 — deck trim, post-routed downspouts, straight stair fascia and rail-gallery QA
+- Picture-frame color: Sales Consultation originally inherited Admin default Trex despite field decking set to TimberTech. Sales defaults now set all picture-frame courses to match, with borderSameBoard=true. A pure trim resolver respects contrasting border choices when borderSameBoard=false. Render surfaces use matching manufacturer-sourced top-face textures; Admin Takeoff seed and stock optimizer unchanged.
+- Downspouts: Replace straight vertical gutter tube with a smooth routed hollow rectangular path: from actual gutter outlet, bend toward nearest cover post, descend post, continue beneath elevated deck to nearest deck post, terminate in outward kick. Actual elbows and outlets remain site-verified, not an approved materials schedule.
+- Stair fascia: aesthetic choice profiled (existing notched visual) or straight (smooth sloping edge), available in Admin and Sales, independent of tread/riser choice. Actual structural stringers remain notched. Verify cut/stock procurement separately.
+- Railing gallery: center manufacturer photographs with object-fit contain, center labels, consistent responsive card heights.
+- Strict Netlify preview asset sync/tests/build and published commit verification required. GitHub Actions manual-only. WebGL browser image matching remains separate QA.

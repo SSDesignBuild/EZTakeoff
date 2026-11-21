@@ -60,6 +60,8 @@ export const makeConsultationProject = (id: string): ConsultationProject => ({
   kind:'deck',client:{name:'',address:'',phone:'',email:''},
   values:{...deckDefaults,
     deckingMaterial:'TimberTech Vintage - Coastline',
+    pictureFrameMaterial:'match',pictureFrameMaterial2:'match',pictureFrameMaterial3:'match',
+    borderSameBoard:true,stairFasciaStyle:'profiled',
     deckingType:'composite',
     railingVisualId:'tt-ire-modern',
     railingType:'aluminum',railingSystem:'timbertech-ire',

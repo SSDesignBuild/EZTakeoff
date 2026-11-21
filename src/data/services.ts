@@ -143,6 +143,7 @@ export const SERVICES: ServiceDefinition[] = [
       stairRailingRight: false,
       stairTreadStyle: 'match',
       stairRiserStyle: 'auto',
+      stairFasciaStyle: 'profiled',
       deckGateEntries: JSON.stringify([]),
       railingType: 'aluminum',
       spindleType: 'black-round',
@@ -312,6 +313,10 @@ export const SERVICES: ServiceDefinition[] = [
         {label: 'Fascia matching deck fascia selection',value:'fascia'},
         ...DECK_BOARD_STYLE_OPTIONS,
       ], helper:'Riser material is ordered separately when not covered by standard fascia. Standard pressure-treated risers receive two deck boards per riser.' },
+      { key: 'stairFasciaStyle', label: 'Stair side fascia finish', type: 'select', options: [
+        { label: 'Cut to follow the stringer (existing style)', value: 'profiled' },
+        { label: 'Straight clean fascia — no stair-step cut', value: 'straight' },
+      ], helper: 'Select the exposed stair-side fascia silhouette. Independent of tread and riser board selections; verify final fascia board stock and cut length before ordering.' },
       { key: 'stairRise', label: 'Total stair rise (ft)', type: 'number', min: 0, step: 0.1, helper: 'Leave 0 to use deck height.' },
       { key: 'stairRailingLeft', label: 'Railing on left side of stairs', type: 'boolean' },
       { key: 'stairRailingRight', label: 'Railing on right side of stairs', type: 'boolean' },

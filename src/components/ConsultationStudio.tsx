@@ -214,6 +214,11 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
             <option value="match">Match deck board style</option>
             <option value={String(project.values.deckingMaterial??'')}>{String(project.values.deckingMaterial??'Current deck board')}</option>
           </select></label>
+          <label>Stair fascia edge<select value={String(project.values.stairFasciaStyle??'profiled')}
+            onChange={(e)=>setValue('stairFasciaStyle',e.target.value)}>
+            <option value="profiled">Cut to follow the stringer</option>
+            <option value="straight">Straight clean fascia</option>
+          </select></label>
           <label>Riser material<select value={String(project.values.stairRiserStyle??'auto')}
             onChange={(e)=>setValue('stairRiserStyle',e.target.value)}>
             <option value="auto">Standard coordinated riser</option>
