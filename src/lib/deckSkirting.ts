@@ -1,7 +1,7 @@
 import type { DeckEdgeSegment, MaterialItem } from './types';
 
 export type SkirtCut = { id: string; edgeIndex: number; material: 'finish' | '2x4'; lengthFt: number; location: string };
-export type SkirtOpening = { edgeIndex: number; offset: number; width: number; kind: 'opening' | 'removable' };
+export type SkirtOpening = { edgeIndex: number; offset: number; width: number; kind: 'opening' | 'removable' | 'hinged-gate' };
 export type SkirtGrade = { edgeIndex: number; startFt: number; endFt: number };
 export type SkirtVertical = { station: number; heightFt: number; role: 'stud' | 'jamb' | 'finish' };
 export type SkirtCourse = { row: number; start: number; end: number; depthFt: number };
@@ -137,7 +137,8 @@ export function buildDeckSkirting(
     }
     const at=(station:number)=>startHeightFt+(endHeightFt-startHeightFt)*(station/length);
     const openings=openValues.filter((item)=>Number(item.edgeIndex)===edgeIndex)
-      .map((item)=>({edgeIndex,offset:Number(item.offset),width:Number(item.width),kind:item.kind==='removable'?'removable' as const:'opening' as const}))
+      .map((item)=>({edgeIndex,offset:Number(item.offset),width:Number(item.width),kind:item.kind==='removable'?'removable' as const:
+        item.kind==='hinged-gate'?'hinged-gate' as const:'opening' as const}))
       .sort((a,b)=>a.offset-b.offset);
     for(let i=0;i<openings.length;i++){
       const o=openings[i];
@@ -178,6 +179,24 @@ export function buildDeckSkirting(
     topRails.forEach((r)=>cutContinuousRail(r.start,r.end,'side '+(edgeIndex+1)+' top rail'));
     bottomRails.forEach((r)=>cutContinuousRail(r.start,r.end,'side '+(edgeIndex+1)+' ground-contact bottom rail'));
     verticals.forEach((p)=>addCut('2x4',p.heightFt,'side '+(edgeIndex+1)+' vertical '+p.role+' at '+p3(p.station)+' ft'));
+    // A hinged skirting gate needs its own complete leaf framing and finish;
+    // the opening-only schedule previously omitted the gate panel entirely.
+    clippedOpenings.filter(o=>o.kind==='hinged-gate').forEach(o=>{
+      const leafHeight=Math.max(.3,at(o.offset+o.width/2)-.18);
+      addCut('2x4',Math.max(.2,o.width-.08),'hinged access leaf upper rail');
+      addCut('2x4',Math.max(.2,o.width-.08),'hinged access leaf lower rail');
+      addCut('2x4',leafHeight,'hinged access leaf left stile');
+      addCut('2x4',leafHeight,'hinged access leaf right stile');
+      if(orientation==='vertical'){
+        const number=Math.max(1,Math.ceil(o.width/((faceIn+gapIn)/12)));
+        for(let i=0;i<number;i++)addCut('finish',leafHeight,
+          'hinged access gate finish board '+(i+1));
+      }else{
+        const number=Math.max(1,Math.ceil(leafHeight/((faceIn+gapIn)/12)));
+        for(let i=0;i<number;i++)addCut('finish',Math.max(.2,o.width-.08),
+          'hinged access gate horizontal finish '+(i+1));
+      }
+    });
     if(orientation==='vertical'){
       for(const span of spans){
         const increment=(faceIn+gapIn)/12;
@@ -241,6 +260,16 @@ export function buildDeckSkirting(
           : 'Top/bottom/24 in O.C. framing and access jambs · '+refs.length+' cuts · verify ground contact',
         layoutLabel:refs.length<=12?refs.join(', '):refs.slice(0,12).join(', ')+', +'+(refs.length-12)+' more'});
     }
+  }
+  const accessGates=sides.flatMap(s=>s.openings.filter(o=>o.kind==='hinged-gate'));
+  if(accessGates.length){
+    materials.push({name:'Skirting access gate exterior hinges',category,
+      quantity:accessGates.length*2,unit:'ea',
+      stockRecommendation:'Exterior self-closing hinges, field-rated for gate size',
+      notes:'Two hinges per hinged skirting access leaf; verify frame attachment and corrosion protection.'});
+    materials.push({name:'Skirting access gate latch',category,
+      quantity:accessGates.length,unit:'ea',stockRecommendation:'Exterior latch or slide bolt',
+      notes:'One latch per skirting access gate, sized for available panel height.'});
   }
   const joinCount=sides.reduce((sum,s)=>sum+s.verticals.length*2+s.bottomRails.length*2+s.topRails.length*2,0);
   // Two exterior 3-inch structural framing screws per 2x4 connection.

@@ -13,6 +13,7 @@ import { loadConsultations, saveConsultations, makeConsultationProject, updateCo
 import { saveHousePhoto, readHousePhoto, deleteHousePhoto } from '../lib/consultationPhoto';
 import { createEstimateHandoff, parseEstimateResponse, makeAcceptedScope, downloadJson, selectedPricedTier } from '../lib/estimatingBridge';
 import { ConsultationDeckFinishes, StairFasciaFinishSelect } from './ConsultationDeckFinishes';
+import { deckVisualProducts } from '../data/visualCatalog';
 
 const Live3D=lazy(()=>import('./Consultation3D').then((module)=>({default:module.Consultation3D})));
 type Step='photo'|'layout'|'options'|'render';
@@ -69,6 +70,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
   const [notice,setNotice]=useState('');
   const [overlay,setOverlay]=useState(false);
   const [renderBusy,setRenderBusy]=useState(false);
+  const [viewportHeight,setViewportHeight]=useState(740);
   const [pricingBusy,setPricingBusy]=useState(false);
   const [bridgeError,setBridgeError]=useState('');
   const model=useMemo(()=>buildDeckModel(project.values),[project.values]);
@@ -204,7 +206,9 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
           <label>Tread material<select value={String(project.values.stairTreadStyle??'match')}
             onChange={(e)=>setValue('stairTreadStyle',e.target.value)}>
             <option value="match">Match deck board style</option>
-            <option value={String(project.values.deckingMaterial??'')}>{String(project.values.deckingMaterial??'Current deck board')}</option>
+            {deckVisualProducts.map(board=><option key={board.id} value={board.label}>
+              {board.collection} · {board.color}
+            </option>)}
           </select></label>
           <label>Stair fascia edge<select value={String(project.values.stairFasciaStyle??'profiled')}
             onChange={(e)=>setValue('stairFasciaStyle',e.target.value)}>
@@ -217,6 +221,10 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
             <option value="auto">Standard coordinated riser</option>
             <option value="match">Match deck board</option>
             <option value="fascia">Match fascia trim</option>
+            <option value="open">Open risers (subject to approved code)</option>
+            {deckVisualProducts.map(board=><option key={board.id} value={board.label}>
+              {board.collection} · {board.color}
+            </option>)}
           </select></label>
         </article>
         <ConsultationSkirtingOptions values={project.values} onValuesChange={updateValues}/>
@@ -233,9 +241,17 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
         <button type="button" className={overlay?'active':''} onClick={()=>setOverlay(true)} disabled={!photoUrl}>Overlay on house photo</button>
         <button type="button" className="secondary-btn small-btn" disabled={renderBusy} onClick={preview}>
           {renderBusy?'Exporting…':'Download concept PNG'}</button>
+        <label className="consultation-viewport-resize">3D view height · {viewportHeight}px
+          <input type="range" min={450} max={1200} step={25} value={viewportHeight}
+            onChange={e=>setViewportHeight(Number(e.target.value))}/>
+        </label>
+        <button type="button" className="ghost-btn small-btn"
+          onClick={()=>setViewportHeight(current=>current>=1125?740:1150)}>
+          {viewportHeight>=1125?'Standard view':'Expand view'}</button>
       </div>
       <Suspense fallback={<div className="consultation-3d-loading">Loading professional 3D viewer…</div>}>
-        <Live3D project={project} photoUrl={photoUrl} photoMode={overlay}/>
+        <Live3D project={project} photoUrl={photoUrl} photoMode={overlay}
+          viewportHeight={viewportHeight}/>
       </Suspense>
       {overlay&&<div className="consultation-calibration">
         <p className="muted">Align the preliminary 3D perspective by hand. Use the 3D viewport to orbit the design, then move and scale it on the home photograph.</p>

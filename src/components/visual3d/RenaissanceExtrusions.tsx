@@ -166,54 +166,121 @@ export function RenaissanceReceivingChannel({fromX,toX,z,y,color}:{
  * The 75-degree elbow radius and the field routing are visual approximations,
  * not a manufacturer-certified elbow SKU or installation quantity.
  */
-function routedDownspoutGeometry(layout:DownspoutLayout):THREE.ExtrudeGeometry{
-  const w=inchToFoot(2),d=inchToFoot(3),t=inchToFoot(.045);
+type RoutedSection={
+  geometry:THREE.ExtrudeGeometry;
+  position:[number,number,number];rotation:THREE.Quaternion;
+};
+type RoutedBend={
+  geometry:THREE.ExtrudeGeometry;
+  type:'A'|'B';location:string;
+};
+/** Measured nominal 2 x 3-in hollow downspout section, with folded sheet wall. */
+function makeRectangularDownspoutProfile(){
+  const width=inchToFoot(2),depth=inchToFoot(3),wall=inchToFoot(.045);
   const outer=new THREE.Shape();
-  outer.moveTo(-w/2,-d/2);outer.lineTo(w/2,-d/2);
-  outer.lineTo(w/2,d/2);outer.lineTo(-w/2,d/2);outer.closePath();
-  const inner=new THREE.Path();
-  inner.moveTo(-w/2+t,-d/2+t);inner.lineTo(-w/2+t,d/2-t);
-  inner.lineTo(w/2-t,d/2-t);inner.lineTo(w/2-t,-d/2+t);inner.closePath();
-  outer.holes.push(inner);
-  // Frenet-frame extrusion follows rounded elbows rather than separate
-  // boxes suspended in space; every vertical station belongs to a post.
-  const path=new THREE.CatmullRomCurve3(
-    layout.points.map(p=>new THREE.Vector3(p[0],p[1],p[2])),
-    false,'centripetal',.22,
-  );
-  const g=new THREE.ExtrudeGeometry(outer,{
-    extrudePath:path,steps:Math.max(80,layout.points.length*16),
-    bevelEnabled:false,curveSegments:12,
+  outer.moveTo(-width/2,-depth/2);outer.lineTo(width/2,-depth/2);
+  outer.lineTo(width/2,depth/2);outer.lineTo(-width/2,depth/2);outer.closePath();
+  const hole=new THREE.Path();
+  hole.moveTo(-width/2+wall,-depth/2+wall);
+  hole.lineTo(-width/2+wall,depth/2-wall);
+  hole.lineTo(width/2-wall,depth/2-wall);
+  hole.lineTo(width/2-wall,-depth/2+wall);hole.closePath();
+  outer.holes.push(hole);
+  return outer;
+}
+function getElbowRadii(layout:DownspoutLayout):Map<number,number>{
+  const radii=new Map<number,number>();
+  for(const elbow of layout.elbows){
+    const i=elbow.atIndex;
+    if(i<=0||i>=layout.points.length-1)continue;
+    const incoming=new THREE.Vector3(...layout.points[i]).sub(
+      new THREE.Vector3(...layout.points[i-1]));
+    const outgoing=new THREE.Vector3(...layout.points[i+1]).sub(
+      new THREE.Vector3(...layout.points[i]));
+    if(incoming.length()<.04||outgoing.length()<.04)continue;
+    const dot=incoming.clone().normalize().dot(outgoing.clone().normalize());
+    if(dot>.995)continue;
+    // Proper curved A/B elbow, joined to straight factory-like cut lengths.
+    // Curved fitting length is kept inside the adjacent real pipe runs.
+    const radius=Math.min(.24,incoming.length()*.29,outgoing.length()*.29);
+    if(radius>.012)radii.set(i,radius);
+  }
+  return radii;
+}
+/**
+ * Each long run is STRAIGHT rectangular stock. Tangency cuts avoid an
+ * ugly elbow/pipe overlap, rather than assembling several floating cubes.
+ */
+function routedDownspoutSections(layout:DownspoutLayout,
+  radii:Map<number,number>):RoutedSection[]{
+  const profile=makeRectangularDownspoutProfile();
+  return layout.points.slice(1).flatMap((p,index)=>{
+    const a=new THREE.Vector3(...layout.points[index]);
+    const b=new THREE.Vector3(...p);
+    const direction=b.clone().sub(a),length=direction.length();
+    if(length<.03)return [];
+    const unit=direction.normalize();
+    const from=a.clone().addScaledVector(unit,radii.get(index)??0);
+    const to=b.clone().addScaledVector(unit,-(radii.get(index+1)??0));
+    const cutLen=to.distanceTo(from);
+    if(cutLen<.02)return [];
+    const g=new THREE.ExtrudeGeometry(profile,{depth:cutLen+.008,steps:1,
+      bevelEnabled:false,curveSegments:1});
+    g.translate(0,0,-(cutLen+.008)/2);g.computeVertexNormals();
+    return [{geometry:g,
+      position:from.add(to).multiplyScalar(.5).toArray() as [number,number,number],
+      rotation:new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,0,1),unit)}];
   });
-  g.computeVertexNormals();
-  return g;
+}
+/**
+ * True swept aluminum elbow with circular centerline and hollow 2x3 section.
+ * A and B are mirror-oriented by incoming/outgoing vectors, not drawn as
+ * placeholder solid rectangular boxes.
+ */
+function routedDownspoutElbows(layout:DownspoutLayout,
+  radii:Map<number,number>):RoutedBend[]{
+  const profile=makeRectangularDownspoutProfile();
+  return layout.elbows.flatMap(elbow=>{
+    const index=elbow.atIndex,trim=radii.get(index);
+    if(!trim||index<1||index>=layout.points.length-1)return [];
+    const p=new THREE.Vector3(...layout.points[index]);
+    const prev=new THREE.Vector3(...layout.points[index-1]);
+    const next=new THREE.Vector3(...layout.points[index+1]);
+    const a=p.clone().addScaledVector(p.clone().sub(prev).normalize(),-trim);
+    const b=p.clone().addScaledVector(next.clone().sub(p).normalize(),trim);
+    // Quadratic elbow joins the two miter tangent ends and stays entirely
+    // within the cover/deck envelope. The mesh has hollow sheet thickness.
+    const curve=new THREE.QuadraticBezierCurve3(a,p,b);
+    const geometry=new THREE.ExtrudeGeometry(profile,{
+      extrudePath:curve,steps:12,bevelEnabled:false,curveSegments:12,
+    });
+    geometry.computeVertexNormals();
+    return [{geometry,type:elbow.type,location:elbow.location}];
+  });
 }
 export function RenaissanceDownspout({layout,color}:{
   layout:DownspoutLayout;color:string;
 }){
-  const geometry=useMemo(()=>routedDownspoutGeometry(layout),[layout]);
-  useEffect(()=>()=>geometry.dispose(),[geometry]);
+  const geometries=useMemo(()=>{
+    const radii=getElbowRadii(layout);
+    return {straight:routedDownspoutSections(layout,radii),
+      elbows:routedDownspoutElbows(layout,radii)};
+  },[layout]);
+  useEffect(()=>()=>{geometries.straight.forEach(section=>section.geometry.dispose());
+    geometries.elbows.forEach(bend=>bend.geometry.dispose());},[geometries]);
   return <group name="post-mounted-rectangular-downspout-with-A-and-B-elbows">
-    <mesh geometry={geometry} castShadow receiveShadow>
+    {geometries.straight.map((section,i)=><mesh key={'straight-pipe-section-'+i}
+      geometry={section.geometry} position={section.position}
+      quaternion={section.rotation} castShadow receiveShadow>
       <meshStandardMaterial color={color} side={THREE.DoubleSide}
-        metalness={.39} roughness={.31}/>
-    </mesh>
-    {/* A and B elbow ferrules are modeled at the actual transitions,
-        not at arbitrary locations on a dangling vertical cylinder. */}
-    {layout.elbows.map((elbow,i)=>{
-      const p=layout.points[elbow.atIndex];
-      const before=layout.points[Math.max(0,elbow.atIndex-1)];
-      const after=layout.points[Math.min(layout.points.length-1,elbow.atIndex+1)];
-      const normal=new THREE.Vector3(
-        after[0]-before[0],after[1]-before[1],after[2]-before[2]).normalize();
-      const rotation=new THREE.Quaternion().setFromUnitVectors(
-        new THREE.Vector3(0,1,0),normal);
-      return <mesh key={'elbow-'+i} name={'downspout-'+elbow.type+'-elbow-'+elbow.location}
-        position={[p[0],p[1],p[2]]} quaternion={rotation} castShadow>
-        <boxGeometry args={[inchToFoot(2.13),inchToFoot(.42),inchToFoot(3.13)]}/>
-        <meshStandardMaterial color={color} metalness={.43} roughness={.28}/>
-      </mesh>;
-    })}
+        metalness={.39} roughness={.32}/>
+    </mesh>)}
+    {geometries.elbows.map((bend,i)=><mesh key={'true-elbow-'+i}
+      name={'real-'+bend.type+'-elbow-'+bend.location}
+      geometry={bend.geometry} castShadow receiveShadow>
+      <meshStandardMaterial color={color} metalness={.42} roughness={.30}
+        side={THREE.DoubleSide}/>
+    </mesh>)}
     {/* Straps terminate on the actual nearest cover/deck POST centers. */}
     {layout.straps.map((strap,i)=>{
       const [x,y,z]=strap.at,[px,pz]=strap.post;
@@ -305,30 +372,35 @@ export function RenaissanceShadeTube({from,to,color}:{
  * The upper edge follows the selected canopy; the tail stops at its front
  * overhang. Extrusion thickness is the actual 2-inch visual member width.
  */
-export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,color}:{
-  x:number;frontZ:number;topY:number;projectionFt:number;color:string;
+export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPerFt=0,color}:{
+  x:number;frontZ:number;topY:number;projectionFt:number;pitchInPerFt?:number;color:string;
 }){
-  const front=Math.max(.02,Math.min(1.25,projectionFt));
+  // The tail begins at a short lap behind the front header and terminates
+  // at the TRUE eave. It does not recreate a 1.65ft decorative plank over
+  // a full-length truss, which previously made overlapping dark spikes.
+  const front=Math.max(.06,Math.min(1.25,projectionFt));
+  const inner=Math.min(.30,front*.5+.12);
+  const pitch=pitchInPerFt/12;
   const geometry=useMemo(()=>{
-    const inner=.65;
+    const top=(z:number)=>-pitch*z;
     const shape=new THREE.Shape();
-    shape.moveTo(-inner,0);
-    shape.lineTo(front,0);
-    shape.lineTo(front,-.16);
-    shape.bezierCurveTo(front-.04,-.29,front-.27,-.45,front-.44,-.48);
-    shape.bezierCurveTo(-.20,-.54,-.43,-.49,-inner,-.49);
+    shape.moveTo(-inner,top(-inner));
+    shape.lineTo(front,top(front));
+    shape.lineTo(front,top(front)-.12);
+    shape.bezierCurveTo(front-.08,top(front)-.26,
+      front-.25,top(front)-.46,front-.43,top(front)-.48);
+    shape.bezierCurveTo(-.08,top(-.08)-.48,-.23,top(-.20)-.46,
+      -inner,top(-inner)-.45);
     shape.closePath();
-    const thickness=inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn);
     const g=new THREE.ExtrudeGeometry(shape,{
-      depth:thickness,steps:1,bevelEnabled:false,curveSegments:12,
+      depth:inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn),
+      steps:1,bevelEnabled:false,curveSegments:12,
     });
-    g.translate(0,0,-thickness/2);
-    // Shape X corresponds to roof projection (world +Z).
-    g.rotateY(-Math.PI/2);
-    g.computeVertexNormals();
+    g.translate(0,0,-inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn)/2);
+    g.rotateY(-Math.PI/2);g.computeVertexNormals();
     return g;
-  },[front]);
+  },[front,inner,pitch]);
   return <mesh geometry={geometry} position={[x,topY,frontZ]} castShadow receiveShadow>
-    <meshStandardMaterial color={color} metalness={.4} roughness={.3}/>
+    <meshStandardMaterial color={color} side={THREE.DoubleSide} metalness={.4} roughness={.3}/>
   </mesh>;
 }

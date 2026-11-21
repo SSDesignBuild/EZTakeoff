@@ -141,7 +141,8 @@ assert.ok(manuf.includes('fasciaTexture={stairFasciaMap}'));
 assert.ok(stair.includes("fasciaStyle==='straight'?straightFasciaGeo:geo"));
 assert.ok(stair.includes('map={fasciaTexture}'));
 assert.ok(cover.includes('planRenaissanceDownspout')&&cover.includes('deckSupportPosts'));
-assert.ok(ext.includes('ExtrudeGeometry(outer')&&ext.includes('layout.elbows.map'));
+assert.ok(ext.includes('ExtrudeGeometry(profile')&&ext.includes('layout.elbows.flatMap')&&ext.includes('QuadraticBezierCurve3'),
+  'Downspouts require straight hollow aluminum and physical A/B elbow bends');
 assert.ok(ext.includes('layout.straps.map')&&ext.includes('downspout-attached-'));
 assert.ok(pick.includes('pictureFrameMaterial')&&pick.includes('breakerBoardMaterial'));
 assert.ok(pick.includes('fasciaMaterial')&&pick.includes('stairFasciaMaterial'));

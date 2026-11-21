@@ -37,10 +37,11 @@ function makeStraightFascia(runFt:number,treads:number,riseFt:number,height:numb
   geo.computeVertexNormals();
   return geo;
 }
-function Flight({placement,model,center,height,values,texture,fasciaTexture}:{
+function Flight({placement,model,center,height,values,texture,fasciaTexture,riserTexture,skirtTexture}:{
   placement:StairPlacement;model:DeckModel;center:P2;height:number;
   values:ConsultationProject['values'];texture:THREE.Texture|null;
   fasciaTexture:THREE.Texture|null;
+  riserTexture:THREE.Texture|null;skirtTexture:THREE.Texture|null;
 }){
   const start=placement.start!,end=placement.end!;
   const dx=end.x-start.x,dz=end.y-start.y;
@@ -67,6 +68,12 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture}:{
     '#bcb5aa':'#b19a79';
   const fascia=values.stairStringerFascia!==false;
   const fasciaStyle=values.stairFasciaStyle==='straight'?'straight':'profiled';
+  const contour=planStraightStairFascia({treadDepthFt:treadDepth,treads,riseFt:rise,heightFt:height});
+  const lowerStart=fasciaStyle==='straight'?contour[3].riseFt:Math.max(.05,height-rise-.72);
+  const lowerEnd=fasciaStyle==='straight'?contour[2].riseFt:
+    Math.max(.055,height-(treads+1)*rise+.02);
+  const underFasciaAt=(station:number)=>Math.max(.04,
+    lowerStart+(lowerEnd-lowerStart)*Math.max(0,Math.min(1,station/run))-.04);
   return <group name={'stair-flight-'+placement.edgeIndex}
     position={[(start.x+end.x)/2-center[0],0,(start.y+end.y)/2-center[1]]}
     rotation={[0,yaw,0]}>
@@ -96,7 +103,7 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture}:{
         {values.stairRiserStyle!=='open'&&<Block
           position={[0,stepHeight-rise/2+.01,(i+1)*treadDepth-.035]}
           size={[width,Math.max(.12,rise-.09),.07]}
-          color={values.stairRiserStyle==='fascia'?'#d9d4ce':'#aa9884'}/>}
+          color={riserTexture?'#ffffff':'#ac9885'} texture={riserTexture}/>}
       </group>;
     })}
     {[-1,1].map((sign)=>{
@@ -107,39 +114,48 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture}:{
           <meshStandardMaterial color={fasciaTexture?'#ffffff':'#a99a89'}
             map={fasciaTexture} roughness={.78}/>
         </mesh>}
+        {/* Infill stays BEHIND the finished fascia and under its slope. */}
         {skirt&&(horizontal
-          ?Array.from({length:Math.ceil(height/(boardFace+boardGap))},(_,i)=>{
-            const y=.15+i*(boardFace+boardGap)+boardFace/2;
-            const visible=Math.max(0,Math.min(run,run*(1-y/Math.max(.01,height))));
-            if(visible<.18)return null;
-            return <Block key={'skirt-course-'+i}
-              position={[x+sign*.12,y,visible/2]}
-              size={[.07,boardFace,visible]} color={finish}/>;
+          ?Array.from({length:Math.ceil(lowerStart/(boardFace+boardGap))},(_,i)=>{
+            const y=.12+i*(boardFace+boardGap)+boardFace/2;
+            const delta=lowerStart-lowerEnd;
+            const visible=delta<.005?run:Math.min(run,Math.max(0,
+              run*(lowerStart-(y+boardFace/2+.05))/delta));
+            if(visible<.15)return null;
+            return <Block key={'stair-skirt-course-'+i}
+              position={[sign*(width/2-.09),y,visible/2]}
+              size={[.075,boardFace,visible]} color={finish}
+              texture={skirtTexture}/>;
           })
           :Array.from({length:n},(_,i)=>{
             const z=(i+.5)*(run/n);
-            const available=Math.max(.15,height*(1-z/run)-.34);
-            return <Block key={'skirt-vertical-'+i}
-              position={[x+sign*.12,available/2,z]}
-              size={[.072,available,Math.min(boardFace,run/n-.015)]} color={finish}/>;
+            const upper=underFasciaAt(z);
+            const available=Math.max(0,upper-.10);
+            if(available<.12)return null;
+            return <Block key={'stair-skirt-vertical-'+i}
+              position={[sign*(width/2-.09),.10+available/2,z]}
+              size={[.075,available,Math.max(.06,Math.min(boardFace,run/n-.02))]}
+              color={finish} texture={skirtTexture}/>;
           }))}
-        {skirt&&[0,1].map((endIdx)=><Block key={'skirt-support-'+endIdx}
-          position={[x+sign*.08,.26+endIdx*.22,run/2]}
+        {skirt&&[0,1].map((endIdx)=><Block key={'concealed-stair-skirt-support-'+endIdx}
+          position={[sign*(width/2-.22),.20+endIdx*.22,run/2]}
           size={[.125,.25,run]} color="#7c664c"/>)}
       </group>;
     })}
   </group>;
 }
-export function DeckStairAssembly3D({model,center,height,values,texture,fasciaTexture}:{
+export function DeckStairAssembly3D({model,center,height,values,texture,fasciaTexture,riserTexture,skirtTexture}:{
   model:DeckModel;center:P2;height:number;
   values:ConsultationProject['values'];texture:THREE.Texture|null;
   fasciaTexture:THREE.Texture|null;
+  riserTexture:THREE.Texture|null;skirtTexture:THREE.Texture|null;
 }){
   if(!model.stairCount||!model.stairPlacements.length)return null;
   return <group name="stair-stringer-framing-and-selectable-fascia">
     {model.stairPlacements.filter(item=>item.start&&item.end&&item.edgeIndex!==null).map((placement,i)=>
       <Flight key={placement.edgeIndex+'-'+i} placement={placement} model={model}
         center={center} height={height} values={values} texture={texture}
-        fasciaTexture={fasciaTexture}/>)}
+        fasciaTexture={fasciaTexture} riserTexture={riserTexture}
+        skirtTexture={skirtTexture}/>)}
   </group>;
 }

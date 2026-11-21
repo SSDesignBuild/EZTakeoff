@@ -14,8 +14,10 @@ export function planStraightStairFascia(input:{
   if([treadDepthFt,treads,riseFt,heightFt,faceFt].some(n=>!Number.isFinite(n))||
     treadDepthFt<=0||treads<=0||riseFt<=0||heightFt<=0||faceFt<=0)return [];
   const run=treads*treadDepthFt;
-  const upperStart=Math.max(.15,heightFt-riseFt+.08);
-  const upperEnd=Math.max(.15,heightFt-treads*riseFt+.08);
+  // Continuous straight fascia edge sits above every tread nosing.
+  // Previously it was one full rise below the corner at each step.
+  const upperStart=Math.max(.15,heightFt+.14);
+  const upperEnd=Math.max(.15,heightFt-treads*riseFt+.14);
   const lowerStart=Math.max(.035,upperStart-faceFt);
   const lowerEnd=Math.max(.035,upperEnd-faceFt);
   return [

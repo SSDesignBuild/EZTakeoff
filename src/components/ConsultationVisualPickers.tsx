@@ -155,6 +155,11 @@ export function ManufacturerRailPicker({values,onValues}:{
     </div>
     <div className="manufacturer-selected-rail">
       <strong>{selected.label}</strong>
+      <div className="manufacturer-selected-rail-hero">
+        <ProductPhoto photo={railingPhotos[selected.id]}
+          name={selected.label} fallback={selected.sourcePage}/>
+        <p className="muted">Larger manufacturer style reference. Compare actual infill, top profile and posts before confirming.</p>
+      </div>
       <div className="manufacturer-rail-config">
         <label>Railing finish
           <select value={selected.colors.includes(selectedColor)?selectedColor:selected.colors[0]}
@@ -271,6 +276,85 @@ export function ManufacturerCoverPicker({project,onChange}:{
             <option value="dolce-open-view">Dolce · open-view screened walls</option>
             <option value="dolce-standard">Dolce · standard screened panels</option>
           </select></label>
+        {(project.coverScreenStyle??'none')!=='none'&&<div className="renaissance-screen-options">
+          <strong>Dolce screen integration & PCA access door</strong>
+          <label>Screen / railing arrangement
+            <select value={project.coverScreenRailTreatment??'integrated-kick'}
+              onChange={e=>onChange({coverScreenRailTreatment:e.target.value as
+                NonNullable<ConsultationProject['coverScreenRailTreatment']>})}>
+              <option value="integrated-kick">Integrated Dolce kick panel — no overlapping railing</option>
+              <option value="integrated-picket">Integrated Dolce pickets — no overlapping railing</option>
+              <option value="inside">Screen mounted inside independent deck railing</option>
+              <option value="outside">Screen mounted outside independent deck railing</option>
+              <option value="screens-only">Full-height screen only — omit perimeter railing</option>
+            </select></label>
+          <label className="consultation-checkbox"><input type="checkbox"
+            checked={project.coverDoorEnabled!==false}
+            onChange={e=>onChange({coverDoorEnabled:e.target.checked})}/>
+            Include PCA Products 3068 (36″ × 80″) screen entry door
+          </label>
+          {project.coverDoorEnabled!==false&&<div className="renaissance-door-config">
+            <label>Door placement side
+              <select value={project.coverDoorSide??'front'}
+                onChange={e=>onChange({coverDoorSide:e.target.value as
+                  NonNullable<ConsultationProject['coverDoorSide']>})}>
+                <option value="front">Front screen wall</option>
+                <option value="left">Left screen wall</option>
+                <option value="right">Right screen wall</option>
+                {project.coverMount==='freestanding'&&<option value="rear">Rear screen wall</option>}
+              </select></label>
+            <label>Position along wall · {project.coverDoorPositionPercent??50}%
+              <input type="range" min={10} max={90} step={5}
+                value={project.coverDoorPositionPercent??50}
+                onChange={e=>onChange({coverDoorPositionPercent:Number(e.target.value)})}/>
+            </label>
+            <label>PCA door model
+              <select value={project.coverDoorModel??'A-100'}
+                onChange={e=>onChange({coverDoorModel:e.target.value as
+                  NonNullable<ConsultationProject['coverDoorModel']>,
+                  coverDoorPet:'none'})}>
+                <option value="A-100">Canoe Creek A-100 · 3068</option>
+                <option value="A-500">Westmore A-500 · 3068</option>
+              </select></label>
+            <label>Door finish
+              <select value={project.coverDoorFinish??'match'}
+                onChange={e=>onChange({coverDoorFinish:e.target.value as
+                  NonNullable<ConsultationProject['coverDoorFinish']>})}>
+                {['match','White','Bronze','Black','Sandstone','Clay'].map(color=>
+                  <option key={color} value={color}>{color==='match'?'Match Renaissance frame':color}</option>)}
+              </select></label>
+            <label>Hinge side
+              <select value={project.coverDoorHinge??'left'}
+                onChange={e=>onChange({coverDoorHinge:e.target.value as 'left'|'right'})}>
+                <option value="left">Left hand</option><option value="right">Right hand</option>
+              </select></label>
+            <label>Door swing
+              <select value={project.coverDoorSwing??'out'}
+                onChange={e=>onChange({coverDoorSwing:e.target.value as 'in'|'out'})}>
+                <option value="out">Outswing</option><option value="in">Inswing</option>
+              </select></label>
+            <label>Integrated PCA pet door
+              <select value={project.coverDoorPet??'none'}
+                onChange={e=>onChange({coverDoorPet:e.target.value as
+                  NonNullable<ConsultationProject['coverDoorPet']>})}>
+                <option value="none">No pet door</option>
+                <option value="small">Magnador small · 6″ × 8″ opening</option>
+                {project.coverDoorModel!=='A-500'&&<>
+                  <option value="medium">Magnador medium · 11″ × 13″ opening</option>
+                  <option value="large">Magnador large · 13″ × 20″ opening</option>
+                </>}
+              </select></label>
+            <label>Kick plate height
+              <select value={project.coverDoorKickPlateIn??8}
+                onChange={e=>onChange({coverDoorKickPlateIn:Number(e.target.value)})}>
+                {[0,8,12,14,24].map(inches=><option value={inches} key={inches}>
+                  {inches===0?'No kick plate':inches+'″ kick plate'}
+                </option>)}
+              </select></label>
+            <small className="consultation-visual-note">PCA 3068 opening is 36″ × 80″; confirm actual frame/rough opening, door hand, wall height and pet-door fit before ordering.</small>
+          </div>}
+        </div>}
+
       </div>
       <div className="consultation-skirting-finish">
         <label>Roof width (ft) · 0 = follow deck

@@ -4,6 +4,7 @@ import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { getDeckVisualProduct } from '../../data/visualCatalog';
 import { surfaceStrips, breakerVisualStrips } from '../../lib/visualGeometry';
+import { planMiteredPictureFrames } from '../../lib/deckMiterGeometry';
 import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials, resolveFasciaMaterial, resolveStairSideFasciaMaterial } from '../../lib/deckTrimSelection';
 import { Beam, type P2 } from './Primitives';
 import { DeckStructure3D } from './DeckStructure3D';
@@ -134,24 +135,40 @@ function DeckTrimBeam({start,end,height,texture,color}:{
     </>:<meshStandardMaterial color={color} roughness={.82}/>}
   </mesh>;
 }
+/**
+ * Real polygon-mitered 5.5-inch picture-frame courses, not offset rectangular
+ * beams with exposed square corners. Adjacent ends share the exact polygon
+ * corner miter and square off where a house-facing course was omitted.
+ */
 function BorderBoards({model,center,deckHeight,maps,colors}:{
   model:DeckModel;center:P2;deckHeight:number;
   maps:(THREE.Texture|null)[];colors:string[];
 }){
-  if(model.pictureFrameCount<=0)return null;
-  return <group name="picture-frame-borders">
-    {model.pictureFrameSegments.map((edge)=>Array.from({length:model.pictureFrameCount},(_,i)=>{
-      const from:P2=[edge.start.x-center[0],edge.start.y-center[1]],
-        to:P2=[edge.end.x-center[0],edge.end.y-center[1]];
-      const inward=.18+i*.48;
-      const along=Number(edge.orientation==='vertical');
-      return <DeckTrimBeam key={'frame-'+edge.index+'-'+i}
-        start={[from[0]+(along?inward:0),from[1]+(along?0:inward)]}
-        end={[to[0]+(along?inward:0),to[1]+(along?0:inward)]}
-        height={deckHeight+.015}
-        texture={maps[Math.min(i,2)]??null}
-        color={colors[Math.min(i,2)]??'#9e9d97'}/>;
-    }))}
+  const outlines=useMemo(()=>planMiteredPictureFrames(
+    model.points,model.pictureFrameSegments,model.pictureFrameCount),
+    [model.points,model.pictureFrameSegments,model.pictureFrameCount]);
+  const geometries=useMemo(()=>outlines.map(strip=>{
+    const s=new THREE.Shape();
+    strip.corners.forEach(([x,z],i)=>{
+      if(i===0)s.moveTo(x-center[0],-(z-center[1]));
+      else s.lineTo(x-center[0],-(z-center[1]));
+    });
+    s.closePath();
+    const g=new THREE.ExtrudeGeometry(s,{
+      depth:.095,bevelEnabled:false,curveSegments:1,steps:1,
+    });
+    g.rotateX(-Math.PI/2);g.computeVertexNormals();
+    return {strip,geometry:g};
+  }),[outlines,center]);
+  useEffect(()=>()=>geometries.forEach(item=>item.geometry.dispose()),[geometries]);
+  return <group name="miter-cut-authentic-picture-frame-courses">
+    {geometries.map(({strip,geometry})=><mesh key={'miter-'+strip.edgeIndex+'-'+strip.course}
+      geometry={geometry} position={[0,deckHeight+.015-.0475,0]} castShadow receiveShadow>
+      {maps[strip.course]
+        ?<meshBasicMaterial color="#ffffff" map={maps[strip.course]} toneMapped={false} side={THREE.DoubleSide}/>
+        :<meshStandardMaterial color={colors[strip.course]??'#a5a29d'}
+          side={THREE.DoubleSide} roughness={.81}/>}
+    </mesh>)}
   </group>;
 }
 /** Cross-field breaker courses use their selected real manufacturer swatch. */
@@ -212,6 +229,11 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
   const stairName=project.values.stairTreadStyle==='match'||!project.values.stairTreadStyle
     ?project.values.deckingMaterial:project.values.stairTreadStyle;
   const {map:stairMap}=useManufacturerTexture(stairName);
+  const riserStyle=String(project.values.stairRiserStyle??'auto');
+  const riserName=riserStyle==='fascia'||(riserStyle==='auto'&&project.values.deckingType!=='pressure-treated')
+    ?fasciaName:riserStyle==='auto'||riserStyle==='match'
+      ?String(project.values.deckingMaterial):riserStyle;
+  const {map:riserMap}=useManufacturerTexture(riserName);
   return <group name="manufacturer-visualized-deck">
     <DeckStructure3D model={model} center={center} height={deckHeight}/>
     <PolygonSubstrate model={model} center={center} deckHeight={deckHeight}/>
@@ -220,9 +242,16 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
     <BreakerBoards model={model} center={center} height={deckHeight} maps={breakerMaps} colors={breakerColors}/>
     <DeckFascia model={model} center={center} height={deckHeight} texture={fasciaMap}/>
     <DeckSkirting3D model={model} center={center} height={deckHeight} values={project.values} texture={skirtMap} lowerTier={lowerTier}/>
-    <ManufacturerRailing3D model={model} values={project.values} center={center} deckHeight={deckHeight}/>
+    <ManufacturerRailing3D model={model} values={project.values} center={center}
+      deckHeight={deckHeight}
+      screenIntegrated={covered&&project.coverScreenStyle!=='none'&&
+        !['inside','outside'].includes(project.coverScreenRailTreatment??'integrated-kick')}
+      screenDoorSide={covered&&project.coverScreenStyle!=='none'&&project.coverDoorEnabled!==false
+        ?(project.coverDoorSide??'front'):undefined}
+      screenDoorPercent={project.coverDoorPositionPercent??50}/>
     <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values}
-      texture={stairMap} fasciaTexture={stairFasciaMap}/>
+      texture={stairMap} fasciaTexture={stairFasciaMap}
+      riserTexture={riserMap} skirtTexture={skirtMap}/>
     {covered&&<RenaissanceCover3D model={model} project={project} center={center} deckHeight={deckHeight}/>}
     {!selected&&<group name="manufacturer-board-texture-not-yet-verified"/>}
   </group>;
