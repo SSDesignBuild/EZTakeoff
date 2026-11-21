@@ -37,9 +37,10 @@ function makeStraightFascia(runFt:number,treads:number,riseFt:number,height:numb
   geo.computeVertexNormals();
   return geo;
 }
-function Flight({placement,model,center,height,values,texture}:{
+function Flight({placement,model,center,height,values,texture,fasciaTexture}:{
   placement:StairPlacement;model:DeckModel;center:P2;height:number;
   values:ConsultationProject['values'];texture:THREE.Texture|null;
+  fasciaTexture:THREE.Texture|null;
 }){
   const start=placement.start!,end=placement.end!;
   const dx=end.x-start.x,dz=end.y-start.y;
@@ -102,8 +103,9 @@ function Flight({placement,model,center,height,values,texture}:{
       const x=sign*(width/2+.08),n=Math.max(2,Math.ceil(run/(boardFace+boardGap)));
       return <group key={'stair-side-'+sign}>
         {fascia&&<mesh geometry={fasciaStyle==='straight'?straightFasciaGeo:geo}
-          position={[x,0,0]} rotation={[0,-Math.PI/2,0]} castShadow>
-          <meshStandardMaterial color="#a99a89" roughness={.8}/>
+          position={[x,0,0]} rotation={[0,-Math.PI/2,0]} castShadow receiveShadow>
+          <meshStandardMaterial color={fasciaTexture?'#ffffff':'#a99a89'}
+            map={fasciaTexture} roughness={.78}/>
         </mesh>}
         {skirt&&(horizontal
           ?Array.from({length:Math.ceil(height/(boardFace+boardGap))},(_,i)=>{
@@ -128,14 +130,16 @@ function Flight({placement,model,center,height,values,texture}:{
     })}
   </group>;
 }
-export function DeckStairAssembly3D({model,center,height,values,texture}:{
+export function DeckStairAssembly3D({model,center,height,values,texture,fasciaTexture}:{
   model:DeckModel;center:P2;height:number;
   values:ConsultationProject['values'];texture:THREE.Texture|null;
+  fasciaTexture:THREE.Texture|null;
 }){
   if(!model.stairCount||!model.stairPlacements.length)return null;
   return <group name="stair-stringer-framing-and-selectable-fascia">
     {model.stairPlacements.filter(item=>item.start&&item.end&&item.edgeIndex!==null).map((placement,i)=>
       <Flight key={placement.edgeIndex+'-'+i} placement={placement} model={model}
-        center={center} height={height} values={values} texture={texture}/>)}
+        center={center} height={height} values={values} texture={texture}
+        fasciaTexture={fasciaTexture}/>)}
   </group>;
 }
