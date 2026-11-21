@@ -1,18 +1,29 @@
 /**
- * Downspout routing is a visualization layout, not a manufactured elbow BOM.
- * Above-deck pipe bends toward the closest actual cover post. On an elevated
- * deck it continues below the fascia and returns to the nearest DECK post,
- * ending in an outward kick at grade. Installers approve real outlet sites.
+ * Concept routing for A/B-elbow rectangular aluminum downspouts. Both ends
+ * of the gutter-to-post offset are supported: an A elbow at the outlet and
+ * a B elbow against the face of the closest real cover post. The vertical
+ * run uses genuine post coordinates and physical hold-down straps.
+ *
+ * For an elevated deck, follow the nearest real deck post beneath the
+ * elevated fascia; if no deck post exists, do not invent a floating pipe.
+ * Final field routing and purchased elbows must be installer-approved.
  */
-export type RoutePoint=readonly [number,number,number]; // X/Y/Z, feet
+export type RoutePoint=readonly [number,number,number]; // X/Y/Z feet
 export type PostXZ=readonly [number,number];
+export interface DownspoutElbow {
+  type:'A'|'B';atIndex:number;location:'gutter'|'post'|'deck'|'kickout';
+}
+export interface DownspoutStrap {
+  at:RoutePoint;post:PostXZ;kind:'cover'|'deck';
+}
 export interface DownspoutLayout {
   points:RoutePoint[];
+  elbows:DownspoutElbow[];
+  straps:DownspoutStrap[];
   coverPost:PostXZ;
   deckPost:PostXZ|null;
   coverPostPipe:PostXZ;
   lowerPostPipe:PostXZ|null;
-  straps:RoutePoint[];
   elevated:boolean;
 }
 const finite=(p:readonly number[])=>p.every(Number.isFinite);
@@ -28,55 +39,68 @@ export function planRenaissanceDownspout(input:{
   if(!finite(outlet)||!Number.isFinite(deckHeightFt)||!Number.isFinite(ground)||
     !Number.isFinite(input.coverPostWidthFt)||input.coverPostWidthFt<=0||
     !Number.isFinite(input.deckPostWidthFt)||input.deckPostWidthFt<=0||
-    coverPosts.length<1||outlet[1]<deckHeightFt+.8)return null;
+    !coverPosts.length||outlet[1]<deckHeightFt+1)return null;
   const validCover=coverPosts.filter(finite);
   if(!validCover.length)return null;
   const outletXZ:PostXZ=[outlet[0],outlet[2]];
   const coverPost=validCover.reduce((best,p)=>distance(p,outletXZ)<distance(best,outletXZ)?p:best);
   const elevated=deckHeightFt-ground>1.5;
   const validDeck=deckPosts.filter(finite);
-  const deckPost=elevated&&validDeck.length?
-    validDeck.reduce((best,p)=>distance(p,coverPost)<distance(best,coverPost)?p:best):null;
-  const downspoutHalfFt=1.5/12;
-  const faceOffset=(width:number)=>width/2+downspoutHalfFt+.025;
-  const signX=outlet[0]>=coverPost[0]?1:-1;
-  const signZ=outlet[2]>=coverPost[1]?1:-1;
-  const coverPostPipe:PostXZ=[
-    coverPost[0]+signX*faceOffset(input.coverPostWidthFt),
-    coverPost[1]+signZ*faceOffset(input.coverPostWidthFt),
-  ];
-  const lowerPostPipe:PostXZ|null=deckPost?[
-    deckPost[0]+signX*faceOffset(input.deckPostWidthFt),
-    deckPost[1]+signZ*faceOffset(input.deckPostWidthFt),
-  ]:null;
-  const postY=Math.max(deckHeightFt+.20,outlet[1]-.72);
-  const points:RoutePoint[]=[
-    outlet,
-    [outlet[0],outlet[1]-.16,outlet[2]],
-    [(outlet[0]+coverPostPipe[0])/2,outlet[1]-.35,
-      (outlet[2]+coverPostPipe[1])/2],
-    [coverPostPipe[0],postY,coverPostPipe[1]],
-    [coverPostPipe[0],deckHeightFt+.10,coverPostPipe[1]],
-  ];
-  let drop=coverPostPipe;
+  if(elevated&&!validDeck.length)return null;
+  const deckPost=elevated?validDeck.reduce((best,p)=>
+    distance(p,coverPost)<distance(best,coverPost)?p:best):null;
+  // 2x3 in rectangular pipe is secured directly to the FRONT face of the
+  // cover/deck post, not floating diagonally beside both faces.
+  const face=(post:PostXZ,width:number):PostXZ=>
+    [post[0],post[1]+width/2+1.5/12+.015];
+  const coverPostPipe=face(coverPost,input.coverPostWidthFt);
+  const lowerPostPipe=deckPost?face(deckPost,input.deckPostWidthFt):null;
+  const points:RoutePoint[]=[];
+  const elbows:DownspoutElbow[]=[];
+  const straps:DownspoutStrap[]=[];
+  const push=(p:RoutePoint)=>{points.push(p);return points.length-1;};
+  push(outlet);
+  // The A elbow turns the short outlet drop to the inclined offset.
+  const a=push([outlet[0],outlet[1]-.18,outlet[2]]);
+  elbows.push({type:'A',atIndex:a,location:'gutter'});
+  const upperPostY=Math.max(deckHeightFt+.75,outlet[1]-.85);
+  // B elbow completes the offset; downstream straight is ON the post face.
+  const b=push([coverPostPipe[0],upperPostY,coverPostPipe[1]]);
+  elbows.push({type:'B',atIndex:b,location:'post'});
+  const coverBottomY=elevated?deckHeightFt-.38:ground+.53;
+  push([coverPostPipe[0],coverBottomY,coverPostPipe[1]]);
+  straps.push({at:[coverPostPipe[0],Math.max(deckHeightFt+.4,(upperPostY+deckHeightFt)/2),
+    coverPostPipe[1]],post:coverPost,kind:'cover'});
+  // A second cover-post strap for tall patio-cover columns.
+  if(upperPostY-deckHeightFt>4)straps.push({at:[coverPostPipe[0],
+    deckHeightFt+.7,coverPostPipe[1]],post:coverPost,kind:'cover'});
+  let exit=coverPostPipe;
   if(elevated){
-    // Keep the under-deck transition beneath the picture-frame/fascia level.
-    points.push([coverPostPipe[0],deckHeightFt-.40,coverPostPipe[1]]);
-    if(lowerPostPipe&&distance(lowerPostPipe,coverPostPipe)>.04){
-      const y=Math.max(ground+.8,deckHeightFt-.70);
-      points.push([lowerPostPipe[0],y,lowerPostPipe[1]]);
-      drop=lowerPostPipe;
+    const next=lowerPostPipe!;
+    // Under-deck transition is hidden below the rim, supported by post
+    // brackets at both ends; never drop vertically in empty space.
+    if(distance(coverPostPipe,next)>.025){
+      const jogStart=push([coverPostPipe[0],deckHeightFt-.54,coverPostPipe[1]]);
+      elbows.push({type:'A',atIndex:jogStart,location:'deck'});
+      const jogEnd=push([next[0],deckHeightFt-.76,next[1]]);
+      elbows.push({type:'B',atIndex:jogEnd,location:'deck'});
     }
+    exit=next;
+    push([exit[0],ground+.53,exit[1]]);
+    straps.push({at:[exit[0],ground+Math.max(.8,(deckHeightFt-ground)*.65),exit[1]],
+      post:deckPost!,kind:'deck'});
+    if(deckHeightFt-ground>6)straps.push({at:[exit[0],ground+1,exit[1]],
+      post:deckPost!,kind:'deck'});
   }
-  const finishY=ground+.40;
-  points.push([drop[0],finishY,drop[1]]);
-  const direction=input.exitDirection??[0,1];
-  const length=Math.max(.001,Math.hypot(...direction));
-  const sx=direction[0]/length,sz=direction[1]/length;
-  points.push([drop[0]+sx*.30,ground+.28,drop[1]+sz*.30]);
-  points.push([drop[0]+sx*.80,ground+.14,drop[1]+sz*.80]);
-  const strapUpperY=deckHeightFt+Math.max(.5,(outlet[1]-deckHeightFt)*.48);
-  const straps:RoutePoint[]=[[coverPostPipe[0],strapUpperY,coverPostPipe[1]]];
-  if(elevated)straps.push([drop[0],ground+Math.max(.8,(deckHeightFt-ground)*.42),drop[1]]);
-  return {points,coverPost,deckPost,coverPostPipe,lowerPostPipe,straps,elevated};
+  // Outward A/B kick at the ground; the pipe does not disappear into decking.
+  const kickDirection=input.exitDirection??[0,1];
+  if(!finite(kickDirection))return null;
+  const d=Math.hypot(kickDirection[0],kickDirection[1]);
+  if(d<.001)return null;
+  const dir:PostXZ=[kickDirection[0]/d,kickDirection[1]/d];
+  const kickIndex=push([exit[0]+dir[0]*.21,ground+.28,exit[1]+dir[1]*.21]);
+  elbows.push({type:'B',atIndex:kickIndex,location:'kickout'});
+  push([exit[0]+dir[0]*.8,ground+.14,exit[1]+dir[1]*.8]);
+  if(points.some(p=>!finite(p)))return null;
+  return {points,elbows,straps,coverPost,deckPost,coverPostPipe,lowerPostPipe,elevated};
 }
