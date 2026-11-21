@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build" # TEMPORARY diagnostic compile-only preview; strict gate must be restored
+  command = "npm run build > /tmp/ez-tsc-errors.txt 2>&1; code=$?; mkdir -p dist; grep -E 'error TS[0-9]+|error:|^> |^src/' /tmp/ez-tsc-errors.txt > dist/__qa_compiler_errors.txt || true; echo EXIT_CODE=$code >> dist/__qa_compiler_errors.txt; exit 0" # TEMPORARY disposable compiler diagnostics: restore full test/build gate before merge
   publish = "dist"
 
 [[redirects]]
