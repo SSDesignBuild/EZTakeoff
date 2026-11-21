@@ -1,5 +1,5 @@
 [build]
-  command = "node scripts/test-premium-consultation.cjs && node scripts/test-consultation-design-accuracy.cjs && node scripts/test-renaissance-reference.cjs && node scripts/test-renaissance-manufacturer.cjs && node scripts/test-renaissance-detail-geometry.cjs" # TEMPORARY bisect early consultation/manufacturer regression
+  command = "npm run assets:sync && npm test && npm run build"
   publish = "dist"
 
 [[redirects]]
