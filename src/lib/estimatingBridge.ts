@@ -30,8 +30,11 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
     frontOverhangFt:Number(project.coverFrontOverhangFt??1),
     postHeightFt:Number(project.coverHeightFt??9),
   }));
-  if(project.coverScreenStyle&&project.coverScreenStyle!=='none')
+  if(project.coverScreenStyle&&project.coverScreenStyle!=='none'){
     blockers.push('Dolce screen style is a visual selection, not a supplier-verified screen room extrusion/cut BOM; approve separate screen-room takeoff.');
+    if(project.coverDoorEnabled!==false)
+      blockers.push('PCA 3068 entry door, hinges, pet door and site-specific rough opening are visualization choices only; supplier ordering and egress/landing requirements must be verified.');
+  }
   if(typeof project.values.railingVisualId==='string' && !String(project.values.railingVisualId).startsWith('tt-ire-'))
     blockers.push('Selected railing style needs manufacturer-specific panel/kit takeoff verification; the standard railing BOM is not a verified match.');
   return {
@@ -49,7 +52,18 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverFamily:project.coverFamily,coverColor:project.coverColor,
       coverRoofColor:project.coverRoofColor??'White',coverCeilingFinish:project.coverCeilingFinish??'White',
       coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
-      coverScreenStyle:project.coverScreenStyle??'none',coverPostCount:project.coverPostCount??0,
+      coverScreenStyle:project.coverScreenStyle??'none',
+      coverScreenRailTreatment:project.coverScreenRailTreatment??'integrated-kick',
+      coverDoorEnabled:project.coverDoorEnabled!==false,
+      coverDoorSide:project.coverDoorSide??'front',
+      coverDoorPositionPercent:project.coverDoorPositionPercent??50,
+      coverDoorModel:project.coverDoorModel??'A-100',
+      coverDoorFinish:project.coverDoorFinish??'match',
+      coverDoorHinge:project.coverDoorHinge??'left',
+      coverDoorSwing:project.coverDoorSwing??'out',
+      coverDoorPet:project.coverDoorPet??'none',
+      coverDoorKickPlateIn:project.coverDoorKickPlateIn??8,
+      coverPostCount:project.coverPostCount??0,
       coverWidthFt:project.coverWidthFt??0,coverProjectionFt:project.coverProjectionFt??0,
       coverHeightFt:project.coverHeightFt??9,coverSideOverhangFt:project.coverSideOverhangFt??1,
       coverFrontOverhangFt:project.coverFrontOverhangFt??1},
