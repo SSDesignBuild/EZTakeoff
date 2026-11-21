@@ -7,6 +7,8 @@ import * as THREE from 'three';
 import { planDolceScreenProfile, roofLineAtX } from '../../lib/renaissanceDetailGeometry';
 import { planInsulatedRoofPanels, planDolceGableInfill } from '../../lib/renaissanceRoofGeometry';
 import { planWrapAroundGutter } from '../../lib/renaissanceGutterGeometry';
+import { planRenaissanceDownspout } from '../../lib/renaissanceDownspoutRouting';
+import { actualPostWidthFt } from '../../lib/visualStructure';
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
 import {
   getRenaissanceExtrusion,makeRenaissanceFramePlan,inchToFoot,
@@ -159,6 +161,20 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     rearTopFt:shape==='gable'?eaveY:roofRearY,
     frontTopFt:shape==='gable'?eaveY:roofFrontY,
   });
+  const deckSupportPosts=model.postLocations.map(post=>
+    [post.x-center[0],post.y-center[1]] as P2);
+  // Prefer the rightmost actual cover post which is also near a real deck
+  // support. Outlet location is at the front gutter, not an arbitrary drop.
+  const compatible=frontPosts.filter(post=>
+    deckSupportPosts.some(under=>Math.hypot(under[0]-post[0],under[1]-post[1])<3));
+  const frontPost=(compatible.at(-1)??frontPosts.at(-1)) as P2|undefined;
+  const downspout=frontPost?planRenaissanceDownspout({
+    outlet:[frontPost[0],roofFrontY-inchToFoot(1.5),front+inchToFoot(1)],
+    coverPosts:frontPosts,deckPosts:deckSupportPosts,
+    coverPostWidthFt:inchToFoot(profile.postOutsideIn),
+    deckPostWidthFt:actualPostWidthFt(model.postSize),
+    deckHeightFt:deckHeight,groundFt:0,exitDirection:[0,1],
+  }):null;
   return <group name={'Renaissance-'+product.id} position={[0,0,0]}>
     {/* Manufacturer outside dimensions: SD/HD 3.875-in hollow columns,
         WD 6-in columns; SD/HD 7x2.75 and WD 7x4.875 headers. */}
@@ -247,9 +263,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     {(isSolid||isTranslucent)&&<group name="renaissance-left-front-right-wrapped-architectural-gutter">
       {gutterRuns.map(run=><RenaissanceGutter key={'gutter-'+run.id}
         run={run} color={powder}/>)}
-      <RenaissanceDownspout x={right+inchToFoot(2)} z={front+inchToFoot(2)}
-        top={roofFrontY-inchToFoot(1.5)} bottom={deckHeight+inchToFoot(4)}
-        color={powder}/>
+      {downspout&&<RenaissanceDownspout layout={downspout} color={powder}/>}
       {attached&&shape==='studio'&&isSolid&&<RenaissanceReceivingChannel
         fromX={left} toX={right} z={roofBackEdge}
         y={roofRearY} color={powder}/>}
