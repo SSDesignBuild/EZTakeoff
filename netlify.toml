@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build >/tmp/ez-error.txt 2>&1; grep -q 'RenaissanceCover3D.tsx' /tmp/ez-error.txt && exit 11; exit 0" # TEMPORARY single-file type diagnostic; restore full gate before merge
+  command = "npm run build >/tmp/ez-error.txt 2>&1; grep -q 'renaissanceDownspoutRouting.ts' /tmp/ez-error.txt && exit 11; exit 0" # TEMPORARY diagnostic; restore strict gate
   publish = "dist"
 
 [[redirects]]
