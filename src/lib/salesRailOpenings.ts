@@ -17,7 +17,7 @@ export function subtractRailingOpenings(runs:DeckRailCoverage[],openings:StairsO
    ranges=next;
   }
   out.push(...ranges.filter(([a,b])=>b-a>.04).map(([start,end])=>({
-   edgeIndex:run.edgeIndex,start,end,
+   edgeIndex:run.edgeIndex,start,end,kind:run.kind,
   })));
  }
  return out;
