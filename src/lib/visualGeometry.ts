@@ -22,7 +22,7 @@ const INSTALLATION_END_GAP_FT = 0.125 / 12;
  */
 export function surfaceStrips(
   model:Pick<DeckModel,'points'|'boardRun'|'minX'|'maxX'|'minY'|'maxY'> &
-    Partial<Pick<DeckModel,'breakerBoardPositions'>>,
+    Partial<Pick<DeckModel,'breakerBoardPositions'|'breakerBoardCount'>>,
   boardWidthFt=VISIBLE_BOARD_WIDTH_FT,gapFt=VISIBLE_BOARD_GAP_FT,
 ):SurfaceStrip[]{
   const points=model.points;
@@ -69,27 +69,121 @@ export function surfaceStrips(
       const end=Math.min(endMid,atLow[1],atHigh[1])-.01;
       const len=end-start;
       if(len<=.04)continue;
-      const relativeBreaks=(model.breakerBoardPositions??[]).map(station=>station-start);
-      const pieces=boardStockSegments(len,relativeBreaks);
-      let cursor=start;
-      for(let part=0;part<pieces.length;part++){
-        const cutLength=pieces[part];
-        const seam=part<pieces.length-1?Math.min(INSTALLATION_END_GAP_FT,cutLength*.1):0;
-        const actualLength=cutLength-seam;
-        if(actualLength>.04){
-          const center=cursor+actualLength/2;
-          result.push({axis:runX?'x':'z',
-            x:runX?center:bandStart+bandWidth/2,
-            z:runX?bandStart+bandWidth/2:center,
-            lengthFt:actualLength,widthFt:bandWidth,
-            startFt:cursor,endFt:cursor+actualLength,row});
+      // A visual breaker is a REAL perpendicular board with physical face
+      // width. Reserve its full footprint + edge gaps in the field board row.
+      const breakerCount=Math.max(0,Math.min(3,Math.round(model.breakerBoardCount??0)));
+      const band=breakerCount*(boardWidthFt+gapFt)+gapFt;
+      const blockers=breakerCount>0?(model.breakerBoardPositions??[]).map(station=>
+        [station-band/2,station+band/2] as const):[];
+      let permitted:[[number,number]]|Array<[number,number]>=[[start,end]];
+      for(const [clipA,clipB] of blockers){
+        const next:Array<[number,number]>=[];
+        for(const [a,b] of permitted){
+          if(b<=clipA||a>=clipB){next.push([a,b]);continue;}
+          if(clipA-a>.04)next.push([a,clipA]);
+          if(b-clipB>.04)next.push([clipB,b]);
         }
-        cursor+=cutLength;
+        permitted=next;
+      }
+      for(const [segmentStart,segmentEnd] of permitted){
+        const len=segmentEnd-segmentStart;
+        if(len<=.04)continue;
+        const pieces=boardStockSegments(len);
+        let cursor=segmentStart;
+        for(let part=0;part<pieces.length;part++){
+          const cutLength=pieces[part];
+          const seam=part<pieces.length-1?Math.min(INSTALLATION_END_GAP_FT,cutLength*.1):0;
+          const actualLength=cutLength-seam;
+          if(actualLength>.04){
+            const center=cursor+actualLength/2;
+            result.push({axis:runX?'x':'z',
+              x:runX?center:bandStart+bandWidth/2,
+              z:runX?bandStart+bandWidth/2:center,
+              lengthFt:actualLength,widthFt:bandWidth,
+              startFt:cursor,endFt:cursor+actualLength,row});
+          }
+          cursor+=cutLength;
+        }
       }
       if(result.length>=1400)break;
     }
   }
   return result;
+}
+export interface BreakerVisualStrip extends SurfaceStrip {
+  course:number;
+  stationFt:number;
+}
+/**
+ * Perpendicular breaker courses at the EXACT takeoff station, using 5.5-inch
+ * face boards separated by the common installation gap. Rows are clipped to
+ * each polygon interval (including concave footprints), never full-width
+ * rectangular impostors. Manufacturing source determines appearance only.
+ */
+export function breakerVisualStrips(
+  model:Pick<DeckModel,'points'|'boardRun'|'minX'|'maxX'|'minY'|'maxY'> &
+    Partial<Pick<DeckModel,'breakerBoardPositions'|'breakerBoardCount'>>,
+  boardWidthFt=VISIBLE_BOARD_WIDTH_FT,gapFt=VISIBLE_BOARD_GAP_FT,
+):BreakerVisualStrip[]{
+  const count=Math.max(0,Math.min(3,Math.round(model.breakerBoardCount??0)));
+  if(count===0||model.points.length<3||!Number.isFinite(boardWidthFt)||boardWidthFt<=0||
+    !Number.isFinite(gapFt)||gapFt<0)return [];
+  const runX=model.boardRun==='width';
+  // Breaker orientation is PERPENDICULAR to the main field.
+  const min=runX?model.minX:model.minY,max=runX?model.maxX:model.maxY;
+  const faceAxis=runX?'x':'z';
+  const results:BreakerVisualStrip[]=[];
+  const scan=(station:number):Array<[number,number]>=>{
+    const hits:number[]=[];
+    const points=model.points;
+    for(let i=0;i<points.length;i++){
+      const a=points[i],b=points[(i+1)%points.length];
+      const av=runX?a.x:a.y,bv=runX?b.x:b.y;
+      if((av<=station&&bv>station)||(bv<=station&&av>station)){
+        const t=(station-av)/(bv-av);
+        hits.push((runX?a.y:a.x)+t*((runX?b.y:b.x)-(runX?a.y:a.x)));
+      }
+    }
+    hits.sort((a,b)=>a-b);
+    const intervals:Array<[number,number]>=[];
+    for(let i=0;i+1<hits.length;i+=2)intervals.push([hits[i],hits[i+1]]);
+    return intervals;
+  };
+  for(const station of model.breakerBoardPositions??[]){
+    if(!Number.isFinite(station)||station<min||station>max)continue;
+    for(let course=0;course<count;course++){
+      const center=station+(course-(count-1)/2)*(boardWidthFt+gapFt);
+      const side1=center-boardWidthFt/2,side2=center+boardWidthFt/2;
+      const epsilon=Math.min(.000001,boardWidthFt/1000);
+      if(side1<min||side2>max)continue;
+      const middle=scan(center),low=scan(side1+epsilon),high=scan(side2-epsilon);
+      for(const [a,b] of middle){
+        const midpoint=(a+b)/2;
+        const find=(pairs:Array<[number,number]>)=>pairs.find(([x,y])=>midpoint>=x-.000001&&midpoint<=y+.000001);
+        const la=find(low),ha=find(high);
+        if(!la||!ha)continue;
+        const start=Math.max(a,la[0],ha[0])+.01;
+        const end=Math.min(b,la[1],ha[1])-.01;
+        if(end-start<.04)continue;
+        const pieces=boardStockSegments(end-start);
+        let cursor=start;
+        for(let i=0;i<pieces.length;i++){
+          const seam=i<pieces.length-1?INSTALLATION_END_GAP_FT:0;
+          const lengthFt=pieces[i]-seam;
+          if(lengthFt>.04)results.push({
+            axis:faceAxis==='x'?'z':'x',
+            x:faceAxis==='x'?center:cursor+lengthFt/2,
+            z:faceAxis==='x'?cursor+lengthFt/2:center,
+            lengthFt,widthFt:boardWidthFt,
+            startFt:cursor,endFt:cursor+lengthFt,
+            row:course,course,stationFt:station,
+          });
+          cursor+=pieces[i];
+        }
+      }
+    }
+  }
+  return results;
 }
 export interface VisualPartSummary {
   roof:'none'|'opaque'|'transparent'|'lattice'|'louvers';
