@@ -1,5 +1,5 @@
 [build]
-  command = "EZ_TEST_ONLY=routing node scripts/test-sales-aesthetic-routing.cjs" # TEMPORARY staged test probe; restore full strict build gate
+  command = "npm run assets:sync && npm test && npm run build"
   publish = "dist"
 
 [[redirects]]
