@@ -128,8 +128,13 @@ assert.ok(board.includes('planMiteredPictureFrames'));
 assert.ok(stair.includes('underFasciaAt')&&stair.includes('riserTexture'));
 assert.ok(skirt3d.includes("layer==='finish'")&&skirt3d.includes("layer==='jamb'"));
 assert.ok(skirt3d.includes('placed-hinged-skirting-access-gate'));
+assert.ok(skirt3d.includes('rotation={[0,yaw,0]}'),
+  'Perimeter skirting must follow angled deck edge vectors, not arbitrary X/Z axes');
 assert.ok(downspout.includes('routedDownspoutSections')&&
-  !downspout.includes('CatmullRomCurve3'));
+  downspout.includes('QuadraticBezierCurve3')&&
+  downspout.includes('layout.elbows.flatMap')&&
+  !downspout.includes('CatmullRomCurve3'),
+  'Authentic A/B elbows must be hollow swept transitions between cut straight pipe');
 assert.ok(studio.includes('viewportHeight={viewportHeight}'));
 assert.ok(studio.includes('Stair fascia edge'));
 assert.ok(picks.includes('PCA Products 3068'));
