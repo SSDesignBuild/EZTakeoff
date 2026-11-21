@@ -1,3 +1,4 @@
+import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials } from './deckTrimSelection';
 import { parseGableSections, parseSections, parseSunroomSections } from './sectioning';
 import { buildDeckModel, buildLowerTierDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem, SectionConfig } from './types';
@@ -461,8 +462,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const pictureFrameCount = Math.max(0, Math.round(Number(inputs.pictureFrameCount ?? 1)));
   const breakerBoardCount = Math.max(0, Math.round(Number(inputs.breakerBoardCount ?? 0)));
   const resolveBoardStyle = (value: unknown) => String(value ?? 'match') === 'match' ? deckingMaterial : String(value);
-  const pictureFrameMaterials = [inputs.pictureFrameMaterial, inputs.pictureFrameMaterial2, inputs.pictureFrameMaterial3].map(resolveBoardStyle);
-  const breakerBoardMaterials = [inputs.breakerBoardMaterial, inputs.breakerBoardMaterial2, inputs.breakerBoardMaterial3].map(resolveBoardStyle);
+  const pictureFrameMaterials=resolvePictureFrameMaterials(inputs);
+  const breakerBoardMaterials=resolveBreakerBoardMaterials(inputs);
   const spindleType = String(inputs.spindleType ?? 'black-round');
   const drinkRail = inputs.drinkRail === true || String(inputs.drinkRail ?? 'false') === 'true';
   const drinkRailMaterial = resolveBoardStyle(inputs.drinkRailMaterial);

@@ -2261,3 +2261,14 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
 @media(max-width:560px){
   .manufacturer-rail-card .manufacturer-photo{height:146px}
 }
+
+/* Manufacturer board finish choices for independently configurable trim. */
+.consultation-finish-card{display:grid;gap:.78rem}
+.consultation-finish-select{display:grid;gap:.35rem;min-width:0}
+.consultation-finish-select select{width:100%;min-width:0;min-height:42px}
+.consultation-finish-preview{display:flex;align-items:center;gap:.7rem;
+  min-height:48px;border:1px solid var(--border);padding:.3rem .5rem;border-radius:9px;
+  background:var(--panel)}
+.consultation-finish-preview img{width:76px;height:46px;object-fit:cover;border-radius:5px;flex:none}
+.consultation-finish-preview span{font-size:.79rem;color:var(--muted)}
+.consultation-finish-no-photo{font-size:.7rem;min-width:76px;max-width:76px;line-height:1.2;color:var(--muted)}

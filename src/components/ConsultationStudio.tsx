@@ -12,7 +12,7 @@ import { loadConsultations, saveConsultations, makeConsultationProject, updateCo
   type PhotoCalibration } from '../lib/consultationProject';
 import { saveHousePhoto, readHousePhoto, deleteHousePhoto } from '../lib/consultationPhoto';
 import { createEstimateHandoff, parseEstimateResponse, makeAcceptedScope, downloadJson, selectedPricedTier } from '../lib/estimatingBridge';
-import { deckVisualProducts } from '../data/visualCatalog';
+import { ConsultationDeckFinishes, StairFasciaFinishSelect } from './ConsultationDeckFinishes';
 
 const Live3D=lazy(()=>import('./Consultation3D').then((module)=>({default:module.Consultation3D})));
 type Step='photo'|'layout'|'options'|'render';
@@ -195,26 +195,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
       </div>
       <ManufacturerBoardPicker values={project.values} onValues={(values)=>onChange({values})}/>
       <div className="consultation-option-columns">
-        <article className="consultation-option-card">
-          <h4>Picture frame & breaker boards</h4>
-          <label>Picture frame courses<select value={Number(project.values.pictureFrameCount??0)} onChange={(e)=>setValue('pictureFrameCount',Number(e.target.value))}>
-            {[0,1,2,3].map((n)=><option value={n} key={n}>{n===0?'None':n+' course'+(n===1?'':'s')}</option>)}
-          </select></label>
-          <label>Picture frame board color<select
-            value={project.values.borderSameBoard!==false?'match':String(project.values.pictureFrameMaterial??'match')}
-            onChange={(e)=>onChange({values:{...project.values,
-              borderSameBoard:e.target.value==='match',
-              pictureFrameMaterial:e.target.value}})}>
-            <option value="match">Match selected deck board</option>
-            {deckVisualProducts.map(board=><option key={board.id} value={board.label}>
-              {board.collection} · {board.color}
-            </option>)}
-          </select></label>
-          <label className="consultation-checkbox"><input type="checkbox" checked={project.values.pictureFrameHouseSide===true} onChange={(e)=>setValue('pictureFrameHouseSide',e.target.checked)}/>Include picture frame on house side</label>
-          <label>Breaker courses<select value={Number(project.values.breakerBoardCount??0)} onChange={(e)=>setValue('breakerBoardCount',Number(e.target.value))}>
-            {[0,1,2,3].map((n)=><option key={n} value={n}>{n===0?'None':n+' breaker course'+(n===1?'':'s')}</option>)}
-          </select></label>
-        </article>
+        <ConsultationDeckFinishes values={project.values} onValues={updateValues}/>
         <ManufacturerRailPicker values={project.values} onValues={(values)=>onChange({values})}/>
         <article className="consultation-option-card">
           <h4>Stair options</h4>
@@ -230,6 +211,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
             <option value="profiled">Cut to follow the stringer</option>
             <option value="straight">Straight clean fascia</option>
           </select></label>
+          <StairFasciaFinishSelect values={project.values} onValues={updateValues}/>
           <label>Riser material<select value={String(project.values.stairRiserStyle??'auto')}
             onChange={(e)=>setValue('stairRiserStyle',e.target.value)}>
             <option value="auto">Standard coordinated riser</option>

@@ -1,17 +1,37 @@
 /**
- * S&S sales deck trim uses the actual field decking by default, rather than
- * the legacy Admin Takeoff seed value ("Trex Enhance Naturals - Foggy Wharf").
- * A contrasting selected picture-frame course remains independently honored
- * when borderSameBoard is explicitly disabled.
+ * Single finish-selection source for Sales 3D and Admin material takeoff.
+ * A selected manufacturer style stays independent for EACH of three border
+ * and breaker courses. 'match' follows the CURRENT field decking choice.
  */
-export type TrimValues=Record<string,string|number|boolean>;
+export interface TrimValues {
+  deckingMaterial?:unknown;
+  borderSameBoard?:unknown;
+  pictureFrameMaterial?:unknown;pictureFrameMaterial2?:unknown;pictureFrameMaterial3?:unknown;
+  breakerBoardMaterial?:unknown;breakerBoardMaterial2?:unknown;breakerBoardMaterial3?:unknown;
+  fasciaMaterial?:unknown;stairFasciaMaterial?:unknown;
+}
+const text=(v:unknown):string=>String(v??'').trim();
+export function resolveBoardFinish(raw:unknown,field:string):string{
+  const value=text(raw);
+  return value&&value!=='match'?value:field;
+}
 export function resolvePictureFrameMaterials(values:TrimValues):string[]{
-  const field=String(values.deckingMaterial??'');
+  const field=text(values.deckingMaterial);
   const same=values.borderSameBoard===undefined||values.borderSameBoard===true||
-    String(values.borderSameBoard)==='true';
-  return [1,2,3].map(course=>{
-    const key=course===1?'pictureFrameMaterial':'pictureFrameMaterial'+course;
-    const custom=String(values[key]??'match').trim();
-    return same||!custom||custom==='match'?field:custom;
-  });
+    text(values.borderSameBoard)==='true';
+  const selections=[values.pictureFrameMaterial,values.pictureFrameMaterial2,values.pictureFrameMaterial3];
+  return selections.map(value=>same?field:resolveBoardFinish(value,field));
+}
+export function resolveBreakerBoardMaterials(values:TrimValues):string[]{
+  const field=text(values.deckingMaterial);
+  return [values.breakerBoardMaterial,values.breakerBoardMaterial2,values.breakerBoardMaterial3]
+    .map(value=>resolveBoardFinish(value,field));
+}
+export function resolveFasciaMaterial(values:TrimValues):string{
+  return resolveBoardFinish(values.fasciaMaterial,text(values.deckingMaterial));
+}
+export function resolveStairSideFasciaMaterial(values:TrimValues):string{
+  const perimeter=resolveFasciaMaterial(values);
+  return values.stairFasciaMaterial==='match-fascia'||!values.stairFasciaMaterial?
+    perimeter:resolveBoardFinish(values.stairFasciaMaterial,text(values.deckingMaterial));
 }

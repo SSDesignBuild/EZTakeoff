@@ -62,6 +62,8 @@ export const makeConsultationProject = (id: string): ConsultationProject => ({
     deckingMaterial:'TimberTech Vintage - Coastline',
     pictureFrameMaterial:'match',pictureFrameMaterial2:'match',pictureFrameMaterial3:'match',
     borderSameBoard:true,stairFasciaStyle:'profiled',
+    breakerBoardMaterial:'match',breakerBoardMaterial2:'match',breakerBoardMaterial3:'match',
+    fasciaMaterial:'match',stairFasciaMaterial:'match-fascia',
     deckingType:'composite',
     railingVisualId:'tt-ire-modern',
     railingType:'aluminum',railingSystem:'timbertech-ire',
