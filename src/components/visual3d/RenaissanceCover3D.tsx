@@ -304,7 +304,10 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           studioRearFt:roofRearY,studioFrontFt:roofFrontY,rear:false,
         });
         return <RenaissanceCurvedTrussEnd key={'contempo-end-'+i}
-          x={x} frontZ={frameFront} topY={roofAtFront-inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn)/2}
+          x={x} frontZ={frameFront}
+          topY={roofAtFront+(shape==='studio'?(front-frameFront)*plan.pitchInPerFt/12:0)-
+            roofPanelThicknessFt/2}
+          pitchInPerFt={shape==='studio'?plan.pitchInPerFt:0}
           projectionFt={plan.frontOverhangFt} color={powder}/>;
       })}
     {/* Classico: full-length projection trusses BELOW the insulated panels,
@@ -325,11 +328,16 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         });
         const drop=inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn)/2+
           inchToFoot(6)/2;
+        const lapEnd=Math.max(roofBackEdge+.2,frameFront-.27);
+        const t=Math.min(1,Math.max(0,(lapEnd-roofBackEdge)/Math.max(.001,front-roofBackEdge)));
+        const lapY=yBack+(yFront-yBack)*t;
         return <group key={'classico-projection-truss-'+i}>
           <RenaissanceTruss from={[x,yBack-drop,roofBackEdge]}
-            to={[x,yFront-drop,front]} color={powder}/>
+            to={[x,lapY-drop,lapEnd]} color={powder}/>
           <RenaissanceCurvedTrussEnd x={x} frontZ={frameFront}
-            topY={yFront-inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn)/2}
+            topY={yFront+(shape==='studio'?(front-frameFront)*plan.pitchInPerFt/12:0)-
+              roofPanelThicknessFt/2}
+            pitchInPerFt={shape==='studio'?plan.pitchInPerFt:0}
             projectionFt={plan.frontOverhangFt} color={powder}/>
         </group>;
       })}

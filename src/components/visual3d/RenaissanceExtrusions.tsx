@@ -305,30 +305,35 @@ export function RenaissanceShadeTube({from,to,color}:{
  * The upper edge follows the selected canopy; the tail stops at its front
  * overhang. Extrusion thickness is the actual 2-inch visual member width.
  */
-export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,color}:{
-  x:number;frontZ:number;topY:number;projectionFt:number;color:string;
+export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPerFt=0,color}:{
+  x:number;frontZ:number;topY:number;projectionFt:number;pitchInPerFt?:number;color:string;
 }){
-  const front=Math.max(.02,Math.min(1.25,projectionFt));
+  // The tail begins at a short lap behind the front header and terminates
+  // at the TRUE eave. It does not recreate a 1.65ft decorative plank over
+  // a full-length truss, which previously made overlapping dark spikes.
+  const front=Math.max(.06,Math.min(1.25,projectionFt));
+  const inner=Math.min(.30,front*.5+.12);
+  const pitch=pitchInPerFt/12;
   const geometry=useMemo(()=>{
-    const inner=.65;
+    const top=(z:number)=>-pitch*z;
     const shape=new THREE.Shape();
-    shape.moveTo(-inner,0);
-    shape.lineTo(front,0);
-    shape.lineTo(front,-.16);
-    shape.bezierCurveTo(front-.04,-.29,front-.27,-.45,front-.44,-.48);
-    shape.bezierCurveTo(-.20,-.54,-.43,-.49,-inner,-.49);
+    shape.moveTo(-inner,top(-inner));
+    shape.lineTo(front,top(front));
+    shape.lineTo(front,top(front)-.12);
+    shape.bezierCurveTo(front-.08,top(front)-.26,
+      front-.25,top(front)-.46,front-.43,top(front)-.48);
+    shape.bezierCurveTo(-.08,top(-.08)-.48,-.23,top(-.20)-.46,
+      -inner,top(-inner)-.45);
     shape.closePath();
-    const thickness=inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn);
     const g=new THREE.ExtrudeGeometry(shape,{
-      depth:thickness,steps:1,bevelEnabled:false,curveSegments:12,
+      depth:inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn),
+      steps:1,bevelEnabled:false,curveSegments:12,
     });
-    g.translate(0,0,-thickness/2);
-    // Shape X corresponds to roof projection (world +Z).
-    g.rotateY(-Math.PI/2);
-    g.computeVertexNormals();
+    g.translate(0,0,-inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn)/2);
+    g.rotateY(-Math.PI/2);g.computeVertexNormals();
     return g;
-  },[front]);
+  },[front,inner,pitch]);
   return <mesh geometry={geometry} position={[x,topY,frontZ]} castShadow receiveShadow>
-    <meshStandardMaterial color={color} metalness={.4} roughness={.3}/>
+    <meshStandardMaterial color={color} side={THREE.DoubleSide} metalness={.4} roughness={.3}/>
   </mesh>;
 }
