@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build" # TEMPORARY compile-only preview; return to full QA gate before merge
+  command = "node scripts/test-sales-aesthetic-routing.cjs" # TEMPORARY isolate new regression, restore strict gate before merge
   publish = "dist"
 
 [[redirects]]
