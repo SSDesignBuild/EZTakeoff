@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build >/tmp/ez-compiler.txt 2>&1; grep -q 'RenaissanceCover3D.tsx' /tmp/ez-compiler.txt && exit 11; exit 0" # TEMPORARY diagnose source; restore strict gate
+  command = "npm run assets:sync && npm test && npm run build"
   publish = "dist"
 
 [[redirects]]

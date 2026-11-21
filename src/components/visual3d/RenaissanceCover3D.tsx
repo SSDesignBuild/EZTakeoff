@@ -167,7 +167,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   // support. Outlet location is at the front gutter, not an arbitrary drop.
   const compatible=frontPosts.filter(post=>
     deckSupportPosts.some(under=>Math.hypot(under[0]-post[0],under[1]-post[1])<3));
-  const frontPost=(compatible.at(-1)??frontPosts.at(-1)) as P2|undefined;
+  const frontPost=(compatible[compatible.length-1]??frontPosts[frontPosts.length-1]) as P2|undefined;
   const downspout=frontPost?planRenaissanceDownspout({
     outlet:[frontPost[0],roofFrontY-inchToFoot(1.5),front+inchToFoot(1)],
     coverPosts:frontPosts,deckPosts:deckSupportPosts,
