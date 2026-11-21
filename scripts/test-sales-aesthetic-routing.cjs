@@ -90,6 +90,7 @@ const stairFascia=e.materials.find(x=>x.name==='Stair side fascia board');
 assert.ok(stairFascia,'Contrasting side fascia needs separate material quantity');
 assert.ok(stairFascia.notes.includes(styles[1]));
 assert.ok(stairFascia.notes.includes('straight continuous diagonal'));
+if(process.env.EZ_TEST_ONLY==='sideRow')process.exit(0);
 const stairs=e.materials.find(x=>x.name==='2x12 stringers');
 assert.ok(stairs&&stairs.quantity>=2,'Structural notched stringers remain independently ordered');
 if(process.env.EZ_TEST_ONLY==='side')process.exit(0);
