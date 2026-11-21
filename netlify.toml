@@ -1,5 +1,5 @@
 [build]
-  command = "node scripts/test-video-visual-accuracy.cjs" # TEMPORARY isolate new video geometry tests; restore strict CI
+  command = "npm run build" # TEMPORARY isolate TypeScript/vite compilation; restore strict gate
   publish = "dist"
 
 [[redirects]]
