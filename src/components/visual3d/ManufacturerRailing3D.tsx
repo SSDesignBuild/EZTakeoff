@@ -18,11 +18,9 @@ function resolveStyle(values:Values):RailVisualProduct {
   const profile=values.railingTopProfile==='modern'?'tt-ire-modern':values.railingTopProfile==='drink'?'tt-ire-drink':'tt-ire-classic';
   return getRailVisualProduct(profile);
 }
-export function ManufacturerRailing3D({model,values,center,deckHeight,
-  screenIntegrated=false,screenDoorSide,screenDoorPercent=50}:{
+export function ManufacturerRailing3D({model,values,center,deckHeight,screenIntegrated=false}:{
   model:DeckModel;values:Values;center:P2;deckHeight:number;
-  screenIntegrated?:boolean;screenDoorSide?:'front'|'left'|'right'|'rear';
-  screenDoorPercent?:number;
+  screenIntegrated?:boolean;
 }){
   const style=resolveStyle(values);
   const finish=String(values.railingColor??style.colors[0]);
@@ -48,26 +46,11 @@ export function ManufacturerRailing3D({model,values,center,deckHeight,
   const stairOpenings=model.stairPlacements.filter(s=>s.edgeIndex!==null)
     .map(s=>({edgeIndex:s.edgeIndex!,startFt:s.offset,endFt:s.offset+s.width}));
   const gateOpenings=gatePlacements.map(g=>({edgeIndex:g.edgeIndex,startFt:g.start,endFt:g.end}));
-  // PCA screen entry is physically accessible: the independent railing,
-  // when selected, must also have a corresponding 3068 opening at the door.
-  const doorEdge=screenDoorSide?model.exposedSegments.reduce<typeof model.exposedSegments[number]|null>(
-    (best,edge)=>{
-      const midpoint=(s:typeof edge)=>({
-        x:(s.start.x+s.end.x)/2,y:(s.start.y+s.end.y)/2,
-      });
-      const a=midpoint(edge);
-      const b=best?midpoint(best):null;
-      const score=(p:{x:number;y:number})=>
-        screenDoorSide==='front'?p.y:screenDoorSide==='rear'?-p.y:
-          screenDoorSide==='left'?-p.x:p.x;
-      return !b||score(a)>score(b)?edge:best;
-    },null):null;
-  const doorStart=doorEdge?
-    Math.max(0,Math.min(doorEdge.length-3,doorEdge.length*(screenDoorPercent/100)-1.5)):0;
-  const screenDoorOpenings=doorEdge?[{edgeIndex:doorEdge.index,startFt:doorStart,
-    endFt:Math.min(doorEdge.length,doorStart+3)}]:[];
+  // A PCA screen entry does not authorize a gap in a required deck guardrail.
+  // Only explicit stair openings or individually configured railing gates
+  // can remove railing sections. The screen door remains independent.
   const visibleRails=screenIntegrated?[]:subtractRailingOpenings(model.railCoverage,
-    [...stairOpenings,...gateOpenings,...screenDoorOpenings],.08);
+    [...stairOpenings,...gateOpenings],.08);
   const startCoords=(edge:typeof model.edgeSegments[number],position:number):P2=>{
     const t=Math.max(0,Math.min(1,position/Math.max(.001,edge.length)));
     return [edge.start.x+(edge.end.x-edge.start.x)*t-center[0],
