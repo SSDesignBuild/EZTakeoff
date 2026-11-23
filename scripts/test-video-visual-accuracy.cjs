@@ -195,6 +195,34 @@ const invalidHeightGate=buildDeckSkirting(deck.edgeSegments,deck.exposedSegments
 });
 assert.ok(invalidHeightGate.issues.some(x=>x.includes('skirting gate height')),
   'Gate higher than measured under-rim grade must be blocked for order review');
+// Recorded visual QA: access panels must use the same individual board
+// reveals as the adjacent skirting, with a shared material/3D layout.
+const {planSkirtingGateFace}=load('src/lib/skirtingGateFace');
+for(const orientation of ['vertical','horizontal']){
+  const width=2.42,height=2.5,gap=.25/12;
+  const gateBoards=planSkirtingGateFace(width,height,orientation,4.5,.25);
+  assert.ok(gateBoards.length>=2);
+  const span=orientation==='vertical'?width:height;
+  const footprint=gateBoards.reduce((sum,b)=>sum+b.faceFt,0)+
+    (gateBoards.length-1)*gap;
+  assert.ok(Math.abs(span-footprint)<1e-6,'Gate finish must fill width/height without a slit');
+  assert.ok(Math.abs(gateBoards[0].faceFt-gateBoards.at(-1).faceFt)<1e-6,
+    'First/last gate boards must be symmetrically ripped');
+  assert.ok(gateBoards.every(b=>Math.abs(b.cutLengthFt-
+    (orientation==='vertical'?height:width))<1e-6));
+}
+assert.deepEqual(planSkirtingGateFace(2,2,'vertical',0,.25),[]);
+assert.deepEqual(planSkirtingGateFace(2,2,'vertical',4.5,-1),[]);
+const gateVisualSource=read('src/components/visual3d/DeckSkirting3D.tsx');
+assert.ok(gateVisualSource.includes('planSkirtingGateFace')&&
+  gateVisualSource.includes('SkirtingAccessFace')&&
+  gateVisualSource.includes('opening.width-.08')&&
+  gateVisualSource.includes('leastGrade'),
+  '3D gate boards, clearances and grade must match the material takeoff');
+const stairRiserSource=read('src/components/visual3d/DeckStairAssembly3D.tsx');
+assert.ok(stairRiserSource.includes('stepHeight-rise/2+.04')&&
+  stairRiserSource.includes('(i+1)*treadDepth-.004'),
+  'Stair riser must cover stringer plumb cuts without covering tread nosing');
 const visualGeometry=read('src/lib/visualGeometry.ts');
 assert.ok(visualGeometry.includes('clip(polygon,crossAxis,low,true)')&&
   visualGeometry.includes('planMiteredPictureFrames'),
