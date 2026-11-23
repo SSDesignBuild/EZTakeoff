@@ -151,9 +151,11 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
               :<meshStandardMaterial color="#b6b8b9" roughness={.82}/>}
           </mesh>;
         })}
+        {/* Move riser fascia in FRONT of the stringer plumb cut (rather than
+            coplanar with it), while preserving the selected tread nosing. */}
         {values.stairRiserStyle!=='open'&&<Block
-          position={[0,stepHeight-rise/2+.01,(i+1)*treadDepth-.035]}
-          size={[width,Math.max(.12,rise-.09),.07]}
+          position={[0,stepHeight-rise/2+.04,(i+1)*treadDepth-.004]}
+          size={[width,Math.max(.12,rise-.08),.07]}
           color={riserTexture?'#ffffff':'#ac9885'} texture={riserTexture}/>}
       </group>;
     })}
