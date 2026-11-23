@@ -1,7 +1,12 @@
 import type { DeckEdgeSegment, MaterialItem } from './types';
 
 export type SkirtCut = { id: string; edgeIndex: number; material: 'finish' | '2x4'; lengthFt: number; location: string };
-export type SkirtOpening = { edgeIndex: number; offset: number; width: number; kind: 'opening' | 'removable' | 'hinged-gate' };
+export type SkirtOpening = {
+  edgeIndex: number; offset: number; width: number;
+  kind: 'opening' | 'removable' | 'hinged-gate';
+  /** Actual leaf height, measured from the bottom of the access opening. Legacy full-height gates omit this. */
+  heightFt?: number;
+};
 export type SkirtGrade = { edgeIndex: number; startFt: number; endFt: number };
 export type SkirtVertical = { station: number; heightFt: number; role: 'stud' | 'jamb' | 'finish' };
 export type SkirtCourse = { row: number; start: number; end: number; depthFt: number };
@@ -137,14 +142,21 @@ export function buildDeckSkirting(
     }
     const at=(station:number)=>startHeightFt+(endHeightFt-startHeightFt)*(station/length);
     const openings=openValues.filter((item)=>Number(item.edgeIndex)===edgeIndex)
-      .map((item)=>({edgeIndex,offset:Number(item.offset),width:Number(item.width),kind:item.kind==='removable'?'removable' as const:
-        item.kind==='hinged-gate'?'hinged-gate' as const:'opening' as const}))
+      .map((item)=>({edgeIndex,offset:Number(item.offset),width:Number(item.width),
+        kind:item.kind==='removable'?'removable' as const:
+          item.kind==='hinged-gate'?'hinged-gate' as const:'opening' as const,
+        heightFt:item.heightFt===undefined||item.heightFt===null?undefined:Number(item.heightFt)}))
       .sort((a,b)=>a.offset-b.offset);
     for(let i=0;i<openings.length;i++){
       const o=openings[i];
       if(!Number.isFinite(o.offset)||!Number.isFinite(o.width)||o.width<=0||o.offset<0||o.offset+o.width>length+0.00001 || (i>0&&o.offset<openings[i-1].offset+openings[i-1].width-0.00001))
         issues.push('Side '+(edgeIndex+1)+': access openings overlap or leave the side.');
-      if(o.kind==='removable') issues.push('Side '+(edgeIndex+1)+': removable panel framing, finish, hinges and latch must be specified before ordering.');
+      if(o.kind==='removable') issues.push('Side '+(edgeIndex+1)+': legacy removable panel requires conversion to a hinged gate or open access before ordering.');
+      if(o.kind==='hinged-gate'&&o.heightFt!==undefined){
+        const maxHeight=Math.min(at(o.offset),at(o.offset+o.width))-.18;
+        if(!Number.isFinite(o.heightFt)||o.heightFt<.5||o.heightFt>maxHeight+.00001)
+          issues.push('Side '+(edgeIndex+1)+': skirting gate height must be at least 0.5 ft and fit the measured grade envelope ('+p3(maxHeight)+' ft max).');
+      }
     }
     const clippedOpenings=openings.filter((o)=>Number.isFinite(o.offset)&&Number.isFinite(o.width)&&o.width>0&&o.offset>=0&&o.offset+o.width<=length+0.00001);
     const exclude=clippedOpenings; // Both access openings and removable doors have separate finish/framing assemblies.
@@ -182,20 +194,34 @@ export function buildDeckSkirting(
     // A hinged skirting gate needs its own complete leaf framing and finish;
     // the opening-only schedule previously omitted the gate panel entirely.
     clippedOpenings.filter(o=>o.kind==='hinged-gate').forEach(o=>{
-      const leafHeight=Math.max(.3,at(o.offset+o.width/2)-.18);
-      addCut('2x4',Math.max(.2,o.width-.08),'hinged access leaf upper rail');
-      addCut('2x4',Math.max(.2,o.width-.08),'hinged access leaf lower rail');
+      const maxLeaf=Math.max(.3,Math.min(at(o.offset),at(o.offset+o.width))-.18);
+      const leafHeight=Math.max(.3,Math.min(maxLeaf,o.heightFt??maxLeaf));
+      const upperInfill=Math.max(0,Math.max(at(o.offset),at(o.offset+o.width))-.18-leafHeight);
+      const leafWidth=Math.max(.2,o.width-.08);
+      addCut('2x4',leafWidth,'hinged access leaf upper rail');
+      addCut('2x4',leafWidth,'hinged access leaf lower rail');
       addCut('2x4',leafHeight,'hinged access leaf left stile');
       addCut('2x4',leafHeight,'hinged access leaf right stile');
+      if(upperInfill>.12)
+        addCut('2x4',leafWidth,'fixed skirting header above short access gate');
       if(orientation==='vertical'){
         const number=Math.max(1,Math.ceil(o.width/((faceIn+gapIn)/12)));
-        for(let i=0;i<number;i++)addCut('finish',leafHeight,
-          'hinged access gate finish board '+(i+1));
+        for(let i=0;i<number;i++){
+          addCut('finish',leafHeight,'hinged access gate finish board '+(i+1));
+          if(upperInfill>.12)addCut('finish',upperInfill,
+            'fixed upper infill above access gate board '+(i+1));
+        }
       }else{
-        const number=Math.max(1,Math.ceil(leafHeight/((faceIn+gapIn)/12)));
-        for(let i=0;i<number;i++)addCut('finish',Math.max(.2,o.width-.08),
+        const gateRows=Math.max(1,Math.ceil(leafHeight/((faceIn+gapIn)/12)));
+        for(let i=0;i<gateRows;i++)addCut('finish',leafWidth,
           'hinged access gate horizontal finish '+(i+1));
+        if(upperInfill>.12){
+          const upperRows=Math.max(1,Math.ceil(upperInfill/((faceIn+gapIn)/12)));
+          for(let i=0;i<upperRows;i++)addCut('finish',leafWidth,
+            'fixed upper access infill horizontal course '+(i+1));
+        }
       }
+      notes.push('Access gate side '+(edgeIndex+1)+': leaf '+p3(leafWidth)+' x '+p3(leafHeight)+' ft, bottom access with fixed upper infill where needed; confirm onsite gate clearance and slope.');
     });
     if(orientation==='vertical'){
       for(const span of spans){
@@ -263,13 +289,17 @@ export function buildDeckSkirting(
   }
   const accessGates=sides.flatMap(s=>s.openings.filter(o=>o.kind==='hinged-gate'));
   if(accessGates.length){
+    const tallGates=accessGates.filter(g=>Number(g.heightFt)>4).length;
     materials.push({name:'Skirting access gate exterior hinges',category,
-      quantity:accessGates.length*2,unit:'ea',
+      quantity:accessGates.length*2+tallGates,unit:'ea',
       stockRecommendation:'Exterior self-closing hinges, field-rated for gate size',
-      notes:'Two hinges per hinged skirting access leaf; verify frame attachment and corrosion protection.'});
+      notes:'Two hinges per skirting gate, three above 4 ft; verify frame attachment and corrosion protection.'});
     materials.push({name:'Skirting access gate latch',category,
       quantity:accessGates.length,unit:'ea',stockRecommendation:'Exterior latch or slide bolt',
       notes:'One latch per skirting access gate, sized for available panel height.'});
+    if(tallGates)materials.push({name:'Skirting access gate cane bolt',category,
+      quantity:tallGates,unit:'ea',stockRecommendation:'Exterior cane bolt for gate over 4 ft',
+      notes:'One cane bolt per tall skirting gate. Confirm actual securing surface.'});
   }
   const joinCount=sides.reduce((sum,s)=>sum+s.verticals.length*2+s.bottomRails.length*2+s.topRails.length*2,0);
   // Two exterior 3-inch structural framing screws per 2x4 connection.
