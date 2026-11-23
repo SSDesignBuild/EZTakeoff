@@ -352,6 +352,12 @@ export function ManufacturerCoverPicker({project,onChange}:{
                 </option>)}
               </select></label>
             <small className="consultation-visual-note">PCA 3068 opening is 36″ × 80″; confirm actual frame/rough opening, door hand, wall height and pet-door fit before ordering.</small>
+            {['inside','outside'].includes(project.coverScreenRailTreatment??'integrated-kick')&&
+              <small className="consultation-visual-note" role="status">
+                Independent screen doors do not remove deck guardrails. Align access
+                with a stair opening or add an appropriately placed railing gate,
+                and verify the guard, landing and egress details before ordering.
+              </small>}
           </div>}
         </div>}
 
