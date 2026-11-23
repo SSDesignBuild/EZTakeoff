@@ -211,6 +211,21 @@ for(const orientation of ['vertical','horizontal']){
   assert.ok(gateBoards.every(b=>Math.abs(b.cutLengthFt-
     (orientation==='vertical'?height:width))<1e-6));
 }
+const actualLeaf=shortGate.sides[0].openings.find(o=>o.kind==='hinged-gate');
+assert.ok(actualLeaf);
+const exactLeafWidth=Math.max(.2,actualLeaf.width-.08);
+const expectedLeafCount=planSkirtingGateFace(exactLeafWidth,2.5,
+  shortGate.options.orientation,shortGate.options.faceIn,shortGate.options.gapIn).length;
+const actualLeafCuts=shortGate.cuts.filter(c=>c.location.includes('hinged access gate finish board')).length;
+assert.equal(actualLeafCuts,expectedLeafCount,
+  'Skirting gate material cut count must match individual boards in the 3D model');
+const maxGateHeight=Math.max(.3,
+  Math.min(shortGate.sides[0].startHeightFt,shortGate.sides[0].endHeightFt)-.18);
+const expectedUpperCount=planSkirtingGateFace(exactLeafWidth,maxGateHeight-2.5,
+  shortGate.options.orientation,shortGate.options.faceIn,shortGate.options.gapIn).length;
+const upperCuts=shortGate.cuts.filter(c=>c.location.includes('fixed upper infill above access gate board')).length;
+assert.equal(upperCuts,expectedUpperCount,
+  'Short gate fixed infill must use the same individually spaced courses in takeoff and 3D');
 assert.deepEqual(planSkirtingGateFace(2,2,'vertical',0,.25),[]);
 assert.deepEqual(planSkirtingGateFace(2,2,'vertical',4.5,-1),[]);
 const gateVisualSource=read('src/components/visual3d/DeckSkirting3D.tsx');
