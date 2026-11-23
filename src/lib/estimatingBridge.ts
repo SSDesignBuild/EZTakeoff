@@ -32,8 +32,11 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
   }));
   if(project.coverScreenStyle&&project.coverScreenStyle!=='none'){
     blockers.push('Dolce screen style is a visual selection, not a supplier-verified screen room extrusion/cut BOM; approve separate screen-room takeoff.');
-    if(project.coverDoorEnabled!==false)
+    if(project.coverDoorEnabled!==false){
       blockers.push('PCA 3068 entry door, hinges, pet door and site-specific rough opening are visualization choices only; supplier ordering and egress/landing requirements must be verified.');
+      if(['inside','outside'].includes(project.coverScreenRailTreatment??'integrated-kick'))
+        blockers.push('Independent PCA screen entry does not create a deck guardrail opening. Align the door with an approved stair opening or a separately configured railing gate; verify safe egress, landing and guard details.');
+    }
   }
   if(typeof project.values.railingVisualId==='string' && !String(project.values.railingVisualId).startsWith('tt-ire-'))
     blockers.push('Selected railing style needs manufacturer-specific panel/kit takeoff verification; the standard railing BOM is not a verified match.');
