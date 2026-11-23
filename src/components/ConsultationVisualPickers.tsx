@@ -203,7 +203,8 @@ export function ManufacturerCoverPicker({project,onChange}:{
         aria-pressed={project.coverFamily===item.id}
         onClick={()=>onChange({coverFamily:item.id,kind:item.id==='none'?'deck':'covered-deck',
           coverColor:item.colors.includes(project.coverColor)?project.coverColor:item.colors[0],
-          coverRoofStyle:item.roofStyles.includes(project.coverRoofStyle??'studio')?project.coverRoofStyle:'studio'})}>
+          coverRoofStyle:item.roofStyles.includes(project.coverRoofStyle??'studio')?project.coverRoofStyle:'studio',
+           coverAccentEnd:['Contempo','Classico'].includes(item.id)?'curved':'straight'})}>
         {item.id==='none'?<div className="manufacturer-photo manufacturer-photo--missing">
           <strong>Open-air deck</strong><span>No cover or pergola included</span>
         </div>:<ProductPhoto photo={coverPhotos[item.id]} name={item.name+' Renaissance'} fallback={item.sourcePage}/>}
@@ -218,7 +219,7 @@ export function ManufacturerCoverPicker({project,onChange}:{
       <div className="manufacturer-finish-system">
         <div>
           <strong>Aluminum framing</strong>
-          <p className="muted">Posts, beams and installed matching components (gutters, C-channel, downspouts) share this color.</p>
+          <p className="muted">Posts, beams and compatible accessories use this finish. Fresco does not use architectural gutters or downspouts.</p>
           <div className="manufacturer-color-choices" role="group" aria-label="Aluminum framing finish">
             {coverFrameColors.map((color:CoverColor)=><button type="button" key={color}
               aria-pressed={color===project.coverColor}
@@ -269,6 +270,15 @@ export function ManufacturerCoverPicker({project,onChange}:{
             <option value="wall-attached">Attached to house / existing structure</option>
             <option value="freestanding">Freestanding · posts front and back</option>
           </select></label>
+        {['Fresco','Classico','Aria','Contempo'].includes(project.coverFamily)&&
+          <label>Decorative projection truss ends
+            <select value={project.coverAccentEnd??(['Classico','Contempo'].includes(project.coverFamily)?'curved':'straight')}
+              onChange={e=>onChange({coverAccentEnd:e.target.value as 'straight'|'curved'})}>
+              <option value="straight">Straight-cut end</option>
+              <option value="curved">Curved accent end</option>
+            </select>
+            <small className="consultation-visual-note">End profiles are design visuals; verify approved manufacturer cut style.</small>
+          </label>}
         <label>Screen walls
           <select value={project.coverScreenStyle??'none'}
             onChange={e=>onChange({coverScreenStyle:e.target.value as 'none'|'dolce-open-view'|'dolce-standard'})}>
@@ -276,6 +286,22 @@ export function ManufacturerCoverPicker({project,onChange}:{
             <option value="dolce-open-view">Dolce · open-view screened walls</option>
             <option value="dolce-standard">Dolce · standard screened panels</option>
           </select></label>
+        {project.coverScreenStyle==='dolce-standard'&&<div className="renaissance-screen-options">
+          <strong>Standard screen wall uprights</strong>
+          <p className="consultation-visual-note">Set INTERMEDIATE uprights only. Structural corner columns remain; bays are even on either side of the screen door.</p>
+          <div className="consultation-skirting-finish">
+            {(['front','left','right',...(project.coverMount==='freestanding'?['rear'] as const:[])] as const).map(side=>
+              <label key={'uprights-'+side}>{side.charAt(0).toUpperCase()+side.slice(1)} wall uprights
+                <input type="number" min={0} max={12} step={1}
+                  value={project.coverScreenUprights?.[side]??(side==='front'||side==='rear'?2:1)}
+                  onChange={e=>onChange({coverScreenUprights:{
+                    ...project.coverScreenUprights,[side]:Math.max(0,Math.min(12,Math.round(Number(e.target.value)||0))),
+                  }})}/>
+              </label>)}
+          </div>
+        </div>}
+        {project.coverScreenStyle==='dolce-open-view'&&
+          <p className="consultation-visual-note">Open-view has no intermediate vertical mullions. Structural corner posts remain.</p>}
         {(project.coverScreenStyle??'none')!=='none'&&<div className="renaissance-screen-options">
           <strong>Dolce screen integration & PCA access door</strong>
           <label>Screen / railing arrangement
