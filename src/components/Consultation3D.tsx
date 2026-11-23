@@ -59,8 +59,9 @@ export function Consultation3D({project,photoUrl,photoMode=false,viewportHeight=
     }:undefined}>
       <Suspense fallback={<div className="consultation-canvas-placeholder">Loading manufacturer materials and 3D geometry…</div>}>
         <Canvas dpr={[1,1.7]} shadows
+          onCreated={({gl})=>gl.setClearColor('#000000',0)}
           camera={{position:[dimension*.82,height+dimension*.85,dimension*1.2],fov:48,near:.1,far:900}}
-          gl={{antialias:true,alpha:photoMode,preserveDrawingBuffer:true,
+          gl={{antialias:true,alpha:true,preserveDrawingBuffer:true,
             toneMapping:THREE.ACESFilmicToneMapping,toneMappingExposure:1.25}}>
           <Scene project={project} photoMode={photoMode}/>
         </Canvas>

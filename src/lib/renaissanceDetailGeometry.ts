@@ -17,6 +17,8 @@ export function planDolceScreenProfile(input:{
   from:readonly [number,number];to:readonly [number,number];
   bottomFt:number;topFromFt:number;topToFt:number;
   openView:boolean;
+  /** Intermediate mullions only; outer support columns are modeled separately. */
+  interiorUprights?:number;
 }):DolceScreenProfile|null{
   const [x0,z0]=input.from,[x1,z1]=input.to;
   const vals=[x0,z0,x1,z1,input.bottomFt,input.topFromFt,input.topToFt];
@@ -25,9 +27,13 @@ export function planDolceScreenProfile(input:{
   const clearFrom=input.topFromFt-input.bottomFt;
   const clearTo=input.topToFt-input.bottomFt;
   if(lengthFt<.3||clearFrom<1||clearTo<1)return null;
-  // Open View may form one uninterrupted field up to ~12ft; conventional
-  // panels carry intermediate mullions at approximately 5ft.
-  const bayCount=Math.max(1,Math.ceil(lengthFt/(input.openView?12:5)));
+  // Open-view is a single uninterrupted screen field irrespective of run length.
+  // Standard screens take an explicit count; when omitted, retain legacy ~5ft bays.
+  if(input.interiorUprights!==undefined&&!Number.isFinite(input.interiorUprights))return null;
+  const interior=input.openView?0:input.interiorUprights===undefined
+    ?Math.max(0,Math.ceil(lengthFt/5)-1)
+    :Math.max(0,Math.min(24,Math.round(input.interiorUprights)));
+  const bayCount=interior+1;
   const mullions=Array.from({length:bayCount+1},(_,i)=>{
     const fraction=i/bayCount;
     const topFt=input.topFromFt+(input.topToFt-input.topFromFt)*fraction;

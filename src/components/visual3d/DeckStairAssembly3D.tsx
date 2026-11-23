@@ -37,6 +37,47 @@ function makeStraightFascia(runFt:number,treads:number,riseFt:number,height:numb
   geo.computeVertexNormals();
   return geo;
 }
+/** A stair-side board is cut to the fascia's diagonal underside, not a square box. */
+function StairSkirtPanel({contour,x,color,texture}:{
+  contour:readonly (readonly [number,number])[];
+  x:number;color:string;texture:THREE.Texture|null;
+}){
+  const geometry=useMemo(()=>{
+    if(contour.length<3)return null;
+    const shape=new THREE.Shape();
+    contour.forEach(([runFt,riseFt],i)=>{
+      if(i===0)shape.moveTo(runFt,riseFt);
+      else shape.lineTo(runFt,riseFt);
+    });
+    shape.closePath();
+    const geo=new THREE.ExtrudeGeometry(shape,{depth:.075,steps:1,bevelEnabled:false});
+    geo.translate(0,0,-.0375);
+    geo.rotateY(-Math.PI/2);
+    geo.computeVertexNormals();
+    return geo;
+  },[contour]);
+  useEffect(()=>()=>geometry?.dispose(),[geometry]);
+  if(!geometry)return null;
+  return <mesh geometry={geometry} position={[x,0,0]} castShadow receiveShadow>
+    <meshStandardMaterial color={texture?'#ffffff':color} map={texture??null}
+      roughness={.82} side={THREE.DoubleSide}/>
+  </mesh>;
+}
+const clipUnderSlope=(rectangle:Array<readonly [number,number]>,
+  heightAt:(z:number)=>number):Array<readonly [number,number]>=>{
+  const result:Array<readonly [number,number]>=[];
+  const d=(p:readonly [number,number])=>p[1]-heightAt(p[0]);
+  for(let i=0;i<rectangle.length;i++){
+    const a=rectangle[i],b=rectangle[(i+1)%rectangle.length];
+    const da=d(a),db=d(b);
+    if(da<=.000001)result.push(a);
+    if((da<0&&db>0)||(da>0&&db<0)){
+      const t=da/(da-db);
+      result.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);
+    }
+  }
+  return result;
+};
 function Flight({placement,model,center,height,values,texture,fasciaTexture,riserTexture,skirtTexture}:{
   placement:StairPlacement;model:DeckModel;center:P2;height:number;
   values:ConsultationProject['values'];texture:THREE.Texture|null;
@@ -55,6 +96,11 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   const rise=riseFor(model,height);
   const treadDepth=Math.max(.65,model.stairRunFt/treads);
   const run=treads*treadDepth;
+  // Two individual 5.5-inch boards separated by 1/8 inch on an 11-inch tread.
+  const boardFaceFt=5.5/12,boardGapFt=.125/12;
+  const fasciaRisers=values.stairRiserStyle==='fascia'||
+    (values.stairRiserStyle==='auto'&&values.deckingType!=='pressure-treated');
+  const nosingFt=(fasciaRisers ? 0.5 : 1)/12;
   const stringers=Math.max(2,Math.ceil(width)+1);
   const geo=useMemo(()=>makeStringer(treadDepth,treads,rise,height),[treadDepth,treads,rise,height]);
   const straightFasciaGeo=useMemo(()=>makeStraightFascia(treadDepth,treads,rise,height),
@@ -87,19 +133,24 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
     {Array.from({length:treads},(_,i)=>{
       const stepHeight=Math.max(.09,height-(i+1)*rise);
       return <group key={'stair-tread-'+i}>
-        <mesh position={[0,stepHeight+.05,(i+.5)*treadDepth]} castShadow receiveShadow>
-          <boxGeometry args={[width,.105,treadDepth-.035]}/>
-          {texture
-            ? <>
-              <meshStandardMaterial attach="material-0" color="#92867a" map={texture} roughness={.77}/>
-              <meshStandardMaterial attach="material-1" color="#92867a" map={texture} roughness={.77}/>
-              <meshBasicMaterial attach="material-2" color="#ffffff" map={texture} toneMapped={false}/>
-              <meshStandardMaterial attach="material-3" color="#786a5e" roughness={.87}/>
-              <meshStandardMaterial attach="material-4" color="#92867a" map={texture} roughness={.77}/>
-              <meshStandardMaterial attach="material-5" color="#92867a" map={texture} roughness={.77}/>
-            </>
-            :<meshStandardMaterial color="#b6b8b9" roughness={.82}/>}
-        </mesh>
+        {Array.from({length:2},(_,boardIndex)=>{
+          const front=(i+1)*treadDepth+nosingFt;
+          const centerZ=front-boardFaceFt/2-boardIndex*(boardFaceFt+boardGapFt);
+          return <mesh key={'individual-deck-tread-board-'+i+'-'+boardIndex}
+            position={[0,stepHeight+.05,centerZ]} castShadow receiveShadow>
+            <boxGeometry args={[width,.105,boardFaceFt]}/>
+            {texture
+              ? <>
+                <meshStandardMaterial attach="material-0" color="#ffffff" map={texture} roughness={.77}/>
+                <meshStandardMaterial attach="material-1" color="#ffffff" map={texture} roughness={.77}/>
+                <meshBasicMaterial attach="material-2" color="#ffffff" map={texture} toneMapped={false}/>
+                <meshStandardMaterial attach="material-3" color="#786a5e" roughness={.87}/>
+                <meshStandardMaterial attach="material-4" color="#ffffff" map={texture} roughness={.77}/>
+                <meshStandardMaterial attach="material-5" color="#ffffff" map={texture} roughness={.77}/>
+              </>
+              :<meshStandardMaterial color="#b6b8b9" roughness={.82}/>}
+          </mesh>;
+        })}
         {values.stairRiserStyle!=='open'&&<Block
           position={[0,stepHeight-rise/2+.01,(i+1)*treadDepth-.035]}
           size={[width,Math.max(.12,rise-.09),.07]}
@@ -111,30 +162,33 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
       return <group key={'stair-side-'+sign}>
         {fascia&&<mesh geometry={fasciaStyle==='straight'?straightFasciaGeo:geo}
           position={[x,0,0]} rotation={[0,-Math.PI/2,0]} castShadow receiveShadow>
-          <meshStandardMaterial color={fasciaTexture?'#ffffff':'#a99a89'}
-            map={fasciaTexture} roughness={.78}/>
+          <meshStandardMaterial color={fasciaTexture?'#ffffff':'#92795e'}
+            map={fasciaTexture??null} side={THREE.DoubleSide} roughness={.78}/>
         </mesh>}
-        {/* Infill stays BEHIND the finished fascia and under its slope. */}
+        {/* Actual polygon-cut skirting follows the underside of the fascia. */}
         {skirt&&(horizontal
           ?Array.from({length:Math.ceil(lowerStart/(boardFace+boardGap))},(_,i)=>{
-            const y=.12+i*(boardFace+boardGap)+boardFace/2;
-            const delta=lowerStart-lowerEnd;
-            const visible=delta<.005?run:Math.min(run,Math.max(0,
-              run*(lowerStart-(y+boardFace/2+.05))/delta));
-            if(visible<.15)return null;
-            return <Block key={'stair-skirt-course-'+i}
-              position={[sign*(width/2-.09),y,visible/2]}
-              size={[.075,boardFace,visible]} color={finish}
-              texture={skirtTexture}/>;
+            const bottom=.10+i*(boardFace+boardGap);
+            const topBoard=bottom+boardFace;
+            const contour=clipUnderSlope([
+              [0,bottom],[run,bottom],[run,topBoard],[0,topBoard],
+            ],underFasciaAt);
+            if(contour.length<3)return null;
+            return <StairSkirtPanel key={'slope-cut-horizontal-skirt-'+i}
+              x={sign*(width/2-.09)} contour={contour}
+              color={finish} texture={skirtTexture}/>;
           })
           :Array.from({length:n},(_,i)=>{
-            const z=(i+.5)*(run/n);
-            const upper=underFasciaAt(z);
-            const available=Math.max(0,upper-.10);
-            if(available<.12)return null;
-            return <Block key={'stair-skirt-vertical-'+i}
-              position={[sign*(width/2-.09),.10+available/2,z]}
-              size={[.075,available,Math.max(.06,Math.min(boardFace,run/n-.02))]}
+            const start=i*(boardFace+boardGap);
+            const end=Math.min(run,start+boardFace);
+            if(end-start<.025)return null;
+            const contour=clipUnderSlope([
+              [start,.10],[end,.10],[end,Math.max(.10,underFasciaAt(end))],
+              [start,Math.max(.10,underFasciaAt(start))],
+            ],underFasciaAt);
+            if(contour.length<3)return null;
+            return <StairSkirtPanel key={'slope-cut-vertical-skirt-'+i}
+              x={sign*(width/2-.09)} contour={contour}
               color={finish} texture={skirtTexture}/>;
           }))}
         {skirt&&[0,1].map((endIdx)=><Block key={'concealed-stair-skirt-support-'+endIdx}

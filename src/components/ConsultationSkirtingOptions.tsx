@@ -35,13 +35,15 @@ export function ConsultationSkirtingOptions({values,onValuesChange}:{
     const next=picked.includes(index)?picked.filter(n=>n!==index):[...picked,index].sort((a,b)=>a-b);
     change({skirtingEdges:JSON.stringify(next),skirtingGradeConfirmed:false});
   };
-  const addAccess=(kind:'opening'|'removable'|'hinged-gate')=>{
+  const addAccess=(kind:'opening'|'hinged-gate')=>{
     const edge=exposed.find(e=>picked.includes(e.index))??exposed[0];
     if(!edge)return;
     const width=Math.min(3,edge.length*.45);
     const offset=Math.max(0,(edge.length-width)/2);
     change({skirtingOpenings:JSON.stringify([...openings,
-      {edgeIndex:edge.index,offset,width,kind}]),skirtingGradeConfirmed:false});
+      {edgeIndex:edge.index,offset,width,kind,
+        ...(kind==='hinged-gate'?{heightFt:Math.max(.5,Math.min(3,Number(values.deckHeight??5)-1))}:{})}]),
+      skirtingGradeConfirmed:false});
   };
   const setMaterial=(material:'kdat'|'composite'|'pvc')=>{
     change({skirtingMaterial:material,skirtingColor:material==='kdat'?'Natural / stain-ready':
@@ -109,7 +111,6 @@ export function ConsultationSkirtingOptions({values,onValuesChange}:{
           Also enclose the lower deck tier</label>}
         <div className="consultation-cover-pills">
           <button type="button" onClick={()=>addAccess('opening')}>+ Add access opening</button>
-          <button type="button" onClick={()=>addAccess('removable')}>+ Removable access panel</button>
           <button type="button" onClick={()=>addAccess('hinged-gate')}>+ Hinged skirting gate</button>
         </div>
       </div>
@@ -117,6 +118,13 @@ export function ConsultationSkirtingOptions({values,onValuesChange}:{
         <strong className="consultation-small-heading">Access openings & gates — exact location</strong>
         {openings.map((opening,index)=>{
           const edge=deck.edgeSegments.find(e=>e.index===opening.edgeIndex);
+          const measuredSide=plan.sides.find(s=>s.edgeIndex===opening.edgeIndex);
+          const gradeAt=(station:number)=>measuredSide
+            ?measuredSide.startHeightFt+
+              (measuredSide.endHeightFt-measuredSide.startHeightFt)*station/measuredSide.lengthFt
+            :Math.max(.5,Number(values.deckHeight??5)-.9);
+          const maxGateHeight=Math.max(.5,
+            Math.min(gradeAt(opening.offset),gradeAt(opening.offset+opening.width))-.18);
           const changeOpening=(data:Partial<SkirtOpening>)=>
             change({skirtingOpenings:JSON.stringify(openings.map((o,i)=>i===index?{...o,...data}:o)),
               skirtingGradeConfirmed:false});
@@ -124,7 +132,7 @@ export function ConsultationSkirtingOptions({values,onValuesChange}:{
             <label>Type<select value={opening.kind}
               onChange={e=>changeOpening({kind:e.target.value as SkirtOpening['kind']})}>
               <option value="opening">Uncovered opening</option>
-              <option value="removable">Removable access panel</option>
+              {opening.kind==='removable'&&<option value="removable">Legacy removable panel — choose replacement</option>}
               <option value="hinged-gate">Hinged skirting gate</option>
             </select></label>
             <label>Deck side<select value={opening.edgeIndex}
@@ -140,6 +148,11 @@ export function ConsultationSkirtingOptions({values,onValuesChange}:{
               max={Math.max(1,(edge?.length??0)-opening.offset)}
               value={opening.width}
               onChange={e=>changeOpening({width:Number(e.target.value)})}/></label>
+            {opening.kind==='hinged-gate'&&<label>Gate height (ft)<input type="number"
+              min={.5} step={1/12}
+              max={maxGateHeight}
+              value={opening.heightFt??maxGateHeight}
+              onChange={e=>changeOpening({heightFt:Number(e.target.value)})}/></label>}
             <button type="button" className="ghost-btn small-btn"
               onClick={()=>change({skirtingOpenings:JSON.stringify(openings.filter((_,i)=>i!==index))})}>Remove</button>
           </div>;

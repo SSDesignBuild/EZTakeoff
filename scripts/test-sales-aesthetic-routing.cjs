@@ -139,7 +139,8 @@ assert.ok(manuf.includes('breakerVisualStrips')&&manuf.includes('<BreakerBoards'
 assert.ok(manuf.includes('resolvePictureFrameMaterials')&&manuf.includes('resolveFasciaMaterial'));
 assert.ok(manuf.includes('fasciaTexture={stairFasciaMap}'));
 assert.ok(stair.includes("fasciaStyle==='straight'?straightFasciaGeo:geo"));
-assert.ok(stair.includes('map={fasciaTexture}'));
+assert.ok(stair.includes('map={fasciaTexture??null}'),
+  'Stair fascia must use the selected independent manufacturer texture');
 assert.ok(cover.includes('planRenaissanceDownspout')&&cover.includes('deckSupportPosts'));
 assert.ok(ext.includes('ExtrudeGeometry(profile')&&ext.includes('layout.elbows.flatMap')&&ext.includes('QuadraticBezierCurve3'),
   'Downspouts require straight hollow aluminum and physical A/B elbow bends');

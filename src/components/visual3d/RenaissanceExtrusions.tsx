@@ -372,8 +372,9 @@ export function RenaissanceShadeTube({from,to,color}:{
  * The upper edge follows the selected canopy; the tail stops at its front
  * overhang. Extrusion thickness is the actual 2-inch visual member width.
  */
-export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPerFt=0,color}:{
+export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPerFt=0,color,endStyle='curved'}:{
   x:number;frontZ:number;topY:number;projectionFt:number;pitchInPerFt?:number;color:string;
+  endStyle?:'straight'|'curved';
 }){
   // The tail begins at a short lap behind the front header and terminates
   // at the TRUE eave. It does not recreate a 1.65ft decorative plank over
@@ -386,11 +387,16 @@ export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPer
     const shape=new THREE.Shape();
     shape.moveTo(-inner,top(-inner));
     shape.lineTo(front,top(front));
-    shape.lineTo(front,top(front)-.12);
-    shape.bezierCurveTo(front-.08,top(front)-.26,
-      front-.25,top(front)-.46,front-.43,top(front)-.48);
-    shape.bezierCurveTo(-.08,top(-.08)-.48,-.23,top(-.20)-.46,
-      -inner,top(-inner)-.45);
+    if(endStyle==='straight'){
+      shape.lineTo(front,top(front)-.45);
+      shape.lineTo(-inner,top(-inner)-.45);
+    }else{
+      shape.lineTo(front,top(front)-.12);
+      shape.bezierCurveTo(front-.08,top(front)-.26,
+        front-.25,top(front)-.46,front-.43,top(front)-.48);
+      shape.bezierCurveTo(-.08,top(-.08)-.48,-.23,top(-.20)-.46,
+        -inner,top(-inner)-.45);
+    }
     shape.closePath();
     const g=new THREE.ExtrudeGeometry(shape,{
       depth:inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn),
@@ -399,7 +405,7 @@ export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPer
     g.translate(0,0,-inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn)/2);
     g.rotateY(-Math.PI/2);g.computeVertexNormals();
     return g;
-  },[front,inner,pitch]);
+  },[front,inner,pitch,endStyle]);
   return <mesh geometry={geometry} position={[x,topY,frontZ]} castShadow receiveShadow>
     <meshStandardMaterial color={color} side={THREE.DoubleSide} metalness={.4} roughness={.3}/>
   </mesh>;

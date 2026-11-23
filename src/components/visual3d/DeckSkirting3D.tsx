@@ -78,28 +78,42 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
         {/* Hinged access gate leaf is actually modeled in its chosen gap,
             with inset framing, vertical/horizontal selected finish and hinges. */}
         {side.openings.filter(opening=>opening.kind==='hinged-gate').map((opening,i)=>{
-          const h=Math.max(.3,
-            (side.startHeightFt+(side.endHeightFt-side.startHeightFt)*
-              (opening.offset+opening.width/2)/side.lengthFt)-.18);
           const middle=opening.offset+opening.width/2;
+          const at=(station:number)=>side.startHeightFt+
+            (side.endHeightFt-side.startHeightFt)*station/side.lengthFt;
+          const measured=at(middle);
+          const allowed=Math.max(.3,Math.min(at(opening.offset),at(opening.offset+opening.width))-.18);
+          const h=Math.max(.3,Math.min(allowed,opening.heightFt??allowed));
+          const gateBottom=top-measured+.09;
+          const gateMid=gateBottom+h/2;
+          const infillH=Math.max(0,measured-h-.18);
           const [x,z]=point(edge,middle,'finish');
           const width=Math.max(.2,opening.width-.09);
           return <group key={'access-gate-leaf-'+i} name="placed-hinged-skirting-access-gate">
-            <group position={[x,top-h/2,z]} rotation={[0,yaw,0]}>
+            {infillH>.12&&<group name="fixed-skirting-infill-above-short-gate">
+              <group position={[x,top-infillH/2,z]} rotation={[0,yaw,0]}>
+                <Block position={[0,0,0]} size={[width,infillH,.075]}
+                  color={color} texture={showPhoto?texture:null}/>
+              </group>
+              <Beam start={point(edge,opening.offset,'frame')}
+                end={point(edge,opening.offset+opening.width,'frame')}
+                height={top-infillH-.03} thickness={.125} depth={.25} color="#8b7657"/>
+            </group>}
+            <group position={[x,gateMid,z]} rotation={[0,yaw,0]}>
               <Block position={[0,0,0]} size={[width,h,.075]}
                 color={color} texture={showPhoto?texture:null}/>
             </group>
             {[opening.offset+.12,opening.offset+opening.width-.12].map((station,k)=>{
               const [sx,sz]=point(edge,station,'finish');
-              return <Block key={'access-gate-stile-'+k} position={[sx,top-h/2,sz]}
+              return <Block key={'access-gate-stile-'+k} position={[sx,gateMid,sz]}
                 size={[.08,h,.08]} color="#8c7357"/>;
             })}
-            {[.25,.75].map((portion,k)=>{
+            {(h>4?[.20,.50,.80]:[.25,.75]).map((portion,k)=>{
               const [hx,hz]=point(edge,opening.offset,'jamb');
-              return <Block key={'access-gate-hinge-'+k} position={[hx,top-h*portion,hz]}
+              return <Block key={'access-gate-hinge-'+k} position={[hx,gateBottom+h*portion,hz]}
                 size={[.14,.13,.14]} color="#565b5f" metalness={.4}/>;
             })}
-            <Block position={[x,top-h*.5,z]}
+            <Block position={[x,gateMid,z]}
               size={[.11,.13,.11]} color="#555c60" metalness={.42}/>
           </group>;
         })}
