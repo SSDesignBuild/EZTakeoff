@@ -90,10 +90,13 @@ assert.equal(project.coverDoorModel,'A-100');
 assert.equal(project.coverScreenRailTreatment,'integrated-kick');
 const handoff=createEstimateHandoff({...project,kind:'covered-deck',
   coverFamily:'Fresco',coverScreenStyle:'dolce-open-view',
+  coverScreenRailTreatment:'inside',
   coverDoorEnabled:true,coverDoorSide:'right',coverDoorPet:'large'});
 assert.equal(handoff.selections.coverDoorSide,'right');
 assert.equal(handoff.selections.coverDoorPet,'large');
 assert.ok(handoff.blockers.some(issue=>issue.includes('PCA 3068')));
+assert.ok(handoff.blockers.some(issue=>issue.includes('deck guardrail opening')),
+  'Independent screen access must preserve the guardrail safety warning');
 const deck=buildDeckModel(project.values);
 const edge=deck.exposedSegments[0];
 assert.ok(edge,'Need an exposed perimeter for skirting gate geometry QA');
@@ -123,6 +126,11 @@ assert.ok(render.includes('integrated-Dolce-24in-aluminum-kick-panel'));
 assert.ok(render.includes('integrated-Dolce-guard-picket-panel'));
 assert.ok(door.includes('PCA-Magnador-'));
 assert.ok(rails.includes('screenIntegrated?[]'));
+assert.ok(rails.includes('[...stairOpenings,...gateOpenings]') &&
+  !rails.includes('screenDoorOpenings') && !rails.includes('doorEdge=screenDoorSide'),
+  'PCA screen entry MUST NOT automatically leave an unguarded deck edge');
+assert.ok(picks.includes('Independent screen doors do not remove deck guardrails'),
+  'Consultation UI must communicate independent door vs required guardrail access');
 assert.ok(rails.includes('subtractRailingOpenings')&&rails.includes('screenDoorOpenings'));
 assert.ok(board.includes('planMiteredPictureFrames'));
 assert.ok(stair.includes('underFasciaAt')&&stair.includes('riserTexture'));
