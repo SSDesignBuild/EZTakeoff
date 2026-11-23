@@ -132,7 +132,7 @@ assert.ok(rails.includes('[...stairOpenings,...gateOpenings]') &&
 assert.ok(picks.includes('Independent screen doors do not remove deck guardrails'),
   'Consultation UI must communicate independent door vs required guardrail access');
 assert.ok(rails.includes('subtractRailingOpenings')&&!rails.includes('screenDoorOpenings'),
-  'Independent screen entry must not remove a rail section');
+  'Screen access never independently erases an existing deck guardrail');
 assert.ok(board.includes('planMiteredPictureFrames'));
 assert.ok(stair.includes('underFasciaAt')&&stair.includes('riserTexture'));
 assert.ok(skirt3d.includes("layer==='finish'")&&skirt3d.includes("layer==='jamb'"));
@@ -148,4 +148,75 @@ assert.ok(studio.includes('viewportHeight={viewportHeight}'));
 assert.ok(studio.includes('Stair fascia edge'));
 assert.ok(picks.includes('PCA Products 3068'));
 assert.ok(designer.includes('railingFeedback')&&designer.includes('NO RAIL'));
+
+// November 23 video regression: short skirting access gates, Fresco roof,
+// individual treads, photo alpha and physically clipped picture frame courses.
+const {planDolceScreenProfile}=load('src/lib/renaissanceDetailGeometry');
+const open18=planDolceScreenProfile({
+  from:[0,0],to:[18,0],bottomFt:.12,topFromFt:9,topToFt:9,openView:true,
+  interiorUprights:7,
+});
+assert.ok(open18);
+assert.equal(open18.bayCount,1,'Even 18ft open-view has no intermediate mullion');
+assert.equal(open18.mullions.length,2,'Only end boundary stations in open view');
+const standard18=planDolceScreenProfile({
+  from:[0,0],to:[18,0],bottomFt:.12,topFromFt:9,topToFt:9,openView:false,
+  interiorUprights:4,
+});
+assert.equal(standard18.bayCount,5);
+assert.equal(standard18.mullions.length,6);
+assert.equal(standard18.mullions[1].alongFt,3.6);
+const shortGate=buildDeckSkirting(deck.edgeSegments,deck.exposedSegments,5,7.25,{
+  ...project.values,skirtingEnabled:true,skirtingMaterial:'kdat',
+  skirtingEdges:JSON.stringify([edge.index]),skirtingGradeConfirmed:true,
+  skirtingOpenings:JSON.stringify([{edgeIndex:edge.index,offset:.5,width:2.5,
+    kind:'hinged-gate',heightFt:2.5}]),
+});
+const gateStile=shortGate.cuts.find(c=>c.location==='hinged access leaf left stile');
+assert.ok(gateStile,'Adjustable gate must have independently cut stiles');
+assert.equal(gateStile.lengthFt,2.5);
+assert.ok(shortGate.cuts.some(c=>c.location.includes('fixed upper')),
+  'Short gate must have permanent infill material above its leaf');
+assert.ok(shortGate.sides[0].openings[0].heightFt===2.5);
+const tallLegacyGate=buildDeckSkirting(deck.edgeSegments,deck.exposedSegments,7,7.25,{
+  ...project.values,skirtingEnabled:true,skirtingMaterial:'kdat',
+  skirtingEdges:JSON.stringify([edge.index]),skirtingGradeConfirmed:true,
+  skirtingOpenings:JSON.stringify([{edgeIndex:edge.index,offset:.5,width:2.5,
+    kind:'hinged-gate'}]),
+});
+assert.equal(tallLegacyGate.materials.find(m=>m.name==='Skirting access gate exterior hinges')?.quantity,3,
+  'Legacy full-height hinged gate above 4 ft requires three hinges');
+assert.equal(tallLegacyGate.materials.find(m=>m.name==='Skirting access gate cane bolt')?.quantity,1);
+const invalidHeightGate=buildDeckSkirting(deck.edgeSegments,deck.exposedSegments,5,7.25,{
+  ...project.values,skirtingEnabled:true,skirtingMaterial:'kdat',
+  skirtingEdges:JSON.stringify([edge.index]),skirtingGradeConfirmed:true,
+  skirtingOpenings:JSON.stringify([{edgeIndex:edge.index,offset:.5,width:2.5,
+    kind:'hinged-gate',heightFt:12}]),
+});
+assert.ok(invalidHeightGate.issues.some(x=>x.includes('skirting gate height')),
+  'Gate higher than measured under-rim grade must be blocked for order review');
+const visualGeometry=read('src/lib/visualGeometry.ts');
+assert.ok(visualGeometry.includes('clip(polygon,crossAxis,low,true)')&&
+  visualGeometry.includes('planMiteredPictureFrames'),
+  'Field decking must be physically clipped around the actual mitered border');
+assert.ok(!visualGeometry.includes("'full-trusses','translucent'].includes(cover.family)"),
+  'Fresco does not use the Renaissance architectural wrap gutters');
+assert.ok(render.includes('isSolid&&<group name="renaissance-left-front-right-wrapped-architectural-gutter"'),
+  'Only supported solid-roof systems receive gutters');
+assert.ok(render.includes('uprights={beforeUprights}')&&render.includes('uprights={afterUprights}'),
+  'Standard screen uprights must be apportioned around the PCA door opening');
+assert.ok(render.includes('profile.mullions.slice(1,-1)'),
+  'Even open-view end columns must not have duplicate screen posts');
+const viewer=read('src/components/Consultation3D.tsx');
+assert.ok(viewer.includes('alpha:true')&&viewer.includes("gl.setClearColor('#000000',0)"),
+  'Photo overlay must keep WebGL transparent even after toggling photo mode');
+assert.ok(stair.includes('individual-deck-tread-board')&&
+  stair.includes('boardFaceFt=5.5/12,boardGapFt=.125/12')&&
+  stair.includes('StairSkirtPanel')&&stair.includes('clipUnderSlope'),
+  'Stairs need two real 5.5in boards and polygon-clipped stair skirting');
+assert.ok(skirt3d.includes('opening.heightFt??allowed')&&
+  skirt3d.includes('fixed-skirting-infill-above-short-gate'));
+const skirtUI=read('src/components/ConsultationSkirtingOptions.tsx');
+assert.ok(skirtUI.includes('Gate height (ft)')&&!skirtUI.includes("addAccess('removable')"),
+  'Sales skirting shows only open or adjustable hinged access');
 console.log('PASS video-report geometry miters, post inset, stair fascia and skirting, PCA 3068 and pet openings, rail and access gate gaps, responsive viewer controls');

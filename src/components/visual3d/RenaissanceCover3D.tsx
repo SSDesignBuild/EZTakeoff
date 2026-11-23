@@ -23,13 +23,14 @@ import {
 } from './RenaissanceExtrusions';
 
 /** Roof-following Dolce screen wall with real triangular mesh at sloping eaves. */
-function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish,treatment='screens-only'}:{
+function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish,treatment='screens-only',uprights}:{
   from:P2;to:P2;bottom:number;topFrom:number;topTo:number;
-  openView:boolean;finish:string;
+  openView:boolean;finish:string;uprights?:number;
   treatment?:'integrated-kick'|'integrated-picket'|'inside'|'outside'|'screens-only';
 }){
   const profile=planDolceScreenProfile({
     from,to,bottomFt:bottom,topFromFt:topFrom,topToFt:topTo,openView,
+    interiorUprights:uprights,
   });
   if(!profile)return null;
   const dx=to[0]-from[0],dz=to[1]-from[1];
@@ -54,7 +55,7 @@ function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish,treatment=
       thickness={.12} depth={.10} color={finish}/>
     {!openView&&<Beam start={from} end={to}
       height={bottom+2.3} thickness={.12} depth={.10} color={finish}/>}
-    {profile.mullions.map((m,i)=>{
+    {profile.mullions.slice(1,-1).map((m,i)=>{
       const t=m.alongFt/profile.lengthFt,x=from[0]+dx*t,z=from[1]+dz*t;
       return <Block key={'Dolce-mullion-'+i}
         position={[x,bottom+m.heightFt/2,z]}
@@ -90,9 +91,9 @@ type ScreenDoorDetail={
   swing:'in'|'out';kickPlateIn:number;
 };
 function DolceScreenWall({id,from,to,bottom,topFrom,topTo,openView,finish,treatment,
-  door,center}:{id:ScreenDoorWall;from:P2;to:P2;bottom:number;topFrom:number;topTo:number;
+  door,center,uprights=0}:{id:ScreenDoorWall;from:P2;to:P2;bottom:number;topFrom:number;topTo:number;
   openView:boolean;finish:string;treatment:DolceTreatment;
-  door:ScreenDoorDetail;center:P2;
+  door:ScreenDoorDetail;center:P2;uprights?:number;
 }){
   const dx=to[0]-from[0],dz=to[1]-from[1],length=Math.hypot(dx,dz);
   if(length<.05)return null;
@@ -110,8 +111,9 @@ function DolceScreenWall({id,from,to,bottom,topFrom,topTo,openView,finish,treatm
   const opening=door.enabled&&door.wall===id?
     planPcaDoorOnWall(length,door.positionPercent):null;
   const common={bottom,openView,finish,treatment};
+  const count=openView?0:Math.max(0,Math.min(24,Math.round(uprights)));
   if(!opening)return <DolceScreenRun from={f} to={t} topFrom={topFrom}
-    topTo={topTo} {...common}/>;
+    topTo={topTo} uprights={count} {...common}/>;
   const a=opening.startFt/length,b=opening.endFt/length;
   const start=along(a),end=along(b);
   const doorHeight=80/12;
@@ -119,13 +121,17 @@ function DolceScreenWall({id,from,to,bottom,topFrom,topTo,openView,finish,treatm
   // a door punching through the roof; show a full wall pending redesign.
   if(Math.min(atTop(a),atTop(b))-bottom<doorHeight+.08)return <group
     name="PCA-door-height-blocked-by-cover-clearance">
-    <DolceScreenRun from={f} to={t} topFrom={topFrom} topTo={topTo} {...common}/>
+    <DolceScreenRun from={f} to={t} topFrom={topFrom} topTo={topTo}
+      uprights={count} {...common}/>
   </group>;
+  const remaining=length-opening.widthFt;
+  const beforeUprights=remaining>.05?Math.round(count*opening.startFt/remaining):0;
+  const afterUprights=count-beforeUprights;
   return <group name={'screen-wall-'+id+'-with-PCA-3068-door-cutout'}>
     {opening.startFt>.10&&<DolceScreenRun from={f} to={start}
-      topFrom={topFrom} topTo={atTop(a)} {...common}/>}
+      topFrom={topFrom} topTo={atTop(a)} uprights={beforeUprights} {...common}/>}
     {length-opening.endFt>.10&&<DolceScreenRun from={end} to={t}
-      topFrom={atTop(b)} topTo={topTo} {...common}/>}
+      topFrom={atTop(b)} topTo={topTo} uprights={afterUprights} {...common}/>}
     <PcaScreenDoor3D from={start} to={end} bottom={bottom}
       finish={door.finish} model={door.model} pet={door.pet}
       kickPlateIn={door.kickPlateIn} hinge={door.hinge} swing={door.swing}/>
@@ -231,6 +237,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const slopeRise=roofRearY-roofFrontY;
   const gableRise=plan.ridgeTopFt-plan.backTopFt;
   const isSolid=product.family==='solid-studio'||product.family==='solid-truss-ends'||product.family==='full-trusses';
+  const accentEnd=project.coverAccentEnd??(['Contempo','Classico'].includes(project.coverFamily)?'curved':'straight');
   const isTranslucent=product.family==='translucent';
   const isLattice=product.family==='lattice';
   const isLouvered=product.family==='louvered';
@@ -257,7 +264,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const compatible=frontPosts.filter(post=>
     deckSupportPosts.some(under=>Math.hypot(under[0]-post[0],under[1]-post[1])<2.2));
   const frontPost=(compatible[compatible.length-1]??frontPosts[frontPosts.length-1]) as P2|undefined;
-  const downspout=frontPost?planRenaissanceDownspout({
+  const downspout=isSolid&&frontPost?planRenaissanceDownspout({
     outlet:[frontPost[0],roofFrontY-inchToFoot(1.5),front],
     coverPosts:frontPosts,deckPosts:deckSupportPosts,
     coverPostWidthFt:inchToFoot(profile.postOutsideIn),
@@ -349,7 +356,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     {/* A connected 3-sided visible Renaissance gutter follows the left,
         front and right eaves, with true 45-degree outside miters. No rear
         gutter on wall-attached studio roofs: the C channel is at the wall. */}
-    {(isSolid||isTranslucent)&&<group name="renaissance-left-front-right-wrapped-architectural-gutter">
+    {isSolid&&<group name="renaissance-left-front-right-wrapped-architectural-gutter">
       {gutterRuns.map(run=><RenaissanceGutter key={'gutter-'+run.id}
         run={run} color={powder}/>)}
       {downspout&&<RenaissanceDownspout layout={downspout} color={powder}/>}
@@ -384,7 +391,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           topY={roofAtFront+(shape==='studio'?(front-frameFront)*plan.pitchInPerFt/12:0)-
             roofPanelThicknessFt/2}
           pitchInPerFt={shape==='studio'?plan.pitchInPerFt:0}
-          projectionFt={plan.frontOverhangFt} color={powder}/>;
+          projectionFt={plan.frontOverhangFt} color={powder} endStyle={accentEnd}/>;
       })}
     {/* Classico: full-length projection trusses BELOW the insulated panels,
         with sculpted tails. They must run front-to-back at width stations,
@@ -409,12 +416,12 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         const lapY=yBack+(yFront-yBack)*t;
         return <group key={'classico-projection-truss-'+i}>
           <RenaissanceTruss from={[x,yBack-drop,roofBackEdge]}
-            to={[x,lapY-drop,lapEnd]} color={powder}/>
-          <RenaissanceCurvedTrussEnd x={x} frontZ={frameFront}
+            to={accentEnd==='curved'?[x,lapY-drop,lapEnd]:[x,yFront-drop,front]} color={powder}/>
+          {accentEnd==='curved'&&<RenaissanceCurvedTrussEnd x={x} frontZ={frameFront}
             topY={yFront+(shape==='studio'?(front-frameFront)*plan.pitchInPerFt/12:0)-
               roofPanelThicknessFt/2}
             pitchInPerFt={shape==='studio'?plan.pitchInPerFt:0}
-            projectionFt={plan.frontOverhangFt} color={powder}/>
+            projectionFt={plan.frontOverhangFt} color={powder}/>}
         </group>;
       })}
     {/* Fresco: correctly oriented translucent polycarbonate sheets captured by
@@ -435,7 +442,11 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         const x=xMid+localX;
         return <group key={'fresco-tube-and-snap-'+i}>
           <RenaissanceTruss from={[x,roofRearY-.24,roofBackEdge]}
-            to={[x,roofFrontY-.24,front]} color={powder}/>
+            to={[x,roofFrontY-.24,accentEnd==='curved'?frameFront-.27:front]} color={powder}/>
+          {accentEnd==='curved'&&<RenaissanceCurvedTrussEnd
+            x={x} frontZ={frameFront} topY={roofFrontY-.24}
+            projectionFt={plan.frontOverhangFt} pitchInPerFt={plan.pitchInPerFt}
+            color={powder}/>}
           <SlopedBeam start={[x,roofRearY+.115,roofBackEdge]}
             end={[x,roofFrontY+.115,front]}
             thickness={.07} depth={.09} color={powder}/>
@@ -450,9 +461,14 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     {isLattice&&<group name="aria-projection-trusses-and-shade-tubes">
       {plan.projectionTrussStationsFt.map((localX,i)=>{
         const x=xMid+localX;
-        return <RenaissanceTruss key={'aria-truss-'+i}
-          from={[x,roofRearY-.25,roofBackEdge]}
-          to={[x,roofFrontY-.25,front]} color={powder}/>;
+        return <group key={'aria-truss-'+i}>
+          <RenaissanceTruss from={[x,roofRearY-.25,roofBackEdge]}
+            to={[x,roofFrontY-.25,accentEnd==='curved'?frameFront-.27:front]} color={powder}/>
+          {accentEnd==='curved'&&<RenaissanceCurvedTrussEnd
+            x={x} frontZ={frameFront} topY={roofFrontY-.25}
+            projectionFt={plan.frontOverhangFt} pitchInPerFt={plan.pitchInPerFt}
+            color={powder}/>} 
+        </group>;
       })}
       {Array.from({length:latticeCount},(_,i)=>{
         const station=roofBackEdge+depth*(i+.5)/latticeCount;
@@ -494,6 +510,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         openView={project.coverScreenStyle==='dolce-open-view'}
         finish={powder} center={[xMid,zMid]}
         treatment={project.coverScreenRailTreatment??'integrated-kick'}
+        uprights={project.coverScreenUprights?.[wall.id]??(wall.id==='front'||wall.id==='rear'?2:1)}
         door={{
           enabled:project.coverDoorEnabled!==false,
           wall:project.coverDoorSide??'front',

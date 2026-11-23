@@ -30,6 +30,8 @@ export interface ConsultationProject {
   coverFraming?: 'standard'|'hd'|'wide'|'wide-insert';
   coverMount?: 'wall-attached'|'freestanding';
   coverScreenStyle?: 'none'|'dolce-open-view'|'dolce-standard';
+  coverAccentEnd?: 'straight'|'curved'; // Truss/tail end finish on Fresco, Classico, Aria and Contempo.
+  coverScreenUprights?: Partial<Record<ScreenDoorWall,number>>; // Interior upright count per wall, excluding corner posts and doors.
   coverScreenRailTreatment?: 'integrated-kick'|'integrated-picket'|'inside'|'outside'|'screens-only';
   coverDoorEnabled?:boolean;
   coverDoorSide?:ScreenDoorWall;
@@ -81,6 +83,7 @@ export const makeConsultationProject = (id: string): ConsultationProject => ({
     railingTopProfile:'modern',railingColor:'black',railingInfill:'aluminum'},
   coverFamily:'none',coverColor:'White',coverRoofColor:'White',coverCeilingFinish:'White',coverRoofStyle:'studio',coverShadePercent:65,coverLouverAngle:12,
   coverFraming:'standard',coverMount:'wall-attached',coverScreenStyle:'none',
+  coverAccentEnd:'straight',coverScreenUprights:{front:2,left:1,right:1,rear:2},
   coverScreenRailTreatment:'integrated-kick',coverDoorEnabled:true,
   coverDoorSide:'front',coverDoorPositionPercent:50,coverDoorModel:'A-100',
   coverDoorFinish:'match',coverDoorHinge:'left',coverDoorSwing:'out',coverDoorPet:'none',
@@ -103,6 +106,8 @@ export const loadConsultations = (): ConsultationProject[] => {
       coverLouverAngle:p.coverLouverAngle??12,
       coverFraming:p.coverFraming??'standard',coverMount:p.coverMount??'wall-attached',
       coverScreenStyle:p.coverScreenStyle??'none',
+      coverAccentEnd:p.coverAccentEnd??(['Contempo','Classico'].includes(p.coverFamily)?'curved':'straight'),
+      coverScreenUprights:{front:2,left:1,right:1,rear:2,...p.coverScreenUprights},
       coverScreenRailTreatment:p.coverScreenRailTreatment??'integrated-kick',
       coverDoorEnabled:p.coverDoorEnabled??((p.coverScreenStyle??'none')!=='none'),
       coverDoorSide:p.coverDoorSide??'front',
