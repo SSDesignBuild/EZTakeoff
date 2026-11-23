@@ -1,4 +1,5 @@
 import type { DeckEdgeSegment, MaterialItem } from './types';
+import { planSkirtingGateFace } from './skirtingGateFace';
 
 export type SkirtCut = { id: string; edgeIndex: number; material: 'finish' | '2x4'; lengthFt: number; location: string };
 export type SkirtOpening = {
@@ -196,7 +197,9 @@ export function buildDeckSkirting(
     clippedOpenings.filter(o=>o.kind==='hinged-gate').forEach(o=>{
       const maxLeaf=Math.max(.3,Math.min(at(o.offset),at(o.offset+o.width))-.18);
       const leafHeight=Math.max(.3,Math.min(maxLeaf,o.heightFt??maxLeaf));
-      const upperInfill=Math.max(0,Math.max(at(o.offset),at(o.offset+o.width))-.18-leafHeight);
+      // Use the smallest measured grade at either jamb, consistently with the
+      // 3D bottom clearance. A sloped side must not produce phantom upper boards.
+      const upperInfill=Math.max(0,maxLeaf-leafHeight);
       const leafWidth=Math.max(.2,o.width-.08);
       addCut('2x4',leafWidth,'hinged access leaf upper rail');
       addCut('2x4',leafWidth,'hinged access leaf lower rail');
@@ -204,22 +207,15 @@ export function buildDeckSkirting(
       addCut('2x4',leafHeight,'hinged access leaf right stile');
       if(upperInfill>.12)
         addCut('2x4',leafWidth,'fixed skirting header above short access gate');
-      if(orientation==='vertical'){
-        const number=Math.max(1,Math.ceil(o.width/((faceIn+gapIn)/12)));
-        for(let i=0;i<number;i++){
-          addCut('finish',leafHeight,'hinged access gate finish board '+(i+1));
-          if(upperInfill>.12)addCut('finish',upperInfill,
-            'fixed upper infill above access gate board '+(i+1));
-        }
-      }else{
-        const gateRows=Math.max(1,Math.ceil(leafHeight/((faceIn+gapIn)/12)));
-        for(let i=0;i<gateRows;i++)addCut('finish',leafWidth,
-          'hinged access gate horizontal finish '+(i+1));
-        if(upperInfill>.12){
-          const upperRows=Math.max(1,Math.ceil(upperInfill/((faceIn+gapIn)/12)));
-          for(let i=0;i<upperRows;i++)addCut('finish',leafWidth,
-            'fixed upper access infill horizontal course '+(i+1));
-        }
+      const leafBoards=planSkirtingGateFace(leafWidth,leafHeight,orientation,faceIn,gapIn);
+      leafBoards.forEach((board,i)=>addCut('finish',board.cutLengthFt,
+        'hinged access gate finish board '+(i+1)+
+        ' (rip face '+p3(board.faceFt*12)+' in)'));
+      if(upperInfill>.12){
+        const fixedBoards=planSkirtingGateFace(leafWidth,upperInfill,orientation,faceIn,gapIn);
+        fixedBoards.forEach((board,i)=>addCut('finish',board.cutLengthFt,
+          'fixed upper infill above access gate board '+(i+1)+
+          ' (rip face '+p3(board.faceFt*12)+' in)'));
       }
       notes.push('Access gate side '+(edgeIndex+1)+': leaf '+p3(leafWidth)+' x '+p3(leafHeight)+' ft, bottom access with fixed upper infill where needed; confirm onsite gate clearance and slope.');
     });

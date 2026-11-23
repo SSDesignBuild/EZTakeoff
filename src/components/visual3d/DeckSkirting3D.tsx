@@ -3,8 +3,27 @@ import type * as THREE from 'three';
 import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { buildDeckSkirting } from '../../lib/deckSkirting';
+import { planSkirtingGateFace } from '../../lib/skirtingGateFace';
 import { Block, Beam, SlopedBeam, type P2 } from './Primitives';
 
+/** Both the gate and the fixed header use real individually spaced finish
+ * planks. The prior solid slab had no courses or reveals unlike adjacent skirting.
+ */
+function SkirtingAccessFace({width,height,orientation,faceIn,gapIn,color,texture}:{
+  width:number;height:number;orientation:'vertical'|'horizontal';
+  faceIn:number;gapIn:number;color:string;texture:THREE.Texture|null;
+}){
+  const boards=planSkirtingGateFace(width,height,orientation,faceIn,gapIn);
+  return <group name="individual-skirting-access-finish-boards">
+    {boards.map((board,i)=>orientation==='vertical'
+      ?<Block key={'vertical-access-plank-'+i}
+        position={[-width/2+board.stationFt+board.faceFt/2,0,0]}
+        size={[board.faceFt,height,.075]} color={color} texture={texture}/>
+      :<Block key={'horizontal-access-plank-'+i}
+        position={[0,height/2-board.stationFt-board.faceFt/2,0]}
+        size={[width,board.faceFt,.075]} color={color} texture={texture}/>)}
+  </group>;
+}
 export function DeckSkirting3D({model,center,height,values,texture,lowerTier=false}:{
   model:DeckModel;center:P2;height:number;lowerTier?:boolean;
   values:ConsultationProject['values'];texture:THREE.Texture|null;
@@ -81,18 +100,20 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
           const middle=opening.offset+opening.width/2;
           const at=(station:number)=>side.startHeightFt+
             (side.endHeightFt-side.startHeightFt)*station/side.lengthFt;
-          const measured=at(middle);
-          const allowed=Math.max(.3,Math.min(at(opening.offset),at(opening.offset+opening.width))-.18);
+          const leastGrade=Math.min(at(opening.offset),at(opening.offset+opening.width));
+          const allowed=Math.max(.3,leastGrade-.18);
           const h=Math.max(.3,Math.min(allowed,opening.heightFt??allowed));
-          const gateBottom=top-measured+.09;
+          const gateBottom=top-leastGrade+.09;
           const gateMid=gateBottom+h/2;
-          const infillH=Math.max(0,measured-h-.18);
+          const infillH=Math.max(0,allowed-h);
           const [x,z]=point(edge,middle,'finish');
-          const width=Math.max(.2,opening.width-.09);
+          const width=Math.max(.2,opening.width-.08);
           return <group key={'access-gate-leaf-'+i} name="placed-hinged-skirting-access-gate">
             {infillH>.12&&<group name="fixed-skirting-infill-above-short-gate">
               <group position={[x,top-infillH/2,z]} rotation={[0,yaw,0]}>
-                <Block position={[0,0,0]} size={[width,infillH,.075]}
+                <SkirtingAccessFace width={width} height={infillH}
+                  orientation={plan.options.orientation}
+                  faceIn={plan.options.faceIn} gapIn={plan.options.gapIn}
                   color={color} texture={showPhoto?texture:null}/>
               </group>
               <Beam start={point(edge,opening.offset,'frame')}
@@ -100,7 +121,9 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
                 height={top-infillH-.03} thickness={.125} depth={.25} color="#8b7657"/>
             </group>}
             <group position={[x,gateMid,z]} rotation={[0,yaw,0]}>
-              <Block position={[0,0,0]} size={[width,h,.075]}
+              <SkirtingAccessFace width={width} height={h}
+                orientation={plan.options.orientation}
+                faceIn={plan.options.faceIn} gapIn={plan.options.gapIn}
                 color={color} texture={showPhoto?texture:null}/>
             </group>
             {[opening.offset+.12,opening.offset+opening.width-.12].map((station,k)=>{
