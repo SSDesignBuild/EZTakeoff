@@ -49,7 +49,7 @@ function SkirtingElevation({side,orientation,framing,gapIn,faceIn}:{
         height={Math.max(0,Math.min(ground(opening.offset),ground(opening.offset+opening.width))-top-7)}
         fill="white" stroke="#dc2626" strokeWidth={2} strokeDasharray="6 4"/>
       <text x={px(opening.offset+opening.width/2)} y={top+25} fontSize={11} textAnchor="middle" fill="#991b1b">
-        {opening.kind==='removable'?'PANEL':'ACCESS'}
+        {opening.kind==='hinged-gate'?'GATE':opening.kind==='removable'?'LEGACY PANEL':'ACCESS'}
       </text>
     </g>)}
     <text x={px(side.lengthFt/2)} y={Math.max(ground(0),ground(side.lengthFt))+20} fontSize={13} textAnchor="middle" fill="#374151">{ft(side.lengthFt)} · {side.label ?? ('E'+(side.edgeIndex+1))}</text>
@@ -144,8 +144,13 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
           value={o.width} onChange={(e)=>{const next=openings.map((item)=>item===o?{...item,width:Number(e.target.value)}:item);update('skirtingOpenings',JSON.stringify(next));}}/></label>
         <label>Style <select style={fieldStyle} value={o.kind}
           onChange={(e)=>update('skirtingOpenings',JSON.stringify(openings.map((item)=>item===o?{...item,kind:e.target.value}:item)))}>
-          <option value="opening">Open access</option><option value="removable">Removable panel (hardware pending)</option>
+          <option value="opening">Open access</option><option value="hinged-gate">Hinged access gate</option>
+          {o.kind==='removable'&&<option value="removable">Legacy removable panel — convert before ordering</option>}
         </select></label>
+        {o.kind==='hinged-gate'&&<label>Gate height (ft) <input type="number" min={.5}
+          max={Math.max(.5,Math.min(side.startHeightFt,side.endHeightFt)-.18)}
+          step={1/12} style={{...fieldStyle,width:90}} value={o.heightFt??Math.max(.5,Math.min(side.startHeightFt,side.endHeightFt)-.18)}
+          onChange={e=>update('skirtingOpenings',JSON.stringify(openings.map(item=>item===o?{...item,heightFt:Number(e.target.value)}:item)))}/></label>}
         <button type="button" className="ghost-btn small-btn" onClick={()=>update('skirtingOpenings',JSON.stringify(openings.filter((item)=>item!==o)))}>Remove</button>
       </div>)}
       <small className="muted">{side.finishCuts.length} finish cuts · {side.framingCuts.length} 2×4 cuts · {side.verticals.length} vertical 2×4 supports at 24″ O.C./jambs</small>
@@ -169,7 +174,7 @@ function TierSkirting({values,onValuesChange,lower=false}: {values:Values;onValu
       <strong>Supplier / installer reconciliation</strong>
       <p className="muted">Finish stock: {plan.finishStock.map((s,i)=>'S'+(i+1)+' '+s.stockLengthFt+'ft → '+s.cuts.map((cut)=>cut.id).join('+')).join('; ')||'None'}.</p>
       <p className="muted">2×4 framing stock: {plan.frameStock.map((s,i)=>'F'+(i+1)+' '+s.stockLengthFt+'ft → '+s.cuts.map((cut)=>cut.id).join('+')).join('; ')||'None'}.</p>
-      <p className="muted">Saw kerf and stock trimming are included. Removable access panel hinge/latch details and ground contact specifications require field approval.</p>
+      <p className="muted">Saw kerf and stock trimming are included. Gate height, hardware and ground contact specifications require field approval. Legacy removable panels must be converted before ordering.</p>
     </div>
     <details style={{marginTop:15}}>
       <summary style={{fontWeight:700,cursor:'pointer'}}>Installer cut list — {allCuts.length} exact pieces (deck + stairs)</summary>
