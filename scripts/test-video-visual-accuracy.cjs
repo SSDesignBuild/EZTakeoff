@@ -131,7 +131,8 @@ assert.ok(rails.includes('[...stairOpenings,...gateOpenings]') &&
   'PCA screen entry MUST NOT automatically leave an unguarded deck edge');
 assert.ok(picks.includes('Independent screen doors do not remove deck guardrails'),
   'Consultation UI must communicate independent door vs required guardrail access');
-assert.ok(rails.includes('subtractRailingOpenings')&&rails.includes('screenDoorOpenings'));
+assert.ok(rails.includes('subtractRailingOpenings')&&!rails.includes('screenDoorOpenings'),
+  'Independent screen entry must not remove a rail section');
 assert.ok(board.includes('planMiteredPictureFrames'));
 assert.ok(stair.includes('underFasciaAt')&&stair.includes('riserTexture'));
 assert.ok(skirt3d.includes("layer==='finish'")&&skirt3d.includes("layer==='jamb'"));
