@@ -1,5 +1,6 @@
 import { DECK_BOARD_FACE_FT, DECK_GAP_FT, boardStockSegments, type DeckModel } from './deckModel';
 import type { DeckPoint } from './types';
+import { planMiteredPictureFrames } from './deckMiterGeometry';
 import { getCoverVisualProduct, getRailVisualProduct, getDeckVisualProduct } from '../data/visualCatalog';
 
 export interface SurfaceStrip {
@@ -22,7 +23,7 @@ const INSTALLATION_END_GAP_FT = 0.125 / 12;
  */
 export function surfaceStrips(
   model:Pick<DeckModel,'points'|'boardRun'|'minX'|'maxX'|'minY'|'maxY'> &
-    Partial<Pick<DeckModel,'breakerBoardPositions'|'breakerBoardCount'>>,
+    Partial<Pick<DeckModel,'breakerBoardPositions'|'breakerBoardCount'|'pictureFrameSegments'|'pictureFrameCount'>>,
   boardWidthFt=VISIBLE_BOARD_WIDTH_FT,gapFt=VISIBLE_BOARD_GAP_FT,
 ):SurfaceStrip[]{
   const points=model.points;
@@ -108,7 +109,63 @@ export function surfaceStrips(
       if(result.length>=1400)break;
     }
   }
-  return result;
+
+  // Clip all field boards around mitered picture-frame bands. Raising border
+  // meshes alone is not acceptable: two overlapping surfaces create z-fighting.
+  const frames=planMiteredPictureFrames(model.points,model.pictureFrameSegments??[],
+    model.pictureFrameCount??0,boardWidthFt,gapFt);
+  if(!frames.length)return result;
+  const margin=Math.max(.005,Math.min(.025,gapFt));
+  const clip=(polygon:Array<readonly [number,number]>,coord:0|1,
+    plane:number,keepAbove:boolean):Array<readonly [number,number]>=>{
+    const inside=(p:readonly [number,number])=>keepAbove?p[coord]>=plane-1e-9:p[coord]<=plane+1e-9;
+    const out:Array<readonly [number,number]>=[];
+    for(let i=0;i<polygon.length;i++){
+      const start=polygon[i],end=polygon[(i+1)%polygon.length];
+      const inA=inside(start),inB=inside(end);
+      if(inA)out.push(start);
+      if(inA!==inB){
+        const denominator=end[coord]-start[coord];
+        if(Math.abs(denominator)>1e-12){
+          const t=Math.min(1,Math.max(0,(plane-start[coord])/denominator));
+          out.push([start[0]+(end[0]-start[0])*t,start[1]+(end[1]-start[1])*t]);
+        }
+      }
+    }
+    return out;
+  };
+  return result.flatMap(strip=>{
+    const runAxis:0|1=strip.axis==='x'?0:1;
+    const crossAxis:0|1=strip.axis==='x'?1:0;
+    const center=strip.axis==='x'?strip.z:strip.x;
+    const low=center-strip.widthFt/2,high=center+strip.widthFt/2;
+    const blockers:Array<[number,number]>=[];
+    for(const frame of frames){
+      let polygon:Array<readonly [number,number]>=frame.corners;
+      polygon=clip(polygon,crossAxis,low,true);
+      polygon=clip(polygon,crossAxis,high,false);
+      if(polygon.length<3)continue;
+      const min=Math.min(...polygon.map(p=>p[runAxis]));
+      const max=Math.max(...polygon.map(p=>p[runAxis]));
+      if(max>=strip.startFt&&min<=strip.endFt)
+        blockers.push([Math.max(strip.startFt,min-margin),Math.min(strip.endFt,max+margin)]);
+    }
+    let permitted:Array<[number,number]>=[[strip.startFt,strip.endFt]];
+    for(const [lowCut,highCut] of blockers){
+      permitted=permitted.flatMap(([a,b])=>{
+        if(b<=lowCut||a>=highCut)return [[a,b] as [number,number]];
+        const pieces:Array<[number,number]>=[];
+        if(lowCut-a>.04)pieces.push([a,lowCut]);
+        if(b-highCut>.04)pieces.push([highCut,b]);
+        return pieces;
+      });
+    }
+    return permitted.filter(([a,b])=>b-a>.04).map(([startFt,endFt])=>({
+      ...strip,startFt,endFt,lengthFt:endFt-startFt,
+      x:strip.axis==='x'?(startFt+endFt)/2:strip.x,
+      z:strip.axis==='z'?(startFt+endFt)/2:strip.z,
+    }));
+  });
 }
 export interface BreakerVisualStrip extends SurfaceStrip {
   course:number;
@@ -199,7 +256,7 @@ export function visualPartSummary(values:Record<string,string|number|boolean>,co
   return {roof,
     exposedTrusses:cover.family==='full-trusses',
     decorativeEnds:cover.family==='solid-truss-ends'||cover.family==='full-trusses',
-    gutters:coverFamily!=='none'&&['solid-studio','solid-truss-ends','full-trusses','translucent'].includes(cover.family),
+    gutters:coverFamily!=='none'&&['solid-studio','solid-truss-ends','full-trusses'].includes(cover.family),
     rails:selectedRail.takeoffSystem==='timbertech-ire'?'manufacturer-family':'unverified',
     texture:getDeckVisualProduct(values.deckingMaterial)?'verified-photo':'unavailable'};
 }
