@@ -13,13 +13,18 @@ export function planSkirtingGateFace(
   const span=orientation==='vertical'?widthFt:heightFt;
   const cutLength=orientation==='vertical'?heightFt:widthFt;
   const boards:GateFaceBoard[]=[];
-  // A short final piece is ripped rather than protruding beyond the leaf.
-  for(let n=0;n<250;n++){
-    const station=n*pitch;
-    if(station>=span-1e-7)break;
-    const visibleFace=Math.min(face,span-station);
-    if(visibleFace<1e-6)break;
+  const count=Math.min(250,Math.max(1,Math.ceil((span+gap)/pitch)));
+  // Distribute trim evenly: don't put an ugly <1-in sliver at one edge.
+  // When a partial course is needed, split its rip across BOTH end boards.
+  const endFace=count===1?span:
+    Math.max(0,(span-(count-1)*gap-(count-2)*face)/2);
+  let station=0;
+  for(let i=0;i<count;i++){
+    const visibleFace=count===1?span:
+      i===0||i===count-1?endFace:face;
+    if(visibleFace<1e-6)continue;
     boards.push({stationFt:station,faceFt:visibleFace,cutLengthFt:cutLength});
+    station+=visibleFace+gap;
   }
   return boards;
 }
