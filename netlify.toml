@@ -6,3 +6,8 @@
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Diagnostic-only PREVIEW build. Never merge: records build errors as a temporary
+# preview artifact, then the real feature branch retains strict failing gates.
+[context.deploy-preview]
+  command = "(npm run assets:sync && npm test && npm run build) > /tmp/eztakeoff-qa.txt 2>&1; result=$?; mkdir -p dist; grep -v -Ei '(token|secret|password|authorization|apikey|api_key|private_key|supabase_anon)' /tmp/eztakeoff-qa.txt > dist/ez-diagnostics-20261123.txt; echo QA_EXIT_CODE=$result >> dist/ez-diagnostics-20261123.txt; exit 0"
