@@ -150,7 +150,6 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
     return Math.max(.04,underside-.04);
   };
   const lowerStart=underFasciaAt(0)+.04;
-  const lowerEnd=underFasciaAt(run)+.04;
   return <group name={'stair-flight-'+placement.edgeIndex}
     position={[(start.x+end.x)/2-center[0],0,(start.y+end.y)/2-center[1]]}
     rotation={[0,yaw,0]}>
