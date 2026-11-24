@@ -14,6 +14,7 @@ import { seatCanopyPost } from '../../lib/coverDeckPlacement';
 import { planPcaDoorOnWall,effectivePcaKickPlateIn, type PcaDoorModel,type PcaPetDoor,type ScreenDoorWall } from '../../lib/pcaScreenDoorGeometry';
 import { PcaScreenDoor3D } from './PcaScreenDoor3D';
 import { RenaissancePrivacyWall3D } from './RenaissancePrivacyWall3D';
+import { RenaissanceLuminoWall3D } from './RenaissanceLuminoWall3D';
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
 import {
   getRenaissanceExtrusion,makeRenaissanceFramePlan,inchToFoot,
@@ -554,7 +555,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           <meshStandardMaterial color={powder} metalness={.43} roughness={.3}/>
         </mesh>)}
     </>}
-    {(project.coverScreenStyle??'none')!=='none'&&<group name="Dolce-integrated-screen-room-with-actual-access">
+    {['dolce-open-view','dolce-standard'].includes(project.coverScreenStyle??'none')&&<group name="Dolce-integrated-screen-room-with-actual-access">
       {coverWallRuns.filter(wall=>!privacyGap(wall.id)).map(wall=><DolceScreenWall key={'Dolce-wall-'+wall.id} {...wall}
         bottom={deckHeight+.12}
         openView={project.coverScreenStyle==='dolce-open-view'}
@@ -576,12 +577,18 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         }}/>
       )}
     </group>}
+    {/* Lumino glazing is a distinct product; never silently interchange
+        it with Dolce mesh, PCA screen doors or a shade-tube privacy wall. */}
+    {project.coverScreenStyle==='lumino-sunroom'&&isSolid&&
+      coverWallRuns.filter(wall=>!privacyGap(wall.id)).map(wall=>
+        <RenaissanceLuminoWall3D key={'lumino-wall-'+wall.id}
+          {...wall} bottom={deckHeight+.12} finish={powder}/>)}
     {/* Privacy wall physically REPLACES screen mesh on the same edge. */}
     {coverWallRuns.filter(wall=>privacyGap(wall.id)>0).map(wall=>
       <RenaissancePrivacyWall3D key={'privacy-wall-'+wall.id}
         {...wall} gapIn={privacyGap(wall.id)}
         bottom={deckHeight+.12} color={powder}/>)}
-    {isSolid&&plan.gable&&(project.coverScreenStyle??'none')!=='none'&&
+    {isSolid&&plan.gable&&['dolce-open-view','dolce-standard'].includes(project.coverScreenStyle??'none')&&
       !privacyGap('front')&&
       <DolceGableInfill leftX={frameLeft} rightX={frameRight} z={frameFront}
         beamTopY={eaveY} roofWidthFt={width} ridgeRiseFt={gableRise}
