@@ -8,6 +8,7 @@ import { sunroomDoorRect,sunroomSpansExcludingDoor,sunroomGlazingBays,
   sunroomKickHeightFt,sunroomHasTransom,sunroomWindowOpenings,
   sunroomUprightOffsetsExcludingDoor,type EliteGlazingOpening } from '../../lib/sunroomSectionGeometry';
 import { Block,SlopedBeam } from './Primitives';
+import { EliteVerticalExtrusion,EliteHorizontalExtrusion } from './EliteAddARoomExtrusions';
 
 const FINISH_COLORS:Record<EliteSunroomFinish,string>={
  white:'#e7e9e7',wheat:'#c6b59a',clay:'#aa998d',bronze:'#574b40',
@@ -139,22 +140,6 @@ function ElitePrimeDoor({section,frameColor,glazing}:{
    <group name={'prime-door-glazing-'+section.doorType}/>
  </group>;
 }
-function FrameRail({start,end,yLeft,yRight,color,depth,name}:{
- start:number;end:number;yLeft:number;yRight:number;
- color:string;depth:number;name:string;
-}){
- const len=end-start;if(len<.04)return null;
- return <group name={name}>
-   <SlopedBeam start={[start,yLeft,0]} end={[end,yRight,0]}
-     thickness={.075} depth={depth} color={color}/>
-   <SlopedBeam start={[start,yLeft+.037,depth/2-.014]}
-     end={[end,yRight+.037,depth/2-.014]}
-     thickness={.028} depth={.030} color={color}/>
-   <SlopedBeam start={[start,yLeft+.037,-depth/2+.014]}
-     end={[end,yRight+.037,-depth/2+.014]}
-     thickness={.028} depth={.030} color={color}/>
- </group>;
-}
 function EliteSection({section,xStart,settings}:{
  section:SunroomSectionConfig;xStart:number;settings:EliteSunroomSettings;
 }){
@@ -196,44 +181,49 @@ function EliteSection({section,xStart,settings}:{
   });
  };
  return <group name={'elite-add-a-room-section-'+section.label} position={[xStart,0,0]}>
-   {/* Receiver and DRC at the structural-wall boundaries, but NO extra
-       Elite corner post: the Renaissance posts already support the cover. */}
-   {[0,section.width].map((x,i)=><group key={'receiver-and-drc-'+i}
-     name={i===0?'left-receiver-drc':'right-receiver-drc'}>
-     <Block name="receiving-channel-back"
-       position={[x,section.height/2,-systemDepth/2+.018]}
-       size={[.072,section.height,.038]} color={framing} metalness={.52}/>
-     <Block name="DRC-window-edge"
-       position={[x,section.height/2,0]}
-       size={[.085,section.height,systemDepth-.035]}
-       color={windowColor} metalness={.44}/>
+   {/* Actual 2/3-in U-shaped receiving channel against preexisting
+        Renaissance structural post (never a replacement corner post). */}
+   {[0,section.width].map((x,i)=><group key={'wall-receiver-'+i}
+      name={i===0?'left-receiver-drc':'right-receiver-drc'}>
+      <EliteVerticalExtrusion system={settings.roomSystem} kind="receiver"
+        x={x} bottom={0} height={section.height}
+        flip={i===1} color={framing} name="receiving-channel-back"/>
+      {/* DRC engages sash at both external window/door opening edges. */}
+      <EliteVerticalExtrusion system={settings.roomSystem} kind="drc"
+        x={x} bottom={0} height={section.height}
+        flip={i===1} color={windowColor} name="DRC-window-edge"/>
    </group>)}
-   {widths.map((span,i)=><FrameRail key={'base-channel-'+i}
-     name="elite-bottom-base-channel-weep" start={span.start} end={span.end}
-     yLeft={.035} yRight={.035} depth={systemDepth}
-     color={framing}/>)}
-   <FrameRail name="elite-top-cap-under-renaissance-roof"
-     start={0} end={section.width} yLeft={topLeft} yRight={topRight}
-     depth={systemDepth} color={framing}/>
+   {widths.map((span,i)=><EliteHorizontalExtrusion key={'base-channel-'+i}
+      system={settings.roomSystem} kind="bottom"
+      name="elite-bottom-base-channel-weep" start={span.start} end={span.end}
+      yLeft={.035} yRight={.035} color={framing}/>)}
+   <EliteHorizontalExtrusion system={settings.roomSystem} kind="top"
+      name="elite-top-cap-under-renaissance-roof"
+      start={0} end={section.width} yLeft={topLeft} yRight={topRight}
+      color={framing}/>
    {uprights.map((x,i)=><group key={'elite-hbeam-upright-'+i}>
-     <Block name="elite-h-beam-vertical-between-glazing"
-       position={[x,(uprightFrom+uprightTop)/2,0]}
-       size={[.125,Math.max(.05,uprightTop-uprightFrom),systemDepth]}
-       color={framing} metalness={.49}/>
-     {[systemDepth/2-.035,-systemDepth/2+.035].map((z,index)=>
-       <Block key={'Drc-face-'+index} name="elite-drc-h-beam-window-face"
-         position={[x,(uprightFrom+uprightTop)/2,z]}
-         size={[.06,Math.max(.05,uprightTop-uprightFrom),.035]}
-         color={windowColor} metalness={.43}/>)}
+      <EliteVerticalExtrusion system={settings.roomSystem} kind="h-vertical"
+        x={x} bottom={uprightFrom} height={Math.max(.05,uprightTop-uprightFrom)}
+        color={framing} name="elite-h-beam-vertical-between-glazing"/>
+      {[-1,1].map((sign,index)=>
+        <EliteVerticalExtrusion key={'hbeam-drc-'+index} kind="drc"
+          system={settings.roomSystem} name="elite-drc-h-beam-window-face"
+          x={x+sign*(settings.roomSystem==='3-thermal'?.088:.046)}
+          bottom={uprightFrom} height={Math.max(.05,uprightTop-uprightFrom)}
+          flip={index===1} color={windowColor}/>)}
    </group>)}
    {section.kickSection!=='none'&&widths.map((span,i)=>
-     <FrameRail key={'kick-hbeam-'+i} name="elite-H-beam-and-DRC-kick-break"
-       start={span.start} end={span.end} yLeft={kick} yRight={kick}
-       depth={systemDepth} color={framing}/>)}
+      <EliteHorizontalExtrusion key={'kick-hbeam-'+i}
+        system={settings.roomSystem} kind="h-horizontal"
+        name="elite-H-beam-and-DRC-kick-break"
+        start={span.start} end={span.end} yLeft={kick} yRight={kick}
+        color={framing}/>)}
    {transom&&widths.map((span,i)=>
-     <FrameRail key={'transom-hbeam-'+i} name="elite-H-beam-and-DRC-transom-break"
-       start={span.start} end={span.end} yLeft={mainTop} yRight={mainTop}
-       depth={systemDepth} color={framing}/>)}
+      <EliteHorizontalExtrusion key={'transom-hbeam-'+i}
+        system={settings.roomSystem} kind="h-horizontal"
+        name="elite-H-beam-and-DRC-transom-break"
+        start={span.start} end={span.end} yLeft={mainTop} yRight={mainTop}
+        color={framing}/>)}
    {section.electricChase&&uprights.map((x,i)=><Block
      key={'electric-chase-'+i} name="elite-optional-electrical-chase"
      position={[x,(uprightFrom+uprightTop)/2,.015]}
