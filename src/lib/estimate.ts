@@ -1,5 +1,6 @@
 import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials, resolveStairSideFasciaMaterial } from './deckTrimSelection';
 import { stockBoardSegments } from './finishStockGeometry';
+import { planStairFasciaCoverage } from './stairFasciaGeometry';
 import { parseGableSections, parseSections, parseSunroomSections } from './sectioning';
 import { isSunroomWindowKind,sunroomDoorWidthFeet,sunroomDoorLeftFeet,
   sunroomSpansExcludingDoor,sunroomUprightOffsetsExcludingDoor,
@@ -586,7 +587,30 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     (independentStairSideFascia?0:actualLowerSide)):0;
   const separateStairSideFasciaLf=independentStairSideFascia&&
     !isPressureTreatedDecking?actualDeckSide+actualLowerSide:0;
-  const totalFasciaBoardLf=deckFasciaLfForOrder+lowerFasciaLfForOrder+separateStairSideFasciaLf;
+  // Match the 3D stringer's true 3/4 x 12 x 12-in (12-ft length) fascia.
+  // A straight fascia may need a SECOND ripped lower strip to fully conceal
+  // the nominal 2x12 underside. Compute from the SAME geometry as 3D.
+  const stairFasciaRipByTier=(tier:typeof deck,heightFt:number)=>{
+    if(tier.stairCount<=0||tier.stairTreadsPerRun<=0)return {lengthFt:0,maxRipWidthIn:0};
+    const coverage=planStairFasciaCoverage({
+      treadDepthFt:tier.stairRunFt/Math.max(1,tier.stairTreadsPerRun),
+      treads:tier.stairTreadsPerRun,
+      riseFt:heightFt/Math.max(1,tier.stairRisers),
+      heightFt,style:inputs.stairFasciaStyle==='straight'?'straight':'profiled',
+      nosingFt:((stairRiserUsesFascia?.5:1)/12),
+    });
+    return {lengthFt:coverage.ripRunFt*2*tier.stairCount,
+      maxRipWidthIn:coverage.ripMaxWidthIn};
+  };
+  const mainFasciaRip=stairFasciaRipByTier(deck,
+    Math.max(0,Number(inputs.deckHeight??5)));
+  const lowerFasciaRip=lowerDeck?stairFasciaRipByTier(lowerDeck,
+    Math.max(0,Number(inputs.lowerDeckHeight??inputs.deckHeight??5))):
+    {lengthFt:0,maxRipWidthIn:0};
+  const extraRipFasciaLf=mainFasciaRip.lengthFt+lowerFasciaRip.lengthFt;
+  const extraRipFasciaBoards=Math.ceil(extraRipFasciaLf/12);
+  const totalFasciaBoardLf=deckFasciaLfForOrder+lowerFasciaLfForOrder+
+    separateStairSideFasciaLf+extraRipFasciaLf;
   const colorMatchedTrimFastenerPoints = Math.ceil((pictureFrameBoardLf + stairDeckBoardLf + totalFasciaBoardLf) * 2);
   const totalDeckAreaForNails = Math.max(0, Number(deck.area || 0)) + (lowerDeck ? Math.max(0, Number(lowerDeck.area || 0)) : 0);
   const connectorNails = (deck.joistHangers + deck.postBases + deck.lateralLoadBrackets + deck.rafterTies) * 10 + (lowerDeck ? (lowerDeck.joistHangers + lowerDeck.postBases + lowerDeck.lateralLoadBrackets + lowerDeck.rafterTies) * 10 : 0);
@@ -781,9 +805,16 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       toMaterial('Color match screws for plugs', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '2 screws per lf', deckingStyleInfo.color ?? fasciaStyleInfo.color, `Same count logic as fascia screws: picture-frame boards, step boards, and fascia board runs.`),
       toMaterial('Color match plugs', 'Hardware', colorMatchedTrimFastenerPoints, 'ea', '1 plug per color-match screw', deckingStyleInfo.color ?? fasciaStyleInfo.color, `Same count logic as fascia screws: picture-frame boards, step boards, and fascia board runs.`),
     ] : []),
-    ...(deckFasciaLfForOrder > 0 ? [toMaterial('Fascia board', 'Trim', Math.ceil(deckFasciaLfForOrder/12), 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${deckFasciaLfForOrder.toFixed(1)} lf for deck perimeter/stringer sides ${stairRiserUsesFascia ? 'including standard stair fascia risers' : '(separate riser boards are listed under Stairs)'}. Fascia style: ${fasciaMaterial}.`)] : []),
-    ...(lowerFasciaLfForOrder > 0 ? [toMaterial('Lower-tier fascia board', 'Lower tier trim', Math.ceil(lowerFasciaLfForOrder/12), 'boards', '12 ft fascia boards', fasciaStyleInfo.color, `${lowerFasciaLfForOrder.toFixed(1)} lf lower deck fascia; separate riser boards where chosen. Style: ${fasciaMaterial}.`)] : []),
-    ...(separateStairSideFasciaLf > 0 ? [toMaterial('Stair side fascia board', 'Stairs', Math.ceil(separateStairSideFasciaLf/12), 'boards', '12 ft fascia boards', stairSideFasciaStyleInfo.color, `${separateStairSideFasciaLf.toFixed(1)} lf for both exposed stair stringer sides. Finish ${stairSideFasciaMaterial}, ${inputs.stairFasciaStyle==='straight'?'straight continuous diagonal edge':'notched stringer-following edge'}. Verify individual stock cut lengths on site.`)] : []),
+    ...(deckFasciaLfForOrder > 0 ? [toMaterial('Fascia board', 'Trim', Math.ceil(deckFasciaLfForOrder/12), 'boards', '3/4 in x 12 in x 12 ft fascia boards', fasciaStyleInfo.color, `${deckFasciaLfForOrder.toFixed(1)} lf for deck perimeter/stringer sides ${stairRiserUsesFascia ? 'including standard stair fascia risers' : '(separate riser boards are listed under Stairs)'}. Fascia style: ${fasciaMaterial}.`)] : []),
+    ...(lowerFasciaLfForOrder > 0 ? [toMaterial('Lower-tier fascia board', 'Lower tier trim', Math.ceil(lowerFasciaLfForOrder/12), 'boards', '3/4 in x 12 in x 12 ft fascia boards', fasciaStyleInfo.color, `${lowerFasciaLfForOrder.toFixed(1)} lf lower deck fascia; separate riser boards where chosen. Style: ${fasciaMaterial}.`)] : []),
+    ...(separateStairSideFasciaLf > 0 ? [toMaterial('3/4 in x 12 in stair side fascia board', 'Stairs', Math.ceil(separateStairSideFasciaLf/12), 'boards', '12 ft fascia stock', stairSideFasciaStyleInfo.color, `${separateStairSideFasciaLf.toFixed(1)} lf for both exposed stair stringer sides. Finish ${stairSideFasciaMaterial}, ${inputs.stairFasciaStyle==='straight'?'straight continuous diagonal edge':'notched stringer-following edge'}. Ripped lower fascia ordered separately where the single 12-in face cannot cover the structural underside. Verify field lengths.`)] : []),
+    ...(extraRipFasciaBoards>0?[toMaterial('3/4 in x 12 in fascia stock - rip lower stair strip','Stairs',
+      extraRipFasciaBoards,'boards','12 ft stock; rip strips to cover stringer',
+      stairSideFasciaStyleInfo.color,
+      extraRipFasciaLf.toFixed(2)+' lf of lower matching fascia strips (both stair sides). '+
+      'Max theoretical rip width '+Math.max(mainFasciaRip.maxRipWidthIn,
+        lowerFasciaRip.maxRipWidthIn).toFixed(2)+' in. Plan conservatively as 12-ft board stock; '+
+      'field verify cuts and reuse compatible rip offcuts. 3/4-in thickness; do not cover ventilation or toe drainage.')]:[]),
   );
   if (deck.stairStringers > 0) {
     materials.push(toMaterial('2x12 stringers', 'Stairs', deck.stairStringerBoardCount, 'boards', `${deck.stairStringerLength} ft stock`, framingWoodGrade, `${deck.stairStringers} stringer cut(s) at about ${feetAndInches(deck.stairStringerCutLength)} each · 12 in. O.C. · ${deck.stairRisers} risers / ${deck.stairTreadsPerRun} treads per run`));
