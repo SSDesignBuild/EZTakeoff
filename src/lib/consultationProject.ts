@@ -1,6 +1,7 @@
 import { SERVICES } from '../data/services';
 import { deckVisualProducts, coverVisualProducts, type CoverColor, type CoverFamily, type CoverRoofColor, type CoverCeilingFinish } from '../data/visualCatalog';
 import type { PcaDoorModel,PcaPetDoor,ScreenDoorWall } from './pcaScreenDoorGeometry';
+import type { EliteSunroomSettings } from './eliteSunroomStudio';
 
 export type ProjectKind = 'deck' | 'covered-deck';
 export type { CoverFamily, CoverColor, CoverRoofColor, CoverCeilingFinish } from '../data/visualCatalog';
@@ -29,7 +30,9 @@ export interface ConsultationProject {
   coverLouverAngle?: number;
   coverFraming?: 'standard'|'hd'|'wide'|'wide-insert';
   coverMount?: 'wall-attached'|'freestanding';
-  coverScreenStyle?: 'none'|'dolce-open-view'|'dolce-standard'|'lumino-sunroom';
+  coverScreenStyle?: 'none'|'dolce-open-view'|'dolce-standard'|'lumino-sunroom'|'elite-add-a-room';
+  /** Sales Elite Add-A-Room: same Admin inputs, per-Renaissance-wall section JSON. */
+  eliteSunroom?:EliteSunroomSettings;
   coverAccentEnd?: 'straight'|'curved'; // Truss/tail end finish on Fresco, Classico, Aria and Contempo.
   coverTrussMount?: 'flush'|'raised'; // Fresco/Aria manufacturer connection, not cover-to-house mount.
   coverScreenUprights?: Partial<Record<ScreenDoorWall,number>>; // Interior upright count per wall, excluding corner posts and doors.

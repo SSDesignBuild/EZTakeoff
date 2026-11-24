@@ -77,7 +77,7 @@ export interface GableSectionConfig {
 }
 
 export type SunroomUprightMode = 'main-only' | 'main-kick' | 'main-transom' | 'all';
-export type SunroomSectionKind = 'horizontal-sliders' | 'panel' | 'picture-window' | 'window' | 'insulated' | 'none';
+export type SunroomSectionKind = 'horizontal-sliders' | 'double-horizontal-sliders' | 'vertical-sliders' | 'casement' | 'panel' | 'picture-window' | 'window' | 'insulated' | 'none';
 
 export interface SunroomSectionConfig {
   id: string;
@@ -87,13 +87,15 @@ export interface SunroomSectionConfig {
   uprights: number;
   uprightMode: SunroomUprightMode;
   electricChase: boolean;
-  mainSection: 'horizontal-sliders' | 'panel' | 'picture-window';
-  kickSection: 'panel' | 'window' | 'insulated' | 'none';
+  mainSection: 'horizontal-sliders' | 'double-horizontal-sliders' | 'vertical-sliders' | 'casement' | 'panel' | 'picture-window';
+  kickSection: 'panel' | 'window' | 'picture-window' | 'horizontal-sliders' | 'double-horizontal-sliders' | 'vertical-sliders' | 'casement' | 'insulated' | 'none';
   kickHeight: number;
-  transomType: 'none' | 'panel' | 'picture-window' | 'auto';
+  transomType: 'none' | 'panel' | 'picture-window' | 'horizontal-sliders' | 'double-horizontal-sliders' | 'vertical-sliders' | 'casement' | 'auto';
   leftTransomHeight: number;
   rightTransomHeight: number;
   doorType: 'none' | 'single' | 'slider';
+  doorWidthIn?: 32 | 36; // Elite Prime Full View single entry (legacy 36in default)
+  doorHinge?: 'left' | 'right'; // Viewed from outside, outswing
   doorAboveSection: 'panel' | 'window' | 'none';
   doorPlacement: 'left' | 'center' | 'right' | 'custom';
   doorOffsetInches: number;

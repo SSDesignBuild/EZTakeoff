@@ -2318,3 +2318,30 @@ body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSyst
   .manufacturer-rail-card{min-height:290px}
   .manufacturer-rail-card .manufacturer-photo{height:175px;min-height:175px}
 }
+
+/* Elite Add-A-Room: the actual Admin Sunrooms editor embedded in Sales,
+   with full-width controls and readable section dimensions on tablets. */
+.elite-studio-options{display:grid;gap:1rem;grid-column:1/-1;min-width:0}
+.elite-studio-options .section-heading{margin-bottom:.1rem}
+.elite-studio-global-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:.8rem}
+.elite-studio-global-grid .form-field{min-width:0}
+.elite-studio-global-grid select{min-height:43px;width:100%;min-width:0}
+.elite-studio-side-tabs{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center}
+.elite-studio-side-tabs button{border:1px solid var(--border);border-radius:9px;padding:.6rem .8rem}
+.elite-studio-side-tabs button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-strong);font-weight:700}
+.elite-studio-wall-status{display:flex;gap:.55rem .9rem;align-items:center;flex-wrap:wrap;
+  padding:.85rem 1rem;border:1px solid var(--border);border-radius:12px;background:var(--accent-soft)}
+.elite-studio-wall-status strong{font-size:.95rem}
+.elite-studio-wall-status span{font-size:.83rem;color:var(--ink);flex:1 1 220px}
+.elite-studio-wall-status .ghost-btn{margin-left:auto}
+.elite-studio-options > .content-card{box-shadow:none;border:1px solid var(--border);padding:1rem;min-width:0}
+.elite-studio-options .section-card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:.9rem}
+.elite-studio-options .section-card{min-width:0}
+.elite-studio-options .section-input-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem}
+.elite-studio-options .form-field select,.elite-studio-options .form-field input{width:100%;min-width:0}
+@media(max-width:670px){
+ .elite-studio-options{padding:.8rem}
+ .elite-studio-options .section-card-grid{grid-template-columns:1fr}
+ .elite-studio-options .section-input-grid{grid-template-columns:1fr}
+ .elite-studio-wall-status .ghost-btn{width:100%;margin:0}
+}

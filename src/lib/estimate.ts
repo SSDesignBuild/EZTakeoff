@@ -1,6 +1,10 @@
 import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials, resolveStairSideFasciaMaterial } from './deckTrimSelection';
 import { stockBoardSegments } from './finishStockGeometry';
 import { parseGableSections, parseSections, parseSunroomSections } from './sectioning';
+import { isSunroomWindowKind,sunroomDoorWidthFeet,sunroomDoorLeftFeet,
+  sunroomSpansExcludingDoor,sunroomUprightOffsetsExcludingDoor,
+  sunroomHasTransom,sunroomKickHeightFt,sunroomWindowOpenings,
+  type EliteGlazingOpening } from './sunroomSectionGeometry';
 import { buildDeckModel, buildLowerTierDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem, SectionConfig } from './types';
 import { buildPatioPanelLayout } from './patioLayout';
@@ -1463,54 +1467,23 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     chase: [] as number[],
     wallPanelArea: 0,
   };
-  let doorSingles = 0;
+  let doorSingles32 = 0;
+  let doorSingles36 = 0;
   let doorSliders = 0;
+  const customWindows:Array<EliteGlazingOpening&{label:string}> = [];
   let sealantLf = 0;
   const fastenerLf: Record<'wood' | 'metal' | 'concrete', number> = { wood: 0, metal: 0, concrete: 0 };
 
-  const isWindowZone = (kind: string) => kind === 'horizontal-sliders' || kind === 'picture-window' || kind === 'window';
-  const doorWidthFeet = (section: typeof sections[number]) => Math.min(section.doorType === 'slider' ? 6 : section.doorType === 'single' ? 3 : 0, section.width);
-  const doorOffsetFeet = (section: typeof sections[number]) => {
-    const doorWidth = doorWidthFeet(section);
-    const maxOffset = Math.max(0, section.width - doorWidth);
-    if (section.doorType === 'none') return 0;
-    if (section.doorPlacement === 'left') return 0;
-    if (section.doorPlacement === 'right') return maxOffset;
-    if (section.doorPlacement === 'custom') return Math.max(0, Math.min(maxOffset, Number(section.doorOffsetInches || 0) / 12));
-    return maxOffset / 2;
-  };
-  const horizontalSpansExcludingDoor = (section: typeof sections[number]) => {
-    const doorWidth = doorWidthFeet(section);
-    if (section.doorType === 'none' || doorWidth <= 0) return [{ start: 0, end: section.width }];
-    const doorLeft = doorOffsetFeet(section);
-    const doorRight = doorLeft + doorWidth;
-    return [
-      ...(doorLeft > 0.01 ? [{ start: 0, end: doorLeft }] : []),
-      ...(doorRight < section.width - 0.01 ? [{ start: doorRight, end: section.width }] : []),
-    ];
-  };
-  const horizontalVisibleWidths = (section: typeof sections[number]) => horizontalSpansExcludingDoor(section)
-    .map((span) => normalizeCutLength(span.end - span.start))
-    .filter((length) => length > 0.01);
-  const uprightOffsetsExcludingDoor = (section: typeof sections[number]) => {
-    const spans = horizontalSpansExcludingDoor(section).filter((span) => span.end - span.start > 0.05);
-    const total = Math.max(0, Math.floor(Number(section.uprights || 0)));
-    if (total === 0 || spans.length === 0) return [] as number[];
-    const totalWidth = spans.reduce((sum, span) => sum + (span.end - span.start), 0);
-    const allocations = spans.map((span) => {
-      const exact = totalWidth > 0 ? total * (span.end - span.start) / totalWidth : 0;
-      return { span, count: Math.floor(exact), remainder: exact - Math.floor(exact) };
-    });
-    let remaining = total - allocations.reduce((sum, item) => sum + item.count, 0);
-    allocations.sort((a, b) => b.remainder - a.remainder || (b.span.end - b.span.start) - (a.span.end - a.span.start));
-    for (const item of allocations) {
-      if (remaining <= 0) break;
-      item.count += 1;
-      remaining -= 1;
-    }
-    allocations.sort((a, b) => a.span.start - b.span.start);
-    return allocations.flatMap(({ span, count }) => Array.from({ length: count }, (_, idx) => span.start + ((idx + 1) * (span.end - span.start)) / (count + 1)));
-  };
+  // Shared with Admin layout and Sales 3D, so openings and upright stations
+  // do not drift when the same SunroomSectionConfig is edited in either mode.
+  const isWindowZone=isSunroomWindowKind;
+  const doorWidthFeet=sunroomDoorWidthFeet;
+  const doorOffsetFeet=sunroomDoorLeftFeet;
+  const horizontalSpansExcludingDoor=sunroomSpansExcludingDoor;
+  const horizontalVisibleWidths=(section:typeof sections[number])=>
+    horizontalSpansExcludingDoor(section).map(span=>normalizeCutLength(span.end-span.start))
+      .filter(length=>length>.01);
+  const uprightOffsetsExcludingDoor=sunroomUprightOffsetsExcludingDoor;
   const addVisibleHorizontal = (target: number[], section: typeof sections[number], piecesPerSpan = 1) => {
     horizontalVisibleWidths(section).forEach((width) => {
       for (let index = 0; index < piecesPerSpan; index += 1) target.push(width);
@@ -1526,10 +1499,10 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     const doorOffset = doorOffsetFeet(section);
     const touchesLeft = section.doorType !== 'none' && doorOffset <= 0.01;
     const touchesRight = section.doorType !== 'none' && doorOffset + doorWidth >= section.width - 0.01;
-    const transomNeeded = section.transomType === 'panel' || section.transomType === 'picture-window' || (section.transomType === 'auto' && section.height > 10 && section.mainSection !== 'picture-window');
+    const transomNeeded = sunroomHasTransom(section);
     const transomMaxHeight = transomNeeded ? Math.max(section.leftTransomHeight, section.rightTransomHeight) : 0;
     const transomFillHeight = transomNeeded ? (section.leftTransomHeight + section.rightTransomHeight) / 2 : 0;
-    const kickHeight = Math.max(0, Math.min(section.kickHeight, 4));
+    const kickHeight = sunroomKickHeightFt(section);
     const mainHeight = Math.max(0, section.height - kickHeight - transomMaxHeight);
     const uprightHeight = section.uprightMode === 'main-only'
       ? mainHeight
@@ -1615,7 +1588,7 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     if (section.kickSection === 'panel' || section.kickSection === 'insulated') {
       cutGroups.wallPanelArea += usableWidth * kickHeight;
     }
-    if (transomNeeded && section.transomType !== 'picture-window') {
+    if (transomNeeded && !isWindowZone(section.transomType)) {
       cutGroups.wallPanelArea += usableWidth * transomFillHeight;
     }
 
@@ -1635,7 +1608,9 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
         if (section.doorAboveSection === 'window') cutGroups.receiver.push(doorWidth);
         if (section.doorAboveSection === 'panel') cutGroups.wallPanelArea += doorWidth * aboveDoorHeight;
       }
-      if (section.doorType === 'single') doorSingles += 1; else doorSliders += 1;
+      if (section.doorType === 'single'){
+        if(section.doorWidthIn===32)doorSingles32+=1;else doorSingles36+=1;
+      }else doorSliders+=1;
     }
 
     sealantLf += section.width * 2 + section.height * 2;
@@ -1643,6 +1618,9 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     addFasteners(section.topAttach, section.width);
     addFasteners(section.leftAttach, section.height);
     addFasteners(section.rightAttach, section.height);
+    customWindows.push(...sunroomWindowOpenings(section).map(opening=>({
+      ...opening,label:section.label,
+    })));
   });
 
   const add24 = (name: string, category: string, lengths: number[], notes?: string) => {
@@ -1656,8 +1634,27 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   if (cutGroups.chase.length) add24(extrusionName('Channel with chase & snap', 'Channel with chase'), 'Sunroom frame', cutGroups.chase, 'electric chase enabled in selected sections');
   if (buildMode === 'new-structure') materials.push(toMaterial(extrusionName('Corner post', 'Corner post'), 'Sunroom frame', 2, 'ea', isThreeIn ? '8 ft or 25 ft stock' : '8 ft or 24 ft stock', framingColor, 'Only for build-from-scratch corners'));
   if (cutGroups.wallPanelArea > 0) materials.push(toMaterial('Wall panel stock', 'Sunroom panels', Math.ceil(cutGroups.wallPanelArea / 40), 'panels', isThreeIn ? '4x10 panel stock' : 'Cut from 24 ft stock', panelColor, `${cutGroups.wallPanelArea.toFixed(1)} sq ft panel fill`));
-  if (doorSingles) materials.push(toMaterial('Prime glass door 3 ft x 6 ft 8 in', 'Doors', doorSingles, 'ea', 'Standard unit', undefined, undefined));
-  if (doorSliders) materials.push(toMaterial('Prime glass door 6 ft x 6 ft 8 in', 'Doors', doorSliders, 'ea', 'Standard unit', undefined, undefined));
+  if (doorSingles36) materials.push(toMaterial('Elite Prime Full View outswing entry 36 in x 80 in', 'Doors', doorSingles36, 'ea', 'Factory unit - validate handing and vendor profile', windowColor, 'Full-height clear view. Confirm glazing, jamb, approved Elite adapter, deadbolt/hinge hand and opening with supplier.'));
+  if (doorSingles32) materials.push(toMaterial('Elite Prime Full View outswing entry 32 in x 80 in', 'Doors', doorSingles32, 'ea', 'Factory unit - validate handing and vendor profile', windowColor, 'Full-height clear view. Confirm glazing, jamb, approved Elite adapter, deadbolt/hinge hand and opening with supplier.'));
+  if (doorSliders) materials.push(toMaterial('Legacy sliding glass door 6 ft x 80 in', 'Doors', doorSliders, 'ea', 'Confirm exact manufacturer unit', windowColor, 'Legacy Admin section choice; not the Elite Prime single outswing door.'));
+  const windowLabels:Record<string,string>={
+    'horizontal-sliders':'Horizontal slider','double-horizontal-sliders':'Double horizontal slider',
+    'vertical-sliders':'Vertical slider','casement':'Casement',
+    'picture-window':'Fixed picture',
+  };
+  // Custom manufactured openings are a selection schedule, NEVER an invented
+  // ready-to-order net glass size. The supplier subtracts extrusion/sash reveals.
+  for(const opening of customWindows){
+    const width=opening.end-opening.start;
+    if(width<.25||Math.min(opening.topLeftFt,opening.topRightFt)-opening.bottomFt<.25)continue;
+    materials.push(toMaterial('Clear insulated glass - '+windowLabels[opening.style],
+      'Sunroom windows - verify shop dimensions',1,'opening',
+      'Gross opening - confirm net daylight and factory unit',
+      windowColor,opening.label+' / '+opening.zone+
+      ': '+width.toFixed(2)+' ft gross width, '+(opening.topLeftFt-opening.bottomFt).toFixed(2)+
+      ' / '+(opening.topRightFt-opening.bottomFt).toFixed(2)+' ft gross left/right height. '+
+      'Glass thickness, Low-E/tempering, max sash span and production sizes require vendor approval.'));
+  }
   materials.push(toMaterial('Novaflex caulking', 'Sealants', Math.max(1, Math.ceil(sealantLf / 10)), 'tubes', '1 tube per 10 lf perimeter', framingColor, `${sealantLf.toFixed(1)} lf opening / section perimeter`));
   if (fastenerLf.wood > 0) materials.push(toMaterial('1 1/8 in wood screws', 'Hardware', Math.ceil(fastenerLf.wood / 2.5), 'ea', 'Fasteners every 2.5 ft', undefined, `${fastenerLf.wood.toFixed(1)} lf attaching to wood`));
   if (fastenerLf.metal > 0) materials.push(toMaterial('3/4 in tek screws', 'Hardware', Math.ceil(fastenerLf.metal / 2.5), 'ea', 'Fasteners every 2.5 ft', undefined, `${fastenerLf.metal.toFixed(1)} lf attaching to metal`));
@@ -1682,6 +1679,7 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
       buildMode === 'existing-structure' ? 'Existing-structure mode avoids unnecessary corner-post assumptions.' : 'Build-from-scratch mode adds corner-post assumptions.',
       'Sunroom receiving channel and DRC are now taken from the same red/purple section pieces used in the layout and packed as individual 24 ft stock cuts.',
       'Door openings subtract horizontal pieces through the door width, while top receivers and side edge receiver/DRC remain full pieces where the layout shows them.',
+      'Glazing rows list gross custom opening sizes only, not approved glass order dimensions; confirm clear insulated glass thickness, safety glazing, thermal compatibility and Elite Prime Full View Z-bar/adapter with ABC Supply/Elite.',
     ],
   };
 }

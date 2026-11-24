@@ -56,11 +56,14 @@ assert.ok(render.includes('integrated-Dolce-guard-picket-panel'));
 assert.ok(render.includes('height={bottom+3.0}'));
 assert.ok(render.includes('height={bottom+.065}'), 'Common bottom rail must remain');
 assert.ok(render.includes('shapeGeometry args={[shape]}'));
-assert.ok(render.includes('topFrom:screenRearSoffit') &&
-  render.includes('topTo:screenFrontSoffit') &&
-  render.includes('screenRearSoffit=roofRearY-') &&
-  render.includes('screenFrontSoffit=roofFrontY-'),
-  'Dolce side walls must close at the actual pitched roof underside');
+const sharedWall=fs.readFileSync(path.join(root,'src/lib/renaissanceCoverWallLayout.ts'),'utf8');
+assert.ok(render.includes('planRenaissanceCoverWalls') &&
+  render.includes('const coverWallRuns=wallAnchors.wallRuns') &&
+  sharedWall.includes('topFrom:screenRearSoffit') &&
+  sharedWall.includes('topTo:screenFrontSoffit') &&
+  sharedWall.includes('screenRearSoffit=roofRearY-') &&
+  sharedWall.includes('screenFrontSoffit=(plan.gable?plan.frontTopFt:roofFrontY)-'),
+  'Dolce side walls and Elite panels must share the actual pitched roof soffit and seated columns');
 assert.ok(render.includes("product.family==='full-trusses'")&&
   render.includes('plan.projectionTrussStationsFt.map'),'full Classico trusses run in projection');
 assert.ok(render.includes('RenaissanceCurvedTrussEnd'),'Contempo and Classico need sculpted tail contour');
