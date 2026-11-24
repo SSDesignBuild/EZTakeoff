@@ -204,6 +204,27 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
           <h4>Stair options</h4>
           <label>Stair width (ft)<input type="number" min={2} step={.5}
             value={number(project.values.stairWidth,4)} onChange={(e)=>setValue('stairWidth',Number(e.target.value))}/></label>
+          <label>Stair landing at grade
+            <select value={String(project.values.stairLandingSurface??'unknown')}
+              onChange={e=>setValue('stairLandingSurface',e.target.value)}>
+              <option value="unknown">Not verified — no pad added</option>
+              <option value="existing">Existing suitable concrete landing</option>
+              <option value="bare-ground">No existing concrete — include landing pad</option>
+            </select>
+          </label>
+          {project.values.stairLandingSurface==='bare-ground'&&<>
+            <label>Concrete pad depth (ft)
+              <input type="number" min={3} max={20} step={.5}
+                value={number(project.values.stairLandingDepthFt,4)}
+                onChange={e=>setValue('stairLandingDepthFt',Number(e.target.value))}/>
+            </label>
+            <label>Concrete pad thickness (in)
+              <input type="number" min={4} max={12} step={1}
+                value={number(project.values.stairLandingThicknessIn,5)}
+                onChange={e=>setValue('stairLandingThicknessIn',Number(e.target.value))}/>
+            </label>
+            <small className="consultation-visual-note">One pad per drawn stair flight; minimum 4-foot width or the stair width, whichever is greater. 80-lb concrete bag quantities derive from actual volume with a 5% handling allowance and 0.60 cu ft nominal yield. Site grade, base, landings, footings and code approval require field review.</small>
+          </>}
           <label>Tread material<select value={String(project.values.stairTreadStyle??'match')}
             onChange={(e)=>setValue('stairTreadStyle',e.target.value)}>
             <option value="match">Match deck board style</option>
