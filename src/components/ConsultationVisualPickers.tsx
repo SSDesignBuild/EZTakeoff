@@ -271,12 +271,24 @@ export function ManufacturerCoverPicker({project,onChange}:{
             <option value="wall-attached">Attached to house / existing structure</option>
             <option value="freestanding">Freestanding · posts front and back</option>
           </select></label>
+        {['Fresco','Aria'].includes(project.coverFamily)&&
+          <label>Projection truss connection to header
+            <select value={project.coverTrussMount??'flush'}
+              onChange={e=>onChange({coverTrussMount:e.target.value as 'flush'|'raised'})}>
+              <option value="flush">Flush truss - truss crown aligned with header</option>
+              <option value="raised">Raised truss - 6″ truss sits above header</option>
+            </select>
+            <small className="consultation-visual-note">
+              Separate Renaissance 2025 manufacturer connection assemblies.
+              Verify fasteners, anchorage and site-specific engineering before ordering.
+            </small>
+          </label>}
         {['Fresco','Classico','Aria','Contempo'].includes(project.coverFamily)&&
           <label>Decorative projection truss ends
             <select value={project.coverAccentEnd??(['Classico','Contempo'].includes(project.coverFamily)?'curved':'straight')}
               onChange={e=>onChange({coverAccentEnd:e.target.value as 'straight'|'curved'})}>
               <option value="straight">Straight-cut end</option>
-              <option value="curved">Curved accent end</option>
+              <option value="curved">{project.coverFamily==='Aria'?'Scalloped truss end':project.coverFamily==='Fresco'?'S-curve truss end':'Curved accent end'}</option>
             </select>
             <small className="consultation-visual-note">End profiles are design visuals; verify approved manufacturer cut style.</small>
           </label>}
