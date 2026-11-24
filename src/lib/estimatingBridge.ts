@@ -31,6 +31,15 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
     frontOverhangFt:Number(project.coverFrontOverhangFt??1),
     postHeightFt:Number(project.coverHeightFt??9),
   }));
+  const privacyWalls=Object.entries(project.coverPrivacyWallGaps??{})
+    .filter(([,gap])=>[2,4,6].includes(Number(gap)));
+  if(privacyWalls.length){
+    blockers.push('Renaissance 2026 shade-tube privacy walls are dimensional design concepts only. Obtain manufacturer-approved stock lengths, receiver/channel fastening, tube span/wind checks and a separate privacy wall BOM before ordering.');
+    if(project.coverDoorEnabled!==false&&
+       privacyWalls.some(([side])=>side===(project.coverDoorSide??'front')))
+      blockers.push('PCA screen entry side conflicts with selected privacy shade-tube wall. Do not cut the privacy tubes or quote an access opening without an engineered manufacturer design.');
+    blockers.push('Privacy shade-tube wall is not an independently certified code-required deck guardrail; review open deck edges and guard details.');
+  }
   if(project.coverScreenStyle&&project.coverScreenStyle!=='none'){
     blockers.push('Dolce screen style is a visual selection, not a supplier-verified screen room extrusion/cut BOM; approve separate screen-room takeoff.');
     if(project.coverDoorEnabled!==false){
@@ -59,6 +68,10 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
       coverTrussMount:project.coverTrussMount??'flush',
       coverScreenStyle:project.coverScreenStyle??'none',
+      coverPrivacyFrontGapIn:project.coverPrivacyWallGaps?.front??0,
+      coverPrivacyLeftGapIn:project.coverPrivacyWallGaps?.left??0,
+      coverPrivacyRightGapIn:project.coverPrivacyWallGaps?.right??0,
+      coverPrivacyRearGapIn:project.coverPrivacyWallGaps?.rear??0,
       coverAccentEnd:project.coverAccentEnd??(['Contempo','Classico'].includes(project.coverFamily)?'curved':'straight'),
       coverScreenUprightsFront:project.coverScreenUprights?.front??2,
       coverScreenUprightsLeft:project.coverScreenUprights?.left??1,

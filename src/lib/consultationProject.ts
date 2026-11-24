@@ -34,6 +34,8 @@ export interface ConsultationProject {
   coverTrussMount?: 'flush'|'raised'; // Fresco/Aria manufacturer connection, not cover-to-house mount.
   coverScreenUprights?: Partial<Record<ScreenDoorWall,number>>; // Interior upright count per wall, excluding corner posts and doors.
   coverScreenRailTreatment?: 'integrated-kick'|'integrated-picket'|'inside'|'outside'|'screens-only';
+  /** 2026 Renaissance privacy wall tube clear gap; 0 disables the chosen side. */
+  coverPrivacyWallGaps?: Partial<Record<ScreenDoorWall,0|2|4|6>>;
   coverDoorEnabled?:boolean;
   coverDoorSide?:ScreenDoorWall;
   coverDoorPositionPercent?:number;
@@ -85,7 +87,7 @@ export const makeConsultationProject = (id: string): ConsultationProject => ({
   coverFamily:'none',coverColor:'White',coverRoofColor:'White',coverCeilingFinish:'White',coverRoofStyle:'studio',coverShadePercent:65,coverLouverAngle:12,
   coverFraming:'standard',coverMount:'wall-attached',coverScreenStyle:'none',
   coverAccentEnd:'straight',coverTrussMount:'flush',coverScreenUprights:{front:2,left:1,right:1,rear:2},
-  coverScreenRailTreatment:'integrated-kick',coverDoorEnabled:true,
+  coverScreenRailTreatment:'integrated-kick',coverPrivacyWallGaps:{front:0,left:0,right:0,rear:0},coverDoorEnabled:true,
   coverDoorSide:'front',coverDoorPositionPercent:50,coverDoorModel:'A-100',
   coverDoorFinish:'match',coverDoorHinge:'left',coverDoorSwing:'out',coverDoorPet:'none',
   coverDoorKickPlateIn:8,coverPostCount:0,
@@ -111,6 +113,7 @@ export const loadConsultations = (): ConsultationProject[] => {
       coverTrussMount:p.coverTrussMount??'flush',
       coverScreenUprights:{front:2,left:1,right:1,rear:2,...p.coverScreenUprights},
       coverScreenRailTreatment:p.coverScreenRailTreatment??'integrated-kick',
+      coverPrivacyWallGaps:{front:0,left:0,right:0,rear:0,...p.coverPrivacyWallGaps},
       coverDoorEnabled:p.coverDoorEnabled??((p.coverScreenStyle??'none')!=='none'),
       coverDoorSide:p.coverDoorSide??'front',
       coverDoorPositionPercent:p.coverDoorPositionPercent??50,

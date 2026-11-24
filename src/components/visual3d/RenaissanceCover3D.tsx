@@ -13,6 +13,7 @@ import { actualPostWidthFt } from '../../lib/visualStructure';
 import { seatCanopyPost } from '../../lib/coverDeckPlacement';
 import { planPcaDoorOnWall,effectivePcaKickPlateIn, type PcaDoorModel,type PcaPetDoor,type ScreenDoorWall } from '../../lib/pcaScreenDoorGeometry';
 import { PcaScreenDoor3D } from './PcaScreenDoor3D';
+import { RenaissancePrivacyWall3D } from './RenaissancePrivacyWall3D';
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
 import {
   getRenaissanceExtrusion,makeRenaissanceFramePlan,inchToFoot,
@@ -296,6 +297,20 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     deckPostWidthFt:actualPostWidthFt(model.postSize),
     deckHeightFt:deckHeight,groundFt:0,exitDirection:[0,1],
   }):null;
+  // One wall layout is shared by screen and privacy renderers so the two
+  // incompatible assemblies can NEVER occupy the same selected side.
+  const coverWallRuns=[
+    {id:'front' as const,from:[frameLeft,frameFront] as P2,to:[frameRight,frameFront] as P2,
+      topFrom:screenFrontSoffit,topTo:screenFrontSoffit},
+    {id:'left' as const,from:[frameLeft,back] as P2,to:[frameLeft,frameFront] as P2,
+      topFrom:screenRearSoffit,topTo:screenFrontSoffit},
+    {id:'right' as const,from:[frameRight,back] as P2,to:[frameRight,frameFront] as P2,
+      topFrom:screenRearSoffit,topTo:screenFrontSoffit},
+    ...(!attached?[{id:'rear' as const,
+      from:[frameLeft,back] as P2,to:[frameRight,back] as P2,
+      topFrom:screenRearSoffit,topTo:screenRearSoffit}]:[]),
+  ];
+  const privacyGap=(side:ScreenDoorWall)=>project.coverPrivacyWallGaps?.[side]??0;
   return <group name={'Renaissance-'+product.id} position={[0,0,0]}>
     {/* Manufacturer outside dimensions: SD/HD 3.875-in hollow columns,
         WD 6-in columns; SD/HD 7x2.75 and WD 7x4.875 headers. */}
@@ -540,17 +555,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         </mesh>)}
     </>}
     {(project.coverScreenStyle??'none')!=='none'&&<group name="Dolce-integrated-screen-room-with-actual-access">
-      {([
-        {id:'front' as const,from:[frameLeft,frameFront] as P2,to:[frameRight,frameFront] as P2,
-          topFrom:screenFrontSoffit,topTo:screenFrontSoffit},
-        {id:'left' as const,from:[frameLeft,back] as P2,to:[frameLeft,frameFront] as P2,
-          topFrom:screenRearSoffit,topTo:screenFrontSoffit},
-        {id:'right' as const,from:[frameRight,back] as P2,to:[frameRight,frameFront] as P2,
-          topFrom:screenRearSoffit,topTo:screenFrontSoffit},
-        ...(!attached?[{id:'rear' as const,
-          from:[frameLeft,back] as P2,to:[frameRight,back] as P2,
-          topFrom:screenRearSoffit,topTo:screenRearSoffit}]:[]),
-      ]).map(wall=><DolceScreenWall key={'Dolce-wall-'+wall.id} {...wall}
+      {coverWallRuns.filter(wall=>!privacyGap(wall.id)).map(wall=><DolceScreenWall key={'Dolce-wall-'+wall.id} {...wall}
         bottom={deckHeight+.12}
         openView={project.coverScreenStyle==='dolce-open-view'}
         finish={powder} center={[xMid,zMid]}
@@ -571,7 +576,13 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         }}/>
       )}
     </group>}
+    {/* Privacy wall physically REPLACES screen mesh on the same edge. */}
+    {coverWallRuns.filter(wall=>privacyGap(wall.id)>0).map(wall=>
+      <RenaissancePrivacyWall3D key={'privacy-wall-'+wall.id}
+        {...wall} gapIn={privacyGap(wall.id)}
+        bottom={deckHeight+.12} color={powder}/>)}
     {isSolid&&plan.gable&&(project.coverScreenStyle??'none')!=='none'&&
+      !privacyGap('front')&&
       <DolceGableInfill leftX={frameLeft} rightX={frameRight} z={frameFront}
         beamTopY={eaveY} roofWidthFt={width} ridgeRiseFt={gableRise}
         panelThicknessFt={roofPanelThicknessFt} finish={powder}/>}
