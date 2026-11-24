@@ -4,7 +4,7 @@ import { getCoverVisualProduct, getCoverFinish } from '../../data/visualCatalog'
 import { maxReferenceOverhangFt } from '../../lib/renaissanceGuidance';
 import { Beam, Block, SlopedBeam, type P2 } from './Primitives';
 import * as THREE from 'three';
-import { planDolceScreenProfile, roofLineAtX } from '../../lib/renaissanceDetailGeometry';
+import { planDolceScreenProfile, roofLineAtX, showDolceStandardIntermediateRail } from '../../lib/renaissanceDetailGeometry';
 import { planInsulatedRoofPanels, planDolceGableInfill } from '../../lib/renaissanceRoofGeometry';
 import { planWrapAroundGutter } from '../../lib/renaissanceGutterGeometry';
 import { planRenaissanceDownspout } from '../../lib/renaissanceDownspoutRouting';
@@ -53,7 +53,9 @@ function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish,treatment=
     <SlopedBeam start={[from[0],topFrom-.06,from[1]]}
       end={[to[0],topTo-.06,to[1]]}
       thickness={.12} depth={.10} color={finish}/>
-    {!openView&&<Beam start={from} end={to}
+    {/* Integrated Dolce pickets already have their own guardrail top; do not
+        draw the extra Standard mid-rail across the upper picket field. */}
+    {showDolceStandardIntermediateRail(openView,treatment)&&<Beam start={from} end={to}
       height={bottom+2.3} thickness={.12} depth={.10} color={finish}/>}
     {profile.mullions.slice(1,-1).map((m,i)=>{
       const t=m.alongFt/profile.lengthFt,x=from[0]+dx*t,z=from[1]+dz*t;

@@ -6,7 +6,18 @@ const js=ts.transpileModule(fs.readFileSync(path.join(root,'src/lib/renaissanceD
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020},
 }).outputText;
 new Function('module','exports',js)(mod,mod.exports);
-const {planDolceScreenProfile,roofLineAtX}=mod.exports;
+const {planDolceScreenProfile,roofLineAtX,showDolceStandardIntermediateRail}=mod.exports;
+// Explicit matrix regression for the user-reported Dolce Standard + pickets.
+assert.equal(showDolceStandardIntermediateRail(false,'integrated-picket'),false,
+  'Standard integrated pickets must not receive a second upper/intermediate rail');
+assert.equal(showDolceStandardIntermediateRail(false,'screens-only'),true,
+  'Standard screens-only retains its normal horizontal mid-rail');
+assert.equal(showDolceStandardIntermediateRail(false,'inside'),true);
+assert.equal(showDolceStandardIntermediateRail(false,'outside'),true);
+assert.equal(showDolceStandardIntermediateRail(false,'integrated-kick'),true);
+for(const variant of ['integrated-picket','integrated-kick','screens-only','inside','outside'])
+  assert.equal(showDolceStandardIntermediateRail(true,variant),false,
+    'Open-view stays free of all standard intermediate rails: '+variant);
 const from=[0,0],to=[0,10];
 const rear=9+5/12,front=9;
 const p=planDolceScreenProfile({
@@ -40,6 +51,10 @@ assert.equal(roofLineAtX({...gable,xFt:0,gable:false,rear:false}),9);
 const render=fs.readFileSync(path.join(root,'src/components/visual3d/RenaissanceCover3D.tsx'),'utf8');
 const extrude=fs.readFileSync(path.join(root,'src/components/visual3d/RenaissanceExtrusions.tsx'),'utf8');
 assert.ok(render.includes('planDolceScreenProfile'));
+assert.ok(render.includes('showDolceStandardIntermediateRail(openView,treatment)'));
+assert.ok(render.includes('integrated-Dolce-guard-picket-panel'));
+assert.ok(render.includes('height={bottom+3.0}'));
+assert.ok(render.includes('height={bottom+.065}'), 'Common bottom rail must remain');
 assert.ok(render.includes('shapeGeometry args={[shape]}'));
 assert.ok(render.includes('topFrom:screenRearSoffit') &&
   render.includes('topTo:screenFrontSoffit') &&

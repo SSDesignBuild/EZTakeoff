@@ -127,9 +127,11 @@ assert.ok(render.includes('integrated-Dolce-24in-aluminum-kick-panel'));
 assert.ok(render.includes('integrated-Dolce-guard-picket-panel'));
 assert.ok(door.includes('PCA-Magnador-'));
 assert.ok(rails.includes('screenIntegrated?[]'));
-assert.ok(!rails.includes('{wooden&&<Beam') &&
-  rails.includes('Standard wood pickets already have their bottom and top rails'),
-  'Wood-picket railings must not have a second chair/top rail');
+assert.ok(rails.includes('{wooden&&<Beam'),
+  'Unrelated S&S standard wood railing top-profile must be preserved');
+assert.ok(render.includes('showDolceStandardIntermediateRail(openView,treatment)') &&
+  render.includes('integrated-Dolce-guard-picket-panel'),
+  'No redundant standard mid-rail in integrated Dolce picket screen');
 assert.ok(render.includes('PCA-door-side-upright-') &&
   render.includes('topFrom:screenRearSoffit') &&
   render.includes('topTo:screenFrontSoffit'),
