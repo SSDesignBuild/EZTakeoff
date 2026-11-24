@@ -168,15 +168,15 @@ export const coverVisualProducts:readonly CoverVisualProduct[]=[
 export const getCoverVisualProduct=(id:unknown):CoverVisualProduct=>
   coverVisualProducts.find((item)=>item.id===id)??coverVisualProducts[0];
 export const getCoverFinish=(finish:unknown):string=>
-  finish==='Bronze'?'#574639':finish==='Sandstone'?'#b7a489':
+  finish==='Bronze'?'#574639':finish==='Sandstone'?'#c7b99e':
   finish==='Black'?'#202225':'#deddd7';
 
 // Appearance swatches are screen approximations; physical sample approval is required.
 export const getCoverRoofFinish=(finish:CoverRoofColor|string|undefined):string=>
-  finish==='Silver'?'#c6cbd0':finish==='Sandstone'?'#b7a489':'#f0f1ef';
+  finish==='Silver'?'#c6cbd0':finish==='Sandstone'?'#c7b99e':'#f0f1ef';
 export const getCoverCeilingFinish=(finish:CoverCeilingFinish|string|undefined):string=>
   finish==='Silver'?'#c8ccd1':
-  finish==='Bronze'?'#574639':finish==='Sandstone'?'#b7a489':
+  finish==='Bronze'?'#574639':finish==='Sandstone'?'#c7b99e':
   finish==='Black'?'#202225':
   finish==='Mahogany Wood Grain'?'#78513d':
   finish==='Hickory Wood Grain'?'#b89970':'#f1f1ef';
