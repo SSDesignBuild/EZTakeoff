@@ -212,12 +212,19 @@ export function buildDeckSkirting(
       leafBoards.forEach((board,i)=>addCut('finish',board.cutLengthFt,
         'hinged access gate finish board '+(i+1)+
         ' (rip face '+p3(board.faceFt*12)+' in)'));
-      if(upperInfill>.12){
-        const fixedBoards=planSkirtingGateFace(leafWidth,upperInfill,orientation,faceIn,gapIn);
-        fixedBoards.forEach((board,i)=>addCut('finish',board.cutLengthFt,
-          'fixed upper infill above access gate board '+(i+1)+
-          ' (rip face '+p3(board.faceFt*12)+' in)'));
+      if(upperInfill>.12 && orientation==='vertical'){
+        // Upper pieces follow the surrounding wall's original board stations,
+        // not a separately centered decorative infill patch.
+        const pitch=(faceIn+gapIn)/12;
+        for(let x=0;x<length-0.00001;x+=pitch){
+          const cutStart=Math.max(o.offset,x),cutEnd=Math.min(o.offset+o.width,x+faceIn/12);
+          if(cutEnd-cutStart>.001)
+            addCut('finish',upperInfill,
+              'upper continuous-wall aligned vertical skirting at '+p3(cutStart)+
+              ' ft (rip face '+p3((cutEnd-cutStart)*12)+' in)');
+        }
       }
+      // Horizontal upper rows are counted once as the full-wall courses.
       notes.push('Access gate side '+(edgeIndex+1)+': leaf '+p3(leafWidth)+' x '+p3(leafHeight)+' ft, bottom access with fixed upper infill where needed; confirm onsite gate clearance and slope.');
     });
     if(orientation==='vertical'){
@@ -247,14 +254,27 @@ export function buildDeckSkirting(
           else high=Math.min(length,xIntersect);
         }
         if(high-low<=0.001)continue;
-        for(const span of spans){
+        // A short hinged gate removes the lower leaf only. The upper
+        // horizontal courses retain their full wall-wide installed lengths.
+        const blockedAtCourse=clippedOpenings.filter(o=>{
+          if(o.kind!=='hinged-gate')return true;
+          const maxLeaf=Math.max(.3,Math.min(at(o.offset),at(o.offset+o.width))-.18);
+          const leafHeight=Math.max(.3,Math.min(maxLeaf,o.heightFt??maxLeaf));
+          const upperInfill=Math.max(0,maxLeaf-leafHeight);
+          return y+Math.min(faceIn/12,Math.max(0,Math.min(at(o.offset),at(o.offset+o.width))-y))>upperInfill-.005;
+        });
+        const courseSpans=subtractIntervals(length,blockedAtCourse);
+        for(const span of courseSpans){
           const s=Math.max(span.start,low),e=Math.min(span.end,high);
           if(e-s<=0.001)continue;
           // The continuous 25+ ft course is an INSTALLED RUN, not a demand
           // for a mythical 25-ft supplier board. Break only at actual
           // 2x4 upright stations; kerf/trim fit existing 8/12/16/20-ft or
           // 16/20-ft catalog. The 3D consumes these same course pieces.
-          const segmentPlan=supportedFinishCoursePieces(s,e,rawStuds,MAX_FINISH_CUT_FT);
+          const supportedStations=rawStuds.filter(station=>
+            !clippedOpenings.some(o=>o.kind==='hinged-gate'&&
+              station>o.offset+.005&&station<o.offset+o.width-.005));
+          const segmentPlan=supportedFinishCoursePieces(s,e,supportedStations,MAX_FINISH_CUT_FT);
           issues.push(...segmentPlan.issues.map(issue=>'Side '+(edgeIndex+1)+' course '+(row+1)+': '+issue));
           segmentPlan.pieces.forEach((piece,part)=>{
             const a=piece.start,b=piece.end;
@@ -282,6 +302,7 @@ export function buildDeckSkirting(
   if(orientation==='horizontal' && sides.some((side)=>Math.abs(side.startHeightFt-side.endHeightFt)>0.01))
     notes.push('Sloping grade: horizontal bottom courses need field scribing; confirm finished reveal and rip allowances.');
   notes.push('S&S skirting support: continuous top 2x4 below rim, bottom 2x4 at ground (except clear openings), and 2x4 verticals every 24 in O.C. with jambs.');
+  notes.push('Short hinged-gate upper skirting follows the regular whole-wall horizontal courses; do not splice visible boards above the gate unless backed by an actual supporting stud or header.');
   notes.push('Ground-contact treated material, airflow and minimum clearances must be approved for this site; finish stock is not a structural footing.');
   const materials:MaterialItem[]=[];
   const groups=[

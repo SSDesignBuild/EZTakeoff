@@ -138,7 +138,8 @@ const admin=read('src/data/services.ts');
 assert.ok(manuf.includes('breakerVisualStrips')&&manuf.includes('<BreakerBoards'));
 assert.ok(manuf.includes('resolvePictureFrameMaterials')&&manuf.includes('resolveFasciaMaterial'));
 assert.ok(manuf.includes('fasciaTexture={stairFasciaMap}'));
-assert.ok(stair.includes('planStairSideFascia')&&!stair.includes("straightFasciaGeo:geo"),
+assert.ok(stair.includes('planStairFasciaCoverage')&&stair.includes('makeStairFinishGeometry')&&
+ !stair.includes("straightFasciaGeo:geo"),
   'Finish fascia must be generated independently, not cloned from the structural stringer');
 assert.ok(stair.includes('map={fasciaTexture}')&&stair.includes('toneMapped={false}'),
   'Stair fascia must use the selected independent manufacturer texture');

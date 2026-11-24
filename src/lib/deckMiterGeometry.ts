@@ -105,3 +105,35 @@ export function splitMiteredPictureFrames(
   });
  });
 }
+
+export interface PictureFrameMiterSeam {
+  course:number;
+  cornerIndex:number;
+  edgeIndex:number;
+  from:V2;to:V2;
+}
+/**
+ * A visible miter is legal ONLY when both adjacent selected picture-frame
+ * edges meet at the same exterior corner. Exclude all house contact edges
+ * when the designer's house-side picture-frame checkbox is off.
+ * The seam endpoints are the actual shared polygon cut, not a decal
+ * drawn at every outline end.
+ */
+export function planVisiblePictureFrameMiterSeams(
+  points:DeckPoint[],selectedEdges:DeckEdgeSegment[],count:number,
+  houseEdgeIndices:readonly number[]=[],includeHouseSide=false,
+):PictureFrameMiterSeam[]{
+  if(points.length<3||count<=0)return [];
+  const selected=new Set(selectedEdges.map(edge=>edge.index)
+    .filter(index=>includeHouseSide||!houseEdgeIndices.includes(index)));
+  const strips=planMiteredPictureFrames(points,
+    selectedEdges.filter(edge=>selected.has(edge.index)),count);
+  return strips.filter(strip=>
+    selected.has(strip.edgeIndex)&&selected.has((strip.edgeIndex+1)%points.length))
+   .map(strip=>({
+    course:strip.course,edgeIndex:strip.edgeIndex,
+    cornerIndex:(strip.edgeIndex+1)%points.length,
+    from:strip.corners[1],to:strip.corners[2],
+   }))
+   .filter(seam=>length(minus(seam.from,seam.to))>.10);
+}

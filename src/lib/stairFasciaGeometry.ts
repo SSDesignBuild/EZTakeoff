@@ -10,7 +10,7 @@ export function planStraightStairFascia(input:{
   boardFaceFt?:number;
 }):StairSideFasciaPoint[] {
   const {treadDepthFt,treads,riseFt,heightFt}=input;
-  const faceFt=input.boardFaceFt??.72;
+  const faceFt=input.boardFaceFt??1; // 12-inch manufacturer fascia stock face
   if([treadDepthFt,treads,riseFt,heightFt,faceFt].some(n=>!Number.isFinite(n))||
     treadDepthFt<=0||treads<=0||riseFt<=0||heightFt<=0||faceFt<=0)return [];
   const run=treads*treadDepthFt;
@@ -18,8 +18,13 @@ export function planStraightStairFascia(input:{
   // Previously it was one full rise below the corner at each step.
   const upperStart=Math.max(.15,heightFt+.14);
   const upperEnd=Math.max(.15,heightFt-treads*riseFt+.14);
-  const lowerStart=Math.max(.035,upperStart-faceFt);
-  const lowerEnd=Math.max(.035,upperEnd-faceFt);
+  // A 12-in face is measured PERPENDICULAR to a diagonal board, not as
+  // a 12-in vertical world-space box. An extra ripped lower strip may be
+  // necessary to hide the structural stringer's underside (computed below).
+  const slope=(upperEnd-upperStart)/run;
+  const verticalDrop=faceFt*Math.sqrt(1+slope*slope);
+  const lowerStart=Math.max(.025,upperStart-verticalDrop);
+  const lowerEnd=Math.max(.025,upperEnd-verticalDrop);
   return [
     {runFt:0,riseFt:upperStart},
     {runFt:run,riseFt:upperEnd},
@@ -88,4 +93,63 @@ export function planStairStringerFaceStations(
  const start=-treadWidthFt/2+stringerThicknessFt;
  const end=treadWidthFt/2;
  return Array.from({length:count},(_,i)=>start+(end-start)*i/(count-1));
+}
+
+export interface StairFasciaCoverage {
+ main:StairSideFasciaPoint[];
+ lowerRip:StairSideFasciaPoint[];
+ ripMaxWidthIn:number;
+ ripRunFt:number;
+ boardThicknessIn:0.75;
+ boardFaceIn:12;
+ stockLengthFt:12;
+}
+/**
+ * Source of truth for ALL stair fascia 3D and ordering. We use actual
+ * 3/4 x 12 x 12-ft finish stock. A straight 12-in fascia along the nosings
+ * can sit too HIGH to hide a notched 2x12 lower chord; fill the missing
+ * wedge with a second, ripped strip of matching stock, rather than leave
+ * structural lumber visible under the finish.
+ *
+ * This calculation uses the SAME structural stringer lower centerline as
+ * DeckStairAssembly3D.makeStringer (with .02-ft concealment allowance).
+ * Coordinates and returns are local stair run/rise feet.
+ */
+export function planStairFasciaCoverage(input:{
+ treadDepthFt:number;treads:number;riseFt:number;heightFt:number;
+ style:'profiled'|'straight';nosingFt?:number;
+}):StairFasciaCoverage{
+ const main=planStairSideFascia(input);
+ const empty:StairFasciaCoverage={
+  main,lowerRip:[],ripMaxWidthIn:0,ripRunFt:0,
+  boardThicknessIn:.75,boardFaceIn:12,stockLengthFt:12,
+ };
+ if(!main.length||input.style!=='straight')return empty;
+ const {treadDepthFt,riseFt,heightFt}=input;
+ const run=input.treads*treadDepthFt;
+ const boardLowerStart=main[3].riseFt,boardLowerEnd=main[2].riseFt;
+ const structuralStart=Math.max(.05,heightFt-riseFt-.72);
+ const structuralEnd=Math.max(.055,heightFt-(input.treads+1)*riseFt+.02);
+ const desiredStart=Math.max(.02,structuralStart-.055);
+ const desiredEnd=Math.max(.02,structuralEnd-.055);
+ const diffStart=boardLowerStart-desiredStart;
+ const diffEnd=boardLowerEnd-desiredEnd;
+ if(Math.max(diffStart,diffEnd)<=.012)return empty;
+ const crossing=(Math.abs(diffStart-diffEnd)<1e-8)?run:
+   Math.max(0,Math.min(run,run*diffStart/(diffStart-diffEnd)));
+ const startsPositive=diffStart>.012;
+ const ripRunFt=(diffStart>0&&diffEnd>0)?run:startsPositive?crossing:run-crossing;
+ if(ripRunFt<=.02)return empty;
+ const from=startsPositive?0:crossing,to=startsPositive?crossing:run;
+ const lerp=(a:number,b:number,x:number)=>a+(b-a)*x/run;
+ const topAt=(x:number)=>lerp(boardLowerStart,boardLowerEnd,x);
+ const bottomAt=(x:number)=>lerp(desiredStart,desiredEnd,x);
+ const corners=[
+  {runFt:from,riseFt:topAt(from)},
+  {runFt:to,riseFt:topAt(to)},
+  {runFt:to,riseFt:Math.min(topAt(to),bottomAt(to))},
+  {runFt:from,riseFt:Math.min(topAt(from),bottomAt(from))},
+ ];
+ return {...empty,lowerRip:corners,ripRunFt:to-from,
+  ripMaxWidthIn:Math.max(0,diffStart,diffEnd)*12};
 }

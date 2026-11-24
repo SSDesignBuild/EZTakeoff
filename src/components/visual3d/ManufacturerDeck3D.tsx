@@ -4,7 +4,7 @@ import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { getDeckVisualProduct } from '../../data/visualCatalog';
 import { surfaceStrips, breakerVisualStrips } from '../../lib/visualGeometry';
-import { planMiteredPictureFrames,splitMiteredPictureFrames } from '../../lib/deckMiterGeometry';
+import { planMiteredPictureFrames,splitMiteredPictureFrames,planVisiblePictureFrameMiterSeams } from '../../lib/deckMiterGeometry';
 import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials, resolveFasciaMaterial, resolveStairSideFasciaMaterial } from '../../lib/deckTrimSelection';
 import { Beam, type P2 } from './Primitives';
 import { DeckStructure3D } from './DeckStructure3D';
@@ -144,9 +144,13 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
   model:DeckModel;center:P2;deckHeight:number;
   maps:(THREE.Texture|null)[];colors:string[];
 }){
+  const visibleEdges=useMemo(()=>model.pictureFrameHouseSide?
+    model.pictureFrameSegments:
+    model.pictureFrameSegments.filter(edge=>!model.houseEdgeIndices.includes(edge.index)),
+    [model.pictureFrameSegments,model.pictureFrameHouseSide,model.houseEdgeIndices]);
   const outlines=useMemo(()=>splitMiteredPictureFrames(planMiteredPictureFrames(
-    model.points,model.pictureFrameSegments,model.pictureFrameCount)),
-    [model.points,model.pictureFrameSegments,model.pictureFrameCount]);
+    model.points,visibleEdges,model.pictureFrameCount)),
+    [model.points,visibleEdges,model.pictureFrameCount]);
   const geometries=useMemo(()=>outlines.map(strip=>{
     const s=new THREE.Shape();
     strip.corners.forEach(([x,z],i)=>{
@@ -164,20 +168,16 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
   // Miter cuts are real touching geometry, but two identically finished
   // boards previously hid the 45-degree joint. Mark the physical saw-cut
   // interface on the upper face, only where TWO perimeter edges meet.
-  const miterSeams=useMemo(()=>{
-    const selected=new Set(model.pictureFrameSegments.map(edge=>edge.index));
-    return planMiteredPictureFrames(model.points,model.pictureFrameSegments,
-      model.pictureFrameCount).filter(strip=>
-      selected.has((strip.edgeIndex+1)%model.points.length)).map(strip=>{
-      const a=strip.corners[1],b=strip.corners[2];
-      const x1=a[0]-center[0],z1=center[1]-a[1];
-      const x2=b[0]-center[0],z2=center[1]-b[1];
-      return {edgeIndex:strip.edgeIndex,course:strip.course,
-        x:(x1+x2)/2,z:(z1+z2)/2,
-        length:Math.hypot(x2-x1,z2-z1),
+  const miterSeams=useMemo(()=>planVisiblePictureFrameMiterSeams(
+    model.points,model.pictureFrameSegments,model.pictureFrameCount,
+    model.houseEdgeIndices,model.pictureFrameHouseSide).map(seam=>{
+      const x1=seam.from[0]-center[0],z1=center[1]-seam.from[1];
+      const x2=seam.to[0]-center[0],z2=center[1]-seam.to[1];
+      return {edgeIndex:seam.edgeIndex,course:seam.course,
+        x:(x1+x2)/2,z:(z1+z2)/2,length:Math.hypot(x2-x1,z2-z1),
         yaw:-Math.atan2(z2-z1,x2-x1)};
-    });
-  },[model.points,model.pictureFrameSegments,model.pictureFrameCount,center]);
+    }),[model.points,model.pictureFrameSegments,model.pictureFrameCount,
+      model.houseEdgeIndices,model.pictureFrameHouseSide,center]);
   return <group name="miter-cut-authentic-picture-frame-courses">
     {geometries.map(({strip,geometry},index)=><mesh key={'miter-'+strip.edgeIndex+'-'+strip.course+'-'+index}
       geometry={geometry} position={[0,deckHeight+.015-.0475,0]} castShadow receiveShadow>
@@ -190,8 +190,8 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
       name="true-diagonal-picture-frame-miter-joint"
       position={[seam.x,deckHeight+.0655,seam.z]}
       rotation={[0,seam.yaw,0]}>
-      <boxGeometry args={[seam.length,.004,.010]}/>
-      <meshBasicMaterial color="#232529" transparent opacity={.76}
+      <boxGeometry args={[seam.length,.005,.016]}/>
+      <meshBasicMaterial color="#171d25" transparent opacity={.9}
         depthWrite={false}/>
     </mesh>)}
   </group>;

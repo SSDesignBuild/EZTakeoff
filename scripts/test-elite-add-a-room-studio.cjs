@@ -70,7 +70,7 @@ const measured={
  topFrom:9.3,topTo:9.3,bottomY:0.12,widthFt:20,
 };
 const def=studio.makeDefaultEliteWallSections(measured);
-assert.ok(def.length>=3);
+assert.equal(def.length,1,'One physical front wall opening contains internal uprights and an integrated Prime door');
 assert.ok(Math.abs(def.reduce((n,s)=>n+s.width,0)-20)<.005);
 assert.equal(def.filter(s=>s.doorType==='single').length,1);
 assert.ok(!studio.eliteWallDimensionWarnings(measured,def).length);

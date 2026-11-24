@@ -9,18 +9,39 @@ import type { GutterRun } from '../../lib/renaissanceGutterGeometry';
 import { architecturalGutterOutlineFt,miterAlongFt } from '../../lib/renaissanceGutterGeometry';
 import type { DownspoutLayout } from '../../lib/renaissanceDownspoutRouting';
 
-function outlineWithRibs(width:number,height:number){
-  // The reference photos do not dimension the former four horizontal
-  // tongue/reveal lines. Do not invent rib locations on finished beam faces.
-  // Retain the measured outside envelope; manufacturer cross-section assets
-  // must be approved before individual internal tongues are modeled.
-  const w=width/2,h=height/2;
+/**
+ * The 2025 Aria/Fresco 6x2 truss and 7x2.75 SD/HD header reference drawings
+ * show real concave mid-height formed cheek bends, NOT plain tubes and NOT
+ * arbitrary decorative stripes. Outside envelopes and gauges stay measured.
+ * Groove stations/radii are proportionally approximated where undimensioned.
+ */
+function outlineWithRibs(width:number,height:number,wall=0){
+  const t=Math.max(0,wall),w=width/2,h=height/2;
+  const recess=Math.min(inchToFoot(.13),width*.065);
+  const pts=(halfWidth:number,halfHeight:number):Array<[number,number]>=>{
+    const inward=Math.min(recess,halfWidth*.12);
+    return [
+      [-halfWidth,-halfHeight],[halfWidth,-halfHeight],
+      [halfWidth,-halfHeight*.30],[halfWidth-inward,-halfHeight*.17],
+      [halfWidth-inward,halfHeight*.17],[halfWidth,halfHeight*.30],
+      [halfWidth,halfHeight],[-halfWidth,halfHeight],
+      [-halfWidth,halfHeight*.30],[-halfWidth+inward,halfHeight*.17],
+      [-halfWidth+inward,-halfHeight*.17],[-halfWidth,-halfHeight*.30],
+    ];
+  };
+  const draw=(contour:Array<[number,number]>,shape:THREE.Shape|THREE.Path)=>{
+    contour.forEach(([x,y],i)=>i===0?shape.moveTo(x,y):shape.lineTo(x,y));
+    shape.closePath();
+  };
   const shape=new THREE.Shape();
-  shape.moveTo(-w,-h);shape.lineTo(w,-h);
-  shape.lineTo(w,h);shape.lineTo(-w,h);shape.closePath();
+  draw(pts(w,h),shape);
+  if(t>.0001&&w-t>.02&&h-t>.02){
+    const interior=new THREE.Path();
+    draw(pts(w-t,h-t).reverse(),interior);
+    shape.holes.push(interior);
+  }
   return shape;
 }
-
 /** Measured external envelope; HD differs from SD in wall gauge, not outer size. */
 export function RenaissanceHeader({start,end,midY,profile,color,capStart=false,capEnd=false}:{
   start:P2;end:P2;midY:number;profile:RenaissanceExtrusionProfile;color:string;
@@ -31,10 +52,7 @@ export function RenaissanceHeader({start,end,midY,profile,color,capStart=false,c
     if(length<.01)return null;
     const w=inchToFoot(profile.headerDepthIn),h=inchToFoot(profile.headerHeightIn);
     const t=inchToFoot(profile.headerWallIn);
-    const outside=outlineWithRibs(w,h),hole=new THREE.Path();
-    hole.moveTo(-w/2+t,-h/2+t);hole.lineTo(-w/2+t,h/2-t);
-    hole.lineTo(w/2-t,h/2-t);hole.lineTo(w/2-t,-h/2+t);hole.closePath();
-    outside.holes.push(hole);
+    const outside=outlineWithRibs(w,h,t);
     const g=new THREE.ExtrudeGeometry(
       outside,{depth:length,steps:1,bevelEnabled:false,curveSegments:2},
     );
@@ -77,12 +95,31 @@ export function RenaissancePost({x,z,bottom,top,profile,color}:{
     const side=inchToFoot(profile.postOutsideIn);
     const t=inchToFoot(profile.postWallIn);
     const outer=new THREE.Shape();
-    outer.moveTo(-side/2,-side/2);outer.lineTo(side/2,-side/2);
-    outer.lineTo(side/2,side/2);outer.lineTo(-side/2,side/2);outer.closePath();
+    // Four formed CORNER ribs, measured outside width preserved. Recess
+    // details are reference-derived representative, not factory die CAD.
+    const full=side/2,corner=inchToFoot(.30),recess=inchToFoot(.045);
+    const corners:Array<[number,number]>=[
+      [-full,-full],[-full+corner,-full],
+      [-full+corner,-full+recess],[full-corner,-full+recess],
+      [full-corner,-full],[full,-full],[full,-full+corner],
+      [full-recess,-full+corner],[full-recess,full-corner],
+      [full,full-corner],[full,full],[full-corner,full],
+      [full-corner,full-recess],[-full+corner,full-recess],
+      [-full+corner,full],[-full,full],[-full,full-corner],
+      [-full+recess,full-corner],[-full+recess,-full+corner],
+      [-full,-full+corner],
+    ];
+    corners.forEach(([x,y],i)=>i===0?outer.moveTo(x,y):outer.lineTo(x,y));
+    outer.closePath();
     const inner=new THREE.Path();
-    const hole=side/2-t;
-    inner.moveTo(-hole,-hole);inner.lineTo(-hole,hole);
-    inner.lineTo(hole,hole);inner.lineTo(hole,-hole);inner.closePath();
+    // Offset the INTERIOR by the measured SD/HD wall gauge as well; leaving
+    // a square hole behind recessed post cheeks would make wall thickness
+    // spuriously thin. Four corner extrusions and their interior now agree.
+    const innerCorners:Array<[number,number]>=corners.map(([x,y]):[number,number]=>[
+      x-Math.sign(x)*t,y-Math.sign(y)*t,
+    ]).reverse();
+    innerCorners.forEach(([x,y],i)=>i===0?inner.moveTo(x,y):inner.lineTo(x,y));
+    inner.closePath();
     outer.holes.push(inner);
     const g=new THREE.ExtrudeGeometry(outer,{depth:height,steps:1,bevelEnabled:false});
     g.rotateX(-Math.PI/2);g.computeVertexNormals();
@@ -326,7 +363,8 @@ export function RenaissanceTruss({from,to,color}:{
   const geometry=useMemo(()=>{
     if(length<.01)return null;
     const shape=outlineWithRibs(inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn),
-      inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn));
+       inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn),
+       inchToFoot(RENAISSANCE_TRUSS.wallIn));
     const g=new THREE.ExtrudeGeometry(shape,{depth:length,bevelEnabled:false,steps:1});
     g.translate(0,0,-length/2);g.computeVertexNormals();
     return g;
@@ -341,6 +379,77 @@ export function RenaissanceTruss({from,to,color}:{
   </mesh>;
 }
 
+/**
+ * One continuous hollow 6x2 formed truss swept through the existing S /
+ * scalloped end. The provided 2025 cross section has mid-height concave ribs
+ * on BOTH cheeks. Its outside/gauge is measured; undimensioned rib stations
+ * are presentation interpolation, not a factory die.
+ */
+function makeContinuousFormedTrussGeometry(outline:THREE.Shape,
+ length:number,width:number,height:number,rise:number){
+ const path=outline.getPoints(64).slice(1);
+ const top=(z:number)=>height/2+rise*z/length;
+ const bottom=(z:number)=>{
+  let y=top(z)-height;
+  for(let i=1;i<path.length;i++){
+   const a=path[i-1],b=path[i];
+   if(z<Math.min(a.x,b.x)-1e-5||z>Math.max(a.x,b.x)+1e-5)continue;
+   const f=Math.abs(a.x-b.x)<1e-8?0:(z-a.x)/(b.x-a.x);
+   y=Math.min(y,a.y+(b.y-a.y)*Math.max(0,Math.min(1,f)));
+  }
+  // For the shaped tip, its underside may rise above the ordinary body
+  // baseline. Use the lowest boundary IN THE TAIL, not the body extension.
+  const candidates:number[]=[];
+  for(let i=1;i<path.length;i++){
+   const a=path[i-1],b=path[i];
+   if(z<Math.min(a.x,b.x)-1e-5||z>Math.max(a.x,b.x)+1e-5)continue;
+   const f=Math.abs(a.x-b.x)<1e-8?0:(z-a.x)/(b.x-a.x);
+   candidates.push(a.y+(b.y-a.y)*Math.max(0,Math.min(1,f)));
+  }
+  return candidates.length?Math.min(...candidates,top(z)-.014):Math.min(y,top(z)-.014);
+ };
+ const resolution=Math.max(36,Math.ceil(length/.25));
+ const stations=[...new Set([0,length,...path.map(p=>p.x),
+  ...Array.from({length:resolution+1},(_,i)=>length*i/resolution)]
+  .filter(Number.isFinite).map(z=>Math.round(Math.max(0,Math.min(length,z))*100000)/100000))]
+  .sort((a,b)=>a-b).filter((n,i,a)=>i===0||n-a[i-1]>.00002);
+ const sideWall=inchToFoot(RENAISSANCE_TRUSS.wallIn);
+ const ring=(z:number,inside=false):Array<[number,number,number]>=>{
+  const wall=inside?sideWall:0;
+  const lo=bottom(z)+wall,hi=top(z)-wall;
+  const mid=(lo+hi)/2,halfHeight=Math.max(.006,(hi-lo)/2);
+  const halfWidth=Math.max(.017,width/2-wall);
+  const recess=Math.min(inchToFoot(.13),halfWidth*.12);
+  const p:Array<[number,number]>=[
+   [-halfWidth,-halfHeight],[halfWidth,-halfHeight],
+   [halfWidth,-halfHeight*.30],[halfWidth-recess,-halfHeight*.17],
+   [halfWidth-recess,halfHeight*.17],[halfWidth,halfHeight*.30],
+   [halfWidth,halfHeight],[-halfWidth,halfHeight],
+   [-halfWidth,halfHeight*.30],[-halfWidth+recess,halfHeight*.17],
+   [-halfWidth+recess,-halfHeight*.17],[-halfWidth,-halfHeight*.30],
+  ];
+  return p.map(([x,y])=>[x,y+mid,z]);
+ };
+ const outside=stations.map(z=>ring(z)),inside=stations.map(z=>ring(z,true));
+ const xyz:number[]=[];
+ const tri=(a:number[],b:number[],c:number[])=>xyz.push(...a,...b,...c);
+ const quad=(a:number[],b:number[],c:number[],d:number[])=>{
+  tri(a,b,c);tri(a,c,d);
+ };
+ for(let i=1;i<stations.length;i++)for(let k=0;k<12;k++){
+  const n=(k+1)%12;
+  quad(outside[i-1][k],outside[i-1][n],outside[i][n],outside[i][k]);
+  quad(inside[i][k],inside[i][n],inside[i-1][n],inside[i-1][k]);
+ }
+ for(const i of [0,stations.length-1])for(let k=0;k<12;k++){
+  const n=(k+1)%12;
+  quad(outside[i][k],inside[i][k],inside[i][n],outside[i][n]);
+ }
+ const g=new THREE.BufferGeometry();
+ g.setAttribute('position',new THREE.Float32BufferAttribute(xyz,3));
+ g.computeVertexNormals();
+ return g;
+}
 /**
  * Continuous six-by-two-inch projection truss (Fresco/Aria). The front is cut
  * as one connected 3D profile; NEVER stop the member short of a separate cap.
@@ -394,11 +503,7 @@ export function RenaissanceContinuousProjectionTruss({rear,nose,color,endStyle}:
     // Local X is the full front-to-back member; rotate into positive world Z.
     // The extrusion is symmetric about the physical width station, not a
     // second loose tail overlapping the beam.
-    const g=new THREE.ExtrudeGeometry(s,{depth:width,steps:1,
-      bevelEnabled:false,curveSegments:24});
-    g.translate(0,0,-width/2);
-    g.rotateY(-Math.PI/2);
-    g.computeVertexNormals();
+    const g=makeContinuousFormedTrussGeometry(s,length,width,height,rise);
     return g;
   },[length,rise,width,height,endStyle]);
   useEffect(()=>()=>{geometry?.dispose();},[geometry]);

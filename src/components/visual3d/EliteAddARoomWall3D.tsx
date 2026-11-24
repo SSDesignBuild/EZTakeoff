@@ -3,10 +3,11 @@ import * as THREE from 'three';
 import type { SunroomSectionConfig } from '../../lib/types';
 import type { RenaissanceWallMeasure } from '../../lib/renaissanceCoverWallLayout';
 import type { EliteSunroomSettings,EliteSunroomFinish } from '../../lib/eliteSunroomStudio';
-import { eliteWallDimensionWarnings } from '../../lib/eliteSunroomStudio';
+import { eliteWallBlockingIssues } from '../../lib/eliteSunroomStudio';
 import { sunroomDoorRect,sunroomSpansExcludingDoor,sunroomGlazingBays,
   sunroomKickHeightFt,sunroomHasTransom,sunroomWindowOpenings,
-  sunroomUprightOffsetsExcludingDoor,type EliteGlazingOpening } from '../../lib/sunroomSectionGeometry';
+  sunroomUprightOffsetsExcludingDoor,sunroomUprightVerticalExtent,
+  sunroomMainTopFt,sunroomTransomBays,type EliteGlazingOpening } from '../../lib/sunroomSectionGeometry';
 import { Block,SlopedBeam } from './Primitives';
 import { EliteVerticalExtrusion,EliteHorizontalExtrusion } from './EliteAddARoomExtrusions';
 import { ELITE_CATALOG_PROFILES } from '../../lib/eliteAddARoomExtrusions';
@@ -25,7 +26,7 @@ function SolidInfill({left,right,bottom,topLeft,topRight,depth,color,name}:{
  depth:number;color:string;name:string;
 }){
  const geometry=useMemo(()=>{
-  if(right-left<.04||Math.min(topLeft,topRight)-bottom<.04)return null;
+  if(right-left<.04||Math.max(topLeft,topRight)-bottom<.04)return null;
   const shape=new THREE.Shape();
   shape.moveTo(0,0);shape.lineTo(right-left,0);
   shape.lineTo(right-left,topRight-bottom);
@@ -54,12 +55,14 @@ function GlazedBay({opening,frameColor}:{
  const width=opening.end-opening.start;
  const hl=opening.topLeftFt-opening.bottomFt;
  const hr=opening.topRightFt-opening.bottomFt;
- const minHeight=Math.min(hl,hr);
- if(width<.20||minHeight<.2)return null;
+ const minHeight=Math.min(hl,hr),maxHeight=Math.max(hl,hr);
+ // Real triangular transoms taper to zero at the low end.
+ if(width<.20||maxHeight<.12)return null;
  const shape=new THREE.Shape();
- shape.moveTo(.05,.06);shape.lineTo(width-.05,.06);
- shape.lineTo(width-.05,Math.max(.08,hr-.05));
- shape.lineTo(.05,Math.max(.08,hl-.05));shape.closePath();
+ const inset=Math.min(.045,width/8);
+ shape.moveTo(inset,.012);shape.lineTo(width-inset,.012);
+ shape.lineTo(width-inset,Math.max(.020,hr-inset));
+ shape.lineTo(inset,Math.max(.020,hl-inset));shape.closePath();
  const sash=.05;
  const cols=opening.style==='double-horizontal-sliders'?4:
    opening.style==='horizontal-sliders'?2:1;
@@ -77,12 +80,12 @@ function GlazedBay({opening,frameColor}:{
      color={frameColor} metalness={.42}/>
    <SlopedBeam start={[0,hl,0]} end={[width,hr,0]} thickness={sash}
      depth={.09} color={frameColor}/>
-   {[0,width].map((x,i)=><Block key={'sash-edge-'+i}
-     position={[x,minHeight/2,0]} size={[sash,minHeight,.09]}
+      {([hl,hr] as const).map((h,i)=>h>.08&&<Block key={'sash-edge-'+i}
+     position={[i===0?0:width,h/2,0]} size={[sash,h,.09]}
      color={frameColor} metalness={.4}/>)}
    {Array.from({length:cols-1},(_,i)=><Block key={'slider-stile-'+i}
      position={[width*(i+1)/cols,minHeight/2,0]}
-     size={[sash,minHeight-.1,.085]} color={frameColor} metalness={.4}/>)}
+     size={[sash,Math.max(.06,minHeight-.1),.085]} color={frameColor} metalness={.4}/>)}
    {opening.style==='vertical-sliders'&&<Block name="vertical-slider-meeting-rail"
      position={[width/2,minHeight/2,0]} size={[width-.06,sash,.09]}
      color={frameColor} metalness={.38}/>}
@@ -153,28 +156,26 @@ function EliteSection({section,xStart,settings,index,total}:{
  const transom=sunroomHasTransom(section);
  const transomL=transom?Math.max(0,section.leftTransomHeight):0;
  const transomR=transom?Math.max(0,section.rightTransomHeight):0;
- const transomMax=Math.max(transomL,transomR);
- const mainTop=section.height-transomMax;
+ const mainTop=sunroomMainTopFt(section);
  const topLeft=mainTop+transomL,topRight=mainTop+transomR;
  const widths=sunroomSpansExcludingDoor(section);
  const bays=sunroomGlazingBays(section);
  const glass=sunroomWindowOpenings(section);
  const uprights=sunroomUprightOffsetsExcludingDoor(section);
- const uprightFrom=section.uprightMode==='main-only'||section.uprightMode==='main-transom'?kick:0;
- const uprightTop=section.uprightMode==='main-only'||section.uprightMode==='main-kick'?
-  mainTop:Math.min(topLeft,topRight);
+ const extentAt=(station:number)=>sunroomUprightVerticalExtent(section,station);
  const renderPanel=(zone:'main'|'kick'|'transom'|'above-door',kind:string)=>{
   if(kind!=='panel'&&kind!=='insulated'&&kind!=='auto')return null;
   const areas=zone==='above-door'?
-    [sunroomDoorRect(section)].filter((v):v is NonNullable<typeof v>=>v!==null):bays;
+     [sunroomDoorRect(section)].filter((v):v is NonNullable<typeof v>=>v!==null)
+     :zone==='transom'?sunroomTransomBays(section):bays;
   return areas.map((area,i)=>{
    const a=area.start/Math.max(.01,section.width),b=area.end/Math.max(.01,section.width);
    const y1=zone==='kick'?0:zone==='main'?kick:
      zone==='transom'?mainTop:DOOR_HEIGHT_FT;
    const topA=zone==='kick'?kick:zone==='main'?mainTop:
-     zone==='transom'?topLeft+(topRight-topLeft)*a:section.height;
+     zone==='transom'?topLeft+(topRight-topLeft)*a:mainTop;
    const topB=zone==='kick'?kick:zone==='main'?mainTop:
-     zone==='transom'?topLeft+(topRight-topLeft)*b:section.height;
+     zone==='transom'?topLeft+(topRight-topLeft)*b:mainTop;
    return <SolidInfill key={'panel-'+zone+'-'+i}
      name={'elite-'+zone+'-solid-insulated-panel'}
      left={area.start} right={area.end} bottom={y1}
@@ -223,34 +224,39 @@ function EliteSection({section,xStart,settings,index,total}:{
       name="elite-top-cap-under-renaissance-roof"
       start={0} end={section.width} yLeft={topLeft} yRight={topRight}
       color={framing}/>
-   {uprights.map((x,i)=><group key={'elite-hbeam-upright-'+i}>
-      <EliteVerticalExtrusion system={settings.roomSystem} kind="h-vertical"
-        x={x} bottom={uprightFrom} height={Math.max(.05,uprightTop-uprightFrom)}
-        color={framing} name="elite-h-beam-vertical-between-glazing"/>
-      {[-1,1].map((sign,index)=>
-        <EliteVerticalExtrusion key={'hbeam-drc-'+index} kind="drc"
-          system={settings.roomSystem} name="elite-drc-h-beam-window-face"
-          x={x+sign*(settings.roomSystem==='3-thermal'?.088:.046)}
-          bottom={uprightFrom} height={Math.max(.05,uprightTop-uprightFrom)}
-          flip={index===1} color={windowColor}/>)}
-   </group>)}
+   {uprights.map((x,i)=>{
+      const extent=extentAt(x);
+      if(extent.lengthFt<.06)return null;
+      return <group key={'elite-hbeam-upright-'+i}>
+        <EliteVerticalExtrusion system={settings.roomSystem} kind="h-vertical"
+          x={x} bottom={extent.bottomFt} height={extent.lengthFt}
+          color={framing} name="elite-h-beam-vertical-between-glazing"/>
+        {[-1,1].map((sign,index)=>
+          <EliteVerticalExtrusion key={'hbeam-drc-'+index} kind="drc"
+            system={settings.roomSystem} name="elite-drc-h-beam-window-face"
+            x={x+sign*(settings.roomSystem==='3-thermal'?.088:.046)}
+            bottom={extent.bottomFt} height={extent.lengthFt}
+            flip={index===1} color={windowColor}/>)}
+      </group>;
+   })}
    {section.kickSection!=='none'&&widths.map((span,i)=>
       <EliteHorizontalExtrusion key={'kick-hbeam-'+i}
         system={settings.roomSystem} kind="h-horizontal"
         name="elite-H-beam-and-DRC-kick-break"
         start={span.start} end={span.end} yLeft={kick} yRight={kick}
         color={framing}/>)}
-   {transom&&widths.map((span,i)=>
-      <EliteHorizontalExtrusion key={'transom-hbeam-'+i}
+   {transom&&<EliteHorizontalExtrusion
         system={settings.roomSystem} kind="h-horizontal"
-        name="elite-H-beam-and-DRC-transom-break"
-        start={span.start} end={span.end} yLeft={mainTop} yRight={mainTop}
-        color={framing}/>)}
-   {section.electricChase&&uprights.map((x,i)=><Block
-     key={'electric-chase-'+i} name="elite-optional-electrical-chase"
-     position={[x,(uprightFrom+uprightTop)/2,.015]}
-     size={[.095,Math.max(.1,uprightTop-uprightFrom),.065]}
-     color={framing} metalness={.34}/>)}
+        name="elite-H-beam-and-DRC-transom-break-continuous"
+        start={0} end={section.width} yLeft={mainTop} yRight={mainTop}
+        color={framing}/>}
+   {section.electricChase&&uprights.map((x,i)=>{
+     const extent=extentAt(x);
+     return <Block key={'electric-chase-'+i} name="elite-optional-electrical-chase"
+       position={[x,(extent.bottomFt+extent.topFt)/2,.015]}
+       size={[.095,Math.max(.1,extent.lengthFt),.065]}
+       color={framing} metalness={.34}/>;
+   })}
    {renderPanel('main',section.mainSection)}
    {section.kickSection!=='none'&&renderPanel('kick',section.kickSection)}
    {transom&&renderPanel('transom',section.transomType==='auto'?'panel':section.transomType)}
@@ -258,6 +264,20 @@ function EliteSection({section,xStart,settings,index,total}:{
      renderPanel('above-door','panel')}
    {glass.map((opening,i)=><GlazedBay key={'elite-glazing-'+i}
      opening={opening} frameColor={windowColor}/>)}
+   {section.doorType!=='none'&&(()=>{
+     const door=sunroomDoorRect(section);
+     if(!door)return null;
+     // The factory-entry jamb H runs reach the pitched upper edge at each
+     // side of the opening. They are not additional structural corner posts.
+     return [door.start,door.end].filter(x=>x>.01&&x<section.width-.01)
+       .map((x,i)=>{
+         const top=mainTop+transomL+(transomR-transomL)*x/Math.max(.01,section.width);
+         return <EliteVerticalExtrusion key={'elite-door-jamb-'+i}
+           system={settings.roomSystem} kind="h-vertical"
+           name="elite-prime-full-view-door-roof-reaching-jamb"
+           x={x} bottom={0} height={top} color={framing}/>;
+       });
+   })()}
    {section.doorType!=='none'&&<ElitePrimeDoor section={section}
      frameColor={windowColor} glazing={PICTURE_COLOR}/>}
  </group>;
@@ -270,7 +290,7 @@ export function EliteAddARoomWall3D({run,sections,settings}:{
  run:RenaissanceWallMeasure;sections:SunroomSectionConfig[];
  settings:EliteSunroomSettings;
 }){
- const issues=eliteWallDimensionWarnings(run,sections);
+ const issues=eliteWallBlockingIssues(run,sections);
  if(issues.length)return <group name={'elite-wall-requires-measured-dimension-review-'+run.id}/>;
  const dx=run.to[0]-run.from[0],dz=run.to[1]-run.from[1];
  const yaw=-Math.atan2(dz,dx);
