@@ -137,6 +137,9 @@ for(const marker of ['elite-prime-full-view-outswing-door','clear-insulated-glas
  'casement-hinge-stile','slider-latch','EliteAddARoomWall3D']){
  assert.ok(render.includes(marker),'3D feature missing '+marker);
 }
+assert.ok(render.includes('index===0')&&render.includes('index===total-1')&&
+ render.includes('index>0')&&render.includes('elite-shared-internal-section-H'),
+ 'Only exterior ends may receive Renaissance wall receivers; interior section joins share one H');
 const ui=source('src/components/EliteSunroomStudioOptions.tsx');
 const adminEditor=source('src/components/SunroomSectionEditor.tsx');
 assert.ok(ui.includes('<SunroomSectionEditor')&&ui.includes('onValuesChange={editWall}'));
