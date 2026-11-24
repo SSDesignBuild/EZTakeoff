@@ -16,7 +16,10 @@ for(const file of tests){
   const all=(r.stderr||'')+'\n'+(r.stdout||'');
   const lines=all.split(/\r?\n/).filter(x=>
    /AssertionError|^Error:|SyntaxError|TypeError|ERR_|expected|actual|Cannot find/.test(x));
-  errors.push('TEST '+path.basename(file)+' '+lines.slice(0,4).join(' '));
+  const frame=all.split(/\\r?\\n/).find(x=>
+    x.includes(path.basename(file)+':')&&/:[0-9]+:[0-9]+/.test(x))||'';
+  errors.push('TEST '+path.basename(file)+' '+lines.slice(0,3).join(' ')+
+    ' '+frame);
  }
 }
 const run=(bin,args)=>spawnSync(process.execPath,[bin,...args],
