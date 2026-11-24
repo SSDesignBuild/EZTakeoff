@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { railingPhotos, coverPhotos, type PhotoReference } from '../data/consultationPhotos';
 import { hasRenaissanceReferenceChart, maxReferenceOverhangFt } from '../lib/renaissanceGuidance';
+import { effectivePcaKickPlateIn } from '../lib/pcaScreenDoorGeometry';
 import type { ConsultationProject } from '../lib/consultationProject';
 import {
   deckVisualProducts, deckCollections, getDeckVisualProduct,
@@ -370,13 +371,20 @@ export function ManufacturerCoverPicker({project,onChange}:{
                   <option value="large">Magnador large · 13″ × 20″ opening</option>
                 </>}
               </select></label>
-            <label>Kick plate height
-              <select value={project.coverDoorKickPlateIn??8}
-                onChange={e=>onChange({coverDoorKickPlateIn:Number(e.target.value)})}>
-                {[0,8,12,14,24].map(inches=><option value={inches} key={inches}>
-                  {inches===0?'No kick plate':inches+'″ kick plate'}
-                </option>)}
-              </select></label>
+            {(project.coverDoorPet??'none')==='none'
+              ?<label>Kick plate height
+                <select value={project.coverDoorKickPlateIn??8}
+                  onChange={e=>onChange({coverDoorKickPlateIn:Number(e.target.value)})}>
+                  {[0,8,12,14,24].map(inches=><option value={inches} key={inches}>
+                    {inches===0?'No kick plate':inches+'″ kick plate'}
+                  </option>)}
+                </select></label>
+              :<p className="consultation-visual-note" role="status">
+                PCA solid kick panel: <strong>{effectivePcaKickPlateIn(
+                  project.coverDoorPet??'none',project.coverDoorKickPlateIn??8)}″ automatically</strong>.
+                Continuous full-width panel with a precisely framed pet opening.
+                Panel height exceeds the manufacturer's full outer pet frame.
+              </p>}
             <small className="consultation-visual-note">PCA 3068 opening is 36″ × 80″; confirm actual frame/rough opening, door hand, wall height and pet-door fit before ordering.</small>
             {['inside','outside'].includes(project.coverScreenRailTreatment??'integrated-kick')&&
               <small className="consultation-visual-note" role="status">
