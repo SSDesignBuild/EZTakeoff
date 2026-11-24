@@ -376,7 +376,7 @@ export function RenaissanceContinuousProjectionTruss({rear,nose,color,endStyle}:
       s.bezierCurveTo(length-tail*.57,upper(length-tail*.57)-.45,
         length-tail*.80,lower(length-tail*.80),
         length-tail,lower(length-tail));
-    }else{
+    }else if(endStyle==='fresco-s'){
       // Fresco molded S: nose rounding, reverse curve, then full-depth body.
       s.lineTo(length,upper(length)-.13);
       s.bezierCurveTo(length-tail*.08,upper(length-tail*.08)-.15,
