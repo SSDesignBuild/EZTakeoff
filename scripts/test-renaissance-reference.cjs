@@ -17,7 +17,10 @@ assert.equal(g.RENAISSANCE_REFERENCE_MIN_ROOF_SLOPE_IN_PER_FT,.25);
 const picker=fs.readFileSync(path.join(root,'src/components/ConsultationVisualPickers.tsx'),'utf8');
 assert.ok(picker.includes('max={maxOverhang}'));
 const roof=fs.readFileSync(path.join(root,'src/components/visual3d/RenaissanceCover3D.tsx'),'utf8');
-assert.ok(roof.includes('maxReferenceOverhangFt(project.coverFamily)'));
+const wallGeometry=fs.readFileSync(path.join(root,'src/lib/renaissanceCoverWallLayout.ts'),'utf8');
+assert.ok(roof.includes('planRenaissanceCoverWalls')&&
+  wallGeometry.includes('maxReferenceOverhangFt(project.coverFamily)'),
+  'Manufacturer overhang restriction must remain in the shared renderer/section wall plan');
 const bridge=fs.readFileSync(path.join(root,'src/lib/estimatingBridge.ts'),'utf8');
 assert.ok(bridge.includes('renaissanceReferenceIssues'));
 console.log('PASS Renaissance estimating-only envelope and proprietary chart exclusion');
