@@ -129,11 +129,14 @@ export function eliteSunroomTakeoff(project:ConsultationProject,runs:readonly Re
  // Reuse EXACT Admin calculations: receiving/DRC/H, base, top cap, every
  // custom window, 24ft stock packing, fasteners, panels and Elite Prime door.
  const values:Record<string,string|number|boolean>={
-  ...settings,
-  buildMode:'existing-structure',sunroomSections:JSON.stringify(list),
+  roomSystem:settings.roomSystem,
+  framingColor:settings.framingColor,
+  panelColor:settings.panelColor,
+  windowColor:settings.windowColor,
+  glassType:settings.glassType,
+  buildMode:'existing-structure',
+  sunroomSections:JSON.stringify(list),
  };
- // Remove the only non-serializable member from the values record.
- delete (values as Record<string,unknown>).walls;
  return {values,sections:list,estimate:calculateEstimate('sunrooms',values),
   dimensionWarnings:runs.flatMap(run=>eliteWallDimensionWarnings(
    run,eliteWallSections(project,run)))};
