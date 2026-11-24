@@ -17,7 +17,12 @@ This is a **separate opt-in cloud save** feature; the original Admin Takeoff, lo
 ## Known limits
 - Separate Estimator price-tier JSON exchange remains until verified Estimator API contract is implemented. A saved design is not a priced quote or contract.
 - There is **no automatic quote picker in Estimator** yet. Paste an existing quote UUID; server validates entitlement to link.
-- No automatic client photo upload to cloud/Drive: originals remain in the Estimator's existing Google Drive workflow, while the photo uploaded in EZTakeoff remains in this device's IndexedDB until an intentionally authorized private media upload is added.
+- Client photographs are **never uploaded automatically**. After saving a cloud design, a salesperson may explicitly upload/restore an image to/from the private Supabase bucket `sns-design-private`, guarded by the same design ownership, quote-sold, and accepted-revision policies. Estimator's existing Google Drive remains the source of its separate original job documents; there is no direct Google Drive sync from EZTakeoff.
 - A salesperson's ability to save to a quote and read records follows Supabase's existing role and location policies. A cloud design is not the same thing as a shared quote permission.
 - Cloud accepted revisions and sold jobs are immutable; changes need a new design revision stream/record. Sharing collaborator UI not yet implemented (backend membership guard exists).
 - PR validation: strict Netlify build runs `npm run assets:sync && npm test && npm run build`; GitHub Actions remain manual-only; real mobile/tablet browser QA still required.
+
+### Separate opt-in media sync
+- Private storage object key: `sns-design-private/<design_uuid>/house-photo`; JPG, PNG or WebP only, maximum 10 MB.
+- Upload/download requires the user's Estimator JWT. Database function `sns_design_media_write_allowed(text)` rejects modifications to accepted/sold jobs and outsiders. No public bucket or signed public access.
+- Downloaded images are restored to this browser's IndexedDB. Deleting a local photo does **not** silently delete its separately synchronized cloud copy. A separate cloud deletion action is required for that.
