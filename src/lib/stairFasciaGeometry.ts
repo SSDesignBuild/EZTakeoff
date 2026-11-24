@@ -127,7 +127,6 @@ export function planStairFasciaCoverage(input:{
  if(!main.length||input.style!=='straight')return empty;
  const {treadDepthFt,riseFt,heightFt}=input;
  const run=input.treads*treadDepthFt;
- const upperStart=main[0].riseFt,upperEnd=main[1].riseFt;
  const boardLowerStart=main[3].riseFt,boardLowerEnd=main[2].riseFt;
  const structuralStart=Math.max(.05,heightFt-riseFt-.72);
  const structuralEnd=Math.max(.055,heightFt-(input.treads+1)*riseFt+.02);
