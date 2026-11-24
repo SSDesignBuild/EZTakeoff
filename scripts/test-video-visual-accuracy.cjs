@@ -121,11 +121,35 @@ const picks=read('src/components/ConsultationVisualPickers.tsx');
 const studio=read('src/components/ConsultationStudio.tsx');
 const designer=read('src/components/DeckDesigner.tsx');
 const downspout=read('src/components/visual3d/RenaissanceExtrusions.tsx');
+const finishes=load('src/data/visualCatalog');
 assert.ok(render.includes('DolceScreenWall')&&render.includes('PcaScreenDoor3D'));
 assert.ok(render.includes('integrated-Dolce-24in-aluminum-kick-panel'));
 assert.ok(render.includes('integrated-Dolce-guard-picket-panel'));
 assert.ok(door.includes('PCA-Magnador-'));
 assert.ok(rails.includes('screenIntegrated?[]'));
+assert.ok(!rails.includes('{wooden&&<Beam') &&
+  rails.includes('Standard wood pickets already have their bottom and top rails'),
+  'Wood-picket railings must not have a second chair/top rail');
+assert.ok(render.includes('PCA-door-side-upright-') &&
+  render.includes('topFrom:screenRearSoffit') &&
+  render.includes('topTo:screenFrontSoffit'),
+  'PCA screen opening needs both jamb supports and a roof-following top');
+assert.ok(render.includes('headerLeft')&&render.includes('headerRight')&&
+  render.includes('start={[headerLeft,frameFront]}'),
+  'Cover headers must extend to the finished roof edge');
+assert.ok(render.includes('outsideFaceZ=frameFront+') &&
+  render.includes('frontZ={outsideFaceZ}') &&
+  render.includes('fresco-front-polycarbonate-end-cap-'),
+  'Contempo tails stay outside beam, Fresco panels receive front end closure');
+assert.ok(downspout.includes('reverse S-inflection') &&
+  downspout.includes('shape.bezierCurveTo(front*.51'),
+  'Curved tail ends require actual reverse S curvature');
+assert.ok(stair.includes('fasciaGeo') &&
+  stair.includes('g.rotateY(-Math.PI/2)') &&
+  stair.includes('position={[x,0,0]} castShadow receiveShadow'),
+  'Selected fascia geometry must be correctly centered to stringer');
+assert.equal(finishes.getCoverFinish('Sandstone'),finishes.getCoverRoofFinish('Sandstone'));
+assert.equal(finishes.getCoverFinish('Sandstone'),finishes.getCoverCeilingFinish('Sandstone'));
 assert.ok(rails.includes('[...stairOpenings,...gateOpenings]') &&
   !rails.includes('screenDoorOpenings') && !rails.includes('doorEdge=screenDoorSide'),
   'PCA screen entry MUST NOT automatically leave an unguarded deck edge');
