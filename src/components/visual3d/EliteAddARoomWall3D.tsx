@@ -224,34 +224,39 @@ function EliteSection({section,xStart,settings,index,total}:{
       name="elite-top-cap-under-renaissance-roof"
       start={0} end={section.width} yLeft={topLeft} yRight={topRight}
       color={framing}/>
-   {uprights.map((x,i)=><group key={'elite-hbeam-upright-'+i}>
-      <EliteVerticalExtrusion system={settings.roomSystem} kind="h-vertical"
-        x={x} bottom={uprightFrom} height={Math.max(.05,uprightTop-uprightFrom)}
-        color={framing} name="elite-h-beam-vertical-between-glazing"/>
-      {[-1,1].map((sign,index)=>
-        <EliteVerticalExtrusion key={'hbeam-drc-'+index} kind="drc"
-          system={settings.roomSystem} name="elite-drc-h-beam-window-face"
-          x={x+sign*(settings.roomSystem==='3-thermal'?.088:.046)}
-          bottom={uprightFrom} height={Math.max(.05,uprightTop-uprightFrom)}
-          flip={index===1} color={windowColor}/>)}
-   </group>)}
+   {uprights.map((x,i)=>{
+      const extent=extentAt(x);
+      if(extent.lengthFt<.06)return null;
+      return <group key={'elite-hbeam-upright-'+i}>
+        <EliteVerticalExtrusion system={settings.roomSystem} kind="h-vertical"
+          x={x} bottom={extent.bottomFt} height={extent.lengthFt}
+          color={framing} name="elite-h-beam-vertical-between-glazing"/>
+        {[-1,1].map((sign,index)=>
+          <EliteVerticalExtrusion key={'hbeam-drc-'+index} kind="drc"
+            system={settings.roomSystem} name="elite-drc-h-beam-window-face"
+            x={x+sign*(settings.roomSystem==='3-thermal'?.088:.046)}
+            bottom={extent.bottomFt} height={extent.lengthFt}
+            flip={index===1} color={windowColor}/>)}
+      </group>;
+   })}
    {section.kickSection!=='none'&&widths.map((span,i)=>
       <EliteHorizontalExtrusion key={'kick-hbeam-'+i}
         system={settings.roomSystem} kind="h-horizontal"
         name="elite-H-beam-and-DRC-kick-break"
         start={span.start} end={span.end} yLeft={kick} yRight={kick}
         color={framing}/>)}
-   {transom&&widths.map((span,i)=>
-      <EliteHorizontalExtrusion key={'transom-hbeam-'+i}
+   {transom&&<EliteHorizontalExtrusion
         system={settings.roomSystem} kind="h-horizontal"
-        name="elite-H-beam-and-DRC-transom-break"
-        start={span.start} end={span.end} yLeft={mainTop} yRight={mainTop}
-        color={framing}/>)}
-   {section.electricChase&&uprights.map((x,i)=><Block
-     key={'electric-chase-'+i} name="elite-optional-electrical-chase"
-     position={[x,(uprightFrom+uprightTop)/2,.015]}
-     size={[.095,Math.max(.1,uprightTop-uprightFrom),.065]}
-     color={framing} metalness={.34}/>)}
+        name="elite-H-beam-and-DRC-transom-break-continuous"
+        start={0} end={section.width} yLeft={mainTop} yRight={mainTop}
+        color={framing}/>}
+   {section.electricChase&&uprights.map((x,i)=>{
+     const extent=extentAt(x);
+     return <Block key={'electric-chase-'+i} name="elite-optional-electrical-chase"
+       position={[x,(extent.bottomFt+extent.topFt)/2,.015]}
+       size={[.095,Math.max(.1,extent.lengthFt),.065]}
+       color={framing} metalness={.34}/>;
+   })}
    {renderPanel('main',section.mainSection)}
    {section.kickSection!=='none'&&renderPanel('kick',section.kickSection)}
    {transom&&renderPanel('transom',section.transomType==='auto'?'panel':section.transomType)}
@@ -259,6 +264,20 @@ function EliteSection({section,xStart,settings,index,total}:{
      renderPanel('above-door','panel')}
    {glass.map((opening,i)=><GlazedBay key={'elite-glazing-'+i}
      opening={opening} frameColor={windowColor}/>)}
+   {section.doorType!=='none'&&(()=>{
+     const door=sunroomDoorRect(section);
+     if(!door)return null;
+     // The factory-entry jamb H runs reach the pitched upper edge at each
+     // side of the opening. They are not additional structural corner posts.
+     return [door.start,door.end].filter(x=>x>.01&&x<section.width-.01)
+       .map((x,i)=>{
+         const top=mainTop+transomL+(transomR-transomL)*x/Math.max(.01,section.width);
+         return <EliteVerticalExtrusion key={'elite-door-jamb-'+i}
+           system={settings.roomSystem} kind="h-vertical"
+           name="elite-prime-full-view-door-roof-reaching-jamb"
+           x={x} bottom={0} height={top} color={framing}/>;
+       });
+   })()}
    {section.doorType!=='none'&&<ElitePrimeDoor section={section}
      frameColor={windowColor} glazing={PICTURE_COLOR}/>}
  </group>;
