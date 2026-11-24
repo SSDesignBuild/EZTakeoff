@@ -5,6 +5,9 @@ import type { MaterialItem } from './types';
 import { renaissanceReferenceIssues } from './renaissanceGuidance';
 import { effectivePcaKickPlateIn } from './pcaScreenDoorGeometry';
 import { planStairLanding, landingSurface } from './stairConcreteLanding';
+import { planRenaissanceCoverWalls } from './renaissanceCoverWallLayout';
+import { eliteSunroomTakeoff,currentEliteSunroomSettings,
+ eliteWallSections } from './eliteSunroomStudio';
 
 export interface EstimateHandoffV1 {
   schemaVersion:1;
@@ -23,6 +26,20 @@ export interface EstimateHandoffV1 {
 export function createEstimateHandoff(project:ConsultationProject):EstimateHandoffV1{
   const deck=buildDeckModel(project.values);
   const estimate=calculateEstimate('decks',project.values);
+  const center:[number,number]=[(deck.minX+deck.maxX)/2,(deck.minY+deck.maxY)/2];
+  const deckY=Math.max(.35,Math.min(26,Number(project.values.deckHeight??5)));
+  const actualCoverWalls=project.coverScreenStyle==='elite-add-a-room'
+    ?planRenaissanceCoverWalls(deck,project,center,deckY).measuredRuns:[];
+  const eliteWalls=actualCoverWalls.filter(wall=>
+    ![2,4,6].includes(Number(project.coverPrivacyWallGaps?.[wall.id]??0)));
+  const elite=project.coverScreenStyle==='elite-add-a-room'
+    ?eliteSunroomTakeoff(project,eliteWalls):null;
+  const eliteSettings=currentEliteSunroomSettings(project);
+  const eliteWindowSelections=Object.fromEntries(actualCoverWalls.map(wall=>[
+    'elite'+wall.id.charAt(0).toUpperCase()+wall.id.slice(1)+'SectionsJson',
+    JSON.stringify(eliteWallSections(project,wall)),
+  ])) as Record<string,string>;
+
   const stairLandings=landingSurface(project.values.stairLandingSurface)==='bare-ground'
     ?deck.stairPlacements.filter(placement=>placement.start&&placement.end).map(placement=>
       planStairLanding(Math.hypot(placement.end!.x-placement.start!.x,
@@ -55,6 +72,21 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
        privacyWalls.some(([side])=>side===(project.coverDoorSide??'front')))
       blockers.push('PCA screen entry side conflicts with selected privacy shade-tube wall. Do not cut the privacy tubes or quote an access opening without an engineered manufacturer design.');
     blockers.push('Privacy shade-tube wall is not an independently certified code-required deck guardrail; review open deck edges and guard details.');
+  }
+  if(project.coverScreenStyle==='elite-add-a-room'){
+    blockers.push('Elite Add-A-Room wall panels reuse Admin Sunrooms 24-foot extrusion cut takeoff, but factory sash daylight dimensions, final glass spec, corner-to-Renaissance-post attachments, wind load and the Elite Prime Full View jamb/door require supplier and licensed design review.');
+    if(!['Moderno','Contempo','Classico'].includes(project.coverFamily))
+      blockers.push('Elite Add-A-Room is selected without an approved insulated solid Renaissance roof. Select an appropriate solid cover or obtain engineering approval.');
+    if(!eliteWalls.length)
+      blockers.push('No usable Renaissance wall bays were found for the selected Elite Add-A-Room enclosure.');
+    if(actualCoverWalls.length!==eliteWalls.length)
+      blockers.push('A Renaissance privacy shade-tube wall conflicts with the Elite glass sunroom. The conflicting wall is excluded from glass quantity and 3D; select one complete enclosure system.');
+    blockers.push(...(elite?.dimensionWarnings??[]));
+    blockers.push('The Elite Add-A-Room glass and panels are not independently certified as a code-required deck guard. Review enclosure/egress guard and entry-stair landing design.');
+    if(eliteSettings.roomSystem==='2-nonthermal')
+      blockers.push('2-inch non-thermal Add-A-Room paired with clear insulated glazing does not create a thermally broken system; confirm clip/glass compatibility and use classification.');
+    if(elite?.sections.some(section=>section.doorType==='slider'))
+      blockers.push('Legacy sliding-glass door selected; it is NOT the specified Elite Prime Full View single outswing door. Verify the actual door unit and adapter.');
   }
   if(project.coverScreenStyle==='lumino-sunroom'){
     blockers.push('Lumino glazing, insulated knee-wall profiles, window glass specifications, framing, flashing, thermal ratings and exact supplier takeoff are NOT verified by the design visual. Obtain a vendor-approved sunroom BOM and project engineering.');
@@ -90,6 +122,16 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
       coverTrussMount:project.coverTrussMount??'flush',
       coverScreenStyle:project.coverScreenStyle??'none',
+      ...(elite?{
+        eliteSunroomSystem:eliteSettings.roomSystem,
+        eliteSunroomFramingColor:eliteSettings.framingColor,
+        eliteSunroomPanelColor:eliteSettings.panelColor,
+        eliteSunroomWindowColor:eliteSettings.windowColor,
+        eliteSunroomGlass:eliteSettings.glassType,
+        eliteSunroomBuildMode:'existing-structure',
+        eliteUsesRenaissanceCoverPosts:true,
+        ...eliteWindowSelections,
+      }:{}),
       coverPrivacyFrontGapIn:project.coverPrivacyWallGaps?.front??0,
       coverPrivacyLeftGapIn:project.coverPrivacyWallGaps?.left??0,
       coverPrivacyRightGapIn:project.coverPrivacyWallGaps?.right??0,
@@ -113,7 +155,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverWidthFt:project.coverWidthFt??0,coverProjectionFt:project.coverProjectionFt??0,
       coverHeightFt:project.coverHeightFt??9,coverSideOverhangFt:project.coverSideOverhangFt??1,
       coverFrontOverhangFt:project.coverFrontOverhangFt??1},
-    materials:[...estimate.materials,...(landingBags>0?[{
+    materials:[...estimate.materials,...(elite?.estimate.materials??[]),...(landingBags>0?[{
       name:'80-lb bagged concrete — on-site stair landing pads',
       category:'Sales stair landing — supplemental concrete',quantity:landingBags,
       unit:'bags',stockRecommendation:'80-lb concrete mix; nominal 0.60 cu ft yield per bag',
@@ -122,7 +164,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
         ' ft × '+p.thicknessIn+' in; '+p.bags80lb+' bags incl. 5% allowance').join(' | ')+
         '. Review subbase, reinforcement, disposal, forms and local specifications separately.',
     }]:[])],blockers,
-    assumptions:estimate.orderNotes,
+    assumptions:[...estimate.orderNotes,...(elite?.estimate.orderNotes??[])],
   };
 }
 const isRecord=(p:unknown):p is Record<string,unknown>=>!!p&&typeof p==='object'&&!Array.isArray(p);
