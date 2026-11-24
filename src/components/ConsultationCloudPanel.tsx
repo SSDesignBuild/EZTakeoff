@@ -1,8 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { ConsultationProject } from '../lib/consultationProject';
+import {readHousePhoto,saveHousePhoto} from '../lib/consultationPhoto';
 import {
  cloudConfigured,currentCloudUser,signInEstimator,signOutEstimator,
  listEstimatorDesigns,saveEstimatorDesign,isValidQuoteId,
+ uploadEstimatorHousePhoto,downloadEstimatorHousePhoto,
  type CloudDesignRecord,
 } from '../lib/consultationCloud';
 
@@ -10,8 +12,9 @@ type User={id:string;email?:string};
 type Props={
  project:ConsultationProject|null;
  onOpen:(project:ConsultationProject)=>void;
+ onPhotoRestored:(projectId:string)=>void;
 };
-export function ConsultationCloudPanel({project,onOpen}:Props){
+export function ConsultationCloudPanel({project,onOpen,onPhotoRestored}:Props){
  const [user,setUser]=useState<User|null>(()=>currentCloudUser());
  const [email,setEmail]=useState('');
  const [password,setPassword]=useState('');
@@ -80,6 +83,34 @@ export function ConsultationCloudPanel({project,onOpen}:Props){
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
  };
+ const uploadPhoto=async()=>{
+  if(!project||!user)return;
+  setBusy(true);setError('');setMessage('');
+  try{
+   const record=items.find(item=>item.id===project.id);
+   if(!record)throw new Error('Save the design to cloud before uploading its photo.');
+   if(record.accepted_revision!==null)throw new Error('Accepted design media is locked.');
+   const photo=await readHousePhoto(project.id);
+   if(!photo)throw new Error('No property photo is stored in this browser.');
+   await uploadEstimatorHousePhoto(project.id,photo);
+   setMessage('Property photograph securely uploaded to private Estimator storage.');
+  }catch(e){setError(e instanceof Error?e.message:String(e));}
+  finally{setBusy(false);}
+ };
+ const restorePhoto=async()=>{
+  if(!project||!user)return;
+  setBusy(true);setError('');setMessage('');
+  try{
+   const record=items.find(item=>item.id===project.id);
+   if(!record)throw new Error('Load a cloud design first.');
+   const photo=await downloadEstimatorHousePhoto(project.id);
+   if(!photo)throw new Error('This design has no private cloud photo.');
+   await saveHousePhoto(project.id,new File([photo],'home-photo',{type:photo.type}));
+   onPhotoRestored(project.id);
+   setMessage('Private home photograph restored to this browser.');
+  }catch(e){setError(e instanceof Error?e.message:String(e));}
+  finally{setBusy(false);}
+ };
  const logout=async()=>{
   setBusy(true);
   try{await signOutEstimator();setUser(null);setItems([]);setLoadedVersions({});setMessage('');setError('');}
@@ -115,6 +146,14 @@ export function ConsultationCloudPanel({project,onOpen}:Props){
     <button className="secondary-btn" type="button" disabled={busy} onClick={save}>
       {busy?'Saving…':'Save this design to secure cloud'}
     </button>
+    {items.some(item=>item.id===project.id)&&<div className="consultation-form-two" style={{marginTop:12}}>
+      <button className="ghost-btn" type="button" disabled={busy||!project.photoPresent} onClick={uploadPhoto}>
+        Upload home photo privately
+      </button>
+      <button className="ghost-btn" type="button" disabled={busy} onClick={restorePhoto}>
+        Restore private cloud photo
+      </button>
+    </div>}
    </div>}
    <div style={{marginTop:16}}>
     <div className="consultation-list-heading">
@@ -135,6 +174,6 @@ export function ConsultationCloudPanel({project,onOpen}:Props){
   </>}
   {error&&<p role="alert" style={{color:'#b94e40'}}>{error}</p>}
   {message&&<p role="status">{message}</p>}
-  <p className="muted">Client photo files stay local and are not embedded in shared design JSON. Cloud records require authenticated access; sold/accepted designs are locked by the server.</p>
+  <p className="muted">House photo bytes are never included in design JSON or estimating requests. Private photo sync requires a separate explicit upload/download. Only authorized Estimator accounts can access a cloud design and its media.</p>
  </section>;
 }
