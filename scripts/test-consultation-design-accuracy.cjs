@@ -39,7 +39,8 @@ const long=shape([[0,0],[44,0],[44,12],[0,12]]);
 const longPieces=surfaceStrips(long).filter(s=>s.row===0);
 assert.equal(longPieces.length,3,'44-ft rows must show actual 20+20+offcut joints');
 assert.ok(longPieces.every(s=>s.lengthFt<=20));
-assert.deepEqual(boardStockSegments(44),[20,20,4]);
+assert.deepEqual(boardStockSegments(44),[15,14,15],
+  'Long deck runs split into supported near-equal pieces purchasable as 16ft stock');
 const breaker=shape([[0,0],[18,0],[18,12],[0,12]],{breakerBoardCount:1});
 const breakerPieces=surfaceStrips(breaker).filter(s=>s.row===0);
 assert.equal(breakerPieces.length,2,'Existing breaker station must split every rendered board');
