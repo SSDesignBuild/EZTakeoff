@@ -1,7 +1,6 @@
 import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { getCoverVisualProduct, getCoverFinish } from '../../data/visualCatalog';
-import { maxReferenceOverhangFt } from '../../lib/renaissanceGuidance';
 import { planSideConnectedHeader,trussMountLiftFt } from '../../lib/renaissanceTrussConnections';
 import { Beam, Block, SlopedBeam, type P2 } from './Primitives';
 import * as THREE from 'three';
@@ -10,14 +9,14 @@ import { planInsulatedRoofPanels, planDolceGableInfill } from '../../lib/renaiss
 import { planWrapAroundGutter } from '../../lib/renaissanceGutterGeometry';
 import { planRenaissanceDownspout } from '../../lib/renaissanceDownspoutRouting';
 import { actualPostWidthFt } from '../../lib/visualStructure';
-import { seatCanopyPost } from '../../lib/coverDeckPlacement';
+import { planRenaissanceCoverWalls } from '../../lib/renaissanceCoverWallLayout';
 import { planPcaDoorOnWall,effectivePcaKickPlateIn, type PcaDoorModel,type PcaPetDoor,type ScreenDoorWall } from '../../lib/pcaScreenDoorGeometry';
 import { PcaScreenDoor3D } from './PcaScreenDoor3D';
 import { RenaissancePrivacyWall3D } from './RenaissancePrivacyWall3D';
 import { RenaissanceLuminoWall3D } from './RenaissanceLuminoWall3D';
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
 import {
-  getRenaissanceExtrusion,makeRenaissanceFramePlan,inchToFoot,
+  inchToFoot,
   RENAISSANCE_INSULATED_ROOF,RENAISSANCE_SHADE_TUBE,
 } from '../../lib/renaissanceManufacturer';
 import {
@@ -198,44 +197,15 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
 }){
   const product=getCoverVisualProduct(project.coverFamily);
   if(project.coverFamily==='none')return null;
-  const frameVariant=project.coverFraming??'standard';
-  const profile=getRenaissanceExtrusion(frameVariant);
-  const plan=makeRenaissanceFramePlan({
-    family:project.coverFamily,variant:frameVariant,
-    mount:project.coverMount??'wall-attached',
-    roofStyle:project.coverRoofStyle??'studio',
-    frameWidthFt:project.coverWidthFt&&project.coverWidthFt>0?project.coverWidthFt:model.width,
-    frameProjectionFt:project.coverProjectionFt&&project.coverProjectionFt>0?
-      project.coverProjectionFt:model.depth,
-    deckHeightFt:deckHeight,postHeightFt:project.coverHeightFt??9,
-    sideOverhangFt:Math.min(maxReferenceOverhangFt(project.coverFamily),project.coverSideOverhangFt??1),
-    frontOverhangFt:Math.min(maxReferenceOverhangFt(project.coverFamily),project.coverFrontOverhangFt??1),
-    requestedFrontPosts:project.coverPostCount??0,
-  });
-  const frameWidth=plan.frameWidthFt,frameDepth=plan.frameProjectionFt;
+  const wallAnchors=planRenaissanceCoverWalls(model,project,center,deckHeight);
+  const {plan,profile,xMid,zMid,theoreticalBack,theoreticalFront,
+    frontPosts,rearPosts,frameLeft,frameRight,back,frameFront}=wallAnchors;
   const width=plan.roofWidthFt,depth=plan.roofProjectionFt;
-  const xMid=(model.minX+model.maxX)/2-center[0],zMid=(model.minY+model.maxY)/2-center[1];
   const left=xMid-width/2,right=xMid+width/2;
-  const theoreticalBack=zMid-frameDepth/2,theoreticalFront=theoreticalBack+frameDepth;
-  const postFootprintFt=inchToFoot(profile.postOutsideIn+1.8);
-  const seat=(x:number,z:number):P2|null=>{
-    const fitted=seatCanopyPost([x+center[0],z+center[1]],model.points,postFootprintFt);
-    return fitted?[fitted[0]-center[0],fitted[1]-center[1]]:null;
-  };
-  // Preserve the roof envelope while seating every COLUMN and its base plate
-  // completely inside the deck footprint (including non-rectangular plans).
-  const frontPosts=plan.frontPostXsFt.map(x=>seat(xMid+x,theoreticalFront))
-    .filter((p):p is P2=>p!==null);
-  const rearPosts=plan.rearPostXsFt.map(x=>seat(xMid+x,theoreticalBack))
-    .filter((p):p is P2=>p!==null);
   const allPosts=[...frontPosts,...rearPosts];
-  const frameLeft=frontPosts.length?Math.min(...frontPosts.map(p=>p[0])):xMid-frameWidth/2;
-  const frameRight=frontPosts.length?Math.max(...frontPosts.map(p=>p[0])):xMid+frameWidth/2;
-  // Visual fascia/header reaches the eave edges while columns remain inset.
-  // The structural cantilever must be approved for the specific job.
+  // The same seated column stations now drive ALL screen, privacy and Elite
+  // wall dimensions, as well as the consultant's wall section editor.
   const headerLeft=Math.min(left,frameLeft),headerRight=Math.max(right,frameRight);
-  const back=rearPosts.length?rearPosts.reduce((a,p)=>a+p[1],0)/rearPosts.length:theoreticalBack;
-  const frameFront=frontPosts.length?frontPosts.reduce((a,p)=>a+p[1],0)/frontPosts.length:theoreticalFront;
   const roofBackEdge=theoreticalBack-plan.rearOverhangFt;
   const front=theoreticalFront+plan.frontOverhangFt;
   const roofMidZ=(roofBackEdge+front)/2;
@@ -273,8 +243,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const roofPanelThicknessFt=inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn);
   // Screens rise into the canopy soffit behind the structural header.
   // For translucent Fresco, leave space below the snap profile.
-  const screenRearSoffit=roofRearY-(isSolid?roofPanelThicknessFt/2:.10);
-  const screenFrontSoffit=roofFrontY-(isSolid?roofPanelThicknessFt/2:.10);
+  const {screenRearSoffit,screenFrontSoffit}=wallAnchors;
   const studioPanels=planInsulatedRoofPanels(
     width,RENAISSANCE_INSULATED_ROOF.standardPanelWidthIn);
   const gablePanels=planInsulatedRoofPanels(
@@ -300,17 +269,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   }):null;
   // One wall layout is shared by screen and privacy renderers so the two
   // incompatible assemblies can NEVER occupy the same selected side.
-  const coverWallRuns=[
-    {id:'front' as const,from:[frameLeft,frameFront] as P2,to:[frameRight,frameFront] as P2,
-      topFrom:screenFrontSoffit,topTo:screenFrontSoffit},
-    {id:'left' as const,from:[frameLeft,back] as P2,to:[frameLeft,frameFront] as P2,
-      topFrom:screenRearSoffit,topTo:screenFrontSoffit},
-    {id:'right' as const,from:[frameRight,back] as P2,to:[frameRight,frameFront] as P2,
-      topFrom:screenRearSoffit,topTo:screenFrontSoffit},
-    ...(!attached?[{id:'rear' as const,
-      from:[frameLeft,back] as P2,to:[frameRight,back] as P2,
-      topFrom:screenRearSoffit,topTo:screenRearSoffit}]:[]),
-  ];
+  const coverWallRuns=wallAnchors.wallRuns;
   const privacyGap=(side:ScreenDoorWall)=>project.coverPrivacyWallGaps?.[side]??0;
   return <group name={'Renaissance-'+product.id} position={[0,0,0]}>
     {/* Manufacturer outside dimensions: SD/HD 3.875-in hollow columns,
