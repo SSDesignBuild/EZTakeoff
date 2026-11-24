@@ -35,7 +35,8 @@ export function ConsultationCloudPanel({project,onOpen}:Props){
  useEffect(()=>{
   if(!project){setQuoteId('');return;}
   const current=items.find(item=>item.id===project.id);
-  setQuoteId(current?.quote_id??'');
+  const fromEstimator=new URLSearchParams(window.location.search).get('quoteId')??'';
+  setQuoteId(current?.quote_id??(isValidQuoteId(fromEstimator)?fromEstimator:''));
  },[project?.id,items]);
  const login=async(e:FormEvent)=>{
   e.preventDefault();setBusy(true);setError('');setMessage('');
