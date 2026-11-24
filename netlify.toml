@@ -1,5 +1,5 @@
 [build]
-  command = "npm run assets:sync && node scripts/test-long-finish-joins-and-stair-fascia.cjs && npm run build"
+  command = "npm run assets:sync && node scripts/test-stock-availability.cjs && npm run build"
   publish = "dist"
 
 [[redirects]]
