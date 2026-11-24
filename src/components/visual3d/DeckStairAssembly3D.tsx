@@ -4,6 +4,7 @@ import type { DeckModel, StairPlacement } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { Block, type P2 } from './Primitives';
 import { planStairSideFascia,planStairStringerFaceStations } from '../../lib/stairFasciaGeometry';
+import { planStairLanding,landingSurface } from '../../lib/stairConcreteLanding';
 
 const riseFor=(model:DeckModel,height:number)=>height/Math.max(1,model.stairRisers);
 function makeStringer(runFt:number,treads:number,riseFt:number,height:number){
@@ -82,6 +83,9 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   const rise=riseFor(model,height);
   const treadDepth=Math.max(.65,model.stairRunFt/treads);
   const run=treads*treadDepth;
+  const landing=landingSurface(values.stairLandingSurface)==='bare-ground'
+    ?planStairLanding(width,Number(values.stairLandingDepthFt??4),
+      Number(values.stairLandingThicknessIn??5)):null;
   // Two individual 5.5-inch boards separated by 1/8 inch on an 11-inch tread.
   const boardFaceFt=5.5/12,boardGapFt=.125/12;
   const fasciaRisers=values.stairRiserStyle==='fascia'||
@@ -130,6 +134,13 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   return <group name={'stair-flight-'+placement.edgeIndex}
     position={[(start.x+end.x)/2-center[0],0,(start.y+end.y)/2-center[1]]}
     rotation={[0,yaw,0]}>
+    {/* The measured concrete pad sits at the stair exit, rather than
+        under the entire staircase. Most of its thickness is below grade. */}
+    {landing&&<group name="automatic-dimensioned-concrete-stair-landing">
+      <Block position={[0,.055-landing.thicknessIn/24,run+landing.depthFt/2]}
+        size={[landing.widthFt,landing.thicknessIn/12,landing.depthFt]}
+        color="#aaa9a5"/>
+    </group>}
     {stringerStations.map((x,i)=>{
       return <mesh key={'2x12-stringer-'+i} geometry={geo} position={[x,0,0]}
         rotation={[0,-Math.PI/2,0]} castShadow receiveShadow>
