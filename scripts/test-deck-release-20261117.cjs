@@ -74,7 +74,9 @@ const skirtingEstimate=calculateEstimate('decks',skirtSettings);
 const framingScrews=skirtingEstimate.materials.find((m)=>m.name==='3 in exterior framing screws');
 assert.ok(framingScrews && framingScrews.quantity>0);
 assert.ok(skirtingEstimate.materials.some((m)=>m.name.includes('2 in exterior finish nails')&&m.quantity>=stairSkirt.finishNails+wallSkirt.finishNails));
-assert.ok(skirtingEstimate.materials.some((m)=>m.category==='Stair skirting'));
+assert.ok(skirtingEstimate.materials.some((m)=>m.category==='Skirting'&&m.unit==='boards'&&
+ m.name.includes('deck and stair skirting finish')),
+ 'Actual main and stair skirting cuts must be packed into one order for the same stock');
 assert.ok(skirtingEstimate.materials.some((m)=>m.name==='3 in exterior framing screws'));
 assert.ok(!skirtingEstimate.materials.some((m)=>m.name.includes('3-1/2 in exterior framing screws')));
 const noStairSkirt=calculateEstimate('decks',{...skirtSettings,skirtingStairsEnabled:false});

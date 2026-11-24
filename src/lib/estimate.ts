@@ -1,4 +1,5 @@
 import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials, resolveStairSideFasciaMaterial } from './deckTrimSelection';
+import { stockBoardSegments } from './finishStockGeometry';
 import { parseGableSections, parseSections, parseSunroomSections } from './sectioning';
 import { buildDeckModel, buildLowerTierDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem, SectionConfig } from './types';
@@ -452,12 +453,75 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const framingWoodGrade = String(inputs.framingWoodGrade ?? '#2 Prime pressure treated');
   const railingWoodGrade = String(inputs.railingWoodGrade ?? '#2 prime pressure treated');
   const deckingMaterial = String(inputs.deckingMaterial ?? (isPressureTreatedDecking ? 'Pressure treated 5/4x6' : 'Composite / PVC decking'));
-  // Purchase availability is based on the actual selected product, not cut length alone.
-  const deckStockLength = (cutLength: number, style: string) => {
-    const isPT = /pressure\s*treated/i.test(style) || (isPressureTreatedDecking && !/^(trex|timbertech)\b/i.test(style));
-    const lengths = isPT ? [8, 12, 16, 20] : [16, 20];
-    const selection = lengths.find((length) => length >= cutLength - 1e-6);
-    return selection ? `${selection} ft stock` : `UNAVAILABLE: continuous ${cutLength.toFixed(2)} ft cut exceeds 20 ft stock`;
+  // One material source, separate CUT LIST and PURCHASABLE STOCK order.
+  // Field courses, picture-frame miters and breaker boards may share an
+  // actual 16/20ft board whenever the selected SKU/finish is identical.
+  // Never add an invented 25ft supplier line for a finished 25ft run.
+  type FinishRequest={
+    style:string;name:string;category:string;lengthFt:number;count:number;
+    label:string;notes:string;field:boolean;
+  };
+  const finishRequests:FinishRequest[]=[];
+  const finishStockIssues:string[]=[];
+  const queueFinish=(req:FinishRequest)=>{
+    if(req.count>0&&req.lengthFt>.001)finishRequests.push(req);
+  };
+  const emitFinishStock=()=>{
+    const byStyle=new Map<string,FinishRequest[]>();
+    finishRequests.forEach(req=>{
+      const group=byStyle.get(req.style)??[];
+      group.push(req);byStyle.set(req.style,group);
+    });
+    for(const [style,requests] of byStyle){
+      const isPT=/pressure\s*treated/i.test(style)||
+        (isPressureTreatedDecking&&!/^(trex|timbertech)\b/i.test(style));
+      const stockLengths=isPT?[8,12,16,20]:[16,20];
+      const cuts:SkirtCut[]=[];
+      let serial=0,fieldFootage=0;
+      for(const req of requests){
+        const lengths=stockBoardSegments(req.lengthFt);
+        for(const lengthFt of lengths){
+          if(!Number.isFinite(lengthFt)||lengthFt<=0)continue;
+          if(req.field)fieldFootage+=lengthFt*req.count;
+          // Scheduled field cuts are NOT additional supplier stock. Only
+          // the stock records below are purchased. Label every miter seam.
+          materials.push(toMaterial(req.name,'Deck finish cut schedule (not order)',
+            req.count,'cuts',feetAndInches(lengthFt)+' planned finish cut',
+            splitDeckStyle(style).color,
+            req.notes+' Style: '+style+'. Piece '+feetAndInches(lengthFt)+
+              ' (joints require joist/blocking support; NOT another purchase).',req.label));
+          for(let n=0;n<req.count;n++){
+            serial++;
+            cuts.push({id:'DECK-FIN-'+serial,edgeIndex:-1,material:'finish',
+              lengthFt,location:req.name+' / '+req.label+' / '+feetAndInches(lengthFt)});
+          }
+        }
+      }
+      const packed=packSkirtCuts(cuts,stockLengths,.125,.25);
+      finishStockIssues.push(...packed.issues.map(issue=>'Deck finish '+style+': '+issue));
+      for(const length of [...new Set(packed.stock.map(x=>x.stockLengthFt))]){
+        const items=packed.stock.filter(x=>x.stockLengthFt===length);
+        const ids=items.flatMap(x=>x.cuts.map(c=>c.location));
+        const leftovers=items.reduce((sum,x)=>sum+x.remainderIn,0)/12;
+        materials.push(toMaterial(style+' deck finish stock','Decking',
+          items.length,'boards',length+' ft stock',splitDeckStyle(style).color,
+          'Actual purchase for field / picture frame / breaker. '+ids.length+
+          ' scheduled cuts from '+items.length+' full boards. '+leftovers.toFixed(2)+
+          ' ft remaining offcuts may be reused in other cuts of this SAME SKU. '+
+          'Trim 1/4 in and kerf 1/8 in per saw cut included. Cut refs: '+ids.slice(0,22).join('; ')+
+          (ids.length>22?'; +'+(ids.length-22)+' more':'')+'.',
+          ids.slice(0,8).join(', ')));
+      }
+      // Exactly one explicit field-damage allowance, after packing the
+      // ACTUAL installation cuts, instead of 5% on each individual cut group.
+      if(fieldFootage>0&&packed.stock.length){
+        const buffer=Math.max(1,Math.ceil(fieldFootage*.05/20));
+        materials.push(toMaterial(style+' decking contingency','Decking',
+          buffer,'boards','20 ft stock',splitDeckStyle(style).color,
+          '5% of '+fieldFootage.toFixed(1)+' lf field decking as spare boards. '+
+          'Not part of the installed joint schedule.'));
+      }
+    }
   };
   const pictureFrameCount = Math.max(0, Math.round(Number(inputs.pictureFrameCount ?? 1)));
   const breakerBoardCount = Math.max(0, Math.round(Number(inputs.breakerBoardCount ?? 0)));
@@ -562,30 +626,34 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   if (useSubfloorDecking) {
     materials.push(toMaterial('4 ft x 8 ft x 3/4 in subfloor sheets', 'Decking', subfloorSheetCount(deck.area), 'sheets', '4 ft x 8 ft x 3/4 in', 'Exterior rated', `${deck.area.toFixed(1)} sq ft main deck area laid out in a staggered brick pattern; includes 5% waste allowance.`));
   } else {
-  deckingPlan.groups.filter((group) => group.kind === 'field').forEach((group) => {
-    const notes = `${deck.boardRun === 'width' ? 'Field decking. Boards run parallel to the house.' : 'Field decking. Boards run perpendicular to the house.'} Board style: ${deckingMaterial}. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`;
-    const stockLength = deckStockLength(group.cutLength, deckingMaterial);
-    materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', stockLength, deckingStyleInfo.color, notes, group.label));
+  deckingPlan.groups.filter(group=>group.kind==='field').forEach(group=>{
+    queueFinish({
+      name:deckingStyleInfo.material,category:'Decking',style:deckingMaterial,
+      lengthFt:group.cutLength,count:group.count,label:group.label,field:true,
+      notes:(deck.boardRun==='width'?'Main field parallel to house.':'Main field perpendicular to house.')+
+        ' Installed cut '+feetAndInches(group.cutLength)+'.',
+    });
   });
-  if (!useSubfloorDecking && pictureFrameCount > 0) {
-    for (let i = 0; i < pictureFrameCount; i += 1) {
-      const style = pictureFrameMaterials[i] || deckingMaterial;
-      const styleInfo = splitDeckStyle(style);
-      deckingPlan.groups.filter((group) => group.kind === 'picture-frame' && group.course === i).forEach((group) => {
-        const stockLength = deckStockLength(group.cutLength, style);
-        materials.push(toMaterial(`Picture-frame deck board ${i + 1}`, 'Decking', group.count, 'boards', stockLength, styleInfo.color, `Picture-frame course ${i + 1} on ${deck.pictureFrameHouseSide ? 'all deck perimeter edges including house-facing' : 'exposed perimeter edges only'}. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)} including 1 in overhang allowance at each end.`, group.label));
-      });
-    }
+  if(pictureFrameCount>0)for(let course=0;course<pictureFrameCount;course++){
+    const style=pictureFrameMaterials[course]||deckingMaterial;
+    deckingPlan.groups.filter(group=>group.kind==='picture-frame'&&group.course===course)
+      .forEach(group=>queueFinish({
+        name:'Picture-frame deck board '+(course+1),
+        category:'Decking',style,lengthFt:group.cutLength,count:group.count,
+        label:group.label,field:false,
+        notes:'Picture-frame course '+(course+1)+' on '+
+          (deck.pictureFrameHouseSide?'all deck perimeter edges including house-facing':'exposed perimeter edges only')+
+          '. Miter/end allowance retained, installed long edges have butt joints with support.',
+      }));
   }
-  if (!useSubfloorDecking && breakerBoardCount > 0) {
-    for (let i = 0; i < breakerBoardCount; i += 1) {
-      const style = breakerBoardMaterials[i] || deckingMaterial;
-      const styleInfo = splitDeckStyle(style);
-      deckingPlan.groups.filter((group) => group.kind === 'breaker' && group.course === i).forEach((group) => {
-        const stockLength = deckStockLength(group.cutLength, style);
-        materials.push(toMaterial(`Breaker deck board ${i + 1}`, 'Decking', group.count, 'boards', stockLength, styleInfo.color, `Breaker board row ${i + 1} splitting field decking. Board style: ${style}. Cut length ${feetAndInches(group.cutLength)}.`, group.label));
-      });
-    }
+  if(breakerBoardCount>0)for(let course=0;course<breakerBoardCount;course++){
+    const style=breakerBoardMaterials[course]||deckingMaterial;
+    deckingPlan.groups.filter(group=>group.kind==='breaker'&&group.course===course)
+      .forEach(group=>queueFinish({
+        name:'Breaker deck board '+(course+1),category:'Decking',style,
+        lengthFt:group.cutLength,count:group.count,label:group.label,field:false,
+        notes:'Breaker course '+(course+1)+' splitting field boards.',
+      }));
   }
   }
   addStairFinishCuts(deck,'Main','tread',stairTreadMaterial,2);
@@ -601,20 +669,23 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     if (useSubfloorDecking) {
       materials.push(toMaterial('4 ft x 8 ft x 3/4 in subfloor sheets', 'Lower tier decking', subfloorSheetCount(lowerDeck.area), 'sheets', '4 ft x 8 ft x 3/4 in', 'Exterior rated', `${lowerDeck.area.toFixed(1)} sq ft lower tier area laid out in a staggered brick pattern; includes 5% waste allowance.`));
     } else {
-      lowerDeckingPlan.groups.filter((group) => group.kind === 'field').forEach((group) => {
-        const stockLength = deckStockLength(group.cutLength, deckingMaterial);
-        materials.push(toMaterial(deckingStyleInfo.material, 'Decking', Math.ceil(group.count * 1.05), 'boards', stockLength, deckingStyleInfo.color, `Lower tier field decking. Cut length ${feetAndInches(group.cutLength)}. Includes 5% waste/damage buffer.`, group.label));
-      });
+      lowerDeckingPlan.groups.filter(group=>group.kind==='field').forEach(group=>
+        queueFinish({name:deckingStyleInfo.material,category:'Decking',style:deckingMaterial,
+          lengthFt:group.cutLength,count:group.count,label:group.label,field:true,
+          notes:'Lower tier field decking. Cut '+feetAndInches(group.cutLength)+'.'}));
     }
-    if (!useSubfloorDecking && lowerDeck.pictureFrameCount > 0) {
-      for (let course = 0; course < lowerDeck.pictureFrameCount; course += 1) {
-        const style = pictureFrameMaterials[course] || deckingMaterial;
-        const styleInfo = splitDeckStyle(style);
-        lowerDeckingPlan.groups.filter((group) => group.kind === 'picture-frame' && group.course === course).forEach((group) => {
-          materials.push(toMaterial(`Lower-tier picture-frame deck board ${course + 1}`, 'Lower tier decking', group.count,
-            'boards', deckStockLength(group.cutLength, style), styleInfo.color,
-            `Lower border course ${course + 1} on ${lowerDeck.pictureFrameHouseSide ? 'all edges, including house-facing' : 'exposed edges only'}. ${feetAndInches(group.cutLength)} cut with overhang; style: ${style}.`, group.label));
-        });
+    if(!useSubfloorDecking&&lowerDeck.pictureFrameCount>0){
+      for(let course=0;course<lowerDeck.pictureFrameCount;course++){
+        const style=pictureFrameMaterials[course]||deckingMaterial;
+        lowerDeckingPlan.groups.filter(group=>group.kind==='picture-frame'&&group.course===course)
+          .forEach(group=>queueFinish({
+            name:'Lower-tier picture-frame deck board '+(course+1),
+            category:'Lower tier decking',style,lengthFt:group.cutLength,
+            count:group.count,label:group.label,field:false,
+            notes:'Lower border course '+(course+1)+' on '+
+              (lowerDeck.pictureFrameHouseSide?'all edges, including house-facing':'exposed edges only')+
+              '. Miter and end allowances retained.',
+          }));
       }
     }
     addStairFinishCuts(lowerDeck,'Lower','tread',stairTreadMaterial,2);
@@ -640,6 +711,9 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     );
   }
 
+  // Globally pack all compatible main/lower field/border/breaker pieces
+  // AFTER every tier has contributed actual installation cuts.
+  if(!useSubfloorDecking)emitFinishStock();
   const baseRailSegments = deck.exposedSegments.map((segment) => segment.length);
   const stairOpeningWidth = deck.stairPlacement.edgeIndex !== null ? Math.min(deck.stairPlacement.width, deck.exposedSegments.find((segment) => segment.index === deck.stairPlacement.edgeIndex)?.length ?? 0) : 0;
   const adjustedRailSegments = baseRailSegments.flatMap((length, index) => {
@@ -829,11 +903,70 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       ));
     }
   }
-  activeSkirtingPlans.forEach((plan)=>materials.push(...plan.materials));
+  // Pool actual cut requirements across main/lower deck and stair skirting,
+  // but ONLY when the finish SKU, color, trim and saw kerf match. Previously
+  // each area bought separate stock and discarded usable offcuts, inflating
+  // orders even when a stair skirting cut fits the leftover of a deck course.
+  let skirtingFinishPurchased=0;
+  const skirtingPurchaseIssues:string[]=[];
+  const finishPools=new Map<string,typeof activeSkirtingPlans>();
+  const framingPools=new Map<string,typeof activeSkirtingPlans>();
+  activeSkirtingPlans.forEach(plan=>{
+    materials.push(...plan.materials.filter(item=>item.unit!=='boards'));
+    const opt=plan.options;
+    const fkey=[opt.material,opt.finishColor,opt.kerfIn,opt.trimIn].join('|');
+    const framingKey=[opt.kerfIn,opt.trimIn].join('|');
+    const finishGroup=finishPools.get(fkey)??[];
+    finishGroup.push(plan);finishPools.set(fkey,finishGroup);
+    const frameGroup=framingPools.get(framingKey)??[];
+    frameGroup.push(plan);framingPools.set(framingKey,frameGroup);
+  });
+  for(const plans of finishPools.values()){
+    const selected=plans[0].options;
+    const cuts=plans.flatMap(plan=>plan.cuts.filter(cut=>cut.material==='finish'));
+    const lengthCatalog=selected.material==='kdat'?[8,12,16,20]:[16,20];
+    const optimized=packSkirtCuts(cuts,lengthCatalog,selected.kerfIn,selected.trimIn);
+    skirtingPurchaseIssues.push(...optimized.issues.map(issue=>'Shared skirting finish: '+issue));
+    skirtingFinishPurchased+=optimized.stock.length;
+    for(const length of [...new Set(optimized.stock.map(stock=>stock.stockLengthFt))]){
+      const bins=optimized.stock.filter(stock=>stock.stockLengthFt===length);
+      const refs=bins.flatMap(bin=>bin.cuts.map(cut=>cut.id));
+      materials.push(toMaterial(
+        (selected.material==='kdat'?'1x5 KDAT pressure-treated':selected.material==='pvc'?'PVC':'Composite')+
+          ' deck and stair skirting finish',
+        'Skirting',bins.length,'boards',length+' ft stock',selected.finishColor,
+        'Combined deck / stair / lower tier finish stock for identical SKU. '+
+        refs.length+' supported cuts packed with '+selected.kerfIn+' in kerf and '+
+        selected.trimIn+' in end trim. Offcuts are reused across rows and stair panels. '+
+        'Cuts: '+refs.slice(0,25).join(', ')+(refs.length>25?'; +'+(refs.length-25)+' more':'')+'.',
+        refs.slice(0,10).join(', ')));
+    }
+  }
+  for(const plans of framingPools.values()){
+    const selected=plans[0].options;
+    const cuts=plans.flatMap(plan=>plan.cuts.filter(cut=>cut.material==='2x4'));
+    const optimized=packSkirtCuts(cuts,[8,10,12,16,20],selected.kerfIn,selected.trimIn);
+    skirtingPurchaseIssues.push(...optimized.issues.map(issue=>'Shared skirting 2x4: '+issue));
+    for(const length of [...new Set(optimized.stock.map(stock=>stock.stockLengthFt))]){
+      const bins=optimized.stock.filter(stock=>stock.stockLengthFt===length);
+      const refs=bins.flatMap(bin=>bin.cuts.map(cut=>cut.id));
+      materials.push(toMaterial('2x4 ground-contact-rated deck and stair skirting supports',
+        'Skirting',bins.length,'boards',length+' ft stock',
+        'Ground-contact treatment - confirm grade',
+        'Top, bottom and 24 in O.C. uprights packed across matching assemblies. '+
+        refs.length+' framing cuts, '+selected.kerfIn+' in kerf and '+
+        selected.trimIn+' in trim. Cuts: '+refs.slice(0,22).join(', ')+
+        (refs.length>22?'; +'+(refs.length-22)+' more':'')+'.',
+        refs.slice(0,10).join(', ')));
+    }
+  }
   materials.push(...gatePlan.materials);
   return {
     summary: [
-      { label: 'Skirting', value: activeSkirtingPlans.map((p)=>p.sides.length+' sides / '+p.finishStock.length+' finish stock boards').join('; ') || 'None' },
+      { label: 'Skirting', value: activeSkirtingPlans.length
+        ?activeSkirtingPlans.map(p=>p.sides.length+' sides').join('; ')+
+          ' / '+skirtingFinishPurchased+' optimized shared finish stock boards'
+        :'None' },
       ...(gatePlan.gates.length ? [{label:'Gate hardware',value:gatePlan.hinges+' self-closing hinges · '+gatePlan.slideBolts+' slide bolts · '+gatePlan.caneBolts+' cane bolts'}] : []),
       ...(timberTechPlan ? [{label: 'TimberTech railing',value: timberTechPlan.profile+' / '+timberTechPlan.color+' / '+timberTechPlan.panels.length+' panel kits'}] : []),
       { label: 'Framing & footings', value: `${deck.joistSize} joists · ${deck.beamMemberSize} beams · ${deck.postSize} posts · ${deck.footingDiameterIn} in × ${deck.footingDepthIn} in footings` },
@@ -847,6 +980,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       ...deck.postLayoutIssues.map((issue) => 'Main deck: ' + issue),
       ...woodDrinkRailIssues,
       ...stairFinishIssues,
+      ...finishStockIssues,
+      ...skirtingPurchaseIssues,
       ...gatePlan.issues,
       ...(lowerDeck ? lowerDeck.postLayoutIssues.map((issue) => 'Lower deck: ' + issue) : []),
       ...skirtingPlan.issues.map((issue) => 'Main deck skirting: ' + issue),

@@ -365,7 +365,9 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
 
   const stockOrderItems = useMemo<DisplayMaterialItem[]>(() => {
     const merged = new Map<string, DisplayMaterialItem>();
-    displayItems.forEach((item) => {
+    // Cut rows describe already-purchased stock and must never count as
+    // additional supplier quantities in Stock order view.
+    displayItems.filter(item=>item.category!=='Deck finish cut schedule (not order)').forEach((item) => {
       const identity = stockOrderIdentity(item);
       const existing = merged.get(identity.key);
       if (!existing) {
@@ -393,6 +395,8 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
   const hiddenItemCount = removedRecords.length;
   const printGrouped = useMemo(()=>{
     const out={...grouped};
+    // Supplier PDF/image exports exclude cut-only installer rows.
+    delete out['Deck finish cut schedule (not order)'];
     if(removedRecords.length){
       out['REMOVED / DO NOT ORDER (reference only)']=removedRecords.map((row)=>({
         ...row, category:'REMOVED / DO NOT ORDER (reference only)',

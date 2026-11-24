@@ -1,5 +1,6 @@
 import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, LockedPostPoint } from './types';
 import { ExactSupportPost, parseExactPostLayouts, validateExactPostLayout } from './exactPostLayouts';
+import { stockBoardSegments } from './finishStockGeometry';
 
 export interface DeckInputs {
   deckShape?: string | number | boolean;
@@ -430,19 +431,10 @@ function groupRepeatedCutsIntoStock(pieceCount: number, cutLength: number, stock
 }
 
 
-export function boardStockSegments(totalLength: number, availableBreaks: number[] = []) {
-  const sortedBreaks = availableBreaks.filter((value) => value > 0.05 && value < totalLength - 0.05).sort((a, b) => a - b);
-  const marks = [0, ...sortedBreaks, totalLength];
-  const segments: number[] = [];
-  for (let i = 1; i < marks.length; i += 1) {
-    let span = marks[i] - marks[i - 1];
-    while (span > 20.01) {
-      segments.push(20);
-      span -= 20;
-    }
-    if (span > 0.05) segments.push(span);
-  }
-  return segments;
+export function boardStockSegments(totalLength:number,availableBreaks:number[]=[]):number[]{
+  // The same stock-aware joints must drive takeoff and 3D. Even an exact 20ft
+  // cut exceeds a 20ft purchased board once trim/kerf are reserved.
+  return stockBoardSegments(totalLength,availableBreaks);
 }
 
 function uniqueSorted(values: number[]) {

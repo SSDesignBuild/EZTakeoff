@@ -4,7 +4,7 @@ import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { getDeckVisualProduct } from '../../data/visualCatalog';
 import { surfaceStrips, breakerVisualStrips } from '../../lib/visualGeometry';
-import { planMiteredPictureFrames } from '../../lib/deckMiterGeometry';
+import { planMiteredPictureFrames,splitMiteredPictureFrames } from '../../lib/deckMiterGeometry';
 import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials, resolveFasciaMaterial, resolveStairSideFasciaMaterial } from '../../lib/deckTrimSelection';
 import { Beam, type P2 } from './Primitives';
 import { DeckStructure3D } from './DeckStructure3D';
@@ -144,8 +144,8 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
   model:DeckModel;center:P2;deckHeight:number;
   maps:(THREE.Texture|null)[];colors:string[];
 }){
-  const outlines=useMemo(()=>planMiteredPictureFrames(
-    model.points,model.pictureFrameSegments,model.pictureFrameCount),
+  const outlines=useMemo(()=>splitMiteredPictureFrames(planMiteredPictureFrames(
+    model.points,model.pictureFrameSegments,model.pictureFrameCount)),
     [model.points,model.pictureFrameSegments,model.pictureFrameCount]);
   const geometries=useMemo(()=>outlines.map(strip=>{
     const s=new THREE.Shape();
@@ -162,7 +162,7 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
   }),[outlines,center]);
   useEffect(()=>()=>geometries.forEach(item=>item.geometry.dispose()),[geometries]);
   return <group name="miter-cut-authentic-picture-frame-courses">
-    {geometries.map(({strip,geometry})=><mesh key={'miter-'+strip.edgeIndex+'-'+strip.course}
+    {geometries.map(({strip,geometry},index)=><mesh key={'miter-'+strip.edgeIndex+'-'+strip.course+'-'+index}
       geometry={geometry} position={[0,deckHeight+.015-.0475,0]} castShadow receiveShadow>
       {maps[strip.course]
         ?<meshBasicMaterial color="#ffffff" map={maps[strip.course]} toneMapped={false} side={THREE.DoubleSide}/>

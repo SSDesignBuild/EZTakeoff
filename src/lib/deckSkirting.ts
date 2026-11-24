@@ -1,5 +1,6 @@
 import type { DeckEdgeSegment, MaterialItem } from './types';
 import { planSkirtingGateFace } from './skirtingGateFace';
+import { supportedFinishCoursePieces,MAX_FINISH_CUT_FT } from './finishStockGeometry';
 
 export type SkirtCut = { id: string; edgeIndex: number; material: 'finish' | '2x4'; lengthFt: number; location: string };
 export type SkirtOpening = {
@@ -249,8 +250,22 @@ export function buildDeckSkirting(
         for(const span of spans){
           const s=Math.max(span.start,low),e=Math.min(span.end,high);
           if(e-s<=0.001)continue;
-          courses.push({row,start:p3(s),end:p3(e),depthFt:p3(Math.min(faceIn/12,Math.max(0,Math.min(at(s),at(e))-y)))});
-          addCut('finish',e-s,'side '+(edgeIndex+1)+' horizontal course '+(row+1)+' from '+p3(s)+' to '+p3(e)+' ft');
+          // The continuous 25+ ft course is an INSTALLED RUN, not a demand
+          // for a mythical 25-ft supplier board. Break only at actual
+          // 2x4 upright stations; kerf/trim fit existing 8/12/16/20-ft or
+          // 16/20-ft catalog. The 3D consumes these same course pieces.
+          const segmentPlan=supportedFinishCoursePieces(s,e,rawStuds,MAX_FINISH_CUT_FT);
+          issues.push(...segmentPlan.issues.map(issue=>'Side '+(edgeIndex+1)+' course '+(row+1)+': '+issue));
+          segmentPlan.pieces.forEach((piece,part)=>{
+            const a=piece.start,b=piece.end;
+            const depth=p3(Math.min(faceIn/12,Math.max(0,Math.min(at(a),at(b))-y)));
+            if(depth<=0.001)return;
+            courses.push({row,start:a,end:b,depthFt:depth});
+            addCut('finish',b-a,
+              'side '+(edgeIndex+1)+' horizontal course '+(row+1)+
+              ' piece '+(part+1)+' from '+p3(a)+' to '+p3(b)+' ft'+
+              (piece.jointAtFt!==undefined?' (supported seam at '+piece.jointAtFt+' ft)':''));
+          });
         }
       }
     }

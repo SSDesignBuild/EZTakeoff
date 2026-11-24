@@ -39,7 +39,9 @@ for(const group of [skirt.finishStock,skirt.frameStock]){
   }
 }
 const materialEstimate=calculateEstimate('decks',config);
-assert.ok(materialEstimate.materials.some((x)=>x.category==='Deck skirting'&&x.unit==='boards'));
+assert.ok(materialEstimate.materials.some((x)=>x.category==='Skirting'&&x.unit==='boards'&&
+ x.name.includes('deck and stair skirting finish')),
+ 'Combined skirting stock is purchased once, rather than separate duplicate wall/stair rows');
 assert.equal(materialEstimate.validationIssues.length,0,materialEstimate.validationIssues.join(';'));
 const compos=buildDeckSkirting(deck.edgeSegments,deck.exposedSegments,7,7.25,{...config,skirtingMaterial:'pvc',skirtingColor:'White PVC',skirtingFaceIn:5.5});
 assert.ok(compos.finishStock.length>0&&compos.finishStock.every((x)=>[16,20].includes(x.stockLengthFt)));

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import type { DeckModel, StairPlacement } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { Block, type P2 } from './Primitives';
-import { planStraightStairFascia } from '../../lib/stairFasciaGeometry';
+import { planStairSideFascia } from '../../lib/stairFasciaGeometry';
 
 const riseFor=(model:DeckModel,height:number)=>height/Math.max(1,model.stairRisers);
 function makeStringer(runFt:number,treads:number,riseFt:number,height:number){
@@ -20,20 +20,6 @@ function makeStringer(runFt:number,treads:number,riseFt:number,height:number){
   shape.lineTo(0,Math.max(.05,height-riseFt-.72));
   shape.closePath();
   const geo=new THREE.ExtrudeGeometry(shape,{depth:.125,bevelEnabled:false,steps:1});
-  geo.computeVertexNormals();
-  return geo;
-}
-function makeStraightFascia(runFt:number,treads:number,riseFt:number,height:number){
-  const contour=planStraightStairFascia({
-    treadDepthFt:runFt,treads,riseFt,heightFt:height,
-  });
-  const shape=new THREE.Shape();
-  contour.forEach((p,i)=>{
-    if(i===0)shape.moveTo(p.runFt,p.riseFt);
-    else shape.lineTo(p.runFt,p.riseFt);
-  });
-  shape.closePath();
-  const geo=new THREE.ExtrudeGeometry(shape,{depth:.125,steps:1,bevelEnabled:false});
   geo.computeVertexNormals();
   return geo;
 }
@@ -103,20 +89,31 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   const nosingFt=(fasciaRisers ? 0.5 : 1)/12;
   const stringers=Math.max(2,Math.ceil(width)+1);
   const geo=useMemo(()=>makeStringer(treadDepth,treads,rise,height),[treadDepth,treads,rise,height]);
-  const straightFasciaGeo=useMemo(()=>makeStraightFascia(treadDepth,treads,rise,height),
-    [treadDepth,treads,rise,height]);
   const fasciaStyle=values.stairFasciaStyle==='straight'?'straight':'profiled';
-  // Center the facade thickness about its intended stair-edge station rather
-  // than projecting the extrusion to just one side of the stringer.
+  // A FINISH board has its own geometry, not a clone of the notched 2x12
+  // structural stringer. Both stair sides use this one mirrored outline.
+  const fasciaOutline=useMemo(()=>planStairSideFascia({
+    treadDepthFt:treadDepth,treads,riseFt:rise,heightFt:height,style:fasciaStyle,
+    nosingFt,
+  }),[treadDepth,treads,rise,height,fasciaStyle,nosingFt]);
   const fasciaGeo=useMemo(()=>{
-    const g=(fasciaStyle==='straight'?straightFasciaGeo:geo).clone();
-    g.translate(0,0,-.0625);
+    const shape=new THREE.Shape();
+    fasciaOutline.forEach((p,i)=>{
+      if(i===0)shape.moveTo(p.runFt,p.riseFt);
+      else shape.lineTo(p.runFt,p.riseFt);
+    });
+    shape.closePath();
+    // Actual 1-inch finish thickness. Place the side face centered exactly
+    // outside the tread ends so neither side hangs in space or shifts inward.
+    const g=new THREE.ExtrudeGeometry(shape,{
+      depth:1/12,bevelEnabled:false,curveSegments:1,steps:1,
+    });
+    g.translate(0,0,-1/24);
     g.rotateY(-Math.PI/2);
     g.computeVertexNormals();
     return g;
-  },[geo,straightFasciaGeo,fasciaStyle]);
-  useEffect(()=>()=>{geo.dispose();straightFasciaGeo.dispose();fasciaGeo.dispose();},
-    [geo,straightFasciaGeo,fasciaGeo]);
+  },[fasciaOutline]);
+  useEffect(()=>()=>{geo.dispose();fasciaGeo.dispose();},[geo,fasciaGeo]);
   const skirt=values.skirtingEnabled===true&&values.skirtingStairsEnabled!==false;
   const boardFace=Math.max(.25,Number(values.skirtingFaceIn??4.5)/12);
   const boardGap=Math.max(0,Number(values.skirtingGapIn??.25)/12);
@@ -124,10 +121,10 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   const finish=values.skirtingMaterial==='pvc'?'#d8dad6':values.skirtingMaterial==='composite'?
     '#bcb5aa':'#b19a79';
   const fascia=values.stairStringerFascia!==false;
-  const contour=planStraightStairFascia({treadDepthFt:treadDepth,treads,riseFt:rise,heightFt:height});
-  const lowerStart=fasciaStyle==='straight'?contour[3].riseFt:Math.max(.05,height-rise-.72);
-  const lowerEnd=fasciaStyle==='straight'?contour[2].riseFt:
-    Math.max(.055,height-(treads+1)*rise+.02);
+  // Skirting terminates at the ACTUAL fascia underside instead of an
+  // unrelated guessed slope (which previously exposed unfinished stringers).
+  const lowerStart=fasciaOutline[fasciaOutline.length-1]?.riseFt??.08;
+  const lowerEnd=fasciaOutline[fasciaOutline.length-2]?.riseFt??.025;
   const underFasciaAt=(station:number)=>Math.max(.04,
     lowerStart+(lowerEnd-lowerStart)*Math.max(0,Math.min(1,station/run))-.04);
   return <group name={'stair-flight-'+placement.edgeIndex}
@@ -170,12 +167,15 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
       </group>;
     })}
     {[-1,1].map((sign)=>{
-      const x=sign*(width/2+.08),n=Math.max(2,Math.ceil(run/(boardFace+boardGap)));
+      const x=sign*(width/2+1/24),n=Math.max(2,Math.ceil(run/(boardFace+boardGap)));
       return <group key={'stair-side-'+sign}>
         {fascia&&<mesh geometry={fasciaGeo}
           position={[x,0,0]} castShadow receiveShadow>
-          <meshStandardMaterial color={fasciaTexture?'#ffffff':'#92795e'}
-            map={fasciaTexture??null} side={THREE.DoubleSide} roughness={.78}/>
+          {fasciaTexture
+            ?<meshBasicMaterial color="#ffffff" map={fasciaTexture}
+              toneMapped={false} side={THREE.DoubleSide}/>
+            :<meshStandardMaterial color="#92795e" side={THREE.DoubleSide}
+              roughness={.78}/>}
         </mesh>}
         {/* Actual polygon-cut skirting follows the underside of the fascia. */}
         {skirt&&(horizontal
