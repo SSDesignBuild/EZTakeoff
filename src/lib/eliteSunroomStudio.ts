@@ -52,8 +52,8 @@ const lerp=(a:number,b:number,t:number)=>a+(b-a)*t;
 export function makeDefaultEliteWallSections(run:RenaissanceWallMeasure):SunroomSectionConfig[]{
  const available=run.widthFt;
  if(!Number.isFinite(available)||available<2)return [];
- const leftHeight=Math.max(0,run.topFrom-run.bottomY-.035);
- const rightHeight=Math.max(0,run.topTo-run.bottomY-.035);
+ const leftHeight=Math.max(0,run.topFrom-run.bottomY);
+ const rightHeight=Math.max(0,run.topTo-run.bottomY);
  const lower=Math.min(leftHeight,rightHeight);
  const upper=Math.max(leftHeight,rightHeight);
  const slope=upper-lower;
@@ -101,8 +101,8 @@ export function eliteWallDimensionWarnings(run:RenaissanceWallMeasure,
  for(const section of sections){
   const begin=offset/Math.max(.1,run.widthFt);
   const finish=(offset+section.width)/Math.max(.1,run.widthFt);
-  const expectedLeft=lerp(run.topFrom,run.topTo,begin)-run.bottomY-.035;
-  const expectedRight=lerp(run.topFrom,run.topTo,finish)-run.bottomY-.035;
+  const expectedLeft=lerp(run.topFrom,run.topTo,begin)-run.bottomY;
+  const expectedRight=lerp(run.topFrom,run.topTo,finish)-run.bottomY;
   const hasTransom=section.transomType!=='none'&&
     (section.transomType!=='auto'||(section.height>10&&section.mainSection!=='picture-window'));
   const transomLeft=hasTransom?Math.max(0,section.leftTransomHeight):0;
