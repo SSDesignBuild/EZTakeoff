@@ -343,8 +343,17 @@ export function ConsultationStudio(){
       </div>
     </div>
     <ConsultationCloudPanel project={project??null} onOpen={(remote)=>{
-      setProjects(current=>[remote,...current.filter(p=>p.id!==remote.id)]);
+      // Opening a cloud revision replaces only that matching local record.
+      // A photo that was already saved in this browser is kept unchanged.
+      setProjects(current=>{
+        const prior=current.find(p=>p.id===remote.id);
+        return [{...remote,photoPresent:prior?.photoPresent??false},
+          ...current.filter(p=>p.id!==remote.id)];
+      });
       navigate('/consultation/'+remote.id);
+    }} onPhotoRestored={(id)=>{
+      setProjects(current=>current.map(p=>p.id===id?
+        updateConsultation(p,{photoPresent:true}):p));
     }}/>
     {project?<ConsultationEditor key={project.id} project={project} onChange={update}/>:
       <section className="consultation-list">
