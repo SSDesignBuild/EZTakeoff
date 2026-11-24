@@ -10,7 +10,7 @@ import { planWrapAroundGutter } from '../../lib/renaissanceGutterGeometry';
 import { planRenaissanceDownspout } from '../../lib/renaissanceDownspoutRouting';
 import { actualPostWidthFt } from '../../lib/visualStructure';
 import { seatCanopyPost } from '../../lib/coverDeckPlacement';
-import { planPcaDoorOnWall, type PcaDoorModel,type PcaPetDoor,type ScreenDoorWall } from '../../lib/pcaScreenDoorGeometry';
+import { planPcaDoorOnWall,effectivePcaKickPlateIn, type PcaDoorModel,type PcaPetDoor,type ScreenDoorWall } from '../../lib/pcaScreenDoorGeometry';
 import { PcaScreenDoor3D } from './PcaScreenDoor3D';
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
 import {
@@ -553,7 +553,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
             :powder,
           hinge:project.coverDoorHinge??'left',
           swing:project.coverDoorSwing??'out',
-          kickPlateIn:project.coverDoorKickPlateIn??8,
+          kickPlateIn:effectivePcaKickPlateIn(project.coverDoorPet??'none',project.coverDoorKickPlateIn??8),
         }}/>
       )}
     </group>}
