@@ -15,7 +15,7 @@ assert.ok(cover.includes('coverWallRuns.filter(wall=>!privacyGap(wall.id)).map(w
 const ui=read('src/components/ConsultationVisualPickers.tsx');
 assert.ok(ui.includes('<option value="lumino-sunroom">'));
 assert.ok(ui.includes("['Moderno','Contempo','Classico'].includes(project.coverFamily)"));
-assert.ok(ui.includes("project.coverScreenStyle!=='lumino-sunroom'&&<div"),
+assert.ok(ui.includes("!['lumino-sunroom','elite-add-a-room'].includes(project.coverScreenStyle??'none')&&<div"),
  'PCA screen door setup must not be misrepresented as a Lumino sunroom door');
 const project=read('src/lib/consultationProject.ts');
 assert.ok(project.includes("'dolce-standard'|'lumino-sunroom'"));
