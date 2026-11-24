@@ -1,11 +1,8 @@
 [build]
-  command = "npm run assets:sync && node scripts/preview-qa-diagnostics.cjs && npm run build"
+  command = "npm run assets:sync && node scripts/test-stock-availability.cjs && node scripts/test-consultation-design-accuracy.cjs && node scripts/test-sales-aesthetic-routing.cjs && node scripts/test-long-finish-joins-and-stair-fascia.cjs && npm run build"
   publish = "dist"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[functions]
-  directory = "netlify/functions"
