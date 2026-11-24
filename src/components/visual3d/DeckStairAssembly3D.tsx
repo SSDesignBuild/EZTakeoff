@@ -105,7 +105,18 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   const geo=useMemo(()=>makeStringer(treadDepth,treads,rise,height),[treadDepth,treads,rise,height]);
   const straightFasciaGeo=useMemo(()=>makeStraightFascia(treadDepth,treads,rise,height),
     [treadDepth,treads,rise,height]);
-  useEffect(()=>()=>{geo.dispose();straightFasciaGeo.dispose();},[geo,straightFasciaGeo]);
+  const fasciaStyle=values.stairFasciaStyle==='straight'?'straight':'profiled';
+  // Center the facade thickness about its intended stair-edge station rather
+  // than projecting the extrusion to just one side of the stringer.
+  const fasciaGeo=useMemo(()=>{
+    const g=(fasciaStyle==='straight'?straightFasciaGeo:geo).clone();
+    g.translate(0,0,-.0625);
+    g.rotateY(-Math.PI/2);
+    g.computeVertexNormals();
+    return g;
+  },[geo,straightFasciaGeo,fasciaStyle]);
+  useEffect(()=>()=>{geo.dispose();straightFasciaGeo.dispose();fasciaGeo.dispose();},
+    [geo,straightFasciaGeo,fasciaGeo]);
   const skirt=values.skirtingEnabled===true&&values.skirtingStairsEnabled!==false;
   const boardFace=Math.max(.25,Number(values.skirtingFaceIn??4.5)/12);
   const boardGap=Math.max(0,Number(values.skirtingGapIn??.25)/12);
@@ -113,7 +124,6 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   const finish=values.skirtingMaterial==='pvc'?'#d8dad6':values.skirtingMaterial==='composite'?
     '#bcb5aa':'#b19a79';
   const fascia=values.stairStringerFascia!==false;
-  const fasciaStyle=values.stairFasciaStyle==='straight'?'straight':'profiled';
   const contour=planStraightStairFascia({treadDepthFt:treadDepth,treads,riseFt:rise,heightFt:height});
   const lowerStart=fasciaStyle==='straight'?contour[3].riseFt:Math.max(.05,height-rise-.72);
   const lowerEnd=fasciaStyle==='straight'?contour[2].riseFt:
@@ -162,8 +172,8 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
     {[-1,1].map((sign)=>{
       const x=sign*(width/2+.08),n=Math.max(2,Math.ceil(run/(boardFace+boardGap)));
       return <group key={'stair-side-'+sign}>
-        {fascia&&<mesh geometry={fasciaStyle==='straight'?straightFasciaGeo:geo}
-          position={[x,0,0]} rotation={[0,-Math.PI/2,0]} castShadow receiveShadow>
+        {fascia&&<mesh geometry={fasciaGeo}
+          position={[x,0,0]} castShadow receiveShadow>
           <meshStandardMaterial color={fasciaTexture?'#ffffff':'#92795e'}
             map={fasciaTexture??null} side={THREE.DoubleSide} roughness={.78}/>
         </mesh>}
