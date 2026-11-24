@@ -24,5 +24,14 @@ assert.ok(composite.every((row) => /^(16|20) ft stock$/.test(String(row.stockRec
 const pt = deckMaterials({ deckingType: 'pressure-treated', deckingMaterial: 'Pressure treated 5/4x6', deckShape: rect(8,8), quickWidth:8, quickProjection:8 });
 assert.ok(pt.every((row) => /^(8|12|16|20) ft stock$/.test(String(row.stockRecommendation))), 'Pressure-treated decking stock catalog must remain distinct');
 const oversize = deckMaterials({ deckingType: 'composite', deckingMaterial: 'Trex Enhance', deckShape: rect(23,12), quickWidth:23, quickProjection:12, breakerBoardCount:0 });
-assert.ok(oversize.some((row) => String(row.stockRecommendation).startsWith('UNAVAILABLE:')), 'Overlength continuous runs must be flagged rather than silently split');
-console.log('PASS composite/PVC stock lengths, PT catalog, and overlength blocking');
+assert.ok(oversize.length>0&&oversize.every((row)=>/^(16|20) ft stock$/.test(String(row.stockRecommendation))),
+  '23ft deck must purchase actual 16/20ft boards, not non-existent 23ft stock');
+const allLong=calculateEstimate('decks',{...defaults,deckingType:'composite',deckingMaterial:'Trex Enhance',
+  deckShape:rect(25,12),quickWidth:25,quickProjection:12,pictureFrameCount:1,breakerBoardCount:0});
+assert.ok(!allLong.materials.some(row=>/UNAVAILABLE|25 ft stock/.test(row.stockRecommendation)),
+  '25ft picture frames and field boards must be scheduled from available stock');
+assert.ok(!allLong.validationIssues.some(issue=>/No available continuous stock length|UNAVAILABLE/.test(issue)),
+  'A supportable installed run must not become an order-blocking stock failure');
+assert.ok(allLong.materials.filter(row=>row.name==='Picture-frame deck board 1').length>=2,
+  'Long picture frames must show two or more independently cut pieces');
+console.log('PASS PT/PVC stock catalogs, 23ft and 25ft stock-backed cut plans and picture-frame joints');
