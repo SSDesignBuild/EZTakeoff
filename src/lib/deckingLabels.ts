@@ -20,7 +20,10 @@ export interface DeckingLabelPlan {
   breakerLabels: Record<string, string>;
 }
 
-const roundLen = (value: number) => Math.round(value * 12) / 12;
+// Cut schedules must not round a 19ft11.5in piece UP to an impossible
+// 20ft full-length cut. Round UP to 1/16in for safe installer length.
+const roundLen = (value:number) =>
+  Math.min(20-(0.125+0.25)/12-.01,Math.ceil((value-1e-9)*192)/192);
 const keyOf = (kind: DeckingLabelGroup['kind'], course: number, length: number) => `${kind}:${course}:${roundLen(length).toFixed(2)}`;
 
 const alphaLabel = (index: number) => {
