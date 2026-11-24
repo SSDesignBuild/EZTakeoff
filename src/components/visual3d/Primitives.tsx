@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 export type P2=[number,number];
 export type P3=[number,number,number];
-export function Block({position,size,color,metalness=0,roughness=.72,texture}:{
+export function Block({position,size,color,metalness=0,roughness=.72,texture,name}:{
   position:P3;size:P3;color:string;metalness?:number;roughness?:number;texture?:THREE.Texture|null;
+  name?:string;
 }){
-  return <mesh position={position} castShadow receiveShadow>
+  return <mesh position={position} name={name} castShadow receiveShadow>
     <boxGeometry args={size}/>
     {texture?<meshBasicMaterial color="#ffffff" map={texture} toneMapped={false}/>:<meshStandardMaterial color={color} metalness={metalness} roughness={roughness}/>}
   </mesh>;
