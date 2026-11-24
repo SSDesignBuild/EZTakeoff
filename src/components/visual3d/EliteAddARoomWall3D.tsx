@@ -220,7 +220,7 @@ function ElitePrimeDoor({section,frameColor,glazing}:{
    {[-1,1].map((sign,i)=><Block key={'prime-glazing-gasket-head-'+i}
      name="tempered-glass-black-edge-seal"
      position={[width/2,DOOR_HEIGHT_FT/2+.014+sign*glassHeight/2,-.015]}
-     size={[glassWidth+.02,.028,.031]} color="#78858b"/>}
+     size={[glassWidth+.02,.028,.031]} color="#78858b"/>)}
    {[-1,1].map((face,i)=><mesh key={'prime-glass-'+i}
      name="prime-clear-full-view-glazed-lite"
      position={[width/2,DOOR_HEIGHT_FT/2+.014,face*.021]}>
