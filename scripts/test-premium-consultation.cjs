@@ -74,8 +74,15 @@ assert.ok(!stringers.includes('radius={.10}'));
 const skirt3d=read('src/components/visual3d/DeckSkirting3D.tsx');
 assert.ok(skirt3d.includes('buildDeckSkirting')&&skirt3d.includes('side.courses')&&skirt3d.includes('side.finish'));
 const cover=read('src/components/visual3d/RenaissanceCover3D.tsx');
-for(const part of ['frameVariant','wide-insert','DolceScreenRun','coverWidthFt','coverProjectionFt','fresco-polycarbonate'])
+for(const part of ['wide-insert','DolceScreenRun','fresco-polycarbonate'])
   assert.ok(cover.includes(part),'Cover module missing '+part);
+const coverLayout=read('src/lib/renaissanceCoverWallLayout.ts');
+for(const part of ['coverFraming','coverWidthFt','coverProjectionFt','makeRenaissanceFramePlan',
+ 'seatCanopyPost','maxReferenceOverhangFt'])
+  assert.ok(coverLayout.includes(part),'Shared cover structural layout missing '+part);
+assert.ok(cover.includes('planRenaissanceCoverWalls')&&
+  cover.includes('const coverWallRuns=wallAnchors.wallRuns'),
+  'Covered-deck rendering must use the same seated columns as editable Elite/Dolce walls');
 const studio=read('src/components/ConsultationStudio.tsx');
 assert.ok(studio.includes('ConsultationTechnicalSettings')&&studio.includes('ConsultationSkirtingOptions'));
 const css=read('src/styles/global.css');
