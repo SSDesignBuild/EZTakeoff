@@ -72,8 +72,13 @@ const read=(p)=>fs.readFileSync(path.join(root,p),'utf8');
 const render=read('src/components/visual3d/RenaissanceCover3D.tsx');
 const extrusions=read('src/components/visual3d/RenaissanceExtrusions.tsx');
 for(const term of ['RenaissancePost','RenaissanceHeader','RenaissanceGutter','RenaissanceTruss',
-  'makeRenaissanceFramePlan','RenaissanceExtrusion','fresco-polycarbonate','DolceScreenRun'])
+  'RenaissanceExtrusion','fresco-polycarbonate','DolceScreenRun'])
   assert.ok(render.includes(term),term+' must participate in rendered assembly');
+const layout=read('src/lib/renaissanceCoverWallLayout.ts');
+assert.ok(render.includes('planRenaissanceCoverWalls')&&
+  layout.includes('makeRenaissanceFramePlan')&&
+  layout.includes('seatCanopyPost('),
+  'Cover and Sunroom must share the actual manufacturer's frame plan and deck-seated posts');
 assert.ok(!render.includes("frameVariant==='hd'?{post:"),'remove generic hard-coded dimension ladder');
 assert.ok(extrusions.includes('new THREE.ExtrudeGeometry'),'member contours must be actual parametric meshes');
 assert.ok(extrusions.includes('outer.holes.push(inner)'),'posts must be hollow tubes, not solid cube approximations');
