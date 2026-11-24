@@ -10,28 +10,21 @@ import { architecturalGutterOutlineFt,miterAlongFt } from '../../lib/renaissance
 import type { DownspoutLayout } from '../../lib/renaissanceDownspoutRouting';
 
 function outlineWithRibs(width:number,height:number){
-  // Physical beam silhouette: repeated extrusion tongues along each vertical
-  // side, exact outside envelope. Actual tight corner radii are not dimensioned
-  // in the supplied elevation, so no radius is represented as verified.
-  const w=width/2,h=height/2,g=Math.min(.006,width*.10);
+  // The reference photos do not dimension the former four horizontal
+  // tongue/reveal lines. Do not invent rib locations on finished beam faces.
+  // Retain the measured outside envelope; manufacturer cross-section assets
+  // must be approved before individual internal tongues are modeled.
+  const w=width/2,h=height/2;
   const shape=new THREE.Shape();
   shape.moveTo(-w,-h);shape.lineTo(w,-h);
-  for(const level of [-.57,-.48,.25,.34]){
-    const y=level*h;
-    shape.lineTo(w,y);shape.lineTo(w-g,y+g);shape.lineTo(w-g,y+g*2);shape.lineTo(w,y+g*3);
-  }
-  shape.lineTo(w,h);shape.lineTo(-w,h);
-  for(const level of [.34,.25,-.48,-.57]){
-    const y=level*h;
-    shape.lineTo(-w,y);shape.lineTo(-w+g,y-g);shape.lineTo(-w+g,y-g*2);shape.lineTo(-w,y-g*3);
-  }
-  shape.closePath();
+  shape.lineTo(w,h);shape.lineTo(-w,h);shape.closePath();
   return shape;
 }
 
 /** Measured external envelope; HD differs from SD in wall gauge, not outer size. */
-export function RenaissanceHeader({start,end,midY,profile,color}:{
+export function RenaissanceHeader({start,end,midY,profile,color,capStart=false,capEnd=false}:{
   start:P2;end:P2;midY:number;profile:RenaissanceExtrusionProfile;color:string;
+  capStart?:boolean;capEnd?:boolean;
 }){
   const dx=end[0]-start[0],dz=end[1]-start[1],length=Math.hypot(dx,dz);
   const geometry=useMemo(()=>{
@@ -51,11 +44,27 @@ export function RenaissanceHeader({start,end,midY,profile,color}:{
     return g;
   },[length,profile.headerDepthIn,profile.headerHeightIn,profile.headerWallIn]);
   if(!geometry)return null;
-  return <mesh geometry={geometry}
-    position={[(start[0]+end[0])/2,midY,(start[1]+end[1])/2]}
-    rotation={[0,-Math.atan2(dz,dx),0]} castShadow receiveShadow>
-    <meshStandardMaterial color={color} metalness={.48} roughness={.29}/>
-  </mesh>;
+  // End closures belong on the two EXPOSED outer ends only, never on a
+  // side-clip connection concealed against a full-height structural post.
+  const angle=-Math.atan2(dz,dx);
+  const capThickness=inchToFoot(.125);
+  const capWidth=inchToFoot(profile.headerDepthIn);
+  const capHeight=inchToFoot(profile.headerHeightIn);
+  return <group name="renaissance-side-connected-header">
+    <mesh geometry={geometry}
+      position={[(start[0]+end[0])/2,midY,(start[1]+end[1])/2]}
+      rotation={[0,angle,0]} castShadow receiveShadow>
+      <meshStandardMaterial color={color} metalness={.48} roughness={.29}/>
+    </mesh>
+    {[capStart,capEnd].map((enabled,i)=>enabled&&<mesh
+      key={'factory-beam-end-closure-'+i}
+      name="renaissance-exposed-beam-end-cap"
+      position={[i===0?start[0]:end[0],midY,i===0?start[1]:end[1]]}
+      rotation={[0,angle,0]} castShadow receiveShadow>
+      <boxGeometry args={[capThickness,capHeight,capWidth]}/>
+      <meshStandardMaterial color={color} metalness={.4} roughness={.32}/>
+    </mesh>)}
+  </group>;
 }
 
 /** Open-ended hollow rectangular aluminum extrusion, measured OD and wall. */
@@ -329,6 +338,76 @@ export function RenaissanceTruss({from,to,color}:{
     position={a.add(b).multiplyScalar(.5).toArray() as [number,number,number]}
     quaternion={quaternion} castShadow receiveShadow>
     <meshStandardMaterial color={color} metalness={.38} roughness={.32}/>
+  </mesh>;
+}
+
+/**
+ * Continuous six-by-two-inch projection truss (Fresco/Aria). The front is cut
+ * as one connected 3D profile; NEVER stop the member short of a separate cap.
+ * The S/scallop is a visual manufacturer's family approximation, not an
+ * engineer-approved factory cutting template (mold radii are not dimensioned).
+ *
+ * `rear` and `nose` refer to the physical truss centerline stations. The
+ * upper surface stays collinear with roof pitch even in raised-truss mode.
+ */
+export function RenaissanceContinuousProjectionTruss({rear,nose,color,endStyle}:{
+  rear:[number,number,number];nose:[number,number,number];color:string;
+  endStyle:'straight'|'fresco-s'|'aria-scallop';
+}){
+  const length=nose[2]-rear[2];
+  const rise=nose[1]-rear[1];
+  const width=inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn);
+  const height=inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn);
+  const geometry=useMemo(()=>{
+    if(length<=.05||!Number.isFinite(length)||!Number.isFinite(rise))return null;
+    const tail=Math.min(1.05,Math.max(.18,length*.18));
+    const upper=(station:number)=>height/2+rise*station/length;
+    const lower=(station:number)=>upper(station)-height;
+    const s=new THREE.Shape();
+    s.moveTo(0,upper(0));
+    s.lineTo(length,upper(length));
+    if(endStyle==='straight'){
+      s.lineTo(length,lower(length));
+    }else if(endStyle==='aria-scallop'){
+      s.lineTo(length,upper(length)-.13);
+      s.bezierCurveTo(length-tail*.15,upper(length-tail*.15)-.15,
+        length-tail*.30,upper(length-tail*.30)-.20,
+        length-tail*.43,upper(length-tail*.43)-.29);
+      s.bezierCurveTo(length-tail*.57,upper(length-tail*.57)-.45,
+        length-tail*.80,lower(length-tail*.80),
+        length-tail,lower(length-tail));
+    }else{
+      // Fresco molded S: nose rounding, reverse curve, then full-depth body.
+      s.lineTo(length,upper(length)-.13);
+      s.bezierCurveTo(length-tail*.08,upper(length-tail*.08)-.15,
+        length-tail*.12,upper(length-tail*.12)-.37,
+        length-tail*.31,upper(length-tail*.31)-.37);
+      s.bezierCurveTo(length-tail*.48,upper(length-tail*.48)-.37,
+        length-tail*.49,upper(length-tail*.49)-.18,
+        length-tail*.66,upper(length-tail*.66)-.22);
+      s.bezierCurveTo(length-tail*.79,upper(length-tail*.79)-.26,
+        length-tail*.84,lower(length-tail*.84),
+        length-tail,lower(length-tail));
+    }
+    s.lineTo(0,lower(0));
+    s.closePath();
+    // Local X is the full front-to-back member; rotate into positive world Z.
+    // The extrusion is symmetric about the physical width station, not a
+    // second loose tail overlapping the beam.
+    const g=new THREE.ExtrudeGeometry(s,{depth:width,steps:1,
+      bevelEnabled:false,curveSegments:24});
+    g.translate(0,0,-width/2);
+    g.rotateY(-Math.PI/2);
+    g.computeVertexNormals();
+    return g;
+  },[length,rise,width,height,endStyle]);
+  useEffect(()=>()=>{geometry?.dispose();},[geometry]);
+  if(!geometry)return null;
+  return <mesh name={'continuous-'+endStyle+'-renaissance-truss'}
+    geometry={geometry} position={[rear[0],rear[1],rear[2]]}
+    castShadow receiveShadow>
+    <meshStandardMaterial color={color} metalness={.4} roughness={.3}
+      side={THREE.DoubleSide}/>
   </mesh>;
 }
 
