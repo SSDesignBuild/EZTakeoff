@@ -71,8 +71,6 @@ for(const piece of field){
 }
 const positions=[...new Set(breaker.map(b=>b.axis==='z'?b.x:b.z))];
 assert.equal(positions.length,3,'Three courses must have 3 different offsets');
-/* DIAGNOSE ONLY: TEMP BYPASS estimator assertions (restore before merge) */
-if(false){
 const e=calculateEstimate('decks',swatch);
 for(let i=0;i<3;i++){
   const frame=e.materials.filter(x=>x.name==='Picture-frame deck board '+(i+1));
@@ -94,9 +92,6 @@ const contour=planStraightStairFascia({treadDepthFt:11/12,treads:7,riseFt:5/8,he
 assert.equal(contour.length,4,'Straight fascia requires four corners and no stair-step notch');
 assert.ok(contour[0].riseFt>contour[1].riseFt);
 assert.ok(contour[3].riseFt<contour[0].riseFt);
-}
-/* TEMP DIAG: disabled unrelated downspout + static assertions */
-if(false){
 const outlet=[6,15,7],coverPosts=[[6,6],[0,6]];
 const deckPosts=[[6.2,5.8],[0,5.7]];
 const ground=planRenaissanceDownspout({
@@ -156,5 +151,4 @@ assert.ok(pick.includes('fasciaMaterial')&&pick.includes('stairFasciaMaterial'))
 assert.ok(css.includes('.manufacturer-rail-card .manufacturer-photo img'));
 assert.ok(css.includes('object-fit:contain'));
 assert.ok(admin.includes("key: 'stairFasciaStyle'")&&admin.includes("key: 'stairFasciaMaterial'"));
-}
 console.log('PASS 3-course swatch/color/mat-list parity, cut-out field decking, routed A/B elbow post downspouts and elevated return, 4-corner straight fascia and centered rail photographs');
