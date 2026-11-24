@@ -1,4 +1,4 @@
-import { DeckModel } from './deckModel';
+import { DeckModel,boardStockSegments } from './deckModel';
 
 const DECK_BOARD_FACE = 5.5 / 12;
 const DECK_GAP = 0.125 / 12;
@@ -62,18 +62,6 @@ function scanlineIntersections(points: { x: number; y: number }[], axis: 'horizo
   return pairs;
 }
 
-function boardStockSegments(totalLength: number, availableBreaks: number[] = []) {
-  const sortedBreaks = availableBreaks.filter((value) => value > 0.05 && value < totalLength - 0.05).sort((a, b) => a - b);
-  const marks = [0, ...sortedBreaks, totalLength];
-  const segments: number[] = [];
-  for (let i = 1; i < marks.length; i += 1) {
-    let span = marks[i] - marks[i - 1];
-    // Preserve continuous geometry. A run exceeding purchasable stock is an order-blocking issue, not an invented splice.
-    if (span > 0.05) segments.push(span);
-  }
-  return segments.map((length) => roundLen(length));
-}
-
 function groupedLengths(lengths: number[]) {
   const counts = new Map<number, number>();
   lengths.forEach((length) => {
@@ -113,7 +101,10 @@ export function deriveDeckingLabelPlan(deck: DeckModel): DeckingLabelPlan {
     groups.push({ kind: 'field', course: 0, cutLength, count, label });
   });
 
-  const pictureLengths = groupedLengths(deck.pictureFrameSegments.map((segment) => segment.length + PICTURE_FRAME_OVERHANG_ALLOWANCE_FT));
+  // Keep the manufacturer's two-inch miter/end trim allowance over each
+  // WHOLE picture-frame edge, then schedule supported shorter stock pieces.
+  const pictureLengths = groupedLengths(deck.pictureFrameSegments.flatMap((segment) =>
+    boardStockSegments(segment.length + PICTURE_FRAME_OVERHANG_ALLOWANCE_FT)));
   for (let course = 0; course < deck.pictureFrameCount; course += 1) {
     pictureLengths.forEach(({ cutLength, count }) => {
       const label = alphaLabel(cursor++);
@@ -124,8 +115,10 @@ export function deriveDeckingLabelPlan(deck: DeckModel): DeckingLabelPlan {
 
   const breakerLengths: number[] = [];
   deck.breakerBoardPositions.forEach((position) => {
-    if (deck.boardRun === 'width') scanlineIntersections(deck.points, 'vertical', position).forEach((pair) => breakerLengths.push(roundLen(pair.end - pair.start)));
-    else scanlineIntersections(deck.points, 'horizontal', position).forEach((pair) => breakerLengths.push(roundLen(pair.end - pair.start)));
+    if (deck.boardRun === 'width') scanlineIntersections(deck.points, 'vertical', position).forEach((pair) =>
+      breakerLengths.push(...boardStockSegments(pair.end-pair.start)));
+    else scanlineIntersections(deck.points, 'horizontal', position).forEach((pair) =>
+      breakerLengths.push(...boardStockSegments(pair.end-pair.start)));
   });
   const breakerGroups = groupedLengths(breakerLengths);
   for (let course = 0; course < deck.breakerBoardCount; course += 1) {
