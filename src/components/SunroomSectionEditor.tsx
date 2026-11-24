@@ -5,6 +5,9 @@ import { sunroomDoorWidthFeet } from '../lib/sunroomSectionGeometry';
 interface Props {
   values: Record<string, string | number | boolean>;
   onValuesChange: (updater: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => void;
+  /** Admin retains multi-opening editing; Sales one section is one complete wall bay. */
+  onePhysicalOpening?: boolean;
+  transomEndLabels?: readonly [string,string];
 }
 
 const attachOptions: { label: string; value: SunroomSectionConfig['bottomAttach'] }[] = [
@@ -13,7 +16,8 @@ const attachOptions: { label: string; value: SunroomSectionConfig['bottomAttach'
   { label: 'Concrete - 1 1/2 in Tapcon screws', value: 'concrete' },
 ];
 
-export function SunroomSectionEditor({ values, onValuesChange }: Props) {
+export function SunroomSectionEditor({ values, onValuesChange,onePhysicalOpening=false,
+ transomEndLabels=['Left end','Right end'] }: Props) {
   const sections = parseSunroomSections(values.sunroomSections, 3);
   const updateSections = (next: SunroomSectionConfig[]) => {
     onValuesChange((current) => ({ ...current, sunroomSections: JSON.stringify(next.map((section, index) => ({ ...section, label: `Section ${index + 1}` }))) }));
@@ -26,20 +30,31 @@ export function SunroomSectionEditor({ values, onValuesChange }: Props) {
   };
   const removeSection = (id: string) => sections.length > 1 && updateSections(sections.filter((section) => section.id !== id));
 
-  return <section className="content-card"><div className="section-heading inline-heading"><div><p className="eyebrow">Section editor</p><h3>Sunroom wall sections</h3></div><div className="tag-row"><span className="tag">24 ft stock logic with individually editable sections</span><button type="button" className="secondary-btn" onClick={addSection}>Add section</button></div></div><div className="section-card-grid">{sections.map((section)=>{
+  return <section className="content-card"><div className="section-heading inline-heading"><div><p className="eyebrow">Section editor</p><h3>{onePhysicalOpening?'One physical wall opening':'Sunroom wall sections'}</h3>
+    {onePhysicalOpening&&<p className="consultation-visual-note">
+      One section covers the entire opening between Renaissance posts. Add UP-RIGHTS
+      to divide that section into window bays. For example, 11′6″ with 2 uprights
+      is ONE section containing THREE windows; it does not need three sections.
+      Height is the TALLER measured end. Set the separate left/right transom
+      rises above the common level main-window head; a 9′ to 8′ roof creates
+      a 1′–0′ triangular transom, not sloped main windows.
+    </p>}
+  </div><div className="tag-row"><span className="tag">24 ft stock logic: continuous opening, split by uprights</span>
+  {!onePhysicalOpening&&<button type="button" className="secondary-btn" onClick={addSection}>Add section</button>}</div></div><div className="section-card-grid">{sections.map((section)=>{
     const doorWidth = sunroomDoorWidthFeet(section);
     const maxDoorOffset = Math.max(0, section.width * 12 - doorWidth * 12);
-    return <div key={section.id} className="section-card"><div className="inline-heading"><h4>{section.label}</h4><button type="button" className="ghost-btn small-btn" onClick={()=>removeSection(section.id)}>Remove</button></div><div className="form-grid section-input-grid">
-    <label className="form-field"><span>Width (ft)</span><input type="number" step="0.1" value={section.width} onChange={(e)=>updateSection(section.id,{width:Number(e.target.value)})} /></label>
-    <label className="form-field"><span>Height (ft)</span><input type="number" step="0.1" value={section.height} onChange={(e)=>updateSection(section.id,{height:Number(e.target.value)})} /></label>
-    <label className="form-field"><span>Uprights</span><input type="number" step="1" min="0" value={section.uprights} onChange={(e)=>updateSection(section.id,{uprights:Number(e.target.value)})} /></label>
+    return <div key={section.id} className="section-card"><div className="inline-heading"><h4>{onePhysicalOpening?'Complete opening '+(sections.length>1?'('+section.label+')':''):section.label}</h4>
+    {!onePhysicalOpening&&<button type="button" className="ghost-btn small-btn" onClick={()=>removeSection(section.id)}>Remove</button>}</div><div className="form-grid section-input-grid">
+    <label className="form-field"><span>{onePhysicalOpening?'Whole opening width between posts (ft)':'Width (ft)'}</span><input type="number" step="0.1" value={section.width} onChange={(e)=>updateSection(section.id,{width:Number(e.target.value)})} /></label>
+    <label className="form-field"><span>{onePhysicalOpening?'Maximum opening height at high roof end (ft)':'Height (ft)'}</span><input type="number" step="0.1" value={section.height} onChange={(e)=>updateSection(section.id,{height:Number(e.target.value)})} /></label>
+    <label className="form-field"><span>{onePhysicalOpening?'Internal uprights (create additional windows)':'Uprights'}</span><input type="number" step="1" min="0" value={section.uprights} onChange={(e)=>updateSection(section.id,{uprights:Number(e.target.value)})} /></label>
     <label className="form-field"><span>Upright coverage</span><select value={section.uprightMode} onChange={(e)=>updateSection(section.id,{uprightMode:e.target.value as SunroomSectionConfig['uprightMode']})}><option value="main-only">Main only</option><option value="main-kick">Main + kick</option><option value="main-transom">Main + transom</option><option value="all">Main + kick + transom</option></select></label>
     <label className="form-field"><span>Main section</span><select value={section.mainSection} onChange={(e)=>updateSection(section.id,{mainSection:e.target.value as SunroomSectionConfig['mainSection']})}><option value="horizontal-sliders">Horizontal sliders (standard)</option><option value="double-horizontal-sliders">Double horizontal sliders · 4 panels</option><option value="vertical-sliders">Vertical sliders</option><option value="casement">Casement windows</option><option value="picture-window">Picture window · fixed</option><option value="panel">Solid panel</option></select></label>
     <label className="form-field"><span>Kick section</span><select value={section.kickSection} onChange={(e)=>updateSection(section.id,{kickSection:e.target.value as SunroomSectionConfig['kickSection']})}><option value="none">None</option><option value="insulated">Insulated panel</option><option value="panel">Panel</option><option value="window">Picture window (legacy)</option><option value="picture-window">Picture window · fixed</option><option value="horizontal-sliders">Horizontal slider</option><option value="double-horizontal-sliders">Double horizontal slider</option><option value="vertical-sliders">Vertical slider</option><option value="casement">Casement</option></select></label>
     <label className="form-field"><span>Kick panel height (ft)</span><input type="number" step="0.1" min="0" value={section.kickHeight} onChange={(e)=>updateSection(section.id,{kickHeight:Number(e.target.value)})} /></label>
     <label className="form-field"><span>Transom</span><select value={section.transomType} onChange={(e)=>updateSection(section.id,{transomType:e.target.value as SunroomSectionConfig['transomType']})}><option value="auto">Auto based on existing layout</option><option value="none">None</option><option value="panel">Panel</option><option value="picture-window">Picture window · fixed</option><option value="horizontal-sliders">Horizontal slider</option><option value="double-horizontal-sliders">Double horizontal slider</option><option value="vertical-sliders">Vertical slider</option><option value="casement">Casement</option></select></label>
-    <label className="form-field"><span>Left transom height (ft)</span><input type="number" step="0.1" min="0" value={section.leftTransomHeight} onChange={(e)=>updateSection(section.id,{leftTransomHeight:Number(e.target.value)})} /></label>
-    <label className="form-field"><span>Right transom height (ft)</span><input type="number" step="0.1" min="0" value={section.rightTransomHeight} onChange={(e)=>updateSection(section.id,{rightTransomHeight:Number(e.target.value)})} /></label>
+    <label className="form-field"><span>{onePhysicalOpening?transomEndLabels[0]+' transom rise (ft)':'Left transom height (ft)'}</span><input type="number" step="0.01" min="0" value={section.leftTransomHeight} onChange={(e)=>updateSection(section.id,{leftTransomHeight:Number(e.target.value)})} /></label>
+    <label className="form-field"><span>{onePhysicalOpening?transomEndLabels[1]+' transom rise (ft)':'Right transom height (ft)'}</span><input type="number" step="0.01" min="0" value={section.rightTransomHeight} onChange={(e)=>updateSection(section.id,{rightTransomHeight:Number(e.target.value)})} /></label>
     <label className="form-field"><span>Electric chase</span><select value={section.electricChase ? 'yes' : 'no'} onChange={(e)=>updateSection(section.id,{electricChase:e.target.value === 'yes'})}><option value="no">No</option><option value="yes">Yes</option></select></label>
     <label className="form-field"><span>Door</span><select value={section.doorType} onChange={(e)=>updateSection(section.id,{doorType:e.target.value as SunroomSectionConfig['doorType']})}><option value="none">None</option><option value="single">Elite Prime Full View entry · outswing</option><option value="slider">Legacy sliding glass door 6' x 6'8" · verify unit</option></select></label>
     {section.doorType === 'single' && <>
