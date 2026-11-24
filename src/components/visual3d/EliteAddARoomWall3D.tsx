@@ -9,6 +9,7 @@ import { sunroomDoorRect,sunroomSpansExcludingDoor,sunroomGlazingBays,
   sunroomUprightOffsetsExcludingDoor,type EliteGlazingOpening } from '../../lib/sunroomSectionGeometry';
 import { Block,SlopedBeam } from './Primitives';
 import { EliteVerticalExtrusion,EliteHorizontalExtrusion } from './EliteAddARoomExtrusions';
+import { ELITE_CATALOG_PROFILES } from '../../lib/eliteAddARoomExtrusions';
 
 const FINISH_COLORS:Record<EliteSunroomFinish,string>={
  white:'#e7e9e7',wheat:'#c6b59a',clay:'#aa998d',bronze:'#574b40',
@@ -140,8 +141,9 @@ function ElitePrimeDoor({section,frameColor,glazing}:{
    <group name={'prime-door-glazing-'+section.doorType}/>
  </group>;
 }
-function EliteSection({section,xStart,settings}:{
+function EliteSection({section,xStart,settings,index,total}:{
  section:SunroomSectionConfig;xStart:number;settings:EliteSunroomSettings;
+ index:number;total:number;
 }){
  const framing=FINISH_COLORS[settings.framingColor];
  const windowColor=FINISH_COLORS[settings.windowColor];
@@ -181,18 +183,38 @@ function EliteSection({section,xStart,settings}:{
   });
  };
  return <group name={'elite-add-a-room-section-'+section.label} position={[xStart,0,0]}>
-   {/* Actual 2/3-in U-shaped receiving channel against preexisting
-        Renaissance structural post (never a replacement corner post). */}
-   {[0,section.width].map((x,i)=><group key={'wall-receiver-'+i}
-      name={i===0?'left-receiver-drc':'right-receiver-drc'}>
+   {/* Only the two OUTSIDE wall boundaries touch Renaissance columns.
+        Internal section joins share one vertical H extrusion (not two
+        overlapping receivers or invented Elite structural corner posts). */}
+   {index===0&&<group name="elite-exterior-left-receiver-and-drc">
       <EliteVerticalExtrusion system={settings.roomSystem} kind="receiver"
-        x={x} bottom={0} height={section.height}
-        flip={i===1} color={framing} name="receiving-channel-back"/>
-      {/* DRC engages sash at both external window/door opening edges. */}
+        x={0} bottom={0} height={section.height}
+        color={framing} name="receiving-channel-back"/>
       <EliteVerticalExtrusion system={settings.roomSystem} kind="drc"
-        x={x+(i===0?1:-1)*ft(1.5)} bottom={0} height={section.height}
-        flip={i===1} color={windowColor} name="DRC-window-edge"/>
-   </group>)}
+        x={ft(ELITE_CATALOG_PROFILES[settings.roomSystem].receiverLipIn)}
+        bottom={0} height={section.height}
+        color={windowColor} name="DRC-window-edge"/>
+   </group>}
+   {index===total-1&&<group name="elite-exterior-right-receiver-and-drc">
+      <EliteVerticalExtrusion system={settings.roomSystem} kind="receiver"
+        x={section.width} bottom={0} height={section.height}
+        flip color={framing} name="receiving-channel-back"/>
+      <EliteVerticalExtrusion system={settings.roomSystem} kind="drc"
+        x={section.width-ft(ELITE_CATALOG_PROFILES[settings.roomSystem].receiverLipIn)}
+        bottom={0} height={section.height}
+        flip color={windowColor} name="DRC-window-edge"/>
+   </group>}
+   {index>0&&<group name="elite-shared-internal-section-H">
+      <EliteVerticalExtrusion system={settings.roomSystem} kind="h-vertical"
+        x={0} bottom={0} height={section.height}
+        color={framing} name="elite-h-beam-vertical-between-sections"/>
+      {[-1,1].map((sign,j)=>
+        <EliteVerticalExtrusion key={'shared-h-face-'+j}
+          system={settings.roomSystem} kind="drc"
+          x={sign*ft(ELITE_CATALOG_PROFILES[settings.roomSystem].hFaceIn/2)}
+          bottom={0} height={section.height} flip={j===1}
+          color={windowColor} name="elite-shared-H-DRC-window-face"/>)}
+   </group>}
    {widths.map((span,i)=><EliteHorizontalExtrusion key={'base-channel-'+i}
       system={settings.roomSystem} kind="bottom"
       name="elite-bottom-base-channel-weep" start={span.start} end={span.end}
@@ -258,7 +280,7 @@ export function EliteAddARoomWall3D({run,sections,settings}:{
    {sections.map((section,i)=>{
      const x=cursor;cursor+=section.width;
      return <EliteSection key={section.id||i} section={section}
-       xStart={x} settings={settings}/>;
+       xStart={x} index={i} total={sections.length} settings={settings}/>;
    })}
  </group>;
 }
