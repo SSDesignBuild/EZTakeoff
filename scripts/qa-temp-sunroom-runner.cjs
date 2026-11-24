@@ -28,3 +28,6 @@ fs.mkdirSync(path.join(root,'dist'),{recursive:true});
 fs.writeFileSync(path.join(root,'dist','__elite_qa_results.json'),JSON.stringify(out,null,2));
 fs.writeFileSync(path.join(root,'dist','index.html'),'<!doctype html><title>Temporary preview QA</title><p>Feature not yet released. Build validation in progress.</p>');
 process.stdout.write('Temporary diagnostic finished; release still requires full strict test and TypeScript/Vite build.\n');
+const firstFail=results.findIndex(result=>result.status==='FAIL');
+if(firstFail>=0)process.exit(100+firstFail); // Dev preview error_code decodes first suite index.
+
