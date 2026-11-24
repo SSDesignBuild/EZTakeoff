@@ -903,11 +903,70 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       ));
     }
   }
-  activeSkirtingPlans.forEach((plan)=>materials.push(...plan.materials));
+  // Pool actual cut requirements across main/lower deck and stair skirting,
+  // but ONLY when the finish SKU, color, trim and saw kerf match. Previously
+  // each area bought separate stock and discarded usable offcuts, inflating
+  // orders even when a stair skirting cut fits the leftover of a deck course.
+  let skirtingFinishPurchased=0;
+  const skirtingPurchaseIssues:string[]=[];
+  const finishPools=new Map<string,typeof activeSkirtingPlans>();
+  const framingPools=new Map<string,typeof activeSkirtingPlans>();
+  activeSkirtingPlans.forEach(plan=>{
+    materials.push(...plan.materials.filter(item=>item.unit!=='boards'));
+    const opt=plan.options;
+    const fkey=[opt.material,opt.finishColor,opt.kerfIn,opt.trimIn].join('|');
+    const framingKey=[opt.kerfIn,opt.trimIn].join('|');
+    const finishGroup=finishPools.get(fkey)??[];
+    finishGroup.push(plan);finishPools.set(fkey,finishGroup);
+    const frameGroup=framingPools.get(framingKey)??[];
+    frameGroup.push(plan);framingPools.set(framingKey,frameGroup);
+  });
+  for(const plans of finishPools.values()){
+    const selected=plans[0].options;
+    const cuts=plans.flatMap(plan=>plan.cuts.filter(cut=>cut.material==='finish'));
+    const lengthCatalog=selected.material==='kdat'?[8,12,16,20]:[16,20];
+    const optimized=packSkirtCuts(cuts,lengthCatalog,selected.kerfIn,selected.trimIn);
+    skirtingPurchaseIssues.push(...optimized.issues.map(issue=>'Shared skirting finish: '+issue));
+    skirtingFinishPurchased+=optimized.stock.length;
+    for(const length of [...new Set(optimized.stock.map(stock=>stock.stockLengthFt))]){
+      const bins=optimized.stock.filter(stock=>stock.stockLengthFt===length);
+      const refs=bins.flatMap(bin=>bin.cuts.map(cut=>cut.id));
+      materials.push(toMaterial(
+        (selected.material==='kdat'?'1x5 KDAT pressure-treated':selected.material==='pvc'?'PVC':'Composite')+
+          ' deck and stair skirting finish',
+        'Skirting',bins.length,'boards',length+' ft stock',selected.finishColor,
+        'Combined deck / stair / lower tier finish stock for identical SKU. '+
+        refs.length+' supported cuts packed with '+selected.kerfIn+' in kerf and '+
+        selected.trimIn+' in end trim. Offcuts are reused across rows and stair panels. '+
+        'Cuts: '+refs.slice(0,25).join(', ')+(refs.length>25?'; +'+(refs.length-25)+' more':'')+'.',
+        refs.slice(0,10).join(', ')));
+    }
+  }
+  for(const plans of framingPools.values()){
+    const selected=plans[0].options;
+    const cuts=plans.flatMap(plan=>plan.cuts.filter(cut=>cut.material==='2x4'));
+    const optimized=packSkirtCuts(cuts,[8,10,12,16,20],selected.kerfIn,selected.trimIn);
+    skirtingPurchaseIssues.push(...optimized.issues.map(issue=>'Shared skirting 2x4: '+issue));
+    for(const length of [...new Set(optimized.stock.map(stock=>stock.stockLengthFt))]){
+      const bins=optimized.stock.filter(stock=>stock.stockLengthFt===length);
+      const refs=bins.flatMap(bin=>bin.cuts.map(cut=>cut.id));
+      materials.push(toMaterial('2x4 ground-contact-rated deck and stair skirting supports',
+        'Skirting',bins.length,'boards',length+' ft stock',
+        'Ground-contact treatment - confirm grade',
+        'Top, bottom and 24 in O.C. uprights packed across matching assemblies. '+
+        refs.length+' framing cuts, '+selected.kerfIn+' in kerf and '+
+        selected.trimIn+' in trim. Cuts: '+refs.slice(0,22).join(', ')+
+        (refs.length>22?'; +'+(refs.length-22)+' more':'')+'.',
+        refs.slice(0,10).join(', ')));
+    }
+  }
   materials.push(...gatePlan.materials);
   return {
     summary: [
-      { label: 'Skirting', value: activeSkirtingPlans.map((p)=>p.sides.length+' sides / '+p.finishStock.length+' finish stock boards').join('; ') || 'None' },
+      { label: 'Skirting', value: activeSkirtingPlans.length
+        ?activeSkirtingPlans.map(p=>p.sides.length+' sides').join('; ')+
+          ' / '+skirtingFinishPurchased+' optimized shared finish stock boards'
+        :'None' },
       ...(gatePlan.gates.length ? [{label:'Gate hardware',value:gatePlan.hinges+' self-closing hinges · '+gatePlan.slideBolts+' slide bolts · '+gatePlan.caneBolts+' cane bolts'}] : []),
       ...(timberTechPlan ? [{label: 'TimberTech railing',value: timberTechPlan.profile+' / '+timberTechPlan.color+' / '+timberTechPlan.panels.length+' panel kits'}] : []),
       { label: 'Framing & footings', value: `${deck.joistSize} joists · ${deck.beamMemberSize} beams · ${deck.postSize} posts · ${deck.footingDiameterIn} in × ${deck.footingDepthIn} in footings` },
@@ -922,6 +981,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       ...woodDrinkRailIssues,
       ...stairFinishIssues,
       ...finishStockIssues,
+      ...skirtingPurchaseIssues,
       ...gatePlan.issues,
       ...(lowerDeck ? lowerDeck.postLayoutIssues.map((issue) => 'Lower deck: ' + issue) : []),
       ...skirtingPlan.issues.map((issue) => 'Main deck skirting: ' + issue),
