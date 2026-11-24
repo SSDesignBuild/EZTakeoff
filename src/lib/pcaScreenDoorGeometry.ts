@@ -14,6 +14,34 @@ export const PCA_PET_OPENINGS={
   medium:{widthIn:11,heightIn:13},
   large:{widthIn:13,heightIn:20},
 } as const;
+/**
+ * PCA documentation:
+ * - 8in is the standard kick plate on a door WITHOUT a pet insert.
+ * - Magnador small outer frame 7 7/8 x 10 1/2in,
+ *   medium 13 x 15 5/8in, large 16 7/8 x 23 3/4in.
+ * A pet door cuts the kick panel, so pick the next PCA-offered panel height
+ * taller than the ENTIRE pet frame, not just its opening. The 24in kick panel
+ * is the only offered height which surrounds medium and large inserts.
+ * Source: pcaproducts.com/screen-door/accessories-hardware/{pet-door-options,heavy-aluminum-kick-plates}
+ */
+export const PCA_PET_FRAME={
+  small:{cutWidthIn:6+5/8,cutHeightIn:9+5/16,outerWidthIn:7+7/8,outerHeightIn:10.5},
+  medium:{cutWidthIn:11+7/16,cutHeightIn:14,outerWidthIn:13,outerHeightIn:15+5/8},
+  large:{cutWidthIn:14.5,cutHeightIn:22+7/16,outerWidthIn:16+7/8,outerHeightIn:23.75},
+} as const;
+export const PCA_KICK_HEIGHT_OPTIONS=[0,8,12,14,24] as const;
+export function effectivePcaKickPlateIn(pet:PcaPetDoor,selectedIn=8):number{
+  if(pet==='none'){
+    return PCA_KICK_HEIGHT_OPTIONS.includes(selectedIn as typeof PCA_KICK_HEIGHT_OPTIONS[number])
+      ? selectedIn:8;
+  }
+  const outside=PCA_PET_FRAME[pet].outerHeightIn;
+  // No zero-height option may be selected with a pet insert.
+  return PCA_KICK_HEIGHT_OPTIONS.find(height=>height>outside+0.125)??24;
+}
+export function pcaKickPlateSupportsPet(pet:PcaPetDoor,heightIn:number):boolean{
+  return pet==='none'||heightIn>PCA_PET_FRAME[pet].outerHeightIn;
+}
 export function pcaPetCompatibility(model:PcaDoorModel,pet:PcaPetDoor):boolean {
   return pet==='none'||pet==='small'||model==='A-100';
 }
