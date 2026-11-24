@@ -14,6 +14,7 @@ import { saveHousePhoto, readHousePhoto, deleteHousePhoto } from '../lib/consult
 import { createEstimateHandoff, parseEstimateResponse, makeAcceptedScope, downloadJson, selectedPricedTier } from '../lib/estimatingBridge';
 import { ConsultationDeckFinishes, StairFasciaFinishSelect } from './ConsultationDeckFinishes';
 import { deckVisualProducts } from '../data/visualCatalog';
+import { ConsultationCloudPanel } from './ConsultationCloudPanel';
 
 const Live3D=lazy(()=>import('./Consultation3D').then((module)=>({default:module.Consultation3D})));
 type Step='photo'|'layout'|'options'|'render';
@@ -324,7 +325,9 @@ export function ConsultationStudio(){
   const create=()=>{
     const id=crypto.randomUUID();
     setProjects((current)=>[makeConsultationProject(id),...current]);
-    navigate('/consultation/'+id);
+    const quoteId=new URLSearchParams(window.location.search).get('quoteId');
+    const linked=quoteId&&/^[0-9a-f-]{36}$/i.test(quoteId)?'?quoteId='+encodeURIComponent(quoteId):'';
+    navigate('/consultation/'+id+linked);
   };
   const update=(changes:Partial<ConsultationProject>)=>{
     if(!projectId)return;
@@ -339,6 +342,19 @@ export function ConsultationStudio(){
         <button type="button" className="secondary-btn" onClick={create}>+ New consultation</button>
       </div>
     </div>
+    <ConsultationCloudPanel project={project??null} onOpen={(remote)=>{
+      // Opening a cloud revision replaces only that matching local record.
+      // A photo that was already saved in this browser is kept unchanged.
+      setProjects(current=>{
+        const prior=current.find(p=>p.id===remote.id);
+        return [{...remote,photoPresent:prior?.photoPresent??false},
+          ...current.filter(p=>p.id!==remote.id)];
+      });
+      navigate('/consultation/'+remote.id);
+    }} onPhotoRestored={(id)=>{
+      setProjects(current=>current.map(p=>p.id===id?
+        updateConsultation(p,{photoPresent:true}):p));
+    }}/>
     {project?<ConsultationEditor key={project.id} project={project} onChange={update}/>:
       <section className="consultation-list">
         <div className="consultation-list-heading">

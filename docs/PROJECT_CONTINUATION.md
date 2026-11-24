@@ -158,3 +158,9 @@ Only GitHub as repository; Netlify handles build/test/deploy; automatic paid Git
 - Fresco now has a visual leading edge cap on each translucent panel bay, still no architectural gutter or rain leader. Dolce wall top contours rise to the roof underside instead of ending short at header bottoms, and PCA 3068 access receives paired full-height screening uprights.
 - Renaissance Sandstone frame, roof, and ceiling 3D palettes share one lighter illustrative color; manufacturer physical color samples still govern procurement.
 - Regression assertions appended to scripts/test-video-visual-accuracy.cjs. No new pricing logic, customer uploads or changes to Admin Takeoff/material stock optimizer. Netlify strict preview/production deploy gate required.
+
+## Nov 23, 2026 — Opt-in Estimator cloud design library
+- The exact connected Supabase project `ytiqdahvbymuswoyzalc` has two applied additive migrations for private quote-linked revisioned designs, audited ownership/accepted/sold locks, collaborator location validation and private image bucket. No quote pricing columns were modified.
+- New `src/lib/consultationCloud.ts` and `src/components/ConsultationCloudPanel.tsx` sign in using existing Estimator Auth, list RLS-accessible designs, explicitly save with optimistic revision conditions, and require loading a current cloud record before updating. The local browser project remains independently saved and its photo remains IndexedDB-only.
+- Netlify frontend has only public Supabase publishable key + URL; no admin/service secrets. Added `scripts/test-cloud-design-contract.cjs` and kept strict Netlify build gate.
+- Remaining Estimator-to-design deep-link/quote picker, collaborator manager UI, private photo/Drive upload and real price-tier API intentionally not presented as complete. See `docs/CLOUD_ESTIMATOR_DESIGNS.md`.
