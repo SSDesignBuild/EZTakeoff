@@ -74,10 +74,16 @@ function RectangularSashLite({left,width,bottom,height,depth,color,kind}:{
      name={i===0?'sash-bottom-track':'sash-top-track'}
      position={[width/2,y,.002]} size={[width,rail,.087]}
      color={color} metalness={.32}/>)}
-   <Block name="sash-interior-weatherseal-lip"
-     position={[width/2,height/2,-.035]}
-     size={[glassW+edge,glassH+edge,.026]}
-     color="#777e80" metalness={.22}/>
+   {/* Weatherseal is four narrow perimeter strips, NOT an opaque
+       panel behind otherwise clear insulated glass. */}
+   {[-1,1].map((side,i)=><Block key={'sash-gasket-side-'+i}
+     name="sash-interior-weatherseal-lip"
+     position={[side<0?rail+edge/2:width-rail-edge/2,height/2,-.035]}
+     size={[edge,glassH+edge,.026]} color="#777e80" metalness={.22}/>)}
+   {[0,height].map((y,i)=><Block key={'sash-gasket-head-'+i}
+     name="sash-interior-weatherseal-lip"
+     position={[width/2,y===0?rail+edge/2:height-rail-edge/2,-.035]}
+     size={[glassW+edge,edge,.026]} color="#777e80" metalness={.22}/>)}
    {[-1,1].map((face,i)=><mesh key={'insulated-lite-'+i}
      name="clear-insulated-glass-lite"
      position={[width/2,height/2,face*.019]}>
@@ -208,9 +214,15 @@ function ElitePrimeDoor({section,frameColor,glazing}:{
    <Block name="full-view-door-leaf-bottom-rail"
      position={[width/2,bottomRail/2+.085,.055]}
      size={[width-jamb*2,bottomRail,.12]} color={frameColor}/>
-   <Block name="tempered-glass-black-edge-seal"
-     position={[width/2,DOOR_HEIGHT_FT/2+.014,-.015]}
-     size={[glassWidth+.02,glassHeight+.02,.031]} color="#78858b"/>
+   {/* Prime glazing gasket is perimeter-only: keep full-view pane CLEAR. */}
+   {[-1,1].map((sign,i)=><Block key={'prime-glazing-gasket-side-'+i}
+     name="tempered-glass-black-edge-seal"
+     position={[width/2+sign*glassWidth/2,DOOR_HEIGHT_FT/2+.014,-.015]}
+     size={[.028,glassHeight+.025,.031]} color="#78858b"/>)}
+   {[-1,1].map((sign,i)=><Block key={'prime-glazing-gasket-head-'+i}
+     name="tempered-glass-black-edge-seal"
+     position={[width/2,DOOR_HEIGHT_FT/2+.014+sign*glassHeight/2,-.015]}
+     size={[glassWidth+.02,.028,.031]} color="#78858b"/>}
    {[-1,1].map((face,i)=><mesh key={'prime-glass-'+i}
      name="prime-clear-full-view-glazed-lite"
      position={[width/2,DOOR_HEIGHT_FT/2+.014,face*.021]}>
