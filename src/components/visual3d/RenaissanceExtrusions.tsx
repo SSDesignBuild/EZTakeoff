@@ -115,7 +115,7 @@ export function RenaissancePost({x,z,bottom,top,profile,color}:{
     // Offset the INTERIOR by the measured SD/HD wall gauge as well; leaving
     // a square hole behind recessed post cheeks would make wall thickness
     // spuriously thin. Four corner extrusions and their interior now agree.
-    const innerCorners:Array<[number,number]>=corners.map(([x,y])=>[
+    const innerCorners:Array<[number,number]>=corners.map(([x,y]):[number,number]=>[
       x-Math.sign(x)*t,y-Math.sign(y)*t,
     ]).reverse();
     innerCorners.forEach(([x,y],i)=>i===0?inner.moveTo(x,y):inner.lineTo(x,y));
