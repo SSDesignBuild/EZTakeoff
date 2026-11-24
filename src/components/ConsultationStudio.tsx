@@ -325,7 +325,9 @@ export function ConsultationStudio(){
   const create=()=>{
     const id=crypto.randomUUID();
     setProjects((current)=>[makeConsultationProject(id),...current]);
-    navigate('/consultation/'+id);
+    const quoteId=new URLSearchParams(window.location.search).get('quoteId');
+    const linked=quoteId&&/^[0-9a-f-]{36}$/i.test(quoteId)?'?quoteId='+encodeURIComponent(quoteId):'';
+    navigate('/consultation/'+id+linked);
   };
   const update=(changes:Partial<ConsultationProject>)=>{
     if(!projectId)return;
