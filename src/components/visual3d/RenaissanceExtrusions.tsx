@@ -9,18 +9,39 @@ import type { GutterRun } from '../../lib/renaissanceGutterGeometry';
 import { architecturalGutterOutlineFt,miterAlongFt } from '../../lib/renaissanceGutterGeometry';
 import type { DownspoutLayout } from '../../lib/renaissanceDownspoutRouting';
 
-function outlineWithRibs(width:number,height:number){
-  // The reference photos do not dimension the former four horizontal
-  // tongue/reveal lines. Do not invent rib locations on finished beam faces.
-  // Retain the measured outside envelope; manufacturer cross-section assets
-  // must be approved before individual internal tongues are modeled.
-  const w=width/2,h=height/2;
+/**
+ * The 2025 Aria/Fresco 6x2 truss and 7x2.75 SD/HD header reference drawings
+ * show real concave mid-height formed cheek bends, NOT plain tubes and NOT
+ * arbitrary decorative stripes. Outside envelopes and gauges stay measured.
+ * Groove stations/radii are proportionally approximated where undimensioned.
+ */
+function outlineWithRibs(width:number,height:number,wall=0){
+  const t=Math.max(0,wall),w=width/2,h=height/2;
+  const recess=Math.min(inchToFoot(.13),width*.065);
+  const pts=(halfWidth:number,halfHeight:number):Array<[number,number]>=>{
+    const inward=Math.min(recess,halfWidth*.12);
+    return [
+      [-halfWidth,-halfHeight],[halfWidth,-halfHeight],
+      [halfWidth,-halfHeight*.30],[halfWidth-inward,-halfHeight*.17],
+      [halfWidth-inward,halfHeight*.17],[halfWidth,halfHeight*.30],
+      [halfWidth,halfHeight],[-halfWidth,halfHeight],
+      [-halfWidth,halfHeight*.30],[-halfWidth+inward,halfHeight*.17],
+      [-halfWidth+inward,-halfHeight*.17],[-halfWidth,-halfHeight*.30],
+    ];
+  };
+  const draw=(contour:Array<[number,number]>,shape:THREE.Shape|THREE.Path)=>{
+    contour.forEach(([x,y],i)=>i===0?shape.moveTo(x,y):shape.lineTo(x,y));
+    shape.closePath();
+  };
   const shape=new THREE.Shape();
-  shape.moveTo(-w,-h);shape.lineTo(w,-h);
-  shape.lineTo(w,h);shape.lineTo(-w,h);shape.closePath();
+  draw(pts(w,h),shape);
+  if(t>.0001&&w-t>.02&&h-t>.02){
+    const interior=new THREE.Path();
+    draw(pts(w-t,h-t).reverse(),interior);
+    shape.holes.push(interior);
+  }
   return shape;
 }
-
 /** Measured external envelope; HD differs from SD in wall gauge, not outer size. */
 export function RenaissanceHeader({start,end,midY,profile,color,capStart=false,capEnd=false}:{
   start:P2;end:P2;midY:number;profile:RenaissanceExtrusionProfile;color:string;
@@ -31,10 +52,7 @@ export function RenaissanceHeader({start,end,midY,profile,color,capStart=false,c
     if(length<.01)return null;
     const w=inchToFoot(profile.headerDepthIn),h=inchToFoot(profile.headerHeightIn);
     const t=inchToFoot(profile.headerWallIn);
-    const outside=outlineWithRibs(w,h),hole=new THREE.Path();
-    hole.moveTo(-w/2+t,-h/2+t);hole.lineTo(-w/2+t,h/2-t);
-    hole.lineTo(w/2-t,h/2-t);hole.lineTo(w/2-t,-h/2+t);hole.closePath();
-    outside.holes.push(hole);
+    const outside=outlineWithRibs(w,h,t);
     const g=new THREE.ExtrudeGeometry(
       outside,{depth:length,steps:1,bevelEnabled:false,curveSegments:2},
     );
@@ -77,8 +95,22 @@ export function RenaissancePost({x,z,bottom,top,profile,color}:{
     const side=inchToFoot(profile.postOutsideIn);
     const t=inchToFoot(profile.postWallIn);
     const outer=new THREE.Shape();
-    outer.moveTo(-side/2,-side/2);outer.lineTo(side/2,-side/2);
-    outer.lineTo(side/2,side/2);outer.lineTo(-side/2,side/2);outer.closePath();
+    // Four formed CORNER ribs, measured outside width preserved. Recess
+    // details are reference-derived representative, not factory die CAD.
+    const full=side/2,corner=inchToFoot(.30),recess=inchToFoot(.045);
+    const corners:Array<[number,number]>=[
+      [-full,-full],[-full+corner,-full],
+      [-full+corner,-full+recess],[full-corner,-full+recess],
+      [full-corner,-full],[full,-full],[full,-full+corner],
+      [full-recess,-full+corner],[full-recess,full-corner],
+      [full,full-corner],[full,full],[full-corner,full],
+      [full-corner,full-recess],[-full+corner,full-recess],
+      [-full+corner,full],[-full,full],[-full,full-corner],
+      [-full+recess,full-corner],[-full+recess,-full+corner],
+      [-full,-full+corner],
+    ];
+    corners.forEach(([x,y],i)=>i===0?outer.moveTo(x,y):outer.lineTo(x,y));
+    outer.closePath();
     const inner=new THREE.Path();
     const hole=side/2-t;
     inner.moveTo(-hole,-hole);inner.lineTo(-hole,hole);
@@ -326,7 +358,8 @@ export function RenaissanceTruss({from,to,color}:{
   const geometry=useMemo(()=>{
     if(length<.01)return null;
     const shape=outlineWithRibs(inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn),
-      inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn));
+       inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn),
+       inchToFoot(RENAISSANCE_TRUSS.wallIn));
     const g=new THREE.ExtrudeGeometry(shape,{depth:length,bevelEnabled:false,steps:1});
     g.translate(0,0,-length/2);g.computeVertexNormals();
     return g;
