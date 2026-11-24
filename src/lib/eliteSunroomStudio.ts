@@ -123,6 +123,16 @@ export function eliteWallDimensionWarnings(run:RenaissanceWallMeasure,
  }
  return warnings;
 }
+/** A visibly mismatched roof is a warning (sales may adjust it interactively),
+ * but a wrong wall WIDTH or legacy window-as-section layout cannot render. */
+export function eliteWallBlockingIssues(run:RenaissanceWallMeasure,
+ sections:readonly SunroomSectionConfig[]):string[]{
+ return eliteWallDimensionWarnings(run,sections).filter(issue=>
+   issue.includes('sections total')||
+   issue.includes('saved window-sized sections')||
+   issue.includes('incomplete or invalid')||
+   issue.includes('No valid Elite sections'));
+}
 export function eliteSunroomTakeoff(project:ConsultationProject,runs:readonly RenaissanceWallMeasure[]){
  const settings=currentEliteSunroomSettings(project);
  const list=runs.flatMap(run=>eliteWallSections(project,run).map((section,i)=>({
