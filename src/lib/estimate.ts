@@ -473,8 +473,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       group.push(req);byStyle.set(req.style,group);
     });
     for(const [style,requests] of byStyle){
-      const isPT=/pressure\\s*treated/i.test(style)||
-        (isPressureTreatedDecking&&!/^(trex|timbertech)\\b/i.test(style));
+      const isPT=/pressure\s*treated/i.test(style)||
+        (isPressureTreatedDecking&&!/^(trex|timbertech)\b/i.test(style));
       const stockLengths=isPT?[8,12,16,20]:[16,20];
       const cuts:SkirtCut[]=[];
       let serial=0,fieldFootage=0;
