@@ -512,7 +512,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           {accentEnd==='curved'&&<RenaissanceCurvedTrussEnd
             x={x} frontZ={frameFront} topY={roofFrontY-.25+trussLift}
             projectionFt={plan.frontOverhangFt} pitchInPerFt={plan.pitchInPerFt}
-            color={powder}/>} 
+            color={powder} profileStyle="aria-scallop"/>} 
         </group>;
       })}
       {Array.from({length:latticeCount},(_,i)=>{
