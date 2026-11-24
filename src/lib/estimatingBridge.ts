@@ -56,7 +56,13 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       blockers.push('PCA screen entry side conflicts with selected privacy shade-tube wall. Do not cut the privacy tubes or quote an access opening without an engineered manufacturer design.');
     blockers.push('Privacy shade-tube wall is not an independently certified code-required deck guardrail; review open deck edges and guard details.');
   }
-  if(project.coverScreenStyle&&project.coverScreenStyle!=='none'){
+  if(project.coverScreenStyle==='lumino-sunroom'){
+    blockers.push('Lumino glazing, insulated knee-wall profiles, window glass specifications, framing, flashing, thermal ratings and exact supplier takeoff are NOT verified by the design visual. Obtain a vendor-approved sunroom BOM and project engineering.');
+    if(!['Moderno','Contempo','Classico'].includes(project.coverFamily))
+      blockers.push('Lumino window-wall concept is not offered with this non-insulated roof family; select an approved solid roof assembly.');
+    blockers.push('PCA screen doors are not certified Lumino sunroom entry doors. Specify and approve a separate sunroom door, safe egress and deck guard details.');
+  }
+  if(['dolce-open-view','dolce-standard'].includes(project.coverScreenStyle??'none')){
     blockers.push('Dolce screen style is a visual selection, not a supplier-verified screen room extrusion/cut BOM; approve separate screen-room takeoff.');
     if(project.coverDoorEnabled!==false){
       blockers.push('PCA 3068 entry door, hinges, pet door and site-specific rough opening are visualization choices only; supplier ordering and egress/landing requirements must be verified.');
