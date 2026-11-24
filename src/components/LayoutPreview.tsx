@@ -7,7 +7,7 @@ import { isSunroomWindowKind,sunroomDoorWidthFeet,sunroomDoorLeftFeet,
   sunroomSpansExcludingDoor,sunroomUprightOffsetsExcludingDoor,
   sunroomHasTransom,sunroomKickHeightFt } from '../lib/sunroomSectionGeometry';
 import { deckingLabelForLength, deriveDeckingLabelPlan, PICTURE_FRAME_OVERHANG_ALLOWANCE_FT } from '../lib/deckingLabels';
-import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, SectionConfig, SunroomSectionConfig } from '../lib/types';
+import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, SectionConfig } from '../lib/types';
 
 interface LayoutPreviewProps {
   serviceSlug: string;
