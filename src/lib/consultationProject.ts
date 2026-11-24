@@ -31,6 +31,7 @@ export interface ConsultationProject {
   coverMount?: 'wall-attached'|'freestanding';
   coverScreenStyle?: 'none'|'dolce-open-view'|'dolce-standard';
   coverAccentEnd?: 'straight'|'curved'; // Truss/tail end finish on Fresco, Classico, Aria and Contempo.
+  coverTrussMount?: 'flush'|'raised'; // Fresco/Aria manufacturer connection, not cover-to-house mount.
   coverScreenUprights?: Partial<Record<ScreenDoorWall,number>>; // Interior upright count per wall, excluding corner posts and doors.
   coverScreenRailTreatment?: 'integrated-kick'|'integrated-picket'|'inside'|'outside'|'screens-only';
   coverDoorEnabled?:boolean;
@@ -83,7 +84,7 @@ export const makeConsultationProject = (id: string): ConsultationProject => ({
     railingTopProfile:'modern',railingColor:'black',railingInfill:'aluminum'},
   coverFamily:'none',coverColor:'White',coverRoofColor:'White',coverCeilingFinish:'White',coverRoofStyle:'studio',coverShadePercent:65,coverLouverAngle:12,
   coverFraming:'standard',coverMount:'wall-attached',coverScreenStyle:'none',
-  coverAccentEnd:'straight',coverScreenUprights:{front:2,left:1,right:1,rear:2},
+  coverAccentEnd:'straight',coverTrussMount:'flush',coverScreenUprights:{front:2,left:1,right:1,rear:2},
   coverScreenRailTreatment:'integrated-kick',coverDoorEnabled:true,
   coverDoorSide:'front',coverDoorPositionPercent:50,coverDoorModel:'A-100',
   coverDoorFinish:'match',coverDoorHinge:'left',coverDoorSwing:'out',coverDoorPet:'none',
@@ -107,6 +108,7 @@ export const loadConsultations = (): ConsultationProject[] => {
       coverFraming:p.coverFraming??'standard',coverMount:p.coverMount??'wall-attached',
       coverScreenStyle:p.coverScreenStyle??'none',
       coverAccentEnd:p.coverAccentEnd??(['Contempo','Classico'].includes(p.coverFamily)?'curved':'straight'),
+      coverTrussMount:p.coverTrussMount??'flush',
       coverScreenUprights:{front:2,left:1,right:1,rear:2,...p.coverScreenUprights},
       coverScreenRailTreatment:p.coverScreenRailTreatment??'integrated-kick',
       coverDoorEnabled:p.coverDoorEnabled??((p.coverScreenStyle??'none')!=='none'),

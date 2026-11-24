@@ -70,3 +70,22 @@ export function planStairSideFascia(input:{
  return input.style==='straight'?planStraightStairFascia(input):
   planProfiledStairFascia(input);
 }
+
+/**
+ * Structural stringers share a finite 1 1/2-in thickness, and Three.js's
+ * extruded/rotated 2x12 profiles project in the negative local X direction.
+ * Keep BOTH outermost stringers wholly INSIDE the finished tread width;
+ * finished fascia sits OUTSIDE either tread end and conceals both faces.
+ * This corrects the formerly asymmetric left stringer outside the fascia.
+ */
+export function planStairStringerFaceStations(
+  treadWidthFt:number,stringerCount:number,stringerThicknessFt=1.5/12,
+):number[]{
+ if(!Number.isFinite(treadWidthFt)||treadWidthFt<=stringerThicknessFt||
+   !Number.isFinite(stringerCount)||stringerCount<2||
+   !Number.isFinite(stringerThicknessFt)||stringerThicknessFt<=0)return [];
+ const count=Math.max(2,Math.floor(stringerCount));
+ const start=-treadWidthFt/2+stringerThicknessFt;
+ const end=treadWidthFt/2;
+ return Array.from({length:count},(_,i)=>start+(end-start)*i/(count-1));
+}

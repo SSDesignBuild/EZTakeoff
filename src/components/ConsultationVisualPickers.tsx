@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { railingPhotos, coverPhotos, type PhotoReference } from '../data/consultationPhotos';
 import { hasRenaissanceReferenceChart, maxReferenceOverhangFt } from '../lib/renaissanceGuidance';
+import { effectivePcaKickPlateIn } from '../lib/pcaScreenDoorGeometry';
 import type { ConsultationProject } from '../lib/consultationProject';
 import {
   deckVisualProducts, deckCollections, getDeckVisualProduct,
@@ -270,12 +271,24 @@ export function ManufacturerCoverPicker({project,onChange}:{
             <option value="wall-attached">Attached to house / existing structure</option>
             <option value="freestanding">Freestanding · posts front and back</option>
           </select></label>
+        {['Fresco','Aria'].includes(project.coverFamily)&&
+          <label>Projection truss connection to header
+            <select value={project.coverTrussMount??'flush'}
+              onChange={e=>onChange({coverTrussMount:e.target.value as 'flush'|'raised'})}>
+              <option value="flush">Flush truss - truss crown aligned with header</option>
+              <option value="raised">Raised truss - 6″ truss sits above header</option>
+            </select>
+            <small className="consultation-visual-note">
+              Separate Renaissance 2025 manufacturer connection assemblies.
+              Verify fasteners, anchorage and site-specific engineering before ordering.
+            </small>
+          </label>}
         {['Fresco','Classico','Aria','Contempo'].includes(project.coverFamily)&&
           <label>Decorative projection truss ends
             <select value={project.coverAccentEnd??(['Classico','Contempo'].includes(project.coverFamily)?'curved':'straight')}
               onChange={e=>onChange({coverAccentEnd:e.target.value as 'straight'|'curved'})}>
               <option value="straight">Straight-cut end</option>
-              <option value="curved">Curved accent end</option>
+              <option value="curved">{project.coverFamily==='Aria'?'Scalloped truss end':project.coverFamily==='Fresco'?'S-curve truss end':'Curved accent end'}</option>
             </select>
             <small className="consultation-visual-note">End profiles are design visuals; verify approved manufacturer cut style.</small>
           </label>}
@@ -370,13 +383,20 @@ export function ManufacturerCoverPicker({project,onChange}:{
                   <option value="large">Magnador large · 13″ × 20″ opening</option>
                 </>}
               </select></label>
-            <label>Kick plate height
-              <select value={project.coverDoorKickPlateIn??8}
-                onChange={e=>onChange({coverDoorKickPlateIn:Number(e.target.value)})}>
-                {[0,8,12,14,24].map(inches=><option value={inches} key={inches}>
-                  {inches===0?'No kick plate':inches+'″ kick plate'}
-                </option>)}
-              </select></label>
+            {(project.coverDoorPet??'none')==='none'
+              ?<label>Kick plate height
+                <select value={project.coverDoorKickPlateIn??8}
+                  onChange={e=>onChange({coverDoorKickPlateIn:Number(e.target.value)})}>
+                  {[0,8,12,14,24].map(inches=><option value={inches} key={inches}>
+                    {inches===0?'No kick plate':inches+'″ kick plate'}
+                  </option>)}
+                </select></label>
+              :<p className="consultation-visual-note" role="status">
+                PCA solid kick panel: <strong>{effectivePcaKickPlateIn(
+                  project.coverDoorPet??'none',project.coverDoorKickPlateIn??8)}″ automatically</strong>.
+                Continuous full-width panel with a precisely framed pet opening.
+                Panel height exceeds the manufacturer's full outer pet frame.
+              </p>}
             <small className="consultation-visual-note">PCA 3068 opening is 36″ × 80″; confirm actual frame/rough opening, door hand, wall height and pet-door fit before ordering.</small>
             {['inside','outside'].includes(project.coverScreenRailTreatment??'integrated-kick')&&
               <small className="consultation-visual-note" role="status">

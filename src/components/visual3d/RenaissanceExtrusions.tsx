@@ -372,9 +372,10 @@ export function RenaissanceShadeTube({from,to,color}:{
  * The upper edge follows the selected canopy; the tail stops at its front
  * overhang. Extrusion thickness is the actual 2-inch visual member width.
  */
-export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPerFt=0,color,endStyle='curved'}:{
+export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPerFt=0,color,endStyle='curved',profileStyle='fresco-s'}:{
   x:number;frontZ:number;topY:number;projectionFt:number;pitchInPerFt?:number;color:string;
   endStyle?:'straight'|'curved';
+  profileStyle?:'fresco-s'|'aria-scallop';
 }){
   // Tail begins at the outside header face; curved end is a visually distinct
   // reverse S-inflection rather than a single rounded edge. It is NOT a
@@ -391,15 +392,26 @@ export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPer
       shape.lineTo(0,top(0)-.45);
     }else{
       const at=(u:number,drop:number)=>top(front*u)-drop;
-      // Roll over the tip, recess at the center and swing back to the root:
-      // three connected cubic arcs form a recognizable S-shaped cut.
       shape.lineTo(front,top(front)-.12);
-      shape.bezierCurveTo(front*.94,at(.94,.19),
-        front*.86,at(.86,.39),front*.68,at(.68,.39));
-      shape.bezierCurveTo(front*.51,at(.51,.39),
-        front*.48,at(.48,.19),front*.34,at(.34,.20));
-      shape.bezierCurveTo(front*.20,at(.20,.23),
-        front*.14,at(.14,.45),0,at(0,.45));
+      if(profileStyle==='aria-scallop'){
+        // Aria "TRUSS SCALLOP END CAP" (2025 parts sheet, p.3)
+        // has a long concave sweep and a rounded nose. Do NOT substitute
+        // the stepped 3-lobe reverse-S used for Fresco's curved cap.
+        shape.bezierCurveTo(front*.96,at(.96,.16),
+          front*.82,at(.82,.17),front*.72,at(.72,.28));
+        shape.bezierCurveTo(front*.55,at(.55,.49),
+          front*.33,at(.33,.52),0,at(0,.52));
+      }else{
+        // Fresco "TRUSS CURVED END CAP" (parts p.4), 3-stage S-sweep.
+        // The attached sample confirms a recess, a reverse crown, and
+        // a generously rounded tip; exact mold radii remain unprovided.
+        shape.bezierCurveTo(front*.94,at(.94,.19),
+          front*.86,at(.86,.39),front*.68,at(.68,.39));
+        shape.bezierCurveTo(front*.51,at(.51,.39),
+          front*.48,at(.48,.19),front*.34,at(.34,.20));
+        shape.bezierCurveTo(front*.20,at(.20,.23),
+          front*.14,at(.14,.45),0,at(0,.45));
+      }
     }
     shape.closePath();
     const g=new THREE.ExtrudeGeometry(shape,{
@@ -409,7 +421,7 @@ export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPer
     g.translate(0,0,-inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn)/2);
     g.rotateY(-Math.PI/2);g.computeVertexNormals();
     return g;
-  },[front,pitch,endStyle]);
+  },[front,pitch,endStyle,profileStyle]);
   return <mesh geometry={geometry} position={[x,topY,frontZ]} castShadow receiveShadow>
     <meshStandardMaterial color={color} side={THREE.DoubleSide} metalness={.4} roughness={.3}/>
   </mesh>;

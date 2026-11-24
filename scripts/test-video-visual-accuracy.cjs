@@ -137,8 +137,10 @@ assert.ok(render.includes('PCA-door-side-upright-') &&
   render.includes('topTo:screenFrontSoffit'),
   'PCA screen opening needs both jamb supports and a roof-following top');
 assert.ok(render.includes('headerLeft')&&render.includes('headerRight')&&
-  render.includes('start={[headerLeft,frameFront]}'),
-  'Cover headers must extend to the finished roof edge');
+  render.includes('frontHeaderSpans.map')&&
+  render.includes('start={[span.startFt,frameFront]}')&&
+  render.includes('planSideConnectedHeader'),
+  'Headers must reach the roof edge in segments clipped to sides of continuous posts');
 assert.ok(render.includes('outsideFaceZ=frameFront+') &&
   render.includes('frontZ={outsideFaceZ}') &&
   render.includes('fresco-front-polycarbonate-end-cap-'),

@@ -45,7 +45,13 @@ export function planMiteredPictureFrames(points:DeckPoint[],segments:DeckEdgeSeg
     const previous=(edge+points.length-1)%points.length;
     const next=(edge+1)%points.length;
     for(let course=0;course<stations;course++){
-      const outer=.045+course*(boardFaceFt+gapFt);
+      // The board must project 3/4in OUTSIDE the fascia's exterior face.
+      // Fascia depth is 0.076ft and centered on the deck rim edge.
+      // Previous +0.045ft pointed INWARD and hid the overhang entirely.
+      const FASCIA_DEPTH_FT=.076;
+      const BORDER_OVERHANG_FT=.75/12;
+      const outer=-(FASCIA_DEPTH_FT/2+BORDER_OVERHANG_FT)
+        +course*(boardFaceFt+gapFt);
       const inner=outer+boardFaceFt;
       const at=(offset:number,first:boolean):V2=>{
         const e=shiftedEdge(points,edge,offset,sign);

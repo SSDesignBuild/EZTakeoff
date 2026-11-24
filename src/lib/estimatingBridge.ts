@@ -3,6 +3,7 @@ import { buildDeckModel } from './deckModel';
 import type { ConsultationProject, EstimateResponse, EstimateTier } from './consultationProject';
 import type { MaterialItem } from './types';
 import { renaissanceReferenceIssues } from './renaissanceGuidance';
+import { effectivePcaKickPlateIn } from './pcaScreenDoorGeometry';
 
 export interface EstimateHandoffV1 {
   schemaVersion:1;
@@ -11,7 +12,7 @@ export interface EstimateHandoffV1 {
   revision:number;
   exportedAt:string;
   customer:{name:string;address:string;phone:string;email:string};
-  project:{kind:string;coverFamily:string;coverColor:string;coverRoofColor:string;coverCeilingFinish:string;coverRoofStyle:string;coverFraming:string;coverMount:string;coverScreenStyle:string;photoAttachedToThisPayload:false};
+  project:{kind:string;coverFamily:string;coverColor:string;coverRoofColor:string;coverCeilingFinish:string;coverRoofStyle:string;coverFraming:string;coverMount:string;coverTrussMount:string;coverScreenStyle:string;photoAttachedToThisPayload:false};
   geometry:{footprint:{x:number;y:number}[];areaSqFt:number;deckHeightFt:number;stairCount:number};
   selections:Record<string,string|number|boolean>;
   materials:MaterialItem[];
@@ -48,6 +49,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverRoofColor:project.coverRoofColor??'White',coverCeilingFinish:project.coverCeilingFinish??'White',
       coverRoofStyle:project.coverRoofStyle??'studio',
       coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
+      coverTrussMount:project.coverTrussMount??'flush',
       coverScreenStyle:project.coverScreenStyle??'none',photoAttachedToThisPayload:false},
     geometry:{footprint:deck.points,areaSqFt:deck.area,deckHeightFt:Number(project.values.deckHeight??0),stairCount:deck.stairCount},
     selections:{...project.values,coverRoofStyle:project.coverRoofStyle??'studio',
@@ -55,6 +57,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverFamily:project.coverFamily,coverColor:project.coverColor,
       coverRoofColor:project.coverRoofColor??'White',coverCeilingFinish:project.coverCeilingFinish??'White',
       coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
+      coverTrussMount:project.coverTrussMount??'flush',
       coverScreenStyle:project.coverScreenStyle??'none',
       coverAccentEnd:project.coverAccentEnd??(['Contempo','Classico'].includes(project.coverFamily)?'curved':'straight'),
       coverScreenUprightsFront:project.coverScreenUprights?.front??2,
@@ -70,7 +73,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverDoorHinge:project.coverDoorHinge??'left',
       coverDoorSwing:project.coverDoorSwing??'out',
       coverDoorPet:project.coverDoorPet??'none',
-      coverDoorKickPlateIn:project.coverDoorKickPlateIn??8,
+      coverDoorKickPlateIn:effectivePcaKickPlateIn(project.coverDoorPet??'none',project.coverDoorKickPlateIn??8),
       coverPostCount:project.coverPostCount??0,
       coverWidthFt:project.coverWidthFt??0,coverProjectionFt:project.coverProjectionFt??0,
       coverHeightFt:project.coverHeightFt??9,coverSideOverhangFt:project.coverSideOverhangFt??1,
