@@ -161,6 +161,23 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
     return {strip,geometry:g};
   }),[outlines,center]);
   useEffect(()=>()=>geometries.forEach(item=>item.geometry.dispose()),[geometries]);
+  // Miter cuts are real touching geometry, but two identically finished
+  // boards previously hid the 45-degree joint. Mark the physical saw-cut
+  // interface on the upper face, only where TWO perimeter edges meet.
+  const miterSeams=useMemo(()=>{
+    const selected=new Set(model.pictureFrameSegments.map(edge=>edge.index));
+    return planMiteredPictureFrames(model.points,model.pictureFrameSegments,
+      model.pictureFrameCount).filter(strip=>
+      selected.has((strip.edgeIndex+1)%model.points.length)).map(strip=>{
+      const a=strip.corners[1],b=strip.corners[2];
+      const x1=a[0]-center[0],z1=center[1]-a[1];
+      const x2=b[0]-center[0],z2=center[1]-b[1];
+      return {edgeIndex:strip.edgeIndex,course:strip.course,
+        x:(x1+x2)/2,z:(z1+z2)/2,
+        length:Math.hypot(x2-x1,z2-z1),
+        yaw:-Math.atan2(z2-z1,x2-x1)};
+    });
+  },[model.points,model.pictureFrameSegments,model.pictureFrameCount,center]);
   return <group name="miter-cut-authentic-picture-frame-courses">
     {geometries.map(({strip,geometry},index)=><mesh key={'miter-'+strip.edgeIndex+'-'+strip.course+'-'+index}
       geometry={geometry} position={[0,deckHeight+.015-.0475,0]} castShadow receiveShadow>
@@ -168,6 +185,14 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
         ?<meshBasicMaterial color="#ffffff" map={maps[strip.course]} toneMapped={false} side={THREE.DoubleSide}/>
         :<meshStandardMaterial color={colors[strip.course]??'#a5a29d'}
           side={THREE.DoubleSide} roughness={.81}/>}
+    </mesh>)}
+    {miterSeams.map(seam=><mesh key={'visible-miter-joint-'+seam.edgeIndex+'-'+seam.course}
+      name="true-diagonal-picture-frame-miter-joint"
+      position={[seam.x,deckHeight+.0655,seam.z]}
+      rotation={[0,seam.yaw,0]}>
+      <boxGeometry args={[seam.length,.004,.010]}/>
+      <meshBasicMaterial color="#232529" transparent opacity={.76}
+        depthWrite={false}/>
     </mesh>)}
   </group>;
 }
