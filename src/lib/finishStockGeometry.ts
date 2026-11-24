@@ -28,7 +28,7 @@ export function stockBoardSegments(totalLength:number,breaks:number[]=[],maxCutF
  for(let interval=1;interval<stations.length;interval++){
   const start=stations[interval-1],end=stations[interval],run=end-start;
   if(run<=.05)continue;
-  if(run<=maxCutFt+eps){pieces.push(r3(run));continue;}
+  if(run<=maxCutFt+eps){pieces.push(run);continue;}
   const quantity=Math.ceil(run/maxCutFt);
   let previous=0;
   for(let index=1;index<quantity;index++){
@@ -36,10 +36,10 @@ export function stockBoardSegments(totalLength:number,breaks:number[]=[],maxCutF
    const fullFoot=Math.round(target);
    const candidate=fullFoot>previous+.25&&fullFoot-previous<=maxCutFt+eps &&
      run-fullFoot<=(quantity-index)*maxCutFt+eps ?fullFoot:target;
-   pieces.push(r3(candidate-previous));
+   pieces.push(candidate-previous);
    previous=candidate;
   }
-  pieces.push(r3(run-previous));
+  pieces.push(run-previous);
  }
  return pieces.filter(p=>p>.05);
 }
