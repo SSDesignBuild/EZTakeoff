@@ -97,7 +97,12 @@ export function RenaissancePost({x,z,bottom,top,profile,color}:{
     const outer=new THREE.Shape();
     // Four formed CORNER ribs, measured outside width preserved. Recess
     // details are reference-derived representative, not factory die CAD.
-    const full=side/2,corner=inchToFoot(.30),recess=inchToFoot(.045);
+    // The supplied SD 3-7/8in post drawing dimensioned the straight
+    // flat face to 3-3/8in. Therefore each projecting reinforced corner
+    // occupies (3-7/8 - 3-3/8)/2 = 1/4in, not a guessed 0.30in stripe.
+    // The groove return depth is not separately dimensioned: model it as
+    // a visible representative formed recess, without changing the OD.
+    const full=side/2,corner=inchToFoot(.25),recess=inchToFoot(.115);
     const corners:Array<[number,number]>=[
       [-full,-full],[-full+corner,-full],
       [-full+corner,-full+recess],[full-corner,-full+recess],
