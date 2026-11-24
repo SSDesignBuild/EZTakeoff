@@ -190,7 +190,7 @@ function EliteSection({section,xStart,settings}:{
         flip={i===1} color={framing} name="receiving-channel-back"/>
       {/* DRC engages sash at both external window/door opening edges. */}
       <EliteVerticalExtrusion system={settings.roomSystem} kind="drc"
-        x={x} bottom={0} height={section.height}
+        x={x+(i===0?1:-1)*ft(1.5)} bottom={0} height={section.height}
         flip={i===1} color={windowColor} name="DRC-window-edge"/>
    </group>)}
    {widths.map((span,i)=><EliteHorizontalExtrusion key={'base-channel-'+i}
