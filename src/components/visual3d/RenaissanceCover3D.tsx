@@ -288,6 +288,24 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           profile={profile} color={powder}/>
         <Block position={[x,deckHeight+.009,z]}
           size={[baseOutside,.018,baseOutside]} color={shadowColor} metalness={.42}/>
+        {/* The supplied Renaissance sample has an exterior stepped post
+            base boot; the earlier 1/4in flat plate looked unfinished.
+            This is a visual trim skirt over the existing structural base,
+            NOT a replacement anchorage or new material-order item. */}
+        <Block name="renaissance-four-sided-post-base-skirt"
+          position={[x,deckHeight+.10,z]}
+          size={[baseOutside,.19,baseOutside]} color={powder} metalness={.36}/>
+        <mesh name="renaissance-tapered-post-base-skirt"
+          position={[x,deckHeight+.27,z]} rotation={[0,Math.PI/4,0]}
+          castShadow receiveShadow>
+          <cylinderGeometry args={[baseOutside*.43,baseOutside*.68,.17,4]}/>
+          <meshStandardMaterial color={powder} metalness={.38} roughness={.34}/>
+        </mesh>
+        <Block name="renaissance-upper-base-boot-collar"
+          position={[x,deckHeight+.375,z]}
+          size={[inchToFoot(profile.postOutsideIn+.45),.045,
+            inchToFoot(profile.postOutsideIn+.45)]}
+          color={powder} metalness={.36}/>
         <Block position={[x,topY-.008,z]}
           size={[postCap,.05,postCap]} color={powder} metalness={.38}/>
         {/* Physical header clips and fastener head placements, not fake oversized collars. */}
