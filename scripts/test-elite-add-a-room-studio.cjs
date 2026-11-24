@@ -104,6 +104,32 @@ assert.ok(handoff.blockers.some(s=>s.includes('factory sash daylight dimensions'
 assert.ok(handoff.blockers.some(s=>s.includes('sections total')));
 assert.ok(!('price' in handoff));
 assert.equal(handoff.project.photoAttachedToThisPayload,false);
+const extrusion=load('src/lib/eliteAddARoomExtrusions');
+for(const [system,depth,lip,height,baseLeft,baseRight,cap] of [
+ ['3-thermal',3,1,2,1.25,1.5,5.25],
+ ['2-nonthermal',2,.75,1,1.25,1,3.75],
+]){
+ const p=extrusion.ELITE_CATALOG_PROFILES[system];
+ assert.equal(p.depthIn,depth);assert.equal(p.drcLipIn,lip);
+ assert.equal(p.hFaceIn,height);assert.equal(p.bottomLeftLipIn,baseLeft);
+ assert.equal(p.bottomRightLipIn,baseRight);assert.equal(p.topOutsideIn,cap);
+ assert.equal(extrusion.eliteProfileEnvelopeIn(system,'receiver').height,depth);
+ assert.equal(extrusion.eliteProfileEnvelopeIn(system,'drc').width,lip);
+ assert.equal(extrusion.eliteProfileEnvelopeIn(system,'h-vertical').width,height);
+ assert.equal(extrusion.eliteProfileEnvelopeIn(system,'top').width,cap);
+ assert.equal(extrusion.eliteProfileEnvelopeIn(system,'bottom').width,depth);
+ for(const kind of ['receiver','drc','h-vertical','h-horizontal','bottom','top']){
+  const points=extrusion.eliteProfileContourIn(system,kind);
+  assert.ok(points.length>=8&&points.length<=14,
+    'A real U/H contour, not a solid rectangular block: '+system+' '+kind);
+ }
+}
+const profileSource=source('src/components/visual3d/EliteAddARoomExtrusions.tsx');
+assert.ok(profileSource.includes('THREE.ExtrudeGeometry')&&
+ profileSource.includes('eliteProfileContourIn')&&
+ profileSource.includes('g.rotateX(-Math.PI/2)')&&
+ profileSource.includes('g.rotateY(Math.PI/2)'),
+ 'Measured Elite U/H contours must be swept along true vertical and pitched horizontal wall runs');
 const render=source('src/components/visual3d/EliteAddARoomWall3D.tsx');
 for(const marker of ['elite-prime-full-view-outswing-door','clear-insulated-glass-lite',
  'elite-bottom-base-channel-weep','elite-top-cap-under-renaissance-roof',
