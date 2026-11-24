@@ -1,4 +1,5 @@
 import type { DeckPoint,DeckEdgeSegment } from './types';
+import { stockBoardSegments,FINISH_SEAM_GAP_FT } from './finishStockGeometry';
 export type V2=readonly [number,number];
 export interface MiterFrameStrip {
   edgeIndex:number;course:number;corners:[V2,V2,V2,V2];
@@ -66,4 +67,35 @@ export function planMiteredPictureFrames(points:DeckPoint[],segments:DeckEdgeSeg
     }
   }
   return result;
+}
+
+/**
+ * Split an existing polygon-mitered border course along its LENGTH, retaining
+ * the exact four-corner miter at its outer ends. The internal seams are square,
+ * located symmetrically across the board face with a visible 1/8-inch gap.
+ * No geometry piece is longer than a purchasable stock cut.
+ */
+export function splitMiteredPictureFrames(
+ strips:MiterFrameStrip[],gapFt=FINISH_SEAM_GAP_FT,
+):MiterFrameStrip[]{
+ return strips.flatMap(strip=>{
+  const [a,b,c,d]=strip.corners;
+  const outer=length(minus(b,a)),inner=length(minus(c,d));
+  const span=Math.max(outer,inner);
+  const lengths=stockBoardSegments(span);
+  if(lengths.length<=1)return [strip];
+  const lerp=(p:V2,q:V2,t:number):V2=>[
+   p[0]+(q[0]-p[0])*t,p[1]+(q[1]-p[1])*t,
+  ];
+  let cursor=0;
+  return lengths.map((len,i)=>{
+   const first=(cursor+(i===0?0:gapFt/2))/span;
+   const last=(cursor+len-(i===lengths.length-1?0:gapFt/2))/span;
+   cursor+=len;
+   const from=Math.min(1,Math.max(0,first)),to=Math.min(1,Math.max(from,last));
+   return {edgeIndex:strip.edgeIndex,course:strip.course,
+    corners:[lerp(a,b,from),lerp(a,b,to),lerp(d,c,to),lerp(d,c,from)]
+    } as MiterFrameStrip;
+  });
+ });
 }
