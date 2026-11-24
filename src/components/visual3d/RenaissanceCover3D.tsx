@@ -14,6 +14,8 @@ import { planPcaDoorOnWall,effectivePcaKickPlateIn, type PcaDoorModel,type PcaPe
 import { PcaScreenDoor3D } from './PcaScreenDoor3D';
 import { RenaissancePrivacyWall3D } from './RenaissancePrivacyWall3D';
 import { RenaissanceLuminoWall3D } from './RenaissanceLuminoWall3D';
+import { EliteAddARoomWall3D } from './EliteAddARoomWall3D';
+import { currentEliteSunroomSettings,eliteWallSections } from '../../lib/eliteSunroomStudio';
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
 import {
   inchToFoot,
@@ -541,6 +543,14 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       coverWallRuns.filter(wall=>!privacyGap(wall.id)).map(wall=>
         <RenaissanceLuminoWall3D key={'lumino-wall-'+wall.id}
           {...wall} bottom={deckHeight+.12} finish={powder}/>)}
+    {/* Real Elite Add-A-Room 2/3-inch wall system. Unlike the older Lumino
+        concept, these units share the Admin Sunroom section geometry/BOM.
+        No extra Elite corner posts are fabricated on Renaissance columns. */}
+    {project.coverScreenStyle==='elite-add-a-room'&&isSolid&&
+      wallAnchors.measuredRuns.filter(wall=>!privacyGap(wall.id)).map(wall=>
+        <EliteAddARoomWall3D key={'elite-sunroom-'+wall.id}
+          run={wall} sections={eliteWallSections(project,wall)}
+          settings={currentEliteSunroomSettings(project)}/>)}
     {/* Privacy wall physically REPLACES screen mesh on the same edge. */}
     {coverWallRuns.filter(wall=>privacyGap(wall.id)>0).map(wall=>
       <RenaissancePrivacyWall3D key={'privacy-wall-'+wall.id}
