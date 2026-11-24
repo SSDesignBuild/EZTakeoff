@@ -363,9 +363,13 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     };
   };
 
+  const isFinishCutSchedule = (item:DisplayMaterialItem) =>
+    item.category==='Deck finish cut schedule (not order)';
   const stockOrderItems = useMemo<DisplayMaterialItem[]>(() => {
     const merged = new Map<string, DisplayMaterialItem>();
-    displayItems.forEach((item) => {
+    // Installed cuts belong on an INSTALLER schedule; they do not represent
+    // extra boards purchased on top of the globally packed stock order.
+    displayItems.filter(item=>!isFinishCutSchedule(item)).forEach((item) => {
       const identity = stockOrderIdentity(item);
       const existing = merged.get(identity.key);
       if (!existing) {
@@ -391,8 +395,14 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
   }, {}), [activeItems]);
 
   const hiddenItemCount = removedRecords.length;
+  const cutScheduleGrouped=useMemo<Record<string,DisplayMaterialItem[]>>(()=>{
+    const cuts=displayItems.filter(item=>item.category==='Deck finish cut schedule (not order)');
+    return cuts.length?{'INSTALLER FINISH CUTS - NOT TO ORDER':cuts}:{};
+  },[displayItems]);
   const printGrouped = useMemo(()=>{
+    // A MATERIAL ORDER export must never silently include cut-only quantities.
     const out={...grouped};
+    delete out['Deck finish cut schedule (not order)'];
     if(removedRecords.length){
       out['REMOVED / DO NOT ORDER (reference only)']=removedRecords.map((row)=>({
         ...row, category:'REMOVED / DO NOT ORDER (reference only)',
@@ -539,6 +549,11 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     await exportCanvasAsPdf(canvas, 'S&S Design Build · Material order list', `${exportBaseName}.pdf`);
   };
 
+  const exportCutSchedulePdf=async()=>{
+    if(hasBlockingIssues||Object.keys(cutScheduleGrouped).length===0)return;
+    const canvas=renderMaterialCanvas('S&S Design Build - Installer finish cut schedule (NOT PURCHASE)',values,cutScheduleGrouped);
+    await exportCanvasAsPdf(canvas,'S&S Design Build - Installer cuts',`${exportBaseName}-finish-cut-schedule.pdf`);
+  };
   const exportPng = async () => {
     if (hasBlockingIssues) return;
     const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, printGrouped);
@@ -562,8 +577,14 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     if (skirtingSheet) layoutCanvases.push(skirtingSheet);
     if (!layoutCanvases.length) return;
     const materialCanvas = renderMaterialCanvas('S&S Design Build · Material order list', values, printGrouped);
+    const cutCanvas=Object.keys(cutScheduleGrouped).length
+      ?renderMaterialCanvas('S&S Design Build - Installer finish cuts (NOT PURCHASE)',values,cutScheduleGrouped)
+      :null;
     const forcePortraitByIndex = { [layoutCanvases.length]: true } as Record<number, boolean>;
-    await exportCanvasesAsPdf([...layoutCanvases, materialCanvas], 'S&S Design Build · Layout and material order list', `${exportBaseName}-layout-materials.pdf`, { forcePortraitByIndex });
+    if(cutCanvas)forcePortraitByIndex[layoutCanvases.length+1]=true;
+    await exportCanvasesAsPdf([...layoutCanvases, materialCanvas,...(cutCanvas?[cutCanvas]:[])],
+      'S&S Design Build · Layout and material order list',`${exportBaseName}-layout-materials.pdf`,
+      {forcePortraitByIndex});
   };
 
   return (
@@ -577,6 +598,10 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
           <button type="button" className={stockView ? 'secondary-btn small-btn' : 'ghost-btn small-btn'} onClick={() => setStockView((current) => !current)}>{stockView ? 'Installer view' : 'Stock order view'}</button>
           <button type="button" className="ghost-btn small-btn" disabled={hasBlockingIssues} title={hasBlockingIssues ? blockingMessage : undefined} onClick={exportPdf}>Export PDF</button>
           <button type="button" className="ghost-btn small-btn" disabled={hasBlockingIssues} title={hasBlockingIssues ? blockingMessage : undefined} onClick={exportPng}>Export image</button>
+          {Object.keys(cutScheduleGrouped).length>0&&
+            <button type="button" className="ghost-btn small-btn" disabled={hasBlockingIssues}
+              title="Installer finish board cuts - separate from supplier purchase quantities"
+              onClick={exportCutSchedulePdf}>Export finish cut schedule</button>}
           <button type="button" className="ghost-btn small-btn" disabled={hasBlockingIssues} title={hasBlockingIssues ? blockingMessage : undefined} onClick={exportCombinedPdf}>Export layout + materials</button>
         </div>
       </div>
