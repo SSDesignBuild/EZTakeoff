@@ -294,10 +294,12 @@ export function ManufacturerCoverPicker({project,onChange}:{
           </label>}
         <label>Screen walls
           <select value={project.coverScreenStyle??'none'}
-            onChange={e=>onChange({coverScreenStyle:e.target.value as 'none'|'dolce-open-view'|'dolce-standard'})}>
+            onChange={e=>onChange({coverScreenStyle:e.target.value as 'none'|'dolce-open-view'|'dolce-standard'|'lumino-sunroom'})}>
             <option value="none">No screens · open patio</option>
             <option value="dolce-open-view">Dolce · open-view screened walls</option>
             <option value="dolce-standard">Dolce · standard screened panels</option>
+            {['Moderno','Contempo','Classico'].includes(project.coverFamily)&&
+              <option value="lumino-sunroom">Lumino · windows over insulated knee wall (visual)</option>}
           </select></label>
         <div className="renaissance-screen-options">
           <strong>Renaissance 2026 shade-tube privacy walls</strong>
@@ -322,6 +324,10 @@ export function ManufacturerCoverPicker({project,onChange}:{
               The PCA door shares a privacy-wall side. Move the entry door to another side or remove the privacy wall; we will not cut an unapproved opening through shade tubes.
             </p>}
         </div>
+        {project.coverScreenStyle==='lumino-sunroom'&&<div className="renaissance-screen-options">
+          <strong>Lumino window &amp; insulated knee-wall concept</strong>
+          <p className="consultation-visual-note">Renaissance 2026 drawings show framed window lites above a continuous insulated knee wall. Exact window profiles, glazing, insulation and structure are not verified. Existing PCA 3068 screen-door selections do not automatically become an approved Lumino entry door; model and approve an independent sunroom door.</p>
+        </div>}
         {project.coverScreenStyle==='dolce-standard'&&<div className="renaissance-screen-options">
           <strong>Standard screen wall uprights</strong>
           <p className="consultation-visual-note">Set INTERMEDIATE uprights only. Structural corner columns remain; bays are even on either side of the screen door.</p>
@@ -338,7 +344,7 @@ export function ManufacturerCoverPicker({project,onChange}:{
         </div>}
         {project.coverScreenStyle==='dolce-open-view'&&
           <p className="consultation-visual-note">Open-view has no intermediate vertical mullions. Structural corner posts remain.</p>}
-        {(project.coverScreenStyle??'none')!=='none'&&<div className="renaissance-screen-options">
+        {(project.coverScreenStyle??'none')!=='none'&&project.coverScreenStyle!=='lumino-sunroom'&&<div className="renaissance-screen-options">
           <strong>Dolce screen integration & PCA access door</strong>
           <label>Screen / railing arrangement
             <select value={project.coverScreenRailTreatment??'integrated-kick'}
