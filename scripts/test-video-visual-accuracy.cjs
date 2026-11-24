@@ -205,8 +205,9 @@ const shortGate=buildDeckSkirting(deck.edgeSegments,deck.exposedSegments,5,7.25,
 const gateStile=shortGate.cuts.find(c=>c.location==='hinged access leaf left stile');
 assert.ok(gateStile,'Adjustable gate must have independently cut stiles');
 assert.equal(gateStile.lengthFt,2.5);
-assert.ok(shortGate.cuts.some(c=>c.location.includes('fixed upper')),
-  'Short gate must have permanent infill material above its leaf');
+assert.ok(shortGate.cuts.some(c=>c.location.includes('upper continuous-wall aligned vertical skirting'))||
+  shortGate.sides[0].courses.some(c=>c.row===0&&c.start<=.5&&c.end>=3),
+  'Short gate upper infill must follow existing wall-wide finish stations, never re-center a patch');
 assert.ok(shortGate.sides[0].openings[0].heightFt===2.5);
 const tallLegacyGate=buildDeckSkirting(deck.edgeSegments,deck.exposedSegments,7,7.25,{
   ...project.values,skirtingEnabled:true,skirtingMaterial:'kdat',
@@ -251,11 +252,21 @@ assert.equal(actualLeafCuts,expectedLeafCount,
   'Skirting gate material cut count must match individual boards in the 3D model');
 const maxGateHeight=Math.max(.3,
   Math.min(shortGate.sides[0].startHeightFt,shortGate.sides[0].endHeightFt)-.18);
-const expectedUpperCount=planSkirtingGateFace(exactLeafWidth,maxGateHeight-2.5,
-  shortGate.options.orientation,shortGate.options.faceIn,shortGate.options.gapIn).length;
-const upperCuts=shortGate.cuts.filter(c=>c.location.includes('fixed upper infill above access gate board')).length;
-assert.equal(upperCuts,expectedUpperCount,
-  'Short gate fixed infill must use the same individually spaced courses in takeoff and 3D');
+const upperCuts=shortGate.cuts.filter(c=>
+  c.location.includes('upper continuous-wall aligned vertical skirting')).length;
+if(shortGate.options.orientation==='vertical'){
+  const pitch=(shortGate.options.faceIn+shortGate.options.gapIn)/12;
+  const expectedUpperCount=Array.from({length:Math.ceil(shortGate.sides[0].lengthFt/pitch)},(_,i)=>{
+    const a=i*pitch,b=a+shortGate.options.faceIn/12;
+    return Math.max(0,Math.min(3,b)-Math.max(.5,a))>.001;
+  }).filter(Boolean).length;
+  assert.equal(upperCuts,expectedUpperCount,
+    'Upper vertical gates follow the original wall-wide board station grid');
+}else{
+  assert.equal(upperCuts,0,
+    'Horizontal upper courses must be continuous through the gate, with no patch stock');
+  assert.ok(shortGate.sides[0].courses.some(c=>c.row===0&&c.start<.5&&c.end>3));
+}
 assert.deepEqual(planSkirtingGateFace(2,2,'vertical',0,.25),[]);
 assert.deepEqual(planSkirtingGateFace(2,2,'vertical',4.5,-1),[]);
 const gateVisualSource=read('src/components/visual3d/DeckSkirting3D.tsx');
