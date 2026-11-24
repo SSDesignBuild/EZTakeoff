@@ -243,7 +243,6 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const roofPanelThicknessFt=inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn);
   // Screens rise into the canopy soffit behind the structural header.
   // For translucent Fresco, leave space below the snap profile.
-  const {screenRearSoffit,screenFrontSoffit}=wallAnchors;
   const studioPanels=planInsulatedRoofPanels(
     width,RENAISSANCE_INSULATED_ROOF.standardPanelWidthIn);
   const gablePanels=planInsulatedRoofPanels(
