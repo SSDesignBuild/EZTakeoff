@@ -59,9 +59,27 @@ assert.equal(trussMountLiftFt('Moderno','raised'),0);
 const cover=source('src/components/visual3d/RenaissanceCover3D.tsx');
 assert.ok(cover.includes('planSideConnectedHeader')&&cover.includes('const topY=rear?roofBack:roofFront;'));
 assert.ok(cover.includes('roofRearY-.24+trussLift')&&cover.includes('roofRearY-.25+trussLift'));
-assert.ok(cover.includes('profileStyle="aria-scallop"'));
 const extrusions=source('src/components/visual3d/RenaissanceExtrusions.tsx');
-assert.ok(extrusions.includes("profileStyle==='aria-scallop'")&&extrusions.includes("profileStyle='fresco-s'"));
+// Video QA 2026-11-24 (83s, fully transcribed): Aria raised and Fresco
+// S-shaped ends were physically separate. A single mesh must run the entire
+// roof projection in both raised/flush styles, with the chosen family cut.
+assert.ok(cover.includes('RenaissanceContinuousProjectionTruss'),
+ 'Fresco and Aria use a continuous full-length physical projection truss');
+assert.ok(cover.includes("endStyle={accentEnd==='curved'?'fresco-s':'straight'}"));
+assert.ok(cover.includes("endStyle={accentEnd==='curved'?'aria-scallop':'straight'}"));
+assert.ok(cover.includes('nose={[x,roofFrontY-.24+trussLift,front]}'));
+assert.ok(cover.includes('nose={[x,roofFrontY-.25+trussLift,front]}'));
+assert.ok(!/accentEnd==='curved'\s*&&\s*<RenaissanceCurvedTrussEnd[\s\S]*?profileStyle="aria-scallop"/.test(cover),
+ 'Aria must never attach a second detached decorative end mesh');
+assert.ok(extrusions.includes("continuous-'+endStyle+'-renaissance-truss")&&
+ extrusions.includes("endStyle==='fresco-s'")&&
+ extrusions.includes("endStyle==='aria-scallop'"),'Distinct molded ends share a single watertight 3D member');
+assert.ok(cover.includes('capStart={i===0')&&cover.includes('capEnd={i===frontHeaderSpans.length-1'),
+ 'Only exposed ends of side-connected headers receive matching caps');
+assert.ok(extrusions.includes('renaissance-exposed-beam-end-cap'));
+const ribStart=extrusions.slice(extrusions.indexOf('function outlineWithRibs'),extrusions.indexOf('/** Measured external envelope'));
+assert.ok(!ribStart.includes('for(const level of'),
+ 'Do not invent the four horizontal beam reveal stripes rejected in the video');
 const bridge=source('src/lib/estimatingBridge.ts'),store=source('src/lib/consultationProject.ts');
 assert.ok(bridge.includes("coverTrussMount:project.coverTrussMount??'flush'")&&bridge.includes('effectivePcaKickPlateIn'));
 assert.ok(store.includes("coverTrussMount:'flush'"));
