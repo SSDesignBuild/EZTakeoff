@@ -4,6 +4,7 @@ import type { ConsultationProject, EstimateResponse, EstimateTier } from './cons
 import type { MaterialItem } from './types';
 import { renaissanceReferenceIssues } from './renaissanceGuidance';
 import { effectivePcaKickPlateIn } from './pcaScreenDoorGeometry';
+import { planStairLanding, landingSurface } from './stairConcreteLanding';
 
 export interface EstimateHandoffV1 {
   schemaVersion:1;
@@ -22,7 +23,22 @@ export interface EstimateHandoffV1 {
 export function createEstimateHandoff(project:ConsultationProject):EstimateHandoffV1{
   const deck=buildDeckModel(project.values);
   const estimate=calculateEstimate('decks',project.values);
+  const stairLandings=landingSurface(project.values.stairLandingSurface)==='bare-ground'
+    ?deck.stairPlacements.filter(placement=>placement.start&&placement.end).map(placement=>
+      planStairLanding(Math.hypot(placement.end!.x-placement.start!.x,
+        placement.end!.y-placement.start!.y),
+        Number(project.values.stairLandingDepthFt??4),
+        Number(project.values.stairLandingThicknessIn??5))):[];
+  const validLandings=stairLandings.filter((p):p is NonNullable<typeof p>=>p!==null);
+  const landingBags=validLandings.reduce((sum,p)=>sum+p.bags80lb,0);
   const blockers=[...(estimate.validationIssues??[])];
+  if(landingSurface(project.values.stairLandingSurface)==='unknown'&&deck.stairCount>0)
+    blockers.push('Confirm existing grade-level landing for each stair flight before closing the project scope.');
+  if(landingSurface(project.values.stairLandingSurface)==='bare-ground'&&deck.stairCount>0){
+    blockers.push('Automatic concrete landing quantities are planning values only: field-verify stair clear width, accessible egress, footing/base, frost, drainage, concrete specifications, site grade and local code before ordering.');
+    if(validLandings.length!==stairLandings.length)
+      blockers.push('One or more selected stair landing dimensions are invalid. Correct the dimensions before using concrete quantities.');
+  }
   if(project.kind!=='deck')blockers.push('Covered-deck patio cover is visual-only; patio cover takeoff not included.');
   if(project.coverFamily!=='none')blockers.push('Renaissance framing and the supplied span charts are for estimating only. Obtain an engineering-approved, project-specific configuration before structural material ordering.');
   blockers.push(...renaissanceReferenceIssues({
@@ -91,7 +107,15 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverWidthFt:project.coverWidthFt??0,coverProjectionFt:project.coverProjectionFt??0,
       coverHeightFt:project.coverHeightFt??9,coverSideOverhangFt:project.coverSideOverhangFt??1,
       coverFrontOverhangFt:project.coverFrontOverhangFt??1},
-    materials:estimate.materials,blockers,
+    materials:[...estimate.materials,...(landingBags>0?[{
+      name:'80-lb bagged concrete — on-site stair landing pads',
+      category:'Sales stair landing — supplemental concrete',quantity:landingBags,
+      unit:'bags',stockRecommendation:'80-lb concrete mix; nominal 0.60 cu ft yield per bag',
+      notes:validLandings.map((p,i)=>
+        'Pad '+(i+1)+': '+p.widthFt.toFixed(2)+' ft × '+p.depthFt.toFixed(2)+
+        ' ft × '+p.thicknessIn+' in; '+p.bags80lb+' bags incl. 5% allowance').join(' | ')+
+        '. Review subbase, reinforcement, disposal, forms and local specifications separately.',
+    }]:[])],blockers,
     assumptions:estimate.orderNotes,
   };
 }
