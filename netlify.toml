@@ -1,5 +1,5 @@
 [build]
-  command = "npm run assets:sync && npm test"
+  command = "npm run assets:sync && node scripts/qa-temp-sunroom-runner.cjs"
   publish = "dist"
 
 [[redirects]]
