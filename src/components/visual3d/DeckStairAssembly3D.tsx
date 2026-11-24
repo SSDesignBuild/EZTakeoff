@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import type { DeckModel, StairPlacement } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { Block, type P2 } from './Primitives';
-import { planStairSideFascia } from '../../lib/stairFasciaGeometry';
+import { planStairSideFascia,planStairStringerFaceStations } from '../../lib/stairFasciaGeometry';
 
 const riseFor=(model:DeckModel,height:number)=>height/Math.max(1,model.stairRisers);
 function makeStringer(runFt:number,treads:number,riseFt:number,height:number){
@@ -87,7 +87,7 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   const fasciaRisers=values.stairRiserStyle==='fascia'||
     (values.stairRiserStyle==='auto'&&values.deckingType!=='pressure-treated');
   const nosingFt=(fasciaRisers ? 0.5 : 1)/12;
-  const stringers=Math.max(2,Math.ceil(width)+1);
+  const stringerStations=planStairStringerFaceStations(width,Math.max(2,Math.ceil(width)+1));
   const geo=useMemo(()=>makeStringer(treadDepth,treads,rise,height),[treadDepth,treads,rise,height]);
   const fasciaStyle=values.stairFasciaStyle==='straight'?'straight':'profiled';
   // A FINISH board has its own geometry, not a clone of the notched 2x12
@@ -130,8 +130,7 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   return <group name={'stair-flight-'+placement.edgeIndex}
     position={[(start.x+end.x)/2-center[0],0,(start.y+end.y)/2-center[1]]}
     rotation={[0,yaw,0]}>
-    {Array.from({length:stringers},(_,i)=>{
-      const x=-width/2+width*i/(stringers-1);
+    {stringerStations.map((x,i)=>{
       return <mesh key={'2x12-stringer-'+i} geometry={geo} position={[x,0,0]}
         rotation={[0,-Math.PI/2,0]} castShadow receiveShadow>
         <meshStandardMaterial color="#977759" roughness={.9}/>
