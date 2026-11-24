@@ -299,6 +299,29 @@ export function ManufacturerCoverPicker({project,onChange}:{
             <option value="dolce-open-view">Dolce · open-view screened walls</option>
             <option value="dolce-standard">Dolce · standard screened panels</option>
           </select></label>
+        <div className="renaissance-screen-options">
+          <strong>Renaissance 2026 shade-tube privacy walls</strong>
+          <p className="consultation-visual-note">Choose individual sides. Each privacy wall REPLACES the Dolce screen on that side; no mesh overlap. Manufacturer 2″ shade tubes, 2.1″ receiver channels and spacers use 2″, 4″ or 6″ clear gaps. Structural spans and full stock cuts require review.</p>
+          <div className="consultation-skirting-finish">
+            {(['front','left','right',...(project.coverMount==='freestanding'?['rear'] as const:[])] as const).map(side=>
+              <label key={'privacy-gap-'+side}>{side.charAt(0).toUpperCase()+side.slice(1)} privacy wall
+                <select value={project.coverPrivacyWallGaps?.[side]??0}
+                  onChange={e=>onChange({coverPrivacyWallGaps:{
+                    ...project.coverPrivacyWallGaps,[side]:Number(e.target.value) as 0|2|4|6,
+                  }})}>
+                  <option value={0}>No privacy wall</option>
+                  <option value={2}>2″ clear tube gap</option>
+                  <option value={4}>4″ clear tube gap</option>
+                  <option value={6}>6″ clear tube gap</option>
+                </select>
+              </label>)}
+          </div>
+          {project.coverDoorEnabled!==false&&
+            Number(project.coverPrivacyWallGaps?.[project.coverDoorSide??'front']??0)>0&&
+            <p className="consultation-visual-note" role="alert">
+              The PCA door shares a privacy-wall side. Move the entry door to another side or remove the privacy wall; we will not cut an unapproved opening through shade tubes.
+            </p>}
+        </div>
         {project.coverScreenStyle==='dolce-standard'&&<div className="renaissance-screen-options">
           <strong>Standard screen wall uprights</strong>
           <p className="consultation-visual-note">Set INTERMEDIATE uprights only. Structural corner columns remain; bays are even on either side of the screen door.</p>
