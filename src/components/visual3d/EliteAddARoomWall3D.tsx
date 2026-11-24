@@ -49,55 +49,126 @@ function SolidInfill({left,right,bottom,topLeft,topRight,depth,color,name}:{
  * spacer and separate sash leaves. Glass depth and sash shape are illustrative.
  * Do not convert gross openings into glass shop cut sizes without vendor CAD.
  */
+/**
+ * Photo-referenced Elite sash family. Distinguish the H/DRC frame (which is
+ * part of the measured Admin takeoff) from the actual sliding/casement/fixed
+ * window sash, two parallel track planes and rubber glazing gaskets.
+ * Sash sightlines and hardware are visual references, NOT shop-cut dims.
+ */
+function RectangularSashLite({left,width,bottom,height,depth,color,kind}:{
+ left:number;width:number;bottom:number;height:number;depth:number;
+ color:string;kind:string;
+}){
+ if(width<.14||height<.15)return null;
+ const rail=Math.min(.105,Math.max(.048,Math.min(width,height)*.085));
+ const edge=Math.max(.025,rail*.35);
+ const glassW=Math.max(.03,width-rail*2),glassH=Math.max(.04,height-rail*2);
+ return <group name={'elite-factory-assembled-'+kind+'-sash'}
+   position={[left,bottom,depth]}>
+   {/* Weather-sealed separate sash with extruded track lips. A real slider
+       shows one sash in front of the other, never a flat split outline. */}
+   {[-1,1].map((side,i)=><Block key={'sash-side-'+i}
+     name="separate-sash-stile" position={[side<0?rail/2:width-rail/2,height/2,0]}
+     size={[rail,height,.082]} color={color} metalness={.32}/>)}
+   {[0,height].map((y,i)=><Block key={'sash-rail-'+i}
+     name={i===0?'sash-bottom-track':'sash-top-track'}
+     position={[width/2,y,.002]} size={[width,rail,.087]}
+     color={color} metalness={.32}/>)}
+   <Block name="sash-interior-weatherseal-lip"
+     position={[width/2,height/2,-.035]}
+     size={[glassW+edge,glassH+edge,.026]}
+     color="#777e80" metalness={.22}/>
+   {[-1,1].map((face,i)=><mesh key={'insulated-lite-'+i}
+     name="clear-insulated-glass-lite"
+     position={[width/2,height/2,face*.019]}>
+     <planeGeometry args={[glassW,glassH]}/>
+     <meshPhysicalMaterial color="#dce9ec" transparent opacity={.20}
+       roughness={.035} metalness={.06} depthWrite={false}
+       side={THREE.DoubleSide}/>
+   </mesh>)}
+ </group>;
+}
 function GlazedBay({opening,frameColor}:{
  opening:EliteGlazingOpening;frameColor:string;
 }){
  const width=opening.end-opening.start;
  const hl=opening.topLeftFt-opening.bottomFt;
  const hr=opening.topRightFt-opening.bottomFt;
- const minHeight=Math.min(hl,hr),maxHeight=Math.max(hl,hr);
- // Real triangular transoms taper to zero at the low end.
- if(width<.20||maxHeight<.12)return null;
+ const taller=Math.max(hl,hr),shorter=Math.min(hl,hr);
+ if(width<.20||taller<.12)return null;
+ const picture=opening.style==='picture-window'||opening.zone==='transom'||
+   opening.zone==='above-door';
+ const tapered=Math.abs(hl-hr)>.025;
+ const outer=Math.min(.095,Math.max(.055,width*.028));
+ const gasket=.017;
  const shape=new THREE.Shape();
- const inset=Math.min(.045,width/8);
- shape.moveTo(inset,.012);shape.lineTo(width-inset,.012);
- shape.lineTo(width-inset,Math.max(.020,hr-inset));
- shape.lineTo(inset,Math.max(.020,hl-inset));shape.closePath();
- const sash=.05;
- const cols=opening.style==='double-horizontal-sliders'?4:
+ const inset=Math.min(outer+.025,width/6);
+ shape.moveTo(inset,.025);shape.lineTo(width-inset,.025);
+ shape.lineTo(width-inset,Math.max(.032,hr-inset));
+ shape.lineTo(inset,Math.max(.032,hl-inset));shape.closePath();
+ const trackH=Math.max(.12,shorter-outer*2);
+ const panes=opening.style==='double-horizontal-sliders'?4:
    opening.style==='horizontal-sliders'?2:1;
  return <group name={'elite-clear-insulated-'+opening.zone+'-'+opening.style}
    position={[opening.start,opening.bottomFt,0]}>
-   {[-1,1].map(sign=><mesh key={'insulated-glass-leaf-'+sign}
+   {/* Real window assembly: a visible exterior frame, contrasting thin
+       weatherseal and recessed glass surface, not bare transparent rectangles. */}
+   {[-1,1].map((face,i)=><mesh key={'factory-glass-'+i}
      name="clear-insulated-glass-lite"
-     position={[0,0,sign*.017]}>
+     position={[0,0,face*.023]}>
      <shapeGeometry args={[shape]}/>
-     <meshPhysicalMaterial color={GLASS_COLOR} transparent opacity={.28}
-       roughness={.06} metalness={0} depthWrite={false}
+     <meshPhysicalMaterial color="#d8e7ed" transparent opacity={.19}
+       roughness={.045} metalness={0} depthWrite={false}
        side={THREE.DoubleSide}/>
    </mesh>)}
-   <Block position={[width/2,sash/2,.018]} size={[width,sash,.075]}
-     color={frameColor} metalness={.42}/>
-   <SlopedBeam start={[0,hl,0]} end={[width,hr,0]} thickness={sash}
-     depth={.09} color={frameColor}/>
-      {([hl,hr] as const).map((h,i)=>h>.08&&<Block key={'sash-edge-'+i}
-     position={[i===0?0:width,h/2,0]} size={[sash,h,.09]}
-     color={frameColor} metalness={.4}/>)}
-   {Array.from({length:cols-1},(_,i)=><Block key={'slider-stile-'+i}
-     position={[width*(i+1)/cols,minHeight/2,0]}
-     size={[sash,Math.max(.06,minHeight-.1),.085]} color={frameColor} metalness={.4}/>)}
-   {opening.style==='vertical-sliders'&&<Block name="vertical-slider-meeting-rail"
-     position={[width/2,minHeight/2,0]} size={[width-.06,sash,.09]}
-     color={frameColor} metalness={.38}/>}
-   {opening.style==='casement'&&<>
-     <Block name="casement-hinge-stile" position={[.10,minHeight/2,.052]}
-       size={[.035,minHeight-.13,.09]} color={frameColor}/>
-     <Block name="casement-latch" position={[width-.13,minHeight/2,.07]}
-       size={[.035,.20,.07]} color={EDGE_COLOR} metalness={.6}/>
+   <Block name="elite-mill-finish-base-sash" position={[width/2,outer/2,.043]}
+     size={[width,outer,.10]} color={frameColor} metalness={.31}/>
+   <SlopedBeam start={[0,hl,.043]} end={[width,hr,.043]}
+     thickness={outer} depth={.10} color={frameColor}/>
+   {([hl,hr] as const).map((height,i)=>height>.02&&<Block
+     key={'perimeter-stile-'+i} name="sunroom-sash-perimeter"
+     position={[i===0?outer/2:width-outer/2,height/2,.043]}
+     size={[outer,height,.10]} color={frameColor} metalness={.31}/>)}
+   {/* Thin dark EPDM seal creates the actual gasket/readable sightline
+       around the glass and behind its aluminum members. */}
+   <SlopedBeam start={[inset,Math.max(.03,hl-inset),.074]}
+     end={[width-inset,Math.max(.03,hr-inset),.074]}
+     thickness={gasket} depth={.018} color="#66737b"/>
+   {picture||tapered?null:opening.style==='vertical-sliders'?<>
+     <RectangularSashLite left={outer} width={Math.max(.15,width-outer*2)}
+       bottom={outer} height={Math.max(.18,trackH/2)}
+       depth={-.032} color={frameColor} kind="vertical-slider-lower"/>
+     <RectangularSashLite left={outer} width={Math.max(.15,width-outer*2)}
+       bottom={outer+trackH/2} height={Math.max(.18,trackH/2)}
+       depth={.035} color={frameColor} kind="vertical-slider-upper"/>
+     <Block name="vertical-slider-meeting-rail"
+       position={[width/2,outer+trackH/2,.098]}
+       size={[width-outer*2,.09,.065]} color={frameColor}/>
+   </>:opening.style==='casement'?<>
+     <RectangularSashLite left={outer} width={Math.max(.15,width-outer*2)}
+       bottom={outer} height={trackH} depth={.035}
+       color={frameColor} kind="casement"/>
+     <Block name="casement-hinge-stile" position={[outer,shorter/2,.12]}
+       size={[.046,Math.max(.1,trackH-.1),.04]} color={frameColor}/>
+     <Block name="casement-latch" position={[width-outer*2,shorter/2,.137]}
+       size={[.045,.22,.06]} color="#63666a" metalness={.65}/>
+   </>:<>
+     {/* Two-track aluminum horizontal sliders; the leaves cross at the
+         mullion, with inner and outer tracks and realistic interlocks. */}
+     {Array.from({length:panes},(_,i)=>{
+       const paneW=Math.max(.18,(width-outer*2)/panes+.035);
+       const left=outer+i*(width-outer*2)/panes;
+       return <RectangularSashLite key={'elite-sash-leaf-'+i} left={left}
+         width={paneW} bottom={outer} height={trackH}
+         depth={i%2===0?-.046:.047} color={frameColor}
+         kind={panes===4?'double-horizontal-slider':'horizontal-slider'}/>;
+     })}
+     <Block name="double-track-sill-rail" position={[width/2,outer/2,.10]}
+       size={[width-outer*2,.037,.11]} color={frameColor}/>
+     <Block name="slider-latch"
+       position={[width/2+.05,Math.min(3.2,trackH/2),.135]}
+       size={[.056,.18,.066]} color="#565b60" metalness={.62}/>
    </>}
-   {(opening.style==='horizontal-sliders'||opening.style==='double-horizontal-sliders')&&
-     <Block name="slider-latch" position={[width/cols+.06,minHeight/2,.08]}
-       size={[.032,.18,.055]} color={EDGE_COLOR} metalness={.5}/>}
  </group>;
 }
 function ElitePrimeDoor({section,frameColor,glazing}:{
@@ -108,39 +179,67 @@ function ElitePrimeDoor({section,frameColor,glazing}:{
  const width=rect.end-rect.start;
  const isSlider=section.doorType==='slider';
  const hinge=section.doorHinge==='right'?'right':'left';
- const depth=.17;
- const frame=.105;
- const handleX=hinge==='left'?width-.16:.16;
+ const jamb=.11,leafStile=.155,head=.16,bottomRail=.23;
+ const glassWidth=Math.max(.35,width-2*jamb-2*leafStile);
+ const glassHeight=DOOR_HEIGHT_FT-head-bottomRail-.12;
+ const handleX=hinge==='left'?width-.205:.205;
  return <group name={isSlider?'elite-legacy-sliding-door':'elite-prime-full-view-outswing-door'}
-   position={[rect.start,0,.022]}>
-   <Block name="door-left-zbar-or-jamb" position={[0,DOOR_HEIGHT_FT/2,0]}
-     size={[frame,DOOR_HEIGHT_FT,depth]} color={frameColor} metalness={.45}/>
-   <Block name="door-right-zbar-or-jamb" position={[width,DOOR_HEIGHT_FT/2,0]}
-     size={[frame,DOOR_HEIGHT_FT,depth]} color={frameColor} metalness={.45}/>
-   <Block name="door-head" position={[width/2,DOOR_HEIGHT_FT,0]}
-     size={[width,frame,depth]} color={frameColor} metalness={.45}/>
-   <Block name="door-threshold" position={[width/2,.05,0]}
-     size={[width,.10,depth+.04]} color={frameColor} metalness={.43}/>
-   {[-1,1].map(side=><mesh key={'full-view-glass-'+side}
+   position={[rect.start,0,.03]}>
+   {/* Prime full-view commercial aluminum entry: Z-bar perimeter,
+       distinct leaf rails, nearly full-height glazing and simple flush
+       threshold. Visual sightlines are calibrated to supplied field photos. */}
+   {[-1,1].map((sign,i)=><Block key={'jamb-'+i}
+     name={i===0?'door-left-zbar-or-jamb':'door-right-zbar-or-jamb'}
+     position={[sign<0?jamb/2:width-jamb/2,DOOR_HEIGHT_FT/2,0]}
+     size={[jamb,DOOR_HEIGHT_FT,.19]} color={frameColor} metalness={.35}/>)}
+   <Block name="door-head" position={[width/2,DOOR_HEIGHT_FT-head/2,0]}
+     size={[width,head,.19]} color={frameColor} metalness={.35}/>
+   <Block name="door-threshold" position={[width/2,.047,.04]}
+     size={[width,.094,.26]} color={frameColor} metalness={.35}/>
+   <Block name="full-view-door-leaf-left-stile"
+     position={[jamb+leafStile/2,DOOR_HEIGHT_FT/2,.055]}
+     size={[leafStile,DOOR_HEIGHT_FT-.12,.115]} color={frameColor} metalness={.35}/>
+   <Block name="full-view-door-leaf-right-stile"
+     position={[width-jamb-leafStile/2,DOOR_HEIGHT_FT/2,.055]}
+     size={[leafStile,DOOR_HEIGHT_FT-.12,.115]} color={frameColor} metalness={.35}/>
+   <Block name="full-view-door-leaf-top-rail"
+     position={[width/2,DOOR_HEIGHT_FT-head-.048,.055]}
+     size={[width-jamb*2,.095,.115]} color={frameColor}/>
+   <Block name="full-view-door-leaf-bottom-rail"
+     position={[width/2,bottomRail/2+.085,.055]}
+     size={[width-jamb*2,bottomRail,.12]} color={frameColor}/>
+   <Block name="tempered-glass-black-edge-seal"
+     position={[width/2,DOOR_HEIGHT_FT/2+.014,-.015]}
+     size={[glassWidth+.02,glassHeight+.02,.031]} color="#78858b"/>
+   {[-1,1].map((face,i)=><mesh key={'prime-glass-'+i}
      name="prime-clear-full-view-glazed-lite"
-     position={[width/2,DOOR_HEIGHT_FT/2,side*.021]}>
-     <planeGeometry args={[Math.max(.12,width-.22),DOOR_HEIGHT_FT-.24]}/>
-     <meshPhysicalMaterial color={glazing} transparent opacity={.29}
-       roughness={.06} metalness={0} side={THREE.DoubleSide}
-       depthWrite={false}/>
+     position={[width/2,DOOR_HEIGHT_FT/2+.014,face*.021]}>
+     <planeGeometry args={[glassWidth,glassHeight]}/>
+     <meshPhysicalMaterial color={glazing} transparent opacity={.19}
+       roughness={.045} metalness={.03} depthWrite={false}
+       side={THREE.DoubleSide}/>
    </mesh>)}
    {isSlider&&<Block name="sliding-door-center-interlock"
-     position={[width/2,DOOR_HEIGHT_FT/2,.04]}
-     size={[.075,DOOR_HEIGHT_FT-.16,.10]} color={frameColor}/>}
-   {!isSlider&&[.6,DOOR_HEIGHT_FT/2,DOOR_HEIGHT_FT-.7].map((y,i)=>
-     <Block key={'outswing-hinge-'+i} name="three-outswing-hinges"
-       position={[hinge==='left'?0:width,y,.115]}
-       size={[.055,.22,.07]} color={EDGE_COLOR} metalness={.65}/>)}
-   <Block name="keyed-entry-hardware-handle"
-     position={[handleX,3.2,.13]}
-     size={[.07,.30,.075]} color={EDGE_COLOR} metalness={.73}/>
-   <Block name="deadbolt" position={[handleX,3.75,.13]}
-     size={[.075,.075,.075]} color={EDGE_COLOR} metalness={.75}/>
+     position={[width/2,DOOR_HEIGHT_FT/2,.11]}
+     size={[.075,DOOR_HEIGHT_FT-.18,.11]} color={frameColor}/>}
+   {!isSlider&&[.65,DOOR_HEIGHT_FT/2,DOOR_HEIGHT_FT-.72].map((y,i)=>
+     <Block key={'prime-outswing-hinge-'+i} name="three-outswing-hinges"
+       position={[hinge==='left'?jamb:width-jamb,y,.145]}
+       size={[.06,.24,.085]} color="#70777d" metalness={.74}/>)}
+   {!isSlider&&<>
+     {/* Round keyed passage lock/deadbolt hardware, as on the supplied
+         white Elite door photographs (not a generic massive lever plate). */}
+     <mesh name="keyed-entry-hardware-handle"
+       position={[handleX,3.2,.168]} rotation={[Math.PI/2,0,0]}>
+       <cylinderGeometry args={[.084,.084,.046,20]}/>
+       <meshStandardMaterial color="#aaaeb2" metalness={.82} roughness={.23}/>
+     </mesh>
+     <mesh name="deadbolt"
+       position={[handleX,3.73,.168]} rotation={[Math.PI/2,0,0]}>
+       <cylinderGeometry args={[.062,.062,.041,20]}/>
+       <meshStandardMaterial color="#b0b3b7" metalness={.8} roughness={.25}/>
+     </mesh>
+   </>}
    <group name={'prime-door-glazing-'+section.doorType}/>
  </group>;
 }
