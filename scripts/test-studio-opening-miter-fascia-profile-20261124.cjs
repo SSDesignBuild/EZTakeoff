@@ -139,7 +139,8 @@ assert.ok(stair3d.includes('fasciaRipGeo')&&
  stair3d.includes('lower-ripped-three-quarter-inch-fascia-strip'));
 assert.ok(stair3d.includes('const thickFt=.75/12'));
 const fasciaOrder=estimate.calculateEstimate('decks',{...deckDefaults,
- stairCount:1,stairFasciaStyle:'straight',deckHeight:5,
+ stairCount:1,stairEdgeIndex:2,stairWidth:4,stairOffset:2,
+ stairFasciaStyle:'straight',deckHeight:5,
  deckingType:'composite',deckingMaterial:'Trex Enhance'});
 assert.ok(fasciaOrder.materials.some(m=>
  m.name.includes('rip lower stair strip')&&m.stockRecommendation.includes('12 ft')),
