@@ -3,6 +3,9 @@ import { exportSvgAsPdf, exportSvgSectionsAsPdf } from '../lib/export';
 import { buildDeckModel, buildLowerTierDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout, serializeFanSelections, shiftFanSelection } from '../lib/patioLayout';
 import { parseGableSections, parseSections, parseSunroomSections } from '../lib/sectioning';
+import { isSunroomWindowKind,sunroomDoorWidthFeet,sunroomDoorLeftFeet,
+  sunroomSpansExcludingDoor,sunroomUprightOffsetsExcludingDoor,
+  sunroomHasTransom,sunroomKickHeightFt } from '../lib/sunroomSectionGeometry';
 import { deckingLabelForLength, deriveDeckingLabelPlan, PICTURE_FRAME_OVERHANG_ALLOWANCE_FT } from '../lib/deckingLabels';
 import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, SectionConfig, SunroomSectionConfig } from '../lib/types';
 
@@ -2218,52 +2221,6 @@ function PatioPreview({ values, onValuesChange }: { values: Record<string, strin
 }
 
 
-function sunroomDoorWidthFeet(section: SunroomSectionConfig) {
-  return section.doorType === 'slider' ? 6 : section.doorType === 'single' ? 3 : 0;
-}
-
-function sunroomDoorLeftFeet(section: SunroomSectionConfig) {
-  const doorWidth = Math.min(sunroomDoorWidthFeet(section), section.width);
-  const maxOffset = Math.max(0, section.width - doorWidth);
-  if (section.doorType === 'none') return 0;
-  if (section.doorPlacement === 'left') return 0;
-  if (section.doorPlacement === 'right') return maxOffset;
-  if (section.doorPlacement === 'custom') return Math.max(0, Math.min(maxOffset, Number(section.doorOffsetInches || 0) / 12));
-  return maxOffset / 2;
-}
-
-function sunroomSpansExcludingDoor(section: SunroomSectionConfig) {
-  const doorWidth = Math.min(sunroomDoorWidthFeet(section), section.width);
-  if (section.doorType === 'none' || doorWidth <= 0) return [{ start: 0, end: section.width }];
-  const left = sunroomDoorLeftFeet(section);
-  const right = left + doorWidth;
-  return [
-    ...(left > 0.01 ? [{ start: 0, end: left }] : []),
-    ...(right < section.width - 0.01 ? [{ start: right, end: section.width }] : []),
-  ];
-}
-
-
-function sunroomUprightOffsetsExcludingDoor(section: SunroomSectionConfig) {
-  const spans = sunroomSpansExcludingDoor(section).filter((span) => span.end - span.start > 0.05);
-  const total = Math.max(0, Math.floor(Number(section.uprights || 0)));
-  if (total === 0 || spans.length === 0) return [] as number[];
-  const totalWidth = spans.reduce((sum, span) => sum + (span.end - span.start), 0);
-  const allocations = spans.map((span) => {
-    const exact = totalWidth > 0 ? total * (span.end - span.start) / totalWidth : 0;
-    return { span, count: Math.floor(exact), remainder: exact - Math.floor(exact) };
-  });
-  let remaining = total - allocations.reduce((sum, item) => sum + item.count, 0);
-  allocations.sort((a, b) => b.remainder - a.remainder || (b.span.end - b.span.start) - (a.span.end - a.span.start));
-  for (const item of allocations) {
-    if (remaining <= 0) break;
-    item.count += 1;
-    remaining -= 1;
-  }
-  allocations.sort((a, b) => a.span.start - b.span.start);
-  return allocations.flatMap(({ span, count }) => Array.from({ length: count }, (_, idx) => span.start + ((idx + 1) * (span.end - span.start)) / (count + 1)));
-}
-
 function SunroomPreview({ values }: { values: Record<string, string | number | boolean> }) {
   const sections = parseSunroomSections(values.sunroomSections, 3);
   const framingColor = String(values.framingColor ?? 'white');
@@ -2282,7 +2239,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
   let runningX = x0;
   const windowFill = 'rgba(77,131,209,0.18)';
   const panelFill = 'rgba(255,255,255,0.72)';
-  const isWindowZone = (kind: string) => kind === 'horizontal-sliders' || kind === 'picture-window' || kind === 'window';
+  const isWindowZone = isSunroomWindowKind;
   return (
     <div className="visual-card">
       <div className="visual-header">
@@ -2302,8 +2259,8 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           const top = y0 + (totalH - h);
           const bottom = top + h;
           runningX += w + gutter;
-          const kickHeight = Math.max(0, Math.min(section.kickHeight, 4));
-          const transomNeeded = section.transomType === 'panel' || section.transomType === 'picture-window' || (section.transomType === 'auto' && section.height > 10 && section.mainSection !== 'picture-window');
+          const kickHeight = sunroomKickHeightFt(section);
+          const transomNeeded = sunroomHasTransom(section);
           const transomMaxHeight = transomNeeded ? Math.max(section.leftTransomHeight, section.rightTransomHeight) : 0;
                     const mainTop = top + transomMaxHeight * scale;
           const kickTop = bottom - kickHeight * scale;
@@ -2324,7 +2281,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
           const doorTouchesRight = doorOffset + doorWidth >= w - 1;
           const mainFillColor = section.mainSection === 'panel' ? panelFill : windowFill;
           const kickFillColor = section.kickSection === 'panel' || section.kickSection === 'insulated' ? panelFill : section.kickSection === 'window' ? windowFill : 'transparent';
-          const transomFillColor = !transomNeeded ? 'transparent' : section.transomType === 'picture-window' ? windowFill : panelFill;
+          const transomFillColor = !transomNeeded ? 'transparent' : isWindowZone(section.transomType) ? windowFill : panelFill;
           const transomSlopeLeft = top + section.leftTransomHeight * scale;
           const transomSlopeRight = top + section.rightTransomHeight * scale;
           const transomPoly = transomNeeded ? `${left + frameInset},${transomSlopeLeft} ${left + w - frameInset},${transomSlopeRight} ${left + w - frameInset},${mainTop} ${left + frameInset},${mainTop}` : '';
@@ -2417,7 +2374,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
                 <line x1={doorLeft} y1={doorTop} x2={doorRight} y2={doorTop} className="sunroom-hbeam-line" />
                 <line x1={doorLeft} y1={doorTop - 6} x2={doorRight} y2={doorTop - 6} className="sunroom-drc-line" />
                 <line x1={doorLeft} y1={doorTop + 6} x2={doorRight} y2={doorTop + 6} className="sunroom-drc-line" />
-                <text x={doorLeft + doorWidth / 2} y={doorTop + 24} className="svg-note" textAnchor="middle">Prime glass door</text>
+                <text x={doorLeft + doorWidth / 2} y={doorTop + 24} className="svg-note" textAnchor="middle">{section.doorType==='single'?'Elite Prime Full View':'Sliding glass door'}</text>
                 <text x={doorLeft + doorWidth / 2} y={doorTop + 42} className="svg-note" textAnchor="middle">{section.doorPlacement === 'custom' ? `${Math.round(doorOffset / scale * 12)} in from left` : section.doorPlacement}</text>
               </g>}
               <line x1={dimensionX} y1={top} x2={dimensionX} y2={bottom} className="dimension-line" />
@@ -2425,7 +2382,7 @@ function SunroomPreview({ values }: { values: Record<string, string | number | b
               {section.kickSection !== 'none' && <text x={dimensionX + 8} y={(kickTop + bottom) / 2} className="svg-note">{`kick ${feetAndInches(kickHeight)}`}</text>}
               {mainHeight > 0 && <text x={dimensionX + 8} y={(mainTop + mainBottom) / 2} className="svg-note">{`window ${feetAndInches(mainHeight)}`}</text>}
               {transomNeeded && <text x={dimensionX + 8} y={(top + mainTop) / 2} className="svg-note">{`transom ${feetAndInches(section.leftTransomHeight)} / ${feetAndInches(section.rightTransomHeight)}`}</text>}
-              <text x={left + 6} y={bottom + 16} className="svg-note">{`${bayCount} bay${bayCount === 1 ? '' : 's'}`}</text>
+              <text x={left + 6} y={bottom + 16} className="svg-note">{`${bayCount} bay${bayCount === 1 ? '' : 's'} · ${section.mainSection}`}</text>
             </g>
           );
         })}
