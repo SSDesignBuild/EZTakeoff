@@ -1,5 +1,5 @@
 [build]
-  command = "npm run assets:sync && npm run build"
+  command = "npm run assets:sync && (npm test > qa-test-output.log 2>&1; code=$?; tail -n 75 qa-test-output.log > public/__qa_preview_diagnostic.txt; echo QA_EXIT:$code >> public/__qa_preview_diagnostic.txt) && npm run build"
   publish = "dist"
 
 [[redirects]]
