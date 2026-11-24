@@ -13,7 +13,7 @@ import { planRenaissanceCoverWalls } from '../../lib/renaissanceCoverWallLayout'
 import { planPcaDoorOnWall,effectivePcaKickPlateIn, type PcaDoorModel,type PcaPetDoor,type ScreenDoorWall } from '../../lib/pcaScreenDoorGeometry';
 import { PcaScreenDoor3D } from './PcaScreenDoor3D';
 import { RenaissancePrivacyWall3D } from './RenaissancePrivacyWall3D';
-import { RenaissanceLuminoWall3D } from './RenaissanceLuminoWall3D';
+
 import { EliteAddARoomWall3D } from './EliteAddARoomWall3D';
 import { currentEliteSunroomSettings,eliteWallSections } from '../../lib/eliteSunroomStudio';
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
@@ -537,12 +537,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         }}/>
       )}
     </group>}
-    {/* Lumino glazing is a distinct product; never silently interchange
-        it with Dolce mesh, PCA screen doors or a shade-tube privacy wall. */}
-    {project.coverScreenStyle==='lumino-sunroom'&&isSolid&&
-      coverWallRuns.filter(wall=>!privacyGap(wall.id)).map(wall=>
-        <RenaissanceLuminoWall3D key={'lumino-wall-'+wall.id}
-          {...wall} bottom={deckHeight+.12} finish={powder}/>)}
+
     {/* Real Elite Add-A-Room 2/3-inch wall system. Unlike the older Lumino
         concept, these units share the Admin Sunroom section geometry/BOM.
         No extra Elite corner posts are fabricated on Renaissance columns. */}
