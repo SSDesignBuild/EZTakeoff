@@ -127,7 +127,8 @@ assert.equal(planStairSideFascia({treadDepthFt:11/12,treads:7,riseFt:5/8,
 const visual=fs.readFileSync(path.join(root,'src/components/visual3d/DeckStairAssembly3D.tsx'),'utf8');
 assert.ok(visual.includes('planStairSideFascia')&&
  !visual.includes("straightFasciaGeo:geo")&&
- visual.includes('width/2+1/24')&&
+ visual.includes('width/2+.75/24')&&
+ visual.includes('lower-ripped-three-quarter-inch-fascia-strip')&&
  visual.includes('lowerStart=fasciaOutline[fasciaOutline.length-1]')&&
  visual.includes('map={fasciaTexture}')&&
  visual.includes('toneMapped={false}'),
