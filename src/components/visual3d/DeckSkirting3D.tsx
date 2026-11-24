@@ -110,12 +110,28 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
           const width=Math.max(.2,opening.width-.08);
           return <group key={'access-gate-leaf-'+i} name="placed-hinged-skirting-access-gate">
             {infillH>.12&&<group name="fixed-skirting-infill-above-short-gate">
-              <group position={[x,top-infillH/2,z]} rotation={[0,yaw,0]}>
-                <SkirtingAccessFace width={width} height={infillH}
-                  orientation={plan.options.orientation}
-                  faceIn={plan.options.faceIn} gapIn={plan.options.gapIn}
-                  color={color} texture={showPhoto?texture:null}/>
-              </group>
+              {plan.options.orientation==='vertical'&&
+                // Follow exactly the adjacent continuous wall-wide station
+                // grid: never center a second patched upper-panel pattern.
+                Array.from({length:Math.ceil(side.lengthFt/((plan.options.faceIn+
+                  plan.options.gapIn)/12))},(_,boardIdx)=>{
+                  const pitch=(plan.options.faceIn+plan.options.gapIn)/12;
+                  const boardStart=boardIdx*pitch;
+                  const clippedStart=Math.max(opening.offset,boardStart);
+                  const clippedEnd=Math.min(opening.offset+opening.width,
+                    boardStart+plan.options.faceIn/12);
+                  if(clippedEnd-clippedStart<=.001)return null;
+                  const [cx,cz]=point(edge,(clippedStart+clippedEnd)/2,'finish');
+                  return <group key={'continuous-upper-wall-plank-'+boardIdx}
+                    position={[cx,top-infillH/2,cz]} rotation={[0,yaw,0]}>
+                    <Block position={[0,0,0]}
+                      size={[clippedEnd-clippedStart,infillH,.082]}
+                      color={color} texture={showPhoto?texture:null}/>
+                  </group>;
+                })}
+              {/* Horizontal upper courses are ALREADY drawn by side.courses,
+                  physically crossing the full gate width. Render no separate
+                  upper infill face or phantom vertical patch seams. */}
               <Beam start={point(edge,opening.offset,'frame')}
                 end={point(edge,opening.offset+opening.width,'frame')}
                 height={top-infillH-.03} thickness={.125} depth={.25} color="#8b7657"/>
