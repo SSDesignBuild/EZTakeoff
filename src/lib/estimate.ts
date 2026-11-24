@@ -4,6 +4,8 @@ import { parseGableSections, parseSections, parseSunroomSections } from './secti
 import { isSunroomWindowKind,sunroomDoorWidthFeet,sunroomDoorLeftFeet,
   sunroomSpansExcludingDoor,sunroomUprightOffsetsExcludingDoor,
   sunroomHasTransom,sunroomKickHeightFt,sunroomWindowOpenings,
+  sunroomMainTopFt,sunroomRoofTopFtAt,sunroomRoofCapLengthFt,
+  sunroomUprightVerticalExtent,sunroomTransomPanelAreaFt2,
   type EliteGlazingOpening } from './sunroomSectionGeometry';
 import { buildDeckModel, buildLowerTierDeckModel } from './deckModel';
 import { EstimateResult, MaterialItem, SectionConfig } from './types';
@@ -1500,49 +1502,40 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
     const touchesLeft = section.doorType !== 'none' && doorOffset <= 0.01;
     const touchesRight = section.doorType !== 'none' && doorOffset + doorWidth >= section.width - 0.01;
     const transomNeeded = sunroomHasTransom(section);
-    const transomMaxHeight = transomNeeded ? Math.max(section.leftTransomHeight, section.rightTransomHeight) : 0;
-    const transomFillHeight = transomNeeded ? (section.leftTransomHeight + section.rightTransomHeight) / 2 : 0;
     const kickHeight = sunroomKickHeightFt(section);
-    const mainHeight = Math.max(0, section.height - kickHeight - transomMaxHeight);
-    const uprightHeight = section.uprightMode === 'main-only'
-      ? mainHeight
-      : section.uprightMode === 'main-kick'
-        ? mainHeight + kickHeight
-        : section.uprightMode === 'main-transom'
-          ? mainHeight + transomMaxHeight
-          : section.height;
+    const mainHeight = Math.max(0,sunroomMainTopFt(section)-kickHeight);
+    const roofLeft = sunroomRoofTopFtAt(section,0);
+    const roofRight = sunroomRoofTopFtAt(section,section.width);
+    const slopedRoofCut = sunroomRoofCapLengthFt(section);
 
     // Layout-matched perimeter pieces. These are the always-visible red and
     // purple vertical lines drawn at the outside of every section.
-    cutGroups.base.push(section.width);
-    cutGroups.topCap.push(section.width);
-    cutGroups.receiver.push(section.height, section.height);
-    cutGroups.drc.push(section.height, section.height);
+    // The bottom channel stops at a door threshold. The pitched top cap and
+    // receiver are true sloping lengths, not a flat horizontal projection.
+    addVisibleHorizontal(cutGroups.base,section);
+    cutGroups.topCap.push(slopedRoofCut);
+    cutGroups.receiver.push(roofLeft,roofRight);
+    cutGroups.drc.push(roofLeft,roofRight);
 
     // Layout top receiver: red line across the top whenever the section has a
     // window zone or transom. It is a full-width piece, even when a door is at an edge.
     if (section.mainSection !== 'panel' || transomNeeded) {
-      cutGroups.receiver.push(section.width);
+      cutGroups.receiver.push(slopedRoofCut);
     }
 
     // Upright H-beams and their DRC are placed only in the remaining opening
     // space after subtracting the door, using the same allocation as the layout.
-    uprightOffsetsExcludingDoor(section).forEach(() => {
-      if (uprightHeight > 0) {
-        cutGroups.hBeam.push(uprightHeight);
-        cutGroups.drc.push(uprightHeight, uprightHeight);
-        if (section.electricChase) cutGroups.chase.push(uprightHeight);
+    uprightOffsetsExcludingDoor(section).forEach((station) => {
+      const {lengthFt}=sunroomUprightVerticalExtent(section,station);
+      if (lengthFt > 0) {
+        cutGroups.hBeam.push(lengthFt);
+        cutGroups.drc.push(lengthFt,lengthFt);
+        if (section.electricChase) cutGroups.chase.push(lengthFt);
       }
     });
 
-    // If uprights do not run into the kick/transom, the layout still shows a
-    // support H-beam across each visible non-door span.
-    if (section.kickSection !== 'none' && (section.uprightMode === 'main-only' || section.uprightMode === 'main-transom')) {
-      addVisibleHorizontal(cutGroups.hBeam, section);
-    }
-    if (transomNeeded && (section.uprightMode === 'main-only' || section.uprightMode === 'main-kick')) {
-      addVisibleHorizontal(cutGroups.hBeam, section);
-    }
+    // The two main horizontal breaks are ONE physical H-beam apiece.
+    // Never double-count an H merely because an upright stops at the break.
 
     // Main/kick horizontal break. Count the exact red/purple line types the
     // layout draws, but as actual non-door cut pieces instead of a single gross width.
@@ -1581,29 +1574,50 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
       }
     }
 
+    if (transomNeeded && section.doorType!=='none' &&
+        sunroomMainTopFt(section)>6+8/12+.01) {
+      // The level transom separator CONTINUES OVER the door. The normal
+      // horizontal cut function intentionally excludes the entry below it.
+      cutGroups.hBeam.push(doorWidth);
+      const overDoorTransomWindow=isWindowZone(section.transomType);
+      if (overDoorTransomWindow && section.doorAboveSection==='window')
+        cutGroups.drc.push(doorWidth,doorWidth);
+      else if(overDoorTransomWindow||section.doorAboveSection==='window')
+        cutGroups.drc.push(doorWidth);
+    }
+
     // Infill material is based on the same visible non-door spans used above.
-    if (section.mainSection === 'panel' && buildMode !== 'existing-structure') {
+    if (section.mainSection === 'panel') {
       cutGroups.wallPanelArea += usableWidth * mainHeight;
     }
     if (section.kickSection === 'panel' || section.kickSection === 'insulated') {
       cutGroups.wallPanelArea += usableWidth * kickHeight;
     }
     if (transomNeeded && !isWindowZone(section.transomType)) {
-      cutGroups.wallPanelArea += usableWidth * transomFillHeight;
+      // A trapezoid/triangle is area under one continuous roof slope. The
+      // transom can also continue over a door; its area is not just the
+      // non-door side bays.
+      cutGroups.wallPanelArea += sunroomTransomPanelAreaFt2(section);
     }
 
     if (section.doorType !== 'none') {
       const doorHeight = 6 + 8 / 12;
-      const aboveDoorHeight = Math.max(0, section.height - doorHeight);
+      const aboveDoorHeight = Math.max(0,sunroomMainTopFt(section)-doorHeight);
       // Door jamb H-beams run full section height so they tie into the top cap.
-      if (!touchesLeft) cutGroups.hBeam.push(section.height);
-      if (!touchesRight) cutGroups.hBeam.push(section.height);
+      if (!touchesLeft) cutGroups.hBeam.push(sunroomRoofTopFtAt(section,doorOffset));
+      if (!touchesRight) cutGroups.hBeam.push(sunroomRoofTopFtAt(section,doorOffset+doorWidth));
       cutGroups.hBeam.push(doorWidth);
       // Purple DRC shown at the door jambs/header. Edge-mounted doors reuse the
       // already-counted edge DRC and receiver on the side touching the opening edge.
       cutGroups.drc.push(doorWidth, doorWidth);
-      if (!touchesLeft) cutGroups.drc.push(section.height, section.height);
-      if (!touchesRight) cutGroups.drc.push(section.height, section.height);
+      if (!touchesLeft) {
+        const cut=sunroomRoofTopFtAt(section,doorOffset);
+        cutGroups.drc.push(cut,cut);
+      }
+      if (!touchesRight) {
+        const cut=sunroomRoofTopFtAt(section,doorOffset+doorWidth);
+        cutGroups.drc.push(cut,cut);
+      }
       if (aboveDoorHeight > 0) {
         if (section.doorAboveSection === 'window') cutGroups.receiver.push(doorWidth);
         if (section.doorAboveSection === 'panel') cutGroups.wallPanelArea += doorWidth * aboveDoorHeight;
@@ -1613,11 +1627,11 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
       }else doorSliders+=1;
     }
 
-    sealantLf += section.width * 2 + section.height * 2;
-    addFasteners(section.bottomAttach, section.width);
-    addFasteners(section.topAttach, section.width);
-    addFasteners(section.leftAttach, section.height);
-    addFasteners(section.rightAttach, section.height);
+    sealantLf += section.width + slopedRoofCut + roofLeft + roofRight;
+    addFasteners(section.bottomAttach,usableWidth);
+    addFasteners(section.topAttach,slopedRoofCut);
+    addFasteners(section.leftAttach,roofLeft);
+    addFasteners(section.rightAttach,roofRight);
     customWindows.push(...sunroomWindowOpenings(section).map(opening=>({
       ...opening,label:section.label,
     })));
@@ -1646,7 +1660,9 @@ function estimateSunroom(inputs: EstimateInputs): EstimateResult {
   // ready-to-order net glass size. The supplier subtracts extrusion/sash reveals.
   for(const opening of customWindows){
     const width=opening.end-opening.start;
-    if(width<.25||Math.min(opening.topLeftFt,opening.topRightFt)-opening.bottomFt<.25)continue;
+    // A triangular transom terminates at zero rise: keep that factory
+    // opening when its taller side is nonzero.
+    if(width<.25||Math.max(opening.topLeftFt,opening.topRightFt)-opening.bottomFt<.25)continue;
     materials.push(toMaterial('Clear insulated glass - '+windowLabels[opening.style],
       'Sunroom windows - verify shop dimensions',1,'opening',
       'Gross opening - confirm net daylight and factory unit',
