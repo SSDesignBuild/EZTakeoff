@@ -139,3 +139,35 @@ export async function saveEstimatorDesign(project:ConsultationProject,
  return rows[0];
 }
 export const isValidQuoteId=(value:string)=>uuid.test(value);
+
+const PHOTO_BUCKET='sns-design-private';
+const PHOTO_NAME='house-photo';
+const allowedImages=new Set(['image/jpeg','image/png','image/webp']);
+/** Explicit opt-in: cloud photo transfer never occurs as part of a design JSON save. */
+export async function uploadEstimatorHousePhoto(designId:string,photo:Blob):Promise<void>{
+ if(!uuid.test(designId))throw new Error('Invalid design identifier.');
+ if(!allowedImages.has(photo.type)||photo.size>10*1024*1024||photo.size<1)
+  throw new Error('Cloud images must be JPG, PNG or WebP and no larger than 10 MB.');
+ const s=await session();
+ const path=URL_ROOT+'/storage/v1/object/'+PHOTO_BUCKET+'/'+designId+'/'+PHOTO_NAME;
+ const response=await fetch(path,{method:'POST',headers:{
+  apikey:PUBLISHABLE,Authorization:'Bearer '+s.access_token,
+  'Content-Type':photo.type,'x-upsert':'true',
+ },body:photo});
+ if(!response.ok){
+  const data=await response.json().catch(()=>null) as Record<string,unknown>|null;
+  throw new Error(String(data?.message??data?.error??'Private photo upload failed').slice(0,240));
+ }
+}
+/** Object is always private and only retrievable with a user JWT and RLS. */
+export async function downloadEstimatorHousePhoto(designId:string):Promise<Blob|null>{
+ if(!uuid.test(designId))throw new Error('Invalid design identifier.');
+ const s=await session();
+ const path=URL_ROOT+'/storage/v1/object/authenticated/'+PHOTO_BUCKET+'/'+designId+'/'+PHOTO_NAME;
+ const response=await fetch(path,{headers:{apikey:PUBLISHABLE,Authorization:'Bearer '+s.access_token}});
+ if(response.status===404)return null;
+ if(!response.ok)throw new Error('Private cloud photo could not be accessed with this account.');
+ const photo=await response.blob();
+ if(!allowedImages.has(photo.type)||photo.size>10*1024*1024)throw new Error('Invalid cloud photograph.');
+ return photo;
+}
