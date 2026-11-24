@@ -597,7 +597,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       treads:tier.stairTreadsPerRun,
       riseFt:heightFt/Math.max(1,tier.stairRisers),
       heightFt,style:inputs.stairFasciaStyle==='straight'?'straight':'profiled',
-      nosingFt:((stairRiserUsesFascia?.5:1)/12),
+      nosingFt:((stairRiserUsesFascia ? .5 : 1)/12),
     });
     return {lengthFt:coverage.ripRunFt*2*tier.stairCount,
       maxRipWidthIn:coverage.ripMaxWidthIn};
@@ -807,7 +807,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     ] : []),
     ...(deckFasciaLfForOrder > 0 ? [toMaterial('Fascia board', 'Trim', Math.ceil(deckFasciaLfForOrder/12), 'boards', '3/4 in x 12 in x 12 ft fascia boards', fasciaStyleInfo.color, `${deckFasciaLfForOrder.toFixed(1)} lf for deck perimeter/stringer sides ${stairRiserUsesFascia ? 'including standard stair fascia risers' : '(separate riser boards are listed under Stairs)'}. Fascia style: ${fasciaMaterial}.`)] : []),
     ...(lowerFasciaLfForOrder > 0 ? [toMaterial('Lower-tier fascia board', 'Lower tier trim', Math.ceil(lowerFasciaLfForOrder/12), 'boards', '3/4 in x 12 in x 12 ft fascia boards', fasciaStyleInfo.color, `${lowerFasciaLfForOrder.toFixed(1)} lf lower deck fascia; separate riser boards where chosen. Style: ${fasciaMaterial}.`)] : []),
-    ...(separateStairSideFasciaLf > 0 ? [toMaterial('3/4 in x 12 in stair side fascia board', 'Stairs', Math.ceil(separateStairSideFasciaLf/12), 'boards', '12 ft fascia stock', stairSideFasciaStyleInfo.color, `${separateStairSideFasciaLf.toFixed(1)} lf for both exposed stair stringer sides. Finish ${stairSideFasciaMaterial}, ${inputs.stairFasciaStyle==='straight'?'straight continuous diagonal edge':'notched stringer-following edge'}. Ripped lower fascia ordered separately where the single 12-in face cannot cover the structural underside. Verify field lengths.`)] : []),
+    ...(separateStairSideFasciaLf > 0 ? [toMaterial('Stair side fascia board', 'Stairs', Math.ceil(separateStairSideFasciaLf/12), 'boards', '3/4 in x 12 in x 12 ft fascia stock', stairSideFasciaStyleInfo.color, `${separateStairSideFasciaLf.toFixed(1)} lf for both exposed stair stringer sides. Finish ${stairSideFasciaMaterial}, ${inputs.stairFasciaStyle==='straight'?'straight continuous diagonal edge':'notched stringer-following edge'}. Ripped lower fascia ordered separately where the single 12-in face cannot cover the structural underside. Verify field lengths.`)] : []),
     ...(extraRipFasciaBoards>0?[toMaterial('3/4 in x 12 in fascia stock - rip lower stair strip','Stairs',
       extraRipFasciaBoards,'boards','12 ft stock; rip strips to cover stringer',
       stairSideFasciaStyleInfo.color,
