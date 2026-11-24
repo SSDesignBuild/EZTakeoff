@@ -29,7 +29,7 @@ export interface ConsultationProject {
   coverLouverAngle?: number;
   coverFraming?: 'standard'|'hd'|'wide'|'wide-insert';
   coverMount?: 'wall-attached'|'freestanding';
-  coverScreenStyle?: 'none'|'dolce-open-view'|'dolce-standard';
+  coverScreenStyle?: 'none'|'dolce-open-view'|'dolce-standard'|'lumino-sunroom';
   coverAccentEnd?: 'straight'|'curved'; // Truss/tail end finish on Fresco, Classico, Aria and Contempo.
   coverTrussMount?: 'flush'|'raised'; // Fresco/Aria manufacturer connection, not cover-to-house mount.
   coverScreenUprights?: Partial<Record<ScreenDoorWall,number>>; // Interior upright count per wall, excluding corner posts and doors.
