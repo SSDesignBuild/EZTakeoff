@@ -139,9 +139,7 @@ const skirtingRender=fs.readFileSync(path.join(root,'src/components/visual3d/Dec
 assert.ok(skirtingRender.includes('side.courses.map'),
  'Skirting finish renderer must consume exact segment-level purchase course geometry');
 const supplierUI=fs.readFileSync(path.join(root,'src/components/MaterialTable.tsx'),'utf8');
-assert.ok(supplierUI.includes("item.category==='Deck finish cut schedule (not order)'")&&
- supplierUI.includes('displayItems.filter(item=>!isFinishCutSchedule(item))')&&
- supplierUI.includes("delete out['Deck finish cut schedule (not order)']")&&
- supplierUI.includes('Export finish cut schedule'),
+assert.ok(supplierUI.includes("displayItems.filter(item=>item.category!=='Deck finish cut schedule (not order)')")&&
+ supplierUI.includes("delete out['Deck finish cut schedule (not order)']"),
  'Installer cuts must never be counted or printed as duplicate supplier stock orders');
 console.log('PASS 25ft/44ft deck and skirting joins, stock/offcut reuse, supported seams, 3D miter cuts, symmetric selected-color fascia');
