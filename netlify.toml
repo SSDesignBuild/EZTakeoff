@@ -1,8 +1,11 @@
 [build]
-  command = "npm run assets:sync && (npm test > qa-test-output.log 2>&1; code=$?; tail -n 75 qa-test-output.log > public/__qa_preview_diagnostic.txt; echo QA_EXIT:$code >> public/__qa_preview_diagnostic.txt) && npm run build"
+  command = "npm run assets:sync && node scripts/preview-qa-diagnostics.cjs && npm run build"
   publish = "dist"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+[functions]
+  directory = "netlify/functions"
