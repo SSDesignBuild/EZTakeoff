@@ -376,26 +376,30 @@ export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPer
   x:number;frontZ:number;topY:number;projectionFt:number;pitchInPerFt?:number;color:string;
   endStyle?:'straight'|'curved';
 }){
-  // The tail begins at a short lap behind the front header and terminates
-  // at the TRUE eave. It does not recreate a 1.65ft decorative plank over
-  // a full-length truss, which previously made overlapping dark spikes.
+  // Tail begins at the outside header face; curved end is a visually distinct
+  // reverse S-inflection rather than a single rounded edge. It is NOT a
+  // manufacturer dimensioned CAD cut.
   const front=Math.max(.06,Math.min(1.25,projectionFt));
-  const inner=Math.min(.30,front*.5+.12);
   const pitch=pitchInPerFt/12;
   const geometry=useMemo(()=>{
     const top=(z:number)=>-pitch*z;
     const shape=new THREE.Shape();
-    shape.moveTo(-inner,top(-inner));
+    shape.moveTo(0,top(0));
     shape.lineTo(front,top(front));
     if(endStyle==='straight'){
       shape.lineTo(front,top(front)-.45);
-      shape.lineTo(-inner,top(-inner)-.45);
+      shape.lineTo(0,top(0)-.45);
     }else{
+      const at=(u:number,drop:number)=>top(front*u)-drop;
+      // Roll over the tip, recess at the center and swing back to the root:
+      // three connected cubic arcs form a recognizable S-shaped cut.
       shape.lineTo(front,top(front)-.12);
-      shape.bezierCurveTo(front-.08,top(front)-.26,
-        front-.25,top(front)-.46,front-.43,top(front)-.48);
-      shape.bezierCurveTo(-.08,top(-.08)-.48,-.23,top(-.20)-.46,
-        -inner,top(-inner)-.45);
+      shape.bezierCurveTo(front*.94,at(.94,.19),
+        front*.86,at(.86,.39),front*.68,at(.68,.39));
+      shape.bezierCurveTo(front*.51,at(.51,.39),
+        front*.48,at(.48,.19),front*.34,at(.34,.20));
+      shape.bezierCurveTo(front*.20,at(.20,.23),
+        front*.14,at(.14,.45),0,at(0,.45));
     }
     shape.closePath();
     const g=new THREE.ExtrudeGeometry(shape,{
@@ -405,7 +409,7 @@ export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPer
     g.translate(0,0,-inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn)/2);
     g.rotateY(-Math.PI/2);g.computeVertexNormals();
     return g;
-  },[front,inner,pitch,endStyle]);
+  },[front,pitch,endStyle]);
   return <mesh geometry={geometry} position={[x,topY,frontZ]} castShadow receiveShadow>
     <meshStandardMaterial color={color} side={THREE.DoubleSide} metalness={.4} roughness={.3}/>
   </mesh>;
