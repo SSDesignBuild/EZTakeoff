@@ -20,7 +20,7 @@ import {
 } from '../../lib/renaissanceManufacturer';
 import {
   RenaissancePost,RenaissanceHeader,RenaissanceGutter,RenaissanceTruss,RenaissanceShadeTube,
-  RenaissanceCurvedTrussEnd,RenaissanceReceivingChannel,RenaissanceDownspout,
+  RenaissanceCurvedTrussEnd,RenaissanceContinuousProjectionTruss,RenaissanceReceivingChannel,RenaissanceDownspout,
 } from './RenaissanceExtrusions';
 
 /** Roof-following Dolce screen wall with real triangular mesh at sloping eaves. */
@@ -326,11 +326,15 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     })}
     {frontHeaderSpans.map((span,i)=><RenaissanceHeader key={'front-side-clipped-header-'+i}
       start={[span.startFt,frameFront]} end={[span.endFt,frameFront]}
-      midY={roofFront-headerHeight/2} profile={profile} color={powder}/>)}
+      midY={roofFront-headerHeight/2} profile={profile} color={powder}
+      capStart={i===0&&span.startFt<headerLeft+.01}
+      capEnd={i===frontHeaderSpans.length-1&&span.endFt>headerRight-.01}/>) }
     {!attached&&rearHeaderSpans.map((span,i)=><RenaissanceHeader
       key={'rear-side-clipped-header-'+i}
       start={[span.startFt,back]} end={[span.endFt,back]}
-      midY={roofBack-headerHeight/2} profile={profile} color={powder}/> )}
+      midY={roofBack-headerHeight/2} profile={profile} color={powder}
+      capStart={i===0&&span.startFt<headerLeft+.01}
+      capEnd={i===rearHeaderSpans.length-1&&span.endFt>headerRight-.01}/> )}
     {/* 'wide-insert' keeps the SAME outside extrusion dimensions as Wide.
         Reinforcement resides inside the profiles and is not an exterior bar. */}
     {/* Rectangular canopy is anchored to the deck's footprint bounding box.
@@ -486,12 +490,10 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       {plan.projectionTrussStationsFt.map((localX,i)=>{
         const x=xMid+localX;
         return <group key={'fresco-tube-and-snap-'+i}>
-          <RenaissanceTruss from={[x,roofRearY-.24+trussLift,roofBackEdge]}
-            to={[x,roofFrontY-.24+trussLift,accentEnd==='curved'?frameFront-.27:front]} color={powder}/>
-          {accentEnd==='curved'&&<RenaissanceCurvedTrussEnd
-            x={x} frontZ={frameFront} topY={roofFrontY-.24+trussLift}
-            projectionFt={plan.frontOverhangFt} pitchInPerFt={plan.pitchInPerFt}
-            color={powder}/>}
+          <RenaissanceContinuousProjectionTruss
+            rear={[x,roofRearY-.24+trussLift,roofBackEdge]}
+            nose={[x,roofFrontY-.24+trussLift,front]}
+            color={powder} endStyle={accentEnd==='curved'?'fresco-s':'straight'}/>
           <SlopedBeam start={[x,roofRearY+.115+trussLift,roofBackEdge]}
             end={[x,roofFrontY+.115+trussLift,front]}
             thickness={.07} depth={.09} color={powder}/>
@@ -507,12 +509,10 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       {plan.projectionTrussStationsFt.map((localX,i)=>{
         const x=xMid+localX;
         return <group key={'aria-truss-'+i}>
-          <RenaissanceTruss from={[x,roofRearY-.25+trussLift,roofBackEdge]}
-            to={[x,roofFrontY-.25+trussLift,accentEnd==='curved'?frameFront-.27:front]} color={powder}/>
-          {accentEnd==='curved'&&<RenaissanceCurvedTrussEnd
-            x={x} frontZ={frameFront} topY={roofFrontY-.25+trussLift}
-            projectionFt={plan.frontOverhangFt} pitchInPerFt={plan.pitchInPerFt}
-            color={powder} profileStyle="aria-scallop"/>} 
+          <RenaissanceContinuousProjectionTruss
+            rear={[x,roofRearY-.25+trussLift,roofBackEdge]}
+            nose={[x,roofFrontY-.25+trussLift,front]}
+            color={powder} endStyle={accentEnd==='curved'?'aria-scallop':'straight'}/>
         </group>;
       })}
       {Array.from({length:latticeCount},(_,i)=>{
