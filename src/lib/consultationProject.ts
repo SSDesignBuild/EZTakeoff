@@ -111,7 +111,7 @@ export const loadConsultations = (): ConsultationProject[] => {
       coverRoofStyle:p.coverRoofStyle??'studio',coverShadePercent:p.coverShadePercent??65,
       coverLouverAngle:p.coverLouverAngle??12,
       coverFraming:p.coverFraming??'standard',coverMount:p.coverMount??'wall-attached',
-      coverScreenStyle:p.coverScreenStyle??'none',
+      coverScreenStyle:p.coverScreenStyle==='lumino-sunroom'?'none':(p.coverScreenStyle??'none'),
       coverAccentEnd:p.coverAccentEnd??(['Contempo','Classico'].includes(p.coverFamily)?'curved':'straight'),
       coverTrussMount:p.coverTrussMount??'flush',
       coverScreenUprights:{front:2,left:1,right:1,rear:2,...p.coverScreenUprights},
