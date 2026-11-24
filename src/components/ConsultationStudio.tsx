@@ -14,6 +14,7 @@ import { saveHousePhoto, readHousePhoto, deleteHousePhoto } from '../lib/consult
 import { createEstimateHandoff, parseEstimateResponse, makeAcceptedScope, downloadJson, selectedPricedTier } from '../lib/estimatingBridge';
 import { ConsultationDeckFinishes, StairFasciaFinishSelect } from './ConsultationDeckFinishes';
 import { deckVisualProducts } from '../data/visualCatalog';
+import { ConsultationCloudPanel } from './ConsultationCloudPanel';
 
 const Live3D=lazy(()=>import('./Consultation3D').then((module)=>({default:module.Consultation3D})));
 type Step='photo'|'layout'|'options'|'render';
@@ -339,6 +340,10 @@ export function ConsultationStudio(){
         <button type="button" className="secondary-btn" onClick={create}>+ New consultation</button>
       </div>
     </div>
+    <ConsultationCloudPanel project={project??null} onOpen={(remote)=>{
+      setProjects(current=>[remote,...current.filter(p=>p.id!==remote.id)]);
+      navigate('/consultation/'+remote.id);
+    }}/>
     {project?<ConsultationEditor key={project.id} project={project} onChange={update}/>:
       <section className="consultation-list">
         <div className="consultation-list-heading">
