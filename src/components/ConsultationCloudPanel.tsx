@@ -51,8 +51,9 @@ export function ConsultationCloudPanel({project,onOpen,onPhotoRestored}:Props){
   finally{setBusy(false);}
  };
  const open=(item:CloudDesignRecord)=>{
-  if(!item.design_json||item.design_json.schemaVersion!==1){
-   setError('This cloud design has an unsupported schema.');return;
+  if(!item.design_json||item.design_json.schemaVersion!==1||
+    item.design_json.id!==item.id){
+   setError('This cloud design has an invalid or mismatched schema.');return;
   }
   // House image is deliberately NOT copied to cloud as JSON.
   // Keep local photos only if they already exist for this design ID.
