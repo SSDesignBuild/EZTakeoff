@@ -49,11 +49,12 @@ export function EliteSunroomStudioOptions({project,model,onChange}:{
    <div className="section-heading">
      <div>
        <p className="eyebrow">ELITE ADD-A-ROOM / SALES STUDIO</p>
-       <h3>Manufacturer sunroom wall layout</h3>
+       <h3>One opening per wall · uprights divide windows</h3>
        <p className="muted">This is the same editable Sunroom section system and
        24-foot-stock material calculator used in Admin Takeoff. Its walls follow
-       the actual Renaissance cover posts. Separate Elite corner posts are
-       deliberately omitted.</p>
+       the actual Renaissance cover posts. One physical wall opening is a
+       single section, regardless of how many window bays it contains.
+       Separate Elite corner posts are deliberately omitted.</p>
      </div>
    </div>
    <div className="form-grid elite-studio-global-grid">
@@ -86,15 +87,17 @@ export function EliteSunroomStudioOptions({project,model,onChange}:{
    </div>
    {wall&&<>
      <div className="elite-studio-wall-status">
-       <strong>{LABELS[side]} — {configured.length} section(s)</strong>
+       <strong>{LABELS[side]} — {configured.length===1?'one complete physical opening':configured.length+' saved sections (rebuild required)'}</strong>
        <span>Measured between Renaissance posts: {wall.widthFt.toFixed(2)} ft.
-         Entered total: {configured.reduce((n,s)=>n+s.width,0).toFixed(2)} ft.</span>
+         Entered total: {configured.reduce((n,s)=>n+s.width,0).toFixed(2)} ft.
+         {' '}Internal uprights: {configured.reduce((n,s)=>n+s.uprights,0)}.
+         {' '}A wall with no door and 2 uprights has 3 window bays.</span>
        <button type="button" className="ghost-btn small-btn" onClick={resetWall}>
-         Reset this wall to measured roof / post positions
+         Rebuild as one measured opening (replaces this wall's saved sections)
        </button>
      </div>
      {!!mismatch.length&&<div className="consultation-handoff-warnings" role="alert">
-       <strong>Dimensions need verification before client rendering</strong>
+       <strong>Wall geometry and takeoff need verification</strong>
        {mismatch.map((issue,i)=><p key={i}>{issue}</p>)}
      </div>}
      {[2,4,6].includes(Number(project.coverPrivacyWallGaps?.[side]??0))&&
@@ -103,11 +106,13 @@ export function EliteSunroomStudioOptions({project,model,onChange}:{
          for this side; remove the privacy wall to include Elite glazing.
        </p>}
      <SunroomSectionEditor values={{sunroomSections:JSON.stringify(configured)}}
-       onValuesChange={editWall}/>
+       onValuesChange={editWall} onePhysicalOpening
+       transomEndLabels={side==='left'||side==='right'
+         ?['Rear end','Front end']:['Left end','Right end']}/>
    </>}
    <div className="elite-studio-wall-status">
      <strong>Current combined Elite wall takeoff</strong>
-     <span>{estimate.sections.length} editable sections across {walls.length} cover walls ·
+     <span>{estimate.sections.length} physical opening sections across {walls.length} cover walls ·
        {' '}{estimate.estimate.materials.length} material schedule rows.
        Reuses Admin Sunrooms 24-foot stock optimizer, including DRC, H, receiver,
        base and top cap, window openings and Prime full-view door.</span>
