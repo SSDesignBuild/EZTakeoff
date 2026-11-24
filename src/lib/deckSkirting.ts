@@ -261,7 +261,9 @@ export function buildDeckSkirting(
           const maxLeaf=Math.max(.3,Math.min(at(o.offset),at(o.offset+o.width))-.18);
           const leafHeight=Math.max(.3,Math.min(maxLeaf,o.heightFt??maxLeaf));
           const upperInfill=Math.max(0,maxLeaf-leafHeight);
-          return y+Math.min(faceIn/12,Math.max(0,Math.min(at(o.offset),at(o.offset+o.width))-y))>upperInfill-.005;
+          // Keep a full-length row when its top is above the gate head.
+          // The final row is ripped across the entire wall; no patch seams.
+          return y>=upperInfill-.005;
         });
         const courseSpans=subtractIntervals(length,blockedAtCourse);
         for(const span of courseSpans){
@@ -278,7 +280,17 @@ export function buildDeckSkirting(
           issues.push(...segmentPlan.issues.map(issue=>'Side '+(edgeIndex+1)+' course '+(row+1)+': '+issue));
           segmentPlan.pieces.forEach((piece,part)=>{
             const a=piece.start,b=piece.end;
-            const depth=p3(Math.min(faceIn/12,Math.max(0,Math.min(at(a),at(b))-y)));
+            // The previous cutoff discarded a partially filled course and
+            // exposed a horizontal hole above a short access gate.
+            // Rip that one CONTINUOUS board course for the whole wall.
+            const headerHeights=clippedOpenings.filter(o=>o.kind==='hinged-gate')
+              .map(o=>{
+                const maxLeaf=Math.max(.3,Math.min(at(o.offset),at(o.offset+o.width))-.18);
+                return Math.max(0,maxLeaf-Math.max(.3,Math.min(maxLeaf,o.heightFt??maxLeaf)));
+              }).filter(header=>y<header-.001&&header<y+faceIn/12-.001);
+            const rip=headerHeights.length?Math.min(...headerHeights)-y:faceIn/12;
+            const depth=p3(Math.min(faceIn/12,Math.max(0,Math.min(at(a),at(b))-y),
+              rip));
             if(depth<=0.001)return;
             courses.push({row,start:a,end:b,depthFt:depth});
             addCut('finish',b-a,
