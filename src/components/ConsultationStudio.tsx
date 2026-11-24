@@ -15,6 +15,7 @@ import { createEstimateHandoff, parseEstimateResponse, makeAcceptedScope, downlo
 import { ConsultationDeckFinishes, StairFasciaFinishSelect } from './ConsultationDeckFinishes';
 import { deckVisualProducts } from '../data/visualCatalog';
 import { ConsultationCloudPanel } from './ConsultationCloudPanel';
+import { EliteSunroomStudioOptions } from './EliteSunroomStudioOptions';
 
 const Live3D=lazy(()=>import('./Consultation3D').then((module)=>({default:module.Consultation3D})));
 type Step='photo'|'layout'|'options'|'render';
@@ -252,6 +253,8 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
         <ConsultationSkirtingOptions values={project.values} onValuesChange={updateValues}/>
         <ManufacturerCoverPicker project={project} onChange={onChange}/>
       </div>
+      {project.coverScreenStyle==='elite-add-a-room'&&
+        <EliteSunroomStudioOptions project={project} model={model} onChange={onChange}/>}
       <DeckGateEditor values={project.values} onValuesChange={updateValues}/>
     </section>}
     {step==='render'&&<section className="consultation-panel">
