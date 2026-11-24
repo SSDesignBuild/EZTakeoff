@@ -59,3 +59,15 @@ export function roofLineAtX(input:{
   const across=Math.min(1,Math.abs(input.xFt-input.midXFt)/half);
   return input.eaveFt+input.gableRiseFt*(1-across);
 }
+
+/**
+ * Dolce Standard has one dedicated intermediate screen rail ONLY when it is
+ * not using an integrated picket-guard assembly. The latter already draws
+ * its own top rail at guard height, so rendering both creates an unwanted
+ * second line crossing the pickets.
+ *
+ * Dolce Open View never receives a standard intermediate rail.
+ */
+export const showDolceStandardIntermediateRail = (
+  openView:boolean,treatment:string,
+):boolean => !openView && treatment !== 'integrated-picket';
