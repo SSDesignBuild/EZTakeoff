@@ -103,7 +103,10 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
           const leastGrade=Math.min(at(opening.offset),at(opening.offset+opening.width));
           const allowed=Math.max(.3,leastGrade-.18);
           const h=Math.max(.3,Math.min(allowed,opening.heightFt??allowed));
-          const gateBottom=top-leastGrade+.09;
+          // Align the finished leaf with the last intact/ripped header
+          // course. Prior .09-ft offset left a 1-in see-through void above
+          // the leaf even though the wall-wide finish board was present.
+          const gateBottom=top-leastGrade+.18-.012;
           const gateMid=gateBottom+h/2;
           const infillH=Math.max(0,allowed-h);
           const [x,z]=point(edge,middle,'finish');
@@ -129,9 +132,9 @@ export function DeckSkirting3D({model,center,height,values,texture,lowerTier=fal
                       color={color} texture={showPhoto?texture:null}/>
                   </group>;
                 })}
-              {/* Horizontal upper courses are ALREADY drawn by side.courses,
-                  physically crossing the full gate width. Render no separate
-                  upper infill face or phantom vertical patch seams. */}
+              {/* Horizontal upper courses, including the one continuous
+                  wall-wide ripped head course, are rendered by side.courses.
+                  Never add an isolated patched panel over the gate. */}
               <Beam start={point(edge,opening.offset,'frame')}
                 end={point(edge,opening.offset+opening.width,'frame')}
                 height={top-infillH-.03} thickness={.125} depth={.25} color="#8b7657"/>
