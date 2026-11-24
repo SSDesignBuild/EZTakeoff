@@ -13,7 +13,7 @@ import { planRenaissanceCoverWalls } from '../../lib/renaissanceCoverWallLayout'
 import { planPcaDoorOnWall,effectivePcaKickPlateIn, type PcaDoorModel,type PcaPetDoor,type ScreenDoorWall } from '../../lib/pcaScreenDoorGeometry';
 import { PcaScreenDoor3D } from './PcaScreenDoor3D';
 import { RenaissancePrivacyWall3D } from './RenaissancePrivacyWall3D';
-import { RenaissanceLuminoWall3D } from './RenaissanceLuminoWall3D';
+
 import { EliteAddARoomWall3D } from './EliteAddARoomWall3D';
 import { currentEliteSunroomSettings,eliteWallSections } from '../../lib/eliteSunroomStudio';
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
@@ -288,6 +288,24 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           profile={profile} color={powder}/>
         <Block position={[x,deckHeight+.009,z]}
           size={[baseOutside,.018,baseOutside]} color={shadowColor} metalness={.42}/>
+        {/* The supplied Renaissance sample has an exterior stepped post
+            base boot; the earlier 1/4in flat plate looked unfinished.
+            This is a visual trim skirt over the existing structural base,
+            NOT a replacement anchorage or new material-order item. */}
+        <Block name="renaissance-four-sided-post-base-skirt"
+          position={[x,deckHeight+.10,z]}
+          size={[baseOutside,.19,baseOutside]} color={powder} metalness={.36}/>
+        <mesh name="renaissance-tapered-post-base-skirt"
+          position={[x,deckHeight+.27,z]} rotation={[0,Math.PI/4,0]}
+          castShadow receiveShadow>
+          <cylinderGeometry args={[baseOutside*.43,baseOutside*.68,.17,4]}/>
+          <meshStandardMaterial color={powder} metalness={.38} roughness={.34}/>
+        </mesh>
+        <Block name="renaissance-upper-base-boot-collar"
+          position={[x,deckHeight+.375,z]}
+          size={[inchToFoot(profile.postOutsideIn+.45),.045,
+            inchToFoot(profile.postOutsideIn+.45)]}
+          color={powder} metalness={.36}/>
         <Block position={[x,topY-.008,z]}
           size={[postCap,.05,postCap]} color={powder} metalness={.38}/>
         {/* Physical header clips and fastener head placements, not fake oversized collars. */}
@@ -537,12 +555,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         }}/>
       )}
     </group>}
-    {/* Lumino glazing is a distinct product; never silently interchange
-        it with Dolce mesh, PCA screen doors or a shade-tube privacy wall. */}
-    {project.coverScreenStyle==='lumino-sunroom'&&isSolid&&
-      coverWallRuns.filter(wall=>!privacyGap(wall.id)).map(wall=>
-        <RenaissanceLuminoWall3D key={'lumino-wall-'+wall.id}
-          {...wall} bottom={deckHeight+.12} finish={powder}/>)}
+
     {/* Real Elite Add-A-Room 2/3-inch wall system. Unlike the older Lumino
         concept, these units share the Admin Sunroom section geometry/BOM.
         No extra Elite corner posts are fabricated on Renaissance columns. */}

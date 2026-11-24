@@ -79,10 +79,22 @@ export function planRenaissanceCoverWalls(model:DeckModel,project:ConsultationPr
    topFrom:screenRearSoffit,topTo:screenRearSoffit}]:[]),
  ];
  const bottomY=deckHeight+.12;
- const measuredRuns:RenaissanceWallMeasure[]=wallRuns.map(wall=>({
-  ...wall,bottomY,widthFt:Math.hypot(wall.to[0]-wall.from[0],
-    wall.to[1]-wall.from[1]),
- }));
+ // The solid roof soffit is NOT the top of a wall placed directly
+ // underneath a structural main header. Front/rear glazing and all factory
+ // cuts must stop at the UNDERSIDE of the actual Renaissance beam. Side
+ // walls continue to follow the pitched roof where no main header runs.
+ // Dolce screen/roof connectors retain their separate wallRuns authority.
+ const mainHeaderHeightFt=inchToFoot(profile.headerHeightIn);
+ const frontBeamBottomFt=plan.frontTopFt-mainHeaderHeightFt;
+ const rearBeamBottomFt=plan.backTopFt-mainHeaderHeightFt;
+ const measuredRuns:RenaissanceWallMeasure[]=wallRuns.map(wall=>{
+  const cap=wall.id==='front'?frontBeamBottomFt:
+    wall.id==='rear'?rearBeamBottomFt:null;
+  const topFrom=cap===null?wall.topFrom:Math.min(wall.topFrom,cap);
+  const topTo=cap===null?wall.topTo:Math.min(wall.topTo,cap);
+  return {...wall,topFrom,topTo,bottomY,
+    widthFt:Math.hypot(wall.to[0]-wall.from[0],wall.to[1]-wall.from[1])};
+ });
  return {plan,profile,xMid,zMid,theoreticalBack,theoreticalFront,
   frontPosts,rearPosts,frameLeft,frameRight,back,frameFront,
   screenRearSoffit,screenFrontSoffit,wallRuns,measuredRuns,bottomY};

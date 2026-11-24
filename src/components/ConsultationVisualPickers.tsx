@@ -293,13 +293,12 @@ export function ManufacturerCoverPicker({project,onChange}:{
             <small className="consultation-visual-note">End profiles are design visuals; verify approved manufacturer cut style.</small>
           </label>}
         <label>Enclosure / screen wall system
-          <select value={project.coverScreenStyle??'none'}
+          <select value={project.coverScreenStyle==='lumino-sunroom'?'none':(project.coverScreenStyle??'none')}
             onChange={e=>onChange({coverScreenStyle:e.target.value as NonNullable<ConsultationProject['coverScreenStyle']>})}>
             <option value="none">No screens · open patio</option>
             <option value="dolce-open-view">Dolce · open-view screened walls</option>
             <option value="dolce-standard">Dolce · standard screened panels</option>
-            {['Moderno','Contempo','Classico'].includes(project.coverFamily)&&
-              <option value="lumino-sunroom">Lumino · windows over insulated knee wall (visual)</option>}
+
             {['Moderno','Contempo','Classico'].includes(project.coverFamily)&&
               <option value="elite-add-a-room">Elite Add-A-Room · manufacturer-calculated sunroom</option>}
           </select></label>
@@ -328,12 +327,9 @@ export function ManufacturerCoverPicker({project,onChange}:{
         </div>
         {project.coverScreenStyle==='elite-add-a-room'&&<div className="renaissance-screen-options">
           <strong>Elite Add-A-Room · insulated glass windows and Prime entry</strong>
-          <p className="consultation-visual-note">The full Elite Sunroom section editor, finishes, doors and per-wall measurements appear below the cover options. This replaces Dolce mesh and uses the Admin Sunrooms material engine—not a generic Lumino window block.</p>
+          <p className="consultation-visual-note">The full Elite Sunroom section editor, finishes, doors and per-wall measurements appear below the cover options. This replaces Dolce mesh and uses the original Admin Sunrooms material engine.</p>
         </div>}
-        {project.coverScreenStyle==='lumino-sunroom'&&<div className="renaissance-screen-options">
-          <strong>Lumino window &amp; insulated knee-wall concept</strong>
-          <p className="consultation-visual-note">Renaissance 2026 drawings show framed window lites above a continuous insulated knee wall. Exact window profiles, glazing, insulation and structure are not verified. Existing PCA 3068 screen-door selections do not automatically become an approved Lumino entry door; model and approve an independent sunroom door.</p>
-        </div>}
+
         {project.coverScreenStyle==='dolce-standard'&&<div className="renaissance-screen-options">
           <strong>Standard screen wall uprights</strong>
           <p className="consultation-visual-note">Set INTERMEDIATE uprights only. Structural corner columns remain; bays are even on either side of the screen door.</p>
