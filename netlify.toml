@@ -1,6 +1,9 @@
 [build]
-  command = "npm run assets:sync && npm run build"
+  command = "npm run assets:sync && node scripts/preview-ts-diagnostic.cjs && npx vite build"
   publish = "dist"
+
+[functions]
+  directory = "netlify/functions"
 
 [[redirects]]
   from = "/*"
