@@ -132,6 +132,14 @@ function DolceScreenWall({id,from,to,bottom,topFrom,topTo,openView,finish,treatm
       topFrom={topFrom} topTo={atTop(a)} uprights={beforeUprights} {...common}/>}
     {length-opening.endFt>.10&&<DolceScreenRun from={end} to={t}
       topFrom={atTop(b)} topTo={topTo} uprights={afterUprights} {...common}/>}
+    {/* Independent screen support: a full-height upright on EACH door jamb.
+        The selected PCA door frame is not a structural screen-wall post. */}
+    {[start,end].map((point,i)=>{
+      const upper=atTop(i===0?a:b);
+      return <Block key={'PCA-door-side-upright-'+i}
+        position={[point[0],bottom+(upper-bottom)/2,point[1]]}
+        size={[.167,upper-bottom,.25]} color={finish} metalness={.35}/>;
+    })}
     <PcaScreenDoor3D from={start} to={end} bottom={bottom}
       finish={door.finish} model={door.model} pet={door.pet}
       kickPlateIn={door.kickPlateIn} hinge={door.hinge} swing={door.swing}/>
@@ -218,13 +226,16 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const allPosts=[...frontPosts,...rearPosts];
   const frameLeft=frontPosts.length?Math.min(...frontPosts.map(p=>p[0])):xMid-frameWidth/2;
   const frameRight=frontPosts.length?Math.max(...frontPosts.map(p=>p[0])):xMid+frameWidth/2;
+  // Visual fascia/header reaches the eave edges while columns remain inset.
+  // The structural cantilever must be approved for the specific job.
+  const headerLeft=Math.min(left,frameLeft),headerRight=Math.max(right,frameRight);
   const back=rearPosts.length?rearPosts.reduce((a,p)=>a+p[1],0)/rearPosts.length:theoreticalBack;
   const frameFront=frontPosts.length?frontPosts.reduce((a,p)=>a+p[1],0)/frontPosts.length:theoreticalFront;
   const roofBackEdge=theoreticalBack-plan.rearOverhangFt;
   const front=theoreticalFront+plan.frontOverhangFt;
   const roofMidZ=(roofBackEdge+front)/2;
   const powder=getCoverFinish(project.coverColor);
-  const shadowColor=project.coverColor==='White'?'#c1c5c5':project.coverColor==='Sandstone'?'#938271':
+  const shadowColor=project.coverColor==='White'?'#c1c5c5':project.coverColor==='Sandstone'?'#b4a78c':
     project.coverColor==='Black'?'#202327':'#3c352f';
   const shape=plan.gable?'gable':'studio';
   const attached=plan.attached;
@@ -248,6 +259,10 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const latticeCount=Math.max(2,Math.ceil((depth*12)/(RENAISSANCE_SHADE_TUBE.outsideWidthIn+shadeGapIn)));
   const louverCount=Math.max(4,Math.ceil(depth/.7));
   const roofPanelThicknessFt=inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn);
+  // Screens rise into the canopy soffit behind the structural header.
+  // For translucent Fresco, leave space below the snap profile.
+  const screenRearSoffit=roofRearY-(isSolid?roofPanelThicknessFt/2:.10);
+  const screenFrontSoffit=roofFrontY-(isSolid?roofPanelThicknessFt/2:.10);
   const studioPanels=planInsulatedRoofPanels(
     width,RENAISSANCE_INSULATED_ROOF.standardPanelWidthIn);
   const gablePanels=planInsulatedRoofPanels(
@@ -296,9 +311,9 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           </mesh>))}
       </group>;
     })}
-    <RenaissanceHeader start={[frameLeft,frameFront]} end={[frameRight,frameFront]}
+    <RenaissanceHeader start={[headerLeft,frameFront]} end={[headerRight,frameFront]}
       midY={roofFront-headerHeight/2} profile={profile} color={powder}/>
-    {!attached&&<RenaissanceHeader start={[frameLeft,back]} end={[frameRight,back]}
+    {!attached&&<RenaissanceHeader start={[headerLeft,back]} end={[headerRight,back]}
       midY={roofBack-headerHeight/2} profile={profile} color={powder}/>}
     {/* 'wide-insert' keeps the SAME outside extrusion dimensions as Wide.
         Reinforcement resides inside the profiles and is not an exterior bar. */}
@@ -386,12 +401,16 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           gableRiseFt:gableRise,gable:shape==='gable',
           studioRearFt:roofRearY,studioFrontFt:roofFrontY,rear:false,
         });
+        // Start the decorative tail at the OUTSIDE face of the front header.
+        // Its silhouette must never protrude into the screened room.
+        const outsideFaceZ=frameFront+inchToFoot(profile.headerDepthIn)/2+.025;
+        const visibleOverhang=Math.max(.06,front-outsideFaceZ);
         return <RenaissanceCurvedTrussEnd key={'contempo-end-'+i}
-          x={x} frontZ={frameFront}
-          topY={roofAtFront+(shape==='studio'?(front-frameFront)*plan.pitchInPerFt/12:0)-
+          x={x} frontZ={outsideFaceZ}
+          topY={roofAtFront-(shape==='studio'?(outsideFaceZ-frameFront)*plan.pitchInPerFt/12:0)-
             roofPanelThicknessFt/2}
           pitchInPerFt={shape==='studio'?plan.pitchInPerFt:0}
-          projectionFt={plan.frontOverhangFt} color={powder} endStyle={accentEnd}/>;
+          projectionFt={visibleOverhang} color={powder} endStyle={accentEnd}/>;
       })}
     {/* Classico: full-length projection trusses BELOW the insulated panels,
         with sculpted tails. They must run front-to-back at width stations,
@@ -437,6 +456,16 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           <meshPhysicalMaterial color="#dde5e3" metalness={0} roughness={.32}
             transparent opacity={.82} depthWrite={false} side={2}/>
         </mesh>;
+      })}
+      {/* Each translucent Fresco bay needs a separate exposed front closure
+          at the eave. Exact manufacturer snap cap cross section unverified. */}
+      {Array.from({length:Math.max(0,countRafters-1)},(_,i)=>{
+        const x1=xMid+plan.projectionTrussStationsFt[i];
+        const x2=xMid+plan.projectionTrussStationsFt[i+1];
+        return <Block key={'fresco-front-polycarbonate-end-cap-'+i}
+          position={[(x1+x2)/2,roofFrontY+.068,front-.05]}
+          size={[Math.max(.06,x2-x1-.035),.115,.15]}
+          color={powder} metalness={.35}/>;
       })}
       {plan.projectionTrussStationsFt.map((localX,i)=>{
         const x=xMid+localX;
@@ -497,14 +526,14 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     {(project.coverScreenStyle??'none')!=='none'&&<group name="Dolce-integrated-screen-room-with-actual-access">
       {([
         {id:'front' as const,from:[frameLeft,frameFront] as P2,to:[frameRight,frameFront] as P2,
-          topFrom:roofFront-headerHeight,topTo:roofFront-headerHeight},
+          topFrom:screenFrontSoffit,topTo:screenFrontSoffit},
         {id:'left' as const,from:[frameLeft,back] as P2,to:[frameLeft,frameFront] as P2,
-          topFrom:roofBack-headerHeight,topTo:roofFront-headerHeight},
+          topFrom:screenRearSoffit,topTo:screenFrontSoffit},
         {id:'right' as const,from:[frameRight,back] as P2,to:[frameRight,frameFront] as P2,
-          topFrom:roofBack-headerHeight,topTo:roofFront-headerHeight},
+          topFrom:screenRearSoffit,topTo:screenFrontSoffit},
         ...(!attached?[{id:'rear' as const,
           from:[frameLeft,back] as P2,to:[frameRight,back] as P2,
-          topFrom:roofBack-headerHeight,topTo:roofBack-headerHeight}]:[]),
+          topFrom:screenRearSoffit,topTo:screenRearSoffit}]:[]),
       ]).map(wall=><DolceScreenWall key={'Dolce-wall-'+wall.id} {...wall}
         bottom={deckHeight+.12}
         openView={project.coverScreenStyle==='dolce-open-view'}

@@ -79,7 +79,8 @@ export function ManufacturerRailing3D({model,values,center,deckHeight,screenInte
           <Beam start={from} end={to} height={yTop+.065} thickness={.055} depth={topWidth+.07} color={color}/>
           <Beam start={from} end={to} height={yTop-.25} thickness={.065} depth={topWidth*.65} color={color}/>
         </>}
-        {wooden&&<Beam start={from} end={to} height={yTop-.33} thickness={.18} depth={3.5/12} color={color}/>}
+        {/* Standard wood pickets already have their bottom and top rails.
+            Do not draw a duplicate top / chair rail. */}
         {infill==='midrail'&&<Beam start={from} end={to} height={deckHeight+height/2+.02} thickness={.11} depth={.13} color={color} metalness={.5}/>}
         {Array.from({length:bays+1},(_,i)=>{
           const p=at(i/bays);

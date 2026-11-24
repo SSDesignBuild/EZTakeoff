@@ -41,9 +41,11 @@ const render=fs.readFileSync(path.join(root,'src/components/visual3d/Renaissance
 const extrude=fs.readFileSync(path.join(root,'src/components/visual3d/RenaissanceExtrusions.tsx'),'utf8');
 assert.ok(render.includes('planDolceScreenProfile'));
 assert.ok(render.includes('shapeGeometry args={[shape]}'));
-assert.ok((render.includes('topFrom={roofBack-headerHeight}')&&render.includes('topTo={roofFront-headerHeight}'))||
-  (render.includes('topFrom:roofBack-headerHeight')&&render.includes('topTo:roofFront-headerHeight')),
-  'Dolce side walls must follow both endpoints of the sloped roof');
+assert.ok(render.includes('topFrom:screenRearSoffit') &&
+  render.includes('topTo:screenFrontSoffit') &&
+  render.includes('screenRearSoffit=roofRearY-') &&
+  render.includes('screenFrontSoffit=roofFrontY-'),
+  'Dolce side walls must close at the actual pitched roof underside');
 assert.ok(render.includes("product.family==='full-trusses'")&&
   render.includes('plan.projectionTrussStationsFt.map'),'full Classico trusses run in projection');
 assert.ok(render.includes('RenaissanceCurvedTrussEnd'),'Contempo and Classico need sculpted tail contour');
