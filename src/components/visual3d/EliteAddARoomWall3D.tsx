@@ -16,8 +16,6 @@ const FINISH_COLORS:Record<EliteSunroomFinish,string>={
  white:'#e7e9e7',wheat:'#c6b59a',clay:'#aa998d',bronze:'#574b40',
 };
 const PICTURE_COLOR='#d9e8ef';
-const GLASS_COLOR='#bdd7e4';
-const EDGE_COLOR='#52565b';
 const DOOR_HEIGHT_FT=6+8/12;
 const ft=(inches:number)=>inches/12;
 
