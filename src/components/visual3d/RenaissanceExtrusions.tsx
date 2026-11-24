@@ -112,9 +112,14 @@ export function RenaissancePost({x,z,bottom,top,profile,color}:{
     corners.forEach(([x,y],i)=>i===0?outer.moveTo(x,y):outer.lineTo(x,y));
     outer.closePath();
     const inner=new THREE.Path();
-    const hole=side/2-t;
-    inner.moveTo(-hole,-hole);inner.lineTo(-hole,hole);
-    inner.lineTo(hole,hole);inner.lineTo(hole,-hole);inner.closePath();
+    // Offset the INTERIOR by the measured SD/HD wall gauge as well; leaving
+    // a square hole behind recessed post cheeks would make wall thickness
+    // spuriously thin. Four corner extrusions and their interior now agree.
+    const innerCorners:Array<[number,number]>=corners.map(([x,y])=>[
+      x-Math.sign(x)*t,y-Math.sign(y)*t,
+    ]).reverse();
+    innerCorners.forEach(([x,y],i)=>i===0?inner.moveTo(x,y):inner.lineTo(x,y));
+    inner.closePath();
     outer.holes.push(inner);
     const g=new THREE.ExtrudeGeometry(outer,{depth:height,steps:1,bevelEnabled:false});
     g.rotateX(-Math.PI/2);g.computeVertexNormals();
