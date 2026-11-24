@@ -132,10 +132,12 @@ assert.ok(rails.includes('{wooden&&<Beam'),
 assert.ok(render.includes('showDolceStandardIntermediateRail(openView,treatment)') &&
   render.includes('integrated-Dolce-guard-picket-panel'),
   'No redundant standard mid-rail in integrated Dolce picket screen');
+const coverWalls=read('src/lib/renaissanceCoverWallLayout.ts');
 assert.ok(render.includes('PCA-door-side-upright-') &&
-  render.includes('topFrom:screenRearSoffit') &&
-  render.includes('topTo:screenFrontSoffit'),
-  'PCA screen opening needs both jamb supports and a roof-following top');
+  render.includes('const coverWallRuns=wallAnchors.wallRuns') &&
+  coverWalls.includes('topFrom:screenRearSoffit') &&
+  coverWalls.includes('topTo:screenFrontSoffit'),
+  'PCA door opening must preserve independent jamb uprights and share measured pitched roof wall geometry');
 assert.ok(render.includes('headerLeft')&&render.includes('headerRight')&&
   render.includes('frontHeaderSpans.map')&&
   render.includes('start={[span.startFt,frameFront]}')&&
