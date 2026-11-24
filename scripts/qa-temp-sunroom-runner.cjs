@@ -7,7 +7,7 @@ const root=path.resolve(__dirname,'..');
 const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
 const tests=pkg.scripts.test.split(' && ').map(command=>
   (command.match(/^node (scripts\/test-[\w-]+\.cjs)$/)||[])[1]).filter(Boolean);
-const results=tests.slice(12,20).map(file=>{
+const results=tests.slice(12,16).map(file=>{
   const start=Date.now();
   const child=spawnSync(process.execPath,[file],{
     cwd:root,encoding:'utf8',timeout:45000,maxBuffer:1024*1024,
