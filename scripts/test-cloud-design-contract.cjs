@@ -27,4 +27,14 @@ assert.ok(studio.includes('ConsultationCloudPanel')&&
  'Cloud library must be integrated into the sales consultation route');
 assert.ok(bridge.includes('photoAttachedToThisPayload:false'),
  'Prices and geometry handoff must not contain house photographs');
+assert.ok(api.includes("const PHOTO_BUCKET='sns-design-private'")&&
+  api.includes('uploadEstimatorHousePhoto')&&api.includes('downloadEstimatorHousePhoto')&&
+  api.includes('/storage/v1/object/authenticated/'),
+ 'Optional house-photo sync must use the private Estimator bucket and authenticated routes');
+assert.ok(ui.includes('Upload home photo privately')&&
+  ui.includes('Restore private cloud photo')&&
+  ui.includes('readHousePhoto')&&ui.includes('saveHousePhoto'),
+ 'Home photos must sync separately from public design JSON only when requested');
+assert.ok(studio.includes('onPhotoRestored')&&studio.includes('prior?.photoPresent??false'),
+ 'Cross-device photo restoration should not accidentally clear existing local media');
 console.log('PASS Estimator Auth, quote-linked private design JSON, conflict and security guards');
