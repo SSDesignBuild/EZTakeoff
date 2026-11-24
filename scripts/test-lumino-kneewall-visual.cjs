@@ -1,25 +1,29 @@
-/* Lumino is a DISTINCT visual assembly, not a rebadged Dolce screen. */
-const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const root=path.resolve(__dirname,'..'),read=(f)=>fs.readFileSync(path.join(root,f),'utf8');
-const render=read('src/components/visual3d/RenaissanceLuminoWall3D.tsx');
-assert.ok(render.includes('transparent-glazed-window-lite'));
-assert.ok(render.includes('continuous-insulated-solid-kneewall'));
-assert.ok(render.includes('RenaissanceLuminoWall3D'));
-assert.ok(render.includes('window-frame-jamb'));
-assert.ok(render.includes('Beam start={from} end={to} height={bottom+kneeHeight}'));
+/* Deprecation contract: historical Lumino concept exists only as a source
+ * artifact for old private designs. It is NOT an available Sales product and
+ * is NOT rendered, ordered, or silently changed into an Elite enclosure. */
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path');
+const read=file=>fs.readFileSync(path.join(__dirname,'..',file),'utf8');
+const reference=read('src/components/visual3d/RenaissanceLuminoWall3D.tsx');
+assert.ok(reference.includes('continuous-insulated-solid-kneewall'));
 const cover=read('src/components/visual3d/RenaissanceCover3D.tsx');
-assert.ok(cover.includes("project.coverScreenStyle==='lumino-sunroom'&&isSolid"));
+assert.ok(!cover.includes('RenaissanceLuminoWall3D'),
+  'The discontinued Lumino assembly must not be mounted in the active 3D scene');
+assert.ok(!cover.includes("project.coverScreenStyle==='lumino-sunroom'"),
+  'No active Lumino render branch');
+assert.ok(cover.includes('EliteAddARoomWall3D'));
 assert.ok(cover.includes("['dolce-open-view','dolce-standard'].includes(project.coverScreenStyle??'none')"),
- 'Only Dolce styles may construct mesh and associated PCA screen doors');
-assert.ok(cover.includes('coverWallRuns.filter(wall=>!privacyGap(wall.id)).map(wall=>'));
+  'Only Dolce styles may construct mesh and PCA screen doors');
 const ui=read('src/components/ConsultationVisualPickers.tsx');
-assert.ok(ui.includes('<option value="lumino-sunroom">'));
-assert.ok(ui.includes("['Moderno','Contempo','Classico'].includes(project.coverFamily)"));
-assert.ok(ui.includes("!['lumino-sunroom','elite-add-a-room'].includes(project.coverScreenStyle??'none')&&<div"),
- 'PCA screen door setup must not be misrepresented as a Lumino sunroom door');
+assert.ok(!ui.includes('<option value="lumino-sunroom">'),
+  'Lumino cannot be chosen from the sunroom options');
+assert.ok(!ui.includes('Lumino window &amp; insulated knee-wall concept'),
+  'Lumino conceptual marketing card must also be removed');
+assert.ok(ui.includes('<option value="elite-add-a-room">'));
 const project=read('src/lib/consultationProject.ts');
-assert.ok(project.includes("'dolce-standard'|'lumino-sunroom'"));
+assert.ok(project.includes("p.coverScreenStyle==='lumino-sunroom'?'none'"),
+  'Archived Lumino selection is neutralized, never silently rebranded as Elite');
 const bridge=read('src/lib/estimatingBridge.ts');
-for(const msg of ['Lumino glazing','PCA screen doors are not certified Lumino sunroom entry doors',
- 'non-insulated roof family'])assert.ok(bridge.includes(msg));
-console.log('PASS Lumino window over continuous solid knee wall, Dolce/Lumino/privacy nonoverlap, compatible roofs and supplier/door blockers');
+assert.ok(bridge.includes('Lumino glazing'),
+  'Existing archived third-party estimate requests retain supplier blockers');
+console.log('PASS Lumino absent from selectable UI and 3D, archived selection safe, Elite remains available');
