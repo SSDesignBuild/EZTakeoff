@@ -20,7 +20,16 @@ export function ConsultationCloudPanel({project,onOpen,onPhotoRestored}:Props){
  const [password,setPassword]=useState('');
  const [quoteId,setQuoteId]=useState('');
  const [items,setItems]=useState<CloudDesignRecord[]>([]);
- const [loadedVersions,setLoadedVersions]=useState<Record<string,number>>({});
+ const [loadedVersions,setLoadedVersions]=useState<Record<string,number>>(()=>{
+  try{
+   const raw=window.sessionStorage.getItem('sns-cloud-loaded-versions');
+   return raw?JSON.parse(raw) as Record<string,number>:{};
+  }catch{return {};}
+ });
+ useEffect(()=>{
+  try{window.sessionStorage.setItem('sns-cloud-loaded-versions',JSON.stringify(loadedVersions));}
+  catch{/* Session storage disabled; runtime optimistic-lock tracking remains active. */}
+ },[loadedVersions]);
  const [busy,setBusy]=useState(false);
  const [error,setError]=useState('');
  const [message,setMessage]=useState('');
@@ -45,7 +54,7 @@ export function ConsultationCloudPanel({project,onOpen,onPhotoRestored}:Props){
   e.preventDefault();setBusy(true);setError('');setMessage('');
   try{
    const result=await signInEstimator(email,password);
-   setUser(result);setPassword('');
+   setLoadedVersions({});setUser(result);setPassword('');
    setMessage('Authenticated with your S&S Estimator account.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}
   finally{setBusy(false);}
@@ -114,7 +123,11 @@ export function ConsultationCloudPanel({project,onOpen,onPhotoRestored}:Props){
  };
  const logout=async()=>{
   setBusy(true);
-  try{await signOutEstimator();setUser(null);setItems([]);setLoadedVersions({});setMessage('');setError('');}
+  try{
+   await signOutEstimator();setUser(null);setItems([]);setLoadedVersions({});
+   try{window.sessionStorage.removeItem('sns-cloud-loaded-versions');}catch{}
+   setMessage('');setError('');
+  }
   finally{setBusy(false);}
  };
  if(!cloudConfigured())return <section className="content-card" style={{padding:20,marginBottom:16}}>
