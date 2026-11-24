@@ -3,6 +3,7 @@ import { buildDeckModel } from './deckModel';
 import type { ConsultationProject, EstimateResponse, EstimateTier } from './consultationProject';
 import type { MaterialItem } from './types';
 import { renaissanceReferenceIssues } from './renaissanceGuidance';
+import { effectivePcaKickPlateIn } from './pcaScreenDoorGeometry';
 
 export interface EstimateHandoffV1 {
   schemaVersion:1;
@@ -70,7 +71,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverDoorHinge:project.coverDoorHinge??'left',
       coverDoorSwing:project.coverDoorSwing??'out',
       coverDoorPet:project.coverDoorPet??'none',
-      coverDoorKickPlateIn:project.coverDoorKickPlateIn??8,
+      coverDoorKickPlateIn:effectivePcaKickPlateIn(project.coverDoorPet??'none',project.coverDoorKickPlateIn??8),
       coverPostCount:project.coverPostCount??0,
       coverWidthFt:project.coverWidthFt??0,coverProjectionFt:project.coverProjectionFt??0,
       coverHeightFt:project.coverHeightFt??9,coverSideOverhangFt:project.coverSideOverhangFt??1,
