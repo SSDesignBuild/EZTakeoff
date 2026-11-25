@@ -36,17 +36,19 @@ function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish,treatment=
   const profile=planDolceScreenProfile({
     from,to,bottomFt:bottom,topFromFt:topFrom,topToFt:topTo,openView,
     interiorUprights:uprights,
+    screenBottomOffsetFt:treatment==='integrated-kick'?2:0,
   });
   if(!profile)return null;
   const dx=to[0]-from[0],dz=to[1]-from[1];
   const shape=new THREE.Shape();
-  profile.contour.forEach((point,i)=>{
+  profile.screenContour.forEach((point,i)=>{
     if(i===0)shape.moveTo(point.alongFt,point.riseFt);
     else shape.lineTo(point.alongFt,point.riseFt);
   });
   shape.closePath();
   return <group name={openView?'Dolce-open-view-wall':'Dolce-screened-wall'}>
-    <mesh position={[from[0],bottom,from[1]]}
+    <mesh name="dolce-screen-mesh-stops-at-chair-rail-above-kick"
+      position={[from[0],bottom,from[1]]}
       rotation={[0,-Math.atan2(dz,dx),0]} receiveShadow>
       <shapeGeometry args={[shape]}/>
       <meshPhysicalMaterial color="#819399" side={THREE.DoubleSide}
@@ -75,6 +77,9 @@ function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish,treatment=
         <meshStandardMaterial color={finish} metalness={.38} roughness={.34}
           side={THREE.DoubleSide}/>
       </mesh>
+      {/* Chair rail is the actual top edge of the 24-in solid kick;
+          the upper screen contour begins at the identical elevation.
+          The mesh cannot z-fight through this opaque panel. */}
       <Beam start={from} end={to} height={bottom+2}
         thickness={.12} depth={.10} color={finish}/>
     </group>}
