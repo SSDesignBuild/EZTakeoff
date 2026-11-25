@@ -8,6 +8,7 @@ import { planStairLanding, landingSurface } from './stairConcreteLanding';
 import { planRenaissanceCoverWalls } from './renaissanceCoverWallLayout';
 import { eliteSunroomTakeoff,currentEliteSunroomSettings,
  eliteWallSections } from './eliteSunroomStudio';
+import { planEliteDeckFloorClosure } from './eliteDeckFloorClosure';
 
 export interface EstimateHandoffV1 {
   schemaVersion:1;
@@ -35,6 +36,9 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
   const elite=project.coverScreenStyle==='elite-add-a-room'
     ?eliteSunroomTakeoff(project,eliteWalls):null;
   const eliteSettings=currentEliteSunroomSettings(project);
+  const eliteFloorClosure=project.coverScreenStyle==='elite-add-a-room'
+    ?planEliteDeckFloorClosure(deck,eliteWalls,eliteSettings.roomSystem,
+      project.values.deckingType):null;
   const eliteWindowSelections=Object.fromEntries(actualCoverWalls.map(wall=>[
     'elite'+wall.id.charAt(0).toUpperCase()+wall.id.slice(1)+'SectionsJson',
     JSON.stringify(eliteWallSections(project,wall)),
@@ -87,6 +91,8 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       blockers.push('2-inch non-thermal Add-A-Room paired with clear insulated glazing does not create a thermally broken system; confirm clip/glass compatibility and use classification.');
     if(elite?.sections.some(section=>section.doorType==='slider'))
       blockers.push('Legacy sliding-glass door selected; it is NOT the specified Elite Prime Full View single outswing door. Verify the actual door unit and adapter.');
+    if(eliteFloorClosure?.notes.some(s=>s.includes('exceed purchasable')))
+      blockers.push(...eliteFloorClosure.notes);
   }
   if(project.coverScreenStyle==='lumino-sunroom'){
     blockers.push('Lumino glazing, insulated knee-wall profiles, window glass specifications, framing, flashing, thermal ratings and exact supplier takeoff are NOT verified by the design visual. Obtain a vendor-approved sunroom BOM and project engineering.');
@@ -155,7 +161,19 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverWidthFt:project.coverWidthFt??0,coverProjectionFt:project.coverProjectionFt??0,
       coverHeightFt:project.coverHeightFt??9,coverSideOverhangFt:project.coverSideOverhangFt??1,
       coverFrontOverhangFt:project.coverFrontOverhangFt??1},
-    materials:[...estimate.materials,...(elite?.estimate.materials??[]),...(landingBags>0?[{
+    materials:[...estimate.materials,...(elite?.estimate.materials??[]),
+      ...(eliteFloorClosure?.stock??[]).map(board=>({
+        name:'Interior deck closure board at Elite sunroom wall',
+        category:'Sales sunroom floor transition — additional decking stock',
+        quantity:board.quantity,unit:'boards',
+        stockRecommendation:board.stockLengthFt+' ft '+String(project.values.deckingType??'composite')+
+          ' boards; matching '+String(project.values.deckingMaterial??'selected field decking'),
+        notes:'Additional physical 5.5-in deck-finish scribe course immediately inside the Elite base receiving channel, with 1/8-in expansion. '+
+          'Optimized cuts total '+(eliteFloorClosure?.totalLinearFt??0).toFixed(2)+
+          ' lf across the selected sunroom walls; reuse compatible field/picture-frame offcuts when supported. '+
+          'Verify door threshold clearances, moisture movement, exact stock and backed seams.',
+      })),
+      ...(landingBags>0?[{
       name:'80-lb bagged concrete — on-site stair landing pads',
       category:'Sales stair landing — supplemental concrete',quantity:landingBags,
       unit:'bags',stockRecommendation:'80-lb concrete mix; nominal 0.60 cu ft yield per bag',
@@ -164,7 +182,8 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
         ' ft × '+p.thicknessIn+' in; '+p.bags80lb+' bags incl. 5% allowance').join(' | ')+
         '. Review subbase, reinforcement, disposal, forms and local specifications separately.',
     }]:[])],blockers,
-    assumptions:[...estimate.orderNotes,...(elite?.estimate.orderNotes??[])],
+    assumptions:[...estimate.orderNotes,...(elite?.estimate.orderNotes??[]),
+      ...(eliteFloorClosure?.notes??[])],
   };
 }
 const isRecord=(p:unknown):p is Record<string,unknown>=>!!p&&typeof p==='object'&&!Array.isArray(p);
