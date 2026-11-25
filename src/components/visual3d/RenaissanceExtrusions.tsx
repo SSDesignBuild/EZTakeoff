@@ -8,7 +8,8 @@ import type { P2 } from './Primitives';
 import type { GutterRun } from '../../lib/renaissanceGutterGeometry';
 import { architecturalGutterOutlineFt,miterAlongFt } from '../../lib/renaissanceGutterGeometry';
 import { renaissanceFormedProfileContour,type RenaissanceFormedMember } from '../../lib/renaissanceFactoryProfiles';
-import { renaissanceTrussTailDepthFt,type RenaissanceTrussEndStyle } from '../../lib/renaissanceTrussSilhouette';
+import { renaissanceTrussTailDepthFt,renaissanceTrussTailTopDropFt,
+ renaissanceTrussTailLowerDropFt,type RenaissanceTrussEndStyle } from '../../lib/renaissanceTrussSilhouette';
 import type { DownspoutLayout } from '../../lib/renaissanceDownspoutRouting';
 
 /**
@@ -390,11 +391,17 @@ function makeContinuousFormedTrussGeometry(length:number,width:number,
  const wall=inchToFoot(RENAISSANCE_TRUSS.wallIn);
  const rings=(inner:boolean)=>{
   return stations.map(z=>{
-   const depth=renaissanceTrussTailDepthFt(z,length,height,endStyle);
-   const roofTop=height/2+rise*z/length;
+   // Unlike a flat-roofed cutout, the source cast cap rolls its top
+   // DOWN and then turns its underside through the reverse-S/scallop.
+   // The two contours are traced independently; a single central depth
+   // wedge would be the fake finicky curve reported in the user video.
+   const outerTop=height/2+rise*z/length-
+     renaissanceTrussTailTopDropFt(z,length,height,endStyle);
+   const outerBottom=height/2+rise*z/length-
+     renaissanceTrussTailLowerDropFt(z,length,height,endStyle);
    const gauge=inner?wall:0;
-   const ringDepth=Math.max(.018,depth-2*gauge);
-   const bottom=roofTop-depth+gauge;
+   const ringDepth=Math.max(.018,outerTop-outerBottom-2*gauge);
+   const bottom=outerBottom+gauge;
    const mid=bottom+ringDepth/2;
    return renaissanceFormedProfileContour(
     Math.max(.03,width-2*gauge),ringDepth,'truss')
@@ -511,15 +518,21 @@ export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPer
     const top=(z:number)=>-pitch*z;
     const shape=new THREE.Shape();
     shape.moveTo(0,top(0));
-    shape.lineTo(front,top(front));
-    // Reuse SAME traced Fresco/Aria manufacturer contour as complete
-    // factory trusses; no independently invented three-wiggle S.
     const style=endStyle==='straight'?'straight':profileStyle;
+    // The cast tip ends LOWER than the bearing truss. The top itself
+    // curves downward in the supplied Renaissance perspective drawing.
+    // Use the same profile as the full member, not an unrelated 3-lobe S.
+    for(let i=1;i<=48;i++){
+      const distance=front*i/48;
+      const drop=renaissanceTrussTailTopDropFt(distance,front,
+        inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn),style);
+      shape.lineTo(distance,top(distance)-drop);
+    }
     for(let i=48;i>=0;i--){
       const distance=front*i/48;
-      const depth=renaissanceTrussTailDepthFt(distance,front,
-       inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn),style);
-      shape.lineTo(distance,top(distance)-depth);
+      const drop=renaissanceTrussTailLowerDropFt(distance,front,
+        inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn),style);
+      shape.lineTo(distance,top(distance)-drop);
     }
     shape.closePath();
     const g=new THREE.ExtrudeGeometry(shape,{
