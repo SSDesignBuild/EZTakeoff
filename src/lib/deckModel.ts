@@ -47,6 +47,7 @@ export interface DeckInputs {
   lowerDeckShape?: string | number | boolean;
   additionalStairs?: string | number | boolean;
   deckingSurface?: string | number | boolean;
+  fasciaHouseSide?: string | number | boolean;
 
   lowerManualRailingEdges?: string | number | boolean;
   lowerCustomBeamYs?: string | number | boolean;
@@ -93,6 +94,8 @@ export interface AngledBeamLine {
 export interface BoardGroup { length: number; count: number; }
 
 export interface StairPlacement {
+  /** Stored flight identity: 0 is main; additional flights retain their input index. */
+  sourceIndex?: number;
   edgeIndex: number | null;
   offset: number;
   width: number;
@@ -175,6 +178,8 @@ export interface DeckModel {
   concreteBags: number;
   postBases: number;
   concreteAnchors: number;
+  fasciaHouseSide: boolean;
+  fasciaSegments: DeckEdgeSegment[];
   fasciaLf: number;
   fasciaPieces: number;
   stairCount: number;
@@ -454,45 +459,55 @@ function segmentPointAtOffset(segment: DeckEdgeSegment, offset: number) {
 }
 
 
-function polygonCentroid(points: DeckPoint[]) {
-  if (!points.length) return { x: 0, y: 0 };
-  const area = points.reduce((sum, current, index) => {
-    const next = points[(index + 1) % points.length];
-    return sum + (current.x * next.y - next.x * current.y);
-  }, 0);
-  if (Math.abs(area) < 1e-9) {
-    return { x: points.reduce((sum, p) => sum + p.x, 0) / points.length, y: points.reduce((sum, p) => sum + p.y, 0) / points.length };
+function pointInDeck(points:DeckPoint[],point:DeckPoint){
+  let inside=false;
+  for(let i=0,j=points.length-1;i<points.length;j=i++){
+    const a=points[i],b=points[j];
+    if((a.y>point.y)!==(b.y>point.y)&&
+      point.x<(b.x-a.x)*(point.y-a.y)/(b.y-a.y)+a.x)inside=!inside;
   }
-  let cx = 0;
-  let cy = 0;
-  points.forEach((current, index) => {
-    const next = points[(index + 1) % points.length];
-    const factor = current.x * next.y - next.x * current.y;
-    cx += (current.x + next.x) * factor;
-    cy += (current.y + next.y) * factor;
-  });
-  return { x: cx / (3 * area), y: cy / (3 * area) };
+  return inside;
 }
 
 function insetAngledBeamForSegment(segment: DeckEdgeSegment, points: DeckPoint[], maxSpacing: number): AngledBeamLine | null {
   if (segment.orientation !== 'angled' || segment.length < 1) return null;
-  const centroid = polygonCentroid(points);
   const dx = segment.end.x - segment.start.x;
   const dy = segment.end.y - segment.start.y;
+  // A one-inch unsnapped endpoint is still supported by the existing 3-inch
+  // double rim pack. It must not create a separate near-axis beam and posts.
+  // Keep the exact drawn edge for decking, rails, area and rim quantities.
+  if(Math.min(Math.abs(dx),Math.abs(dy))<=3/12+1e-6)return null;
   const len = Math.hypot(dx, dy) || 1;
-  const normals = [{ x: -dy / len, y: dx / len }, { x: dy / len, y: -dx / len }];
-  const mid = { x: (segment.start.x + segment.end.x) / 2, y: (segment.start.y + segment.end.y) / 2 };
-  const inward = normals.sort((a, b) => {
-    const da = Math.hypot((mid.x + a.x) - centroid.x, (mid.y + a.y) - centroid.y);
-    const db = Math.hypot((mid.x + b.x) - centroid.x, (mid.y + b.y) - centroid.y);
-    return da - db;
-  })[0];
+  const winding=points.reduce((sum,p,i)=>{
+    const q=points[(i+1)%points.length];return sum+p.x*q.y-q.x*p.y;
+  },0)>=0?1:-1;
+  // Centroid directions can point OUTSIDE a concave deck. Winding gives the
+  // actual interior half-plane of this perimeter edge for either draw order.
+  const inward={x:-dy/len*winding,y:dx/len*winding};
   const inset = 0.45;
   const trim = Math.min(0.25, Math.max(0.05, segment.length * 0.05));
   const ux = dx / len;
   const uy = dy / len;
-  const start = { x: round2(segment.start.x + ux * trim + inward.x * inset), y: round2(segment.start.y + uy * trim + inward.y * inset) };
-  const end = { x: round2(segment.end.x - ux * trim + inward.x * inset), y: round2(segment.end.y - uy * trim + inward.y * inset) };
+  const first = { x: segment.start.x + ux * trim + inward.x * inset, y: segment.start.y + uy * trim + inward.y * inset };
+  const last = { x: segment.end.x - ux * trim + inward.x * inset, y: segment.end.y - uy * trim + inward.y * inset };
+  const vx=last.x-first.x,vy=last.y-first.y;
+  const crossings=[0,1];
+  for(let i=0;i<points.length;i++){
+    const a=points[i],b=points[(i+1)%points.length];
+    const ex=b.x-a.x,ey=b.y-a.y,den=vx*ey-vy*ex;
+    if(Math.abs(den)<1e-9)continue;
+    const ax=a.x-first.x,ay=a.y-first.y;
+    const t=(ax*ey-ay*ex)/den,u=(ax*vy-ay*vx)/den;
+    if(t>0&&t<1&&u>=0&&u<=1)crossings.push(t);
+  }
+  crossings.sort((a,b)=>a-b);
+  const at=(t:number)=>({x:first.x+vx*t,y:first.y+vy*t});
+  const intervals=crossings.slice(1).map((end,i)=>({start:crossings[i],end}))
+    .filter(interval=>pointInDeck(points,at((interval.start+interval.end)/2)))
+    .sort((a,b)=>(b.end-b.start)-(a.end-a.start));
+  if(!intervals.length)return null;
+  const chosen=intervals[0];
+  const start=at(chosen.start),end=at(chosen.end);
   const run = round2(Math.hypot(end.x - start.x, end.y - start.y));
   if (run < 0.5) return null;
   const postCount = Math.max(2, Math.ceil(run / Math.max(3, maxSpacing)) + 1);
@@ -544,6 +559,10 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   })();
   const exposedSegments = segments.filter((segment) => defaultExposedSegments.some((item) => item.index === segment.index));
   const exposedPerimeter = round2(exposedSegments.reduce((sum, segment) => sum + segment.length, 0));
+  // Finish coverage is independent of house attachment/support semantics.
+  const fasciaHouseSide = inputs.fasciaHouseSide === true || String(inputs.fasciaHouseSide ?? 'false') === 'true';
+  const fasciaSegments = fasciaHouseSide ? segments : exposedSegments;
+  const fasciaPerimeter = fasciaSegments.reduce((sum, segment) => sum + segment.length, 0);
 
   const pictureFrameCount = Math.max(0, Math.round(Number(inputs.pictureFrameCount ?? 1)));
   const pictureFrameHouseSide = inputs.pictureFrameHouseSide === true || String(inputs.pictureFrameHouseSide ?? 'false') === 'true';
@@ -784,14 +803,14 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     String(inputs.stairRailingLeft ?? 'true') !== 'false';
   const mainStairRight=inputs.stairRailingRight !== false &&
     String(inputs.stairRailingRight ?? 'true') !== 'false';
-  const stairPlacement: StairPlacement = { edgeIndex: stairEdge ? stairEdge.index : null, offset: stairOffset, width: stairWidth, landingProjection: plannedStairRunFt, start: stairStart, end: stairEnd,
+  const stairPlacement: StairPlacement = { sourceIndex:0, edgeIndex: stairEdge ? stairEdge.index : null, offset: stairOffset, width: stairWidth, landingProjection: plannedStairRunFt, start: stairStart, end: stairEnd,
     left:mainStairLeft,right:mainStairRight };
-  const extraStairPlacements = parseAdditionalStairs(inputs.additionalStairs).map((item) => {
+  const extraStairPlacements = parseAdditionalStairs(inputs.additionalStairs).map((item,index) => {
     const edge = segments[item.edgeIndex];
     if (!edge) return null;
     const width = Math.min(item.width, edge.length);
     const offset = clamp(item.offset, 0, Math.max(0, edge.length - width));
-    return { edgeIndex: edge.index, offset, width, landingProjection: plannedStairRunFt, start: segmentPointAtOffset(edge, offset), end: segmentPointAtOffset(edge, offset + width),
+    return { sourceIndex:index+1, edgeIndex: edge.index, offset, width, landingProjection: plannedStairRunFt, start: segmentPointAtOffset(edge, offset), end: segmentPointAtOffset(edge, offset + width),
       left:item.left??mainStairLeft,right:item.right??mainStairRight } as StairPlacement;
   }).filter(Boolean) as StairPlacement[];
   const stairPlacements = [stairPlacement, ...extraStairPlacements].filter((item) => item.edgeIndex !== null && item.start && item.end) as StairPlacement[];
@@ -835,7 +854,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   // one fascia board across each riser.
   const stairSideFascia = useFascia ? stairCount * stairRunFt * 2 : 0;
   const riserFascia = useFascia ? stairCount * stairRisers * stairWidth : 0;
-  const fasciaLf = useFascia ? round2(exposedPerimeter + stairSideFascia + riserFascia) : 0;
+  const fasciaLf = useFascia ? round2(fasciaPerimeter + stairSideFascia + riserFascia) : 0;
   const fasciaPieces = useFascia ? Math.ceil(fasciaLf / 12) : 0;
 
   const topRailSegments = stairPlacements.reduce((coverage, placement) => deriveTopRailSegments(coverage, placement), railCoverage);
@@ -884,7 +903,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const deckFastenerBoxes = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? Math.ceil(deckFastenerCount / 365) : Math.ceil(deckFastenerCount / 1750);
   const fastenerType = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'top screws' : 'hidden camo screws';
 
-  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, automaticJoistSize, joistStockLength, joistLengthGroups, beamLines, angledBeamLines, beamMemberSize, automaticBeamSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, postSize, footingDiameterIn, footingDepthIn, footingTubeStockIn, footingTubeCount, footingBagsPerPost, postLocations, postLayoutIssues, postEngineeringNotes, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, pictureFrameHouseSide, pictureFrameSegments, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, angledJoistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), houseEdgeIndices, stairPlacement, stairPlacements };
+  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, automaticJoistSize, joistStockLength, joistLengthGroups, beamLines, angledBeamLines, beamMemberSize, automaticBeamSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, postSize, footingDiameterIn, footingDepthIn, footingTubeStockIn, footingTubeCount, footingBagsPerPost, postLocations, postLayoutIssues, postEngineeringNotes, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, pictureFrameHouseSide, pictureFrameSegments, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, angledJoistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaHouseSide, fasciaSegments, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), houseEdgeIndices, stairPlacement, stairPlacements };
 }
 
 
@@ -919,8 +938,8 @@ export function buildLowerTierDeckModel(inputs: DeckInputs): DeckModel | null {
     pictureFrameCount: custom ? (inputs.lowerPictureFrameCount ?? inputs.pictureFrameCount) : inputs.pictureFrameCount,
     pictureFrameHouseSide: inputs.lowerPictureFrameHouseSide ?? inputs.pictureFrameHouseSide,
     railingType: custom ? (inputs.lowerRailingType || inputs.railingType) : inputs.railingType,
-    stairRailingLeft: custom ? (inputs.lowerStairRailingLeft ?? inputs.stairRailingLeft) : inputs.stairRailingLeft,
-    stairRailingRight: custom ? (inputs.lowerStairRailingRight ?? inputs.stairRailingRight) : inputs.stairRailingRight,
+    stairRailingLeft: inputs.lowerStairRailingLeft ?? inputs.stairRailingLeft,
+    stairRailingRight: inputs.lowerStairRailingRight ?? inputs.stairRailingRight,
     manualRailingEdges: inputs.lowerManualRailingEdges || JSON.stringify([]),
     houseEdgeIndices: inputs.lowerHouseEdgeIndices || inputs.houseEdgeIndices || JSON.stringify([]),
     customBeamYs: inputs.lowerCustomBeamYs || JSON.stringify([]),

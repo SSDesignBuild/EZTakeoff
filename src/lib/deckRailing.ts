@@ -1,6 +1,9 @@
 import type { buildDeckModel } from './deckModel';
-import type { MaterialItem, DeckEdgeSegment } from './types';
+import type { MaterialItem } from './types';
 import { packSkirtCuts, type SkirtCut } from './deckSkirting';
+import {planLevelRailingRuns,planDrinkRailPieces,railingSurfaceInsetFt,railPointKey,resolveDrinkRailMaterial} from './railingLayout';
+import {planStairRailingRuns} from './stairRailVisualGeometry';
+import {parseDeckGates} from './deckGates';
 
 type Deck = ReturnType<typeof buildDeckModel>;
 type Inputs = Record<string, string | number | boolean>;
@@ -13,31 +16,7 @@ export type IREPlan = {
 };
 const p3=(v:number)=>Math.round(v*1000)/1000;
 const norm=(v:unknown,defaultValue:string)=>String(v===undefined?defaultValue:v);
-const keyPoint=(x:number,y:number)=>Math.round(x*1000)+'/'+Math.round(y*1000);
 const materialRow=(name:string,category:string,quantity:number,unit:string,stockRecommendation:string,color:string,notes:string,layoutLabel?:string):MaterialItem=>({name,category,quantity,unit,stockRecommendation,color,notes,layoutLabel});
-function onEdge(edge:DeckEdgeSegment,offset:number){
-  const fraction=Math.max(0,Math.min(1,offset/edge.length));
-  return {x:edge.start.x+(edge.end.x-edge.start.x)*fraction,y:edge.start.y+(edge.end.y-edge.start.y)*fraction};
-}
-function panelRuns(deck:Deck){
-  const stairCuts=(deck.stairPlacements?.length?deck.stairPlacements:[deck.stairPlacement])
-    .filter((p)=>p.edgeIndex!==null&&p.width>0);
-  const runs:{edgeIndex:number;start:number;end:number}[]=[];
-  for(const coverage of deck.railCoverage){
-    const edge=deck.edgeSegments.find((x)=>x.index===coverage.edgeIndex);
-    if(!edge)continue;
-    let spans=[{start:Math.max(0,coverage.start),end:Math.min(edge.length,coverage.end)}];
-    for(const cut of stairCuts.filter((x)=>x.edgeIndex===coverage.edgeIndex)){
-      const left=cut.offset,right=cut.offset+cut.width;
-      spans=spans.flatMap((span)=>{
-        const lo=Math.max(span.start,left),hi=Math.min(span.end,right);
-        return hi<=lo?[span]:[{start:span.start,end:lo},{start:hi,end:span.end}].filter((part)=>part.end-part.start>0.01);
-      });
-    }
-    runs.push(...spans.filter((span)=>span.end-span.start>0.01).map((span)=>({...span,edgeIndex:edge.index})));
-  }
-  return runs;
-}
 export function buildTimberTechIRE(deck:Deck,inputs:Inputs,tierName='Main deck'):IREPlan{
   const enabled=inputs.railingSystem==='timbertech-ire';
   const color=norm(inputs.railingColor,'black');
@@ -46,7 +25,7 @@ export function buildTimberTechIRE(deck:Deck,inputs:Inputs,tierName='Main deck')
   const heightIn=Number(inputs.railingHeightIn??36);
   const postSize=norm(inputs.railingPostSize,'3x3');
   const requestedCap=norm(inputs.railingPostCap,'standard');
-  const postTermination=norm(inputs.railingPostTermination,'at-top');
+  const postTermination=profile==='drink'?'flush-drink':norm(inputs.railingPostTermination,'at-top');
   const hiddenPosts=postTermination==='flush-top'||postTermination==='flush-drink';
   // Rails/boards cover a truly flush post end. No separate cap is required
   // and it must not accidentally appear on the supplier order.
@@ -82,32 +61,42 @@ export function buildTimberTechIRE(deck:Deck,inputs:Inputs,tierName='Main deck')
   if(!['none','standard'].includes(postCap)&&postSize!=='3x3')issues.push('Selected cap/lighting option requires verification with a compatible 3x3 post kit.');
   const map=new Map<string,RailPost>();
   const panels:RailPanel[]=[];
-  for(const run of panelRuns(deck)){
-    const edge=deck.edgeSegments.find((item)=>item.index===run.edgeIndex);
-    if(!edge)continue;
-    const len=run.end-run.start;
-    const n=Math.max(1,Math.ceil(len/8));
-    for(let i=0;i<=n;i++){
-      const station=run.start+(len*i)/n;
-      const point=onEdge(edge,station);
-      const key=keyPoint(point.x,point.y);
-      if(!map.has(key))map.set(key,{...point,reference:'IR-P'+(map.size+1),edgeIndex:run.edgeIndex});
-      if(i<n){
-        const next=run.start+(len*(i+1))/n;
-        panels.push({kind:'level',edgeIndex:run.edgeIndex,startFt:p3(station),endFt:p3(next),stockFt:(next-station<=6+0.0001?6:8),label:'E'+(run.edgeIndex+1)+'-B'+(panels.length+1)});
-      }
-    }
+  const requestedPost=Number(postSize.split('x')[0]);
+  const postWidth=([2,3,4].includes(requestedPost)?requestedPost:3)/12;
+  const topWidth=profile==='drink'?5.5/12:profile==='modern'?2.25/12:2.5/12;
+  const deckHeight=Number(inputs.deckHeight??0);
+  const gates=parseDeckGates(inputs.deckGateEntries).flatMap(gate=>{
+    const edge=deck.edgeSegments.find(e=>e.index===gate.edgeIndex);if(!edge)return [];
+    const stair=gate.placement==='stairs'?deck.stairPlacements.find(s=>s.edgeIndex===edge.index):undefined;
+    const width=Math.min(edge.length,Math.max(.5,stair?.width??gate.widthFt));
+    const start=Math.min(Math.max(0,edge.length-width),Math.max(0,stair?.offset??gate.offsetFt??0));
+    return [{edgeIndex:edge.index,startFt:start,endFt:start+width}];
+  });
+  const levelRuns=planLevelRailingRuns(deck,[0,0],deckHeight,postWidth,topWidth,7.1,deck.railCoverage,gates);
+  const stairRuns=planStairRailingRuns(deck,[0,0],deckHeight,postWidth,7.1,railingSurfaceInsetFt(postWidth,topWidth));
+  const addPost=(point:readonly number[],edgeIndex:number,reference:string)=>{
+    const key=railPointKey(point);
+    if(!map.has(key))map.set(key,{x:point[0],y:point[2],reference,edgeIndex});
+  };
+  for(const run of levelRuns){
+    run.posts.forEach((point,i)=>{
+      addPost(point,run.edgeIndex,'IR-P'+(map.size+1));
+      if(i===run.posts.length-1)return;
+      const next=run.posts[i+1];
+      const length=Math.hypot(next[0]-point[0],next[2]-point[2]);
+      const start=run.posts.slice(0,i).reduce((sum,p,j)=>sum+Math.hypot(run.posts[j+1][0]-p[0],run.posts[j+1][2]-p[2]),0);
+      panels.push({kind:'level',edgeIndex:run.edgeIndex,startFt:p3(start),endFt:p3(start+length),stockFt:length<=6+.0001?6:8,label:'E'+(run.edgeIndex+1)+'-B'+(i+1)});
+    });
   }
-  const countStairSides=deck.stairCount>0?deck.stairRailSideCount*deck.stairCount:0;
-  if(countStairSides>0){
-    const n=Math.max(1,Math.ceil(deck.stairRunFt/8));
-    for(let stairSide=0;stairSide<countStairSides;stairSide++){
-      for(let i=0;i<n;i++){
-        const start=(i*deck.stairRunFt)/n,end=((i+1)*deck.stairRunFt)/n;
-        panels.push({kind:'stair',edgeIndex:null,startFt:p3(start),endFt:p3(end),stockFt:end-start<=6+0.0001?6:8,label:'STAIR-'+(stairSide+1)+'-'+(i+1)});
-      }
-    }
-    notes.push('Stair posts and attachment are not resolved into unique geometric post coordinates. Verify stair-side post kits and slopes before final ordering.');
+  for(const run of stairRuns){
+    let start=0;
+    run.posts.forEach((point,i)=>{
+      addPost(point,run.edgeIndex,'IR-STAIR-'+(run.placementIndex+1)+'-'+run.side+'-P'+(i+1));
+      if(i===run.posts.length-1)return;
+      const length=run.panels[i].lengthFt;
+      panels.push({kind:'stair',edgeIndex:run.edgeIndex,startFt:p3(start),endFt:p3(start+length),stockFt:length<=6+.0001?6:8,label:'STAIR-'+(run.placementIndex+1)+'-'+run.side+'-'+(i+1)});
+      start+=length;
+    });
   }
   const posts=[...map.values()];
   const materials:MaterialItem[]=[];
@@ -127,23 +116,24 @@ export function buildTimberTechIRE(deck:Deck,inputs:Inputs,tierName='Main deck')
       group.length+' ft nominal top rail ('+(group.length===6?'69.43':'91.31')+' in)',colorText,
       'Separate top rails for '+group.panels.map((p)=>p.label).join(', ')));
   }
-  const postQty=posts.length + countStairSides*2 + panels.filter((p)=>p.kind==='stair').length-countStairSides;
+  const postQty=posts.length;
   if(postQty>0){
     materials.push(materialRow(nameBase+postSize+' aluminum posts/kits',category,postQty,'kits','Compatible '+heightIn+' in rail height',colorText,
-      posts.map((p)=>p.reference).join(', ')+'; stair support count provisional, confirm post style/attachment. 3x3 kits can include a cap; omit separate caps for concealed flush posts.'));
+      posts.map((p)=>p.reference).join(', ')+'; shared landing and corner posts counted once from the rendered layout. Confirm mounting/structural blocking. 3x3 kits can include a cap; omit separate caps for concealed flush posts.'));
     if(!['standard','none'].includes(postCap)){
       materials.push(materialRow(nameBase+postCap+' cap/light accessories',category,postQty,'ea','Verify exact accessory compatibility',colorText,
         'One accessory per estimated post. Check rail cap/skirt kit inclusion and low-voltage wiring.'));
     }
   }
   if(profile==='drink'){
-    const board=norm(inputs.drinkRailMaterial,'match')==='match'?norm(inputs.deckingMaterial,'Composite / PVC'):norm(inputs.drinkRailMaterial,'');
+    const board=resolveDrinkRailMaterial(inputs);
     if(/(?:Terrain\+?|Prime\+?|ReliaBoard|Trex Enhance)/i.test(board))
       issues.push('Selected drink-rail board ('+board+') may be scalloped and is not an approved full-profile square-shouldered board.');
     notes.push('TimberTech Drink Rail requires full-profile square-shouldered boards; verify exact board SKU and the compatible insert/fastening kit.');
-    const drinkCuts:SkirtCut[]=panels.map((panel,i)=>({
-      id:'IR-DRINK-'+(i+1),edgeIndex:panel.edgeIndex??-1,material:'finish',
-      lengthFt:Math.max(0,panel.endFt-panel.startFt),location:panel.label+' drink-rail board'
+    const drinkPieces=planDrinkRailPieces(levelRuns,stairRuns,5.5/12,heightIn/12+.075+.093/2);
+    const drinkCuts:SkirtCut[]=drinkPieces.map((piece,i)=>({
+      id:'IR-DRINK-'+(i+1),edgeIndex:piece.edgeIndex,material:'finish',
+      lengthFt:piece.lengthFt,location:piece.id+' mitered/pitched drink-rail board'
     }));
     const packed=packSkirtCuts(drinkCuts,[16,20],0.125,0.25);
     issues.push(...packed.issues);

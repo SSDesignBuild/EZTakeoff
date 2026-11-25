@@ -60,5 +60,17 @@ const frameView=fs.readFileSync(path.resolve(__dirname,'../src/components/Layout
 assert.ok(frameView.includes('const showStairFraming = showFraming || showStairs;'));
 assert.equal((frameView.match(/showStairFraming && \(/g)||[]).length,2,'main and lower stair stringers visible in framing');
 assert.ok(frameView.includes('showStairs && Array.from({ length: treadCount }'),'tread visuals stay in stairs/overview view');
-assert.ok(frameView.includes('deck.pictureFrameHouseSide ? [] : deck.houseEdgeIndices'));
+assert.ok(frameView.includes('model.pictureFrameCount,model.houseEdgeIndices,model.pictureFrameHouseSide')&&
+  frameView.includes('installedFrameFaces(deck)')&&frameView.includes('installedFrameFaces(lowerDeck)'),
+  'Both drawing tiers must consume the shared selected-edge miter geometry');
+const {planMiteredPictureFrames,planVisiblePictureFrameMiterSeams,openPictureFrameMiterGaps}=loadTs('src/lib/deckMiterGeometry');
+for(const model of [exposed,full,lower]){
+  const strips=planMiteredPictureFrames(model.points,model.pictureFrameSegments,model.pictureFrameCount);
+  const seams=planVisiblePictureFrameMiterSeams(model.points,model.pictureFrameSegments,
+    model.pictureFrameCount,model.houseEdgeIndices,model.pictureFrameHouseSide);
+  const visible=openPictureFrameMiterGaps(strips,seams);
+  assert.equal(visible.length,model.pictureFrameSegments.length*model.pictureFrameCount);
+  assert.ok(visible.every(strip=>model.pictureFrameHouseSide||!model.houseEdgeIndices.includes(strip.edgeIndex)));
+  assert.ok(visible.every(strip=>strip.corners.every(point=>point.every(Number.isFinite))));
+}
 console.log('PASS five PT drink rail profiles, selected house border all tiers, material reconciliation and stair-framing display');

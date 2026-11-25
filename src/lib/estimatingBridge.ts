@@ -1,5 +1,5 @@
 import { calculateEstimate } from './estimate';
-import { buildDeckModel } from './deckModel';
+import { buildDeckModel, buildLowerTierDeckModel } from './deckModel';
 import type { ConsultationProject, EstimateResponse, EstimateTier } from './consultationProject';
 import type { MaterialItem } from './types';
 import { renaissanceReferenceIssues } from './renaissanceGuidance';
@@ -9,6 +9,7 @@ import { planRenaissanceCoverWalls } from './renaissanceCoverWallLayout';
 import { eliteSunroomTakeoff,currentEliteSunroomSettings,
  eliteWallSections } from './eliteSunroomStudio';
 import { planEliteDeckFloorClosure } from './eliteDeckFloorClosure';
+import { planSiteConcrete, type SiteConcreteAreaPlan } from './siteConcrete';
 
 export interface EstimateHandoffV1 {
   schemaVersion:1;
@@ -18,7 +19,8 @@ export interface EstimateHandoffV1 {
   exportedAt:string;
   customer:{name:string;address:string;phone:string;email:string};
   project:{kind:string;coverFamily:string;coverColor:string;coverRoofColor:string;coverCeilingFinish:string;coverRoofStyle:string;coverFraming:string;coverMount:string;coverTrussMount:string;coverScreenStyle:string;photoAttachedToThisPayload:false};
-  geometry:{footprint:{x:number;y:number}[];areaSqFt:number;deckHeightFt:number;stairCount:number};
+  geometry:{footprint:{x:number;y:number}[];areaSqFt:number;deckHeightFt:number;stairCount:number;
+    siteConcreteAreas:SiteConcreteAreaPlan[];siteConcreteQuantitiesValid:boolean};
   selections:Record<string,string|number|boolean>;
   materials:MaterialItem[];
   blockers:string[];
@@ -26,6 +28,9 @@ export interface EstimateHandoffV1 {
 }
 export function createEstimateHandoff(project:ConsultationProject):EstimateHandoffV1{
   const deck=buildDeckModel(project.values);
+  const lowerDeck=buildLowerTierDeckModel(project.values);
+  const stairCount=deck.stairCount+(lowerDeck?.stairCount??0);
+  const siteConcrete=planSiteConcrete(project.values);
   const estimate=calculateEstimate('decks',project.values);
   const center:[number,number]=[(deck.minX+deck.maxX)/2,(deck.minY+deck.maxY)/2];
   const deckY=Math.max(.35,Math.min(26,Number(project.values.deckHeight??5)));
@@ -45,17 +50,17 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
   ])) as Record<string,string>;
 
   const stairLandings=landingSurface(project.values.stairLandingSurface)==='bare-ground'
-    ?deck.stairPlacements.filter(placement=>placement.start&&placement.end).map(placement=>
+    ?[...deck.stairPlacements,...(lowerDeck?.stairPlacements??[])].filter(placement=>placement.start&&placement.end).map(placement=>
       planStairLanding(Math.hypot(placement.end!.x-placement.start!.x,
         placement.end!.y-placement.start!.y),
         Number(project.values.stairLandingDepthFt??4),
         Number(project.values.stairLandingThicknessIn??5))):[];
   const validLandings=stairLandings.filter((p):p is NonNullable<typeof p>=>p!==null);
   const landingBags=validLandings.reduce((sum,p)=>sum+p.bags80lb,0);
-  const blockers=[...(estimate.validationIssues??[])];
-  if(landingSurface(project.values.stairLandingSurface)==='unknown'&&deck.stairCount>0)
+  const blockers=[...(estimate.validationIssues??[]),...siteConcrete.validationIssues];
+  if(landingSurface(project.values.stairLandingSurface)==='unknown'&&stairCount>0)
     blockers.push('Confirm existing grade-level landing for each stair flight before closing the project scope.');
-  if(landingSurface(project.values.stairLandingSurface)==='bare-ground'&&deck.stairCount>0){
+  if(landingSurface(project.values.stairLandingSurface)==='bare-ground'&&stairCount>0){
     blockers.push('Automatic concrete landing quantities are planning values only: field-verify stair clear width, accessible egress, footing/base, frost, drainage, concrete specifications, site grade and local code before ordering.');
     if(validLandings.length!==stairLandings.length)
       blockers.push('One or more selected stair landing dimensions are invalid. Correct the dimensions before using concrete quantities.');
@@ -120,7 +125,8 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
       coverTrussMount:project.coverTrussMount??'flush',
       coverScreenStyle:project.coverScreenStyle??'none',photoAttachedToThisPayload:false},
-    geometry:{footprint:deck.points,areaSqFt:deck.area,deckHeightFt:Number(project.values.deckHeight??0),stairCount:deck.stairCount},
+    geometry:{footprint:deck.points,areaSqFt:deck.area,deckHeightFt:Number(project.values.deckHeight??0),stairCount,
+      siteConcreteAreas:siteConcrete.areas,siteConcreteQuantitiesValid:siteConcrete.canQuantify},
     selections:{...project.values,coverRoofStyle:project.coverRoofStyle??'studio',
       coverShadePercent:project.coverShadePercent??65,coverLouverAngle:project.coverLouverAngle??12,
       coverFamily:project.coverFamily,coverColor:project.coverColor,
@@ -162,6 +168,14 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverHeightFt:project.coverHeightFt??9,coverSideOverhangFt:project.coverSideOverhangFt??1,
       coverFrontOverhangFt:project.coverFrontOverhangFt??1},
     materials:[...estimate.materials,...(elite?.estimate.materials??[]),
+      ...(siteConcrete.canQuantify&&siteConcrete.orderVolumeCuYd>0?[{
+        name:'Concrete — drawn site areas',category:'Site concrete',
+        quantity:siteConcrete.orderVolumeCuYd,unit:'cu yd',
+        stockRecommendation:'Concrete volume from drawn polygons; 5% allowance included',
+        notes:siteConcrete.areas.map(area=>area.name+': '+area.areaSqFt.toFixed(2)+
+          ' sq ft × '+area.thicknessIn+' in = '+area.volumeCuYd.toFixed(3)+
+          ' cu yd before allowance; top elevation '+area.elevationFt+' ft').join(' | '),
+      }]:[]),
       ...(eliteFloorClosure?.stock??[]).map(board=>({
         name:'Interior deck closure board at Elite sunroom wall',
         category:'Sales sunroom floor transition — additional decking stock',
@@ -183,6 +197,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
         '. Review subbase, reinforcement, disposal, forms and local specifications separately.',
     }]:[])],blockers,
     assumptions:[...estimate.orderNotes,...(elite?.estimate.orderNotes??[]),
+      ...(siteConcrete.areas.length?['Site concrete quantities use the saved polygon boundaries and selected slab thicknesses. The volume includes a 5% allowance; reinforcement, subbase, excavation and drainage are separate scope.']:[]),
       ...(eliteFloorClosure?.notes??[])],
   };
 }

@@ -157,12 +157,13 @@ assert.ok(stair.includes('fasciaGeo') &&
   'Selected fascia geometry must be correctly centered to stringer');
 assert.equal(finishes.getCoverFinish('Sandstone'),finishes.getCoverRoofFinish('Sandstone'));
 assert.equal(finishes.getCoverFinish('Sandstone'),finishes.getCoverCeilingFinish('Sandstone'));
-assert.ok(rails.includes('[...stairOpenings,...gateOpenings]') &&
+const railLayout=read('src/lib/railingLayout.ts');
+assert.ok(railLayout.includes('[...stairCuts,...extraOpenings]') &&
   !rails.includes('screenDoorOpenings') && !rails.includes('doorEdge=screenDoorSide'),
   'PCA screen entry MUST NOT automatically leave an unguarded deck edge');
 assert.ok(picks.includes('Independent screen doors do not remove deck guardrails'),
   'Consultation UI must communicate independent door vs required guardrail access');
-assert.ok(rails.includes('subtractRailingOpenings')&&!rails.includes('screenDoorOpenings'),
+assert.ok(railLayout.includes('subtractRailingOpenings')&&!railLayout.includes('screenDoorOpenings'),
   'Screen access never independently erases an existing deck guardrail');
 assert.ok(board.includes('planMiteredPictureFrames'));
 assert.ok(stair.includes('underFasciaAt')&&stair.includes('riserTexture'));
@@ -281,7 +282,8 @@ assert.ok(stairRiserSource.includes('stepHeight-rise/2+.04')&&
   stairRiserSource.includes('(i+1)*treadDepth-.004'),
   'Stair riser must cover stringer plumb cuts without covering tread nosing');
 const visualGeometry=read('src/lib/visualGeometry.ts');
-assert.ok(visualGeometry.includes('clip(polygon,crossAxis,low,true)')&&
+assert.ok(visualGeometry.includes('subtractDeckFace(poly,frame.corners,margin)')&&
+  visualGeometry.includes('mergeDeckFaces(pieces)')&&
   visualGeometry.includes('planMiteredPictureFrames'),
   'Field decking must be physically clipped around the actual mitered border');
 assert.ok(!visualGeometry.includes("'full-trusses','translucent'].includes(cover.family)"),

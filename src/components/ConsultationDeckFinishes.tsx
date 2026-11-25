@@ -80,6 +80,11 @@ export function ConsultationDeckFinishes({values,onValues}:{
         value={String(values[key]??'match')} resolved={breaker[i]}
         onChange={next=>change(key,next)}/>;
     })}
+    <label className="consultation-checkbox"><input type="checkbox"
+      checked={values.fasciaHouseSide !== false && String(values.fasciaHouseSide ?? 'true') !== 'false'}
+      onChange={event=>change('fasciaHouseSide',event.target.checked)}/>
+      Finish fascia on house-facing edges
+    </label>
     <DeckFinishSwatchSelect label="Perimeter fascia board"
       value={String(values.fasciaMaterial??'match')}
       resolved={resolveFasciaMaterial(values)}

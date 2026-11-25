@@ -188,7 +188,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
         <label className="consultation-checkbox"><input type="checkbox" checked={project.values.multiTierEnabled===true}
           onChange={(e)=>setValue('multiTierEnabled',e.target.checked)}/>Add lower deck tier</label>
       </div>
-      <DeckDesigner values={project.values} onValuesChange={updateValues}/>
+      <DeckDesigner values={project.values} onValuesChange={updateValues} allowSiteConcrete/>
       <ConsultationTechnicalSettings values={project.values} onValuesChange={updateValues}/>
       <p className="consultation-engineering-note">Dimensioned geometry is reused in the 3D scene and material estimator. Structural sizes and foundations require field verification before ordering.</p>
     </section>}
@@ -210,6 +210,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
               onChange={e=>setValue('stairLandingSurface',e.target.value)}>
               <option value="unknown">Not verified — no pad added</option>
               <option value="existing">Existing suitable concrete landing</option>
+              <option value="site-plan">Included in drawn concrete area</option>
               <option value="bare-ground">No existing concrete — include landing pad</option>
             </select>
           </label>
@@ -371,7 +372,7 @@ export function ConsultationStudio(){
       // A photo that was already saved in this browser is kept unchanged.
       setProjects(current=>{
         const prior=current.find(p=>p.id===remote.id);
-        return [{...remote,photoPresent:prior?.photoPresent??false},
+        return [{...remote,values:{fasciaHouseSide:true,...remote.values},photoPresent:prior?.photoPresent??false},
           ...current.filter(p=>p.id!==remote.id)];
       });
       navigate('/consultation/'+remote.id);

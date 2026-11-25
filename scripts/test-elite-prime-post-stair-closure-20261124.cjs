@@ -96,7 +96,7 @@ const noneCenter=[(neither.minX+neither.maxX)/2,
 assert.equal(planStairRailingRuns(neither,noneCenter,5).length,0);
 const railRenderer=read('src/components/visual3d/ManufacturerRailing3D.tsx');
 assert.ok(railRenderer.includes('<ManufacturerStairRailing3D')&&
- railRenderer.includes('screenIntegrated?[]:subtractRailingOpenings'),
+ railRenderer.includes('screenIntegrated?[]:planLevelRailingRuns'),
  'Screen/sunroom suppresses ONLY incompatible level rails, not selected stair guards');
 const stairRenderer=read('src/components/visual3d/ManufacturerStairRailing3D.tsx');
 for(const label of ['selected-stair-guard-',

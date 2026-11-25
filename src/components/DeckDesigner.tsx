@@ -1,6 +1,8 @@
 import { MouseEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { buildDeckModel, parseDeckShape } from '../lib/deckModel';
 import { DeckPoint, LockedPostPoint } from '../lib/types';
+import { planStairFootprints } from '../lib/stairPlanGeometry';
+import { readSiteConcreteAreas, planSiteConcrete, type SiteConcreteArea } from '../lib/siteConcrete';
 import { ExactBeamPostLayout, ExactSupportPost, evenlySpacedPosts, parseExactPostLayouts, shiftPostLayoutIndices } from '../lib/exactPostLayouts';
 
 const GRID_SIZE = 1 / 12;
@@ -14,11 +16,11 @@ const INCH_GRID = 1 / 12;
 const SNAP_TOLERANCE = 0.4;
 const defaultShape: DeckPoint[] = [];
 
-type EditMode = 'points' | 'house' | 'railing' | 'stairs' | 'beams' | 'posts';
+type EditMode = 'points' | 'house' | 'railing' | 'stairs' | 'beams' | 'posts' | 'concrete';
 type DeckTier = 'main' | 'lower';
 type ExtraStair = { edgeIndex: number; offset: number; width: number; rise?: number; left?: boolean; right?: boolean };
 type BeamEdit = { beamIndex: number; startTrim: number; endTrim: number };
-type Snapshot = Pick<Record<string, string | number | boolean>, 'deckShape' | 'lowerDeckShape' | 'manualRailingEdges' | 'houseEdgeIndices' | 'customBeamYs' | 'stairEdgeIndex' | 'stairOffset' | 'additionalStairs' | 'lockedPosts' | 'postLayouts' | 'beamEdits' | 'lowerManualRailingEdges' | 'lowerHouseEdgeIndices' | 'lowerCustomBeamYs' | 'lowerStairEdgeIndex' | 'lowerStairOffset' | 'lowerAdditionalStairs' | 'lowerLockedPosts' | 'lowerPostLayouts' | 'lowerBeamEdits'>;
+type Snapshot = Pick<Record<string, string | number | boolean>, 'deckShape' | 'lowerDeckShape' | 'manualRailingEdges' | 'houseEdgeIndices' | 'customBeamYs' | 'stairEdgeIndex' | 'stairOffset' | 'additionalStairs' | 'lockedPosts' | 'postLayouts' | 'beamEdits' | 'lowerManualRailingEdges' | 'lowerHouseEdgeIndices' | 'lowerCustomBeamYs' | 'lowerStairEdgeIndex' | 'lowerStairOffset' | 'lowerAdditionalStairs' | 'lowerLockedPosts' | 'lowerPostLayouts' | 'lowerBeamEdits' | 'stairRailingLeft' | 'stairRailingRight' | 'lowerStairRailingLeft' | 'lowerStairRailingRight' | 'stairCount' | 'siteConcreteAreas'>;
 type DesignerHistory = { shot: Snapshot; drawingSequence: boolean; selectedIndex: number | null };
 
 const snap = (value: number) => Math.round(value / GRID_SIZE) * GRID_SIZE;
@@ -35,8 +37,8 @@ const parseExtraStairs = (raw: string | number | boolean | undefined): ExtraStai
       offset: Math.max(0, Number(item.offset ?? 0)),
       width: Math.max(0.1, Number(item.width ?? 4)),
       rise: Number(item.rise ?? 0),
-      left: item.left !== false,
-      right: item.right !== false,
+      ...(typeof item.left === 'boolean' ? {left: item.left} : {}),
+      ...(typeof item.right === 'boolean' ? {right: item.right} : {}),
     })) : [];
   } catch { return []; }
 };
@@ -73,11 +75,12 @@ const snapPointFromAnchor = (anchor: DeckPoint, point: DeckPoint) => {
 };
 
 interface DeckDesignerProps {
+  allowSiteConcrete?: boolean;
   values: Record<string, string | number | boolean>;
   onValuesChange: (updater: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => void;
 }
 
-export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
+export function DeckDesigner({ values, onValuesChange, allowSiteConcrete = false }: DeckDesignerProps) {
   const mainPoints = useMemo(() => {
     if (typeof values.deckShape === 'string') {
       try {
@@ -118,8 +121,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       deckingType: values.lowerUseCustomSettings ? (values.lowerDeckingType || values.deckingType) : values.deckingType,
       railingType: values.lowerUseCustomSettings ? (values.lowerRailingType || values.railingType) : values.railingType,
       pictureFrameCount: values.lowerUseCustomSettings ? (values.lowerPictureFrameCount ?? values.pictureFrameCount) : values.pictureFrameCount,
-      stairRailingLeft: values.lowerUseCustomSettings ? (values.lowerStairRailingLeft ?? values.stairRailingLeft) : values.stairRailingLeft,
-      stairRailingRight: values.lowerUseCustomSettings ? (values.lowerStairRailingRight ?? values.stairRailingRight) : values.stairRailingRight,
+      stairRailingLeft: values.lowerStairRailingLeft ?? values.stairRailingLeft,
+      stairRailingRight: values.lowerStairRailingRight ?? values.stairRailingRight,
       manualRailingEdges: values.lowerManualRailingEdges || JSON.stringify([]),
       houseEdgeIndices: values.lowerHouseEdgeIndices || values.houseEdgeIndices || JSON.stringify([]),
       customBeamYs: values.lowerCustomBeamYs || JSON.stringify([]),
@@ -133,6 +136,15 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   }, [activeTier, values]);
 
   const model = useMemo(() => buildDeckModel(activeDeckValues), [activeDeckValues]);
+  const stairFootprints = useMemo(() => planStairFootprints(model), [model]);
+  const concreteAreas = useMemo(() => readSiteConcreteAreas(values.siteConcreteAreas), [values.siteConcreteAreas]);
+  const concretePlan = useMemo(() => planSiteConcrete(values), [values]);
+  const [activeConcreteId, setActiveConcreteId] = useState<string | null>(null);
+  const [concreteDraft, setConcreteDraft] = useState<DeckPoint[] | null>(null);
+  const [concretePointIndex, setConcretePointIndex] = useState<number | null>(null);
+  const [concreteFeedback, setConcreteFeedback] = useState('');
+  const [draggingConcretePoint, setDraggingConcretePoint] = useState<number | null>(null);
+  const activeConcrete = concreteAreas.find(area => area.id === activeConcreteId) ?? null;
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [mode, setMode] = useState<EditMode>('points');
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
@@ -157,13 +169,17 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const [future, setFuture] = useState<DesignerHistory[]>([]);
   const svgRef = useRef<SVGSVGElement | null>(null);
 
-  const viewFeet = Math.min(MAX_DRAW_VIEW_FEET, Math.max(8, Number((BASE_VIEW_FEET / zoom).toFixed(3))));
-  const limits = {
-    minX: 0,
-    maxX: viewFeet,
-    minY: 0,
-    maxY: viewFeet,
-  };
+  // Stairs and concrete share the deck's measured coordinates and remain visible
+  // outside its perimeter. Preserve the 25-foot empty drawing field.
+  const extentPoints = [...points, ...stairFootprints.flatMap(flight => flight.corners),
+    ...(allowSiteConcrete ? concreteAreas.flatMap(area => area.points) : [])];
+  const originX = Math.min(0, Math.floor(Math.min(0, ...extentPoints.map(p => p.x))) - (extentPoints.some(p => p.x < 0) ? 1 : 0));
+  const originY = Math.min(0, Math.floor(Math.min(0, ...extentPoints.map(p => p.y))) - (extentPoints.some(p => p.y < 0) ? 1 : 0));
+  const fittedFeet = Math.max(BASE_VIEW_FEET,
+    Math.max(0, ...extentPoints.map(p => p.x)) - originX + 2,
+    Math.max(0, ...extentPoints.map(p => p.y)) - originY + 2);
+  const viewFeet = Math.min(Math.max(MAX_DRAW_VIEW_FEET, fittedFeet), Math.max(8, Number((fittedFeet / zoom).toFixed(3))));
+  const limits = {minX: originX, maxX: originX + viewFeet, minY: originY, maxY: originY + viewFeet};
   const spanX = Math.max(limits.maxX - limits.minX, 1);
   const spanY = Math.max(limits.maxY - limits.minY, 1);
   const scale = Math.min((VIEW_SIZE - PADDING * 2) / spanX, (VIEW_SIZE - PADDING * 2) / spanY);
@@ -184,7 +200,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       deckShape: values.deckShape,
       manualRailingEdges: values.manualRailingEdges,
       houseEdgeIndices: values.houseEdgeIndices,
-      customBeamYs: activeDeckValues.customBeamYs,
+      customBeamYs: values.customBeamYs,
       stairEdgeIndex: values.stairEdgeIndex,
       stairOffset: values.stairOffset,
       additionalStairs: values.additionalStairs,
@@ -201,6 +217,12 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       lowerLockedPosts: values.lowerLockedPosts,
       lowerPostLayouts: values.lowerPostLayouts,
       lowerBeamEdits: values.lowerBeamEdits,
+      stairRailingLeft: values.stairRailingLeft,
+      stairRailingRight: values.stairRailingRight,
+      lowerStairRailingLeft: values.lowerStairRailingLeft,
+      lowerStairRailingRight: values.lowerStairRailingRight,
+      stairCount: values.stairCount,
+      siteConcreteAreas: values.siteConcreteAreas,
     },
     drawingSequence,
     selectedIndex,
@@ -305,6 +327,15 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const handleCanvasClick = (event: MouseEvent<SVGSVGElement>) => {
     const point = fromClientToModelPoint(event.clientX, event.clientY);
     if (!point) return;
+    if (mode === 'concrete') {
+      if (concreteDraft) {
+        const last = concreteDraft[concreteDraft.length - 1];
+        const next = last ? snapPointFromAnchor(last, point) : point;
+        if (!last || Math.hypot(last.x - next.x, last.y - next.y) > .01)
+          setConcreteDraft([...concreteDraft, next]);
+      }
+      return;
+    }
     if (mode === 'points') {
       if (drawingSequence) appendPoint({ x: clamp(point.x, limits.minX, limits.maxX), y: clamp(point.y, limits.minY, limits.maxY) });
       return;
@@ -383,6 +414,52 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const extraStairs = useMemo(() => parseExtraStairs(activeDeckValues.additionalStairs), [activeDeckValues.additionalStairs]);
   const updateExtraStairs = (next: ExtraStair[]) => commitChange((current) => ({ ...current, [tierKey('additionalStairs')]: JSON.stringify(next) }));
   const activeExtraIndex = activeStairIndex - 1;
+  const toggleStairRailing = (sourceIndex: number, side: 'left' | 'right', enabled: boolean) => {
+    if (sourceIndex === 0) {
+      commitChange(current => ({...current,
+        [tierKey(side === 'left' ? 'stairRailingLeft' : 'stairRailingRight')]: enabled}));
+    } else {
+      const next = extraStairs.map((flight, index) => index === sourceIndex - 1
+        ? {...flight, [side]: enabled} : flight);
+      updateExtraStairs(next);
+    }
+    setRailingFeedback('Stair ' + (sourceIndex + 1) + ' ' + side + ' railing ' + (enabled ? 'added' : 'removed'));
+  };
+
+  const writeConcrete = (areas: SiteConcreteArea[]) => commitChange(current => ({
+    ...current, siteConcreteAreas: JSON.stringify(areas),
+  }));
+  const updateConcrete = (patch: Partial<SiteConcreteArea>) => {
+    if (!activeConcrete) return;
+    writeConcrete(concreteAreas.map(area => area.id === activeConcrete.id ? {...area, ...patch} : area));
+  };
+  const finishConcrete = () => {
+    if (!concreteDraft || concreteDraft.length < 3) return;
+    const area: SiteConcreteArea = {id: 'concrete-' + crypto.randomUUID(),
+      name: 'Concrete ' + (concreteAreas.length + 1), points: concreteDraft,
+      thicknessIn: 4, elevationFt: .055};
+    const candidate = [...concreteAreas, area];
+    const plan = planSiteConcrete({...values, siteConcreteAreas: JSON.stringify(candidate)});
+    if (plan.areas.length !== candidate.length) {
+      setConcreteFeedback(plan.validationIssues.join(' ') || 'Close a simple concrete outline with at least three separate corners.');
+      return;
+    }
+    writeConcrete(candidate);
+    setActiveConcreteId(area.id);
+    setConcreteDraft(null);
+    setConcretePointIndex(null);
+    setConcreteFeedback('Concrete area added. Select its corners or edit its position and thickness.');
+  };
+  const moveConcrete = (axis: 'x' | 'y', value: number) => {
+    if (!activeConcrete || !Number.isFinite(value)) return;
+    const previous = Math.min(...activeConcrete.points.map(point => point[axis]));
+    const delta = snap(value) - previous;
+    updateConcrete({points: activeConcrete.points.map(point => ({...point, [axis]: snap(point[axis] + delta)}))});
+  };
+  const updateConcretePoint = (index: number, axis: 'x' | 'y', value: number) => {
+    if (!activeConcrete || !Number.isFinite(value)) return;
+    updateConcrete({points: activeConcrete.points.map((point, i) => i === index ? {...point, [axis]: snap(value)} : point)});
+  };
   const selectStairEdge = (edgeIndex: number) => commitChange((current) => {
     if (activeStairIndex <= 0) return { ...current, [tierKey('stairEdgeIndex')]: edgeIndex, [tierKey('stairOffset')]: 0, stairCount: Math.max(1, Number(current.stairCount ?? 0)) };
     const next = [...extraStairs];
@@ -659,8 +736,10 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
     }
   };
 
-  const onStairPointerDown = (event: PointerEvent<SVGLineElement>) => {
+  const onStairPointerDown = (event: PointerEvent<SVGLineElement>, sourceIndex: number) => {
     event.preventDefault();
+    event.stopPropagation();
+    setActiveStairIndex(sourceIndex);
     setMode('stairs');
     pushHistory();
     setFuture([]);
@@ -670,6 +749,17 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
   const handlePointerMove = (event: PointerEvent<SVGSVGElement>) => {
     const point = fromClientToModelPoint(event.clientX, event.clientY);
     if (!point) return;
+    if (mode === 'concrete') {
+      if (draggingConcretePoint !== null && activeConcrete) {
+        const next = concreteAreas.map(area => area.id === activeConcrete.id ? {...area,
+          points: area.points.map((existing, index) => index === draggingConcretePoint ? point : existing)} : area);
+        onValuesChange(current => ({...current, siteConcreteAreas: JSON.stringify(next)}));
+      } else if (concreteDraft) {
+        const last = concreteDraft[concreteDraft.length - 1];
+        setPreviewPoint(last ? snapPointFromAnchor(last, point) : point);
+      }
+      return;
+    }
     if (drawingSequence && mode === 'points') {
       const preview = points.length ? snapPointFromAnchor(points[points.length - 1], point) : point;
       setPreviewPoint({ x: clamp(preview.x, limits.minX, limits.maxX), y: clamp(preview.y, limits.minY, limits.maxY) });
@@ -695,9 +785,10 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       moveBeamStation(activeBeamDrag, along, true);
       return;
     }
-    if (draggingStair && model.stairPlacement.edgeIndex !== null) {
-      const activePlacement = activeStairIndex <= 0 ? model.stairPlacement : (model.stairPlacements?.[activeStairIndex] ?? model.stairPlacement);
-      const edge = model.edgeSegments[activePlacement.edgeIndex ?? model.stairPlacement.edgeIndex];
+    if (draggingStair) {
+      const activePlacement = model.stairPlacements.find((placement, index) => (placement.sourceIndex ?? index) === activeStairIndex);
+      if (!activePlacement || activePlacement.edgeIndex === null) return;
+      const edge = model.edgeSegments[activePlacement.edgeIndex];
       const dx = edge.end.x - edge.start.x;
       const dy = edge.end.y - edge.start.y;
       const lenSq = (dx * dx) + (dy * dy) || 1;
@@ -717,6 +808,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       setDraggingBeamIndex(null);
       setDraggingPost(null);
       setDraggingStair(false);
+      setDraggingConcretePoint(null);
     };
     window.addEventListener('pointerup', release);
     window.addEventListener('pointercancel', release);
@@ -750,9 +842,9 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
       <div className="designer-mode-row tidy-mode-row">
         <button type="button" className={activeTier === 'main' ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => { setActiveTier('main'); setMode('points'); setSelectedIndex(null); setDrawingSequence(mainPoints.length === 0); }}>Main deck shape</button>
         {lowerTierEnabled && <button type="button" className={activeTier === 'lower' ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => { setActiveTier('lower'); setMode('points'); setSelectedIndex(null); setDrawingSequence(lowerPoints.length === 0); }}>Lower tier shape</button>}
-        {(['points', 'house', 'beams', 'posts', 'railing', 'stairs'] as EditMode[]).map((item) => (
+        {(['points', 'house', 'beams', 'posts', 'railing', 'stairs', ...(allowSiteConcrete ? ['concrete'] : [])] as EditMode[]).map((item) => (
           <button key={item} type="button" className={mode === item ? 'secondary-btn mode-btn active' : 'ghost-btn mode-btn'} onClick={() => setMode(item)}>
-            {item === 'points' ? (drawingSequence ? 'Draw footprint' : 'Edit points') : item === 'house' ? 'Pick house sides' : item === 'railing' ? 'Pick railing edges' : item === 'stairs' ? 'Place stairs' : item === 'beams' ? 'Move beams' : 'Edit posts'}
+            {item === 'points' ? (drawingSequence ? 'Draw footprint' : 'Edit points') : item === 'house' ? 'Pick house sides' : item === 'railing' ? 'Pick railing edges' : item === 'stairs' ? 'Place stairs' : item === 'beams' ? 'Move beams' : item === 'concrete' ? 'Draw concrete' : 'Edit posts'}
           </button>
         ))}
         <button type="button" className="ghost-btn mode-btn" onClick={undo} disabled={!history.length}>Undo</button>
@@ -805,6 +897,15 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
                 })}
               </g>;
             })()}
+            {allowSiteConcrete && concreteAreas.map(area => <g key={area.id} data-concrete-area={area.id}>
+              <polygon points={area.points.map(toSvgPoint).map(p => p.x + ',' + p.y).join(' ')}
+                fill={area.id === activeConcreteId ? '#adc8ce' : '#bdc0be'} fillOpacity={mode === 'concrete' ? .8 : .45}
+                stroke={area.id === activeConcreteId ? '#136c7c' : '#858e8a'} strokeWidth={2}
+                pointerEvents={mode === 'concrete' && !concreteDraft ? 'auto' : 'none'}
+                onClick={event => {event.stopPropagation(); setActiveConcreteId(area.id); setConcretePointIndex(null);}}/>
+              <text x={toSvgPoint(area.points[0]).x + 10} y={toSvgPoint(area.points[0]).y + 20}
+                fill="#35433d" fontSize={13} fontWeight={700} pointerEvents="none">{area.name}</text>
+            </g>)}
             {activeTier === 'main' && lowerTierEnabled && lowerPoints.length >= 3 && <polygon points={lowerPoints.map((point) => { const svgPoint = toSvgPoint(point); return `${svgPoint.x},${svgPoint.y}`; }).join(' ')} className="deck-polygon lower-tier-preview" />}
             {activeTier === 'lower' && mainPoints.length >= 3 && <polygon points={mainPoints.map((point) => { const svgPoint = toSvgPoint(point); return `${svgPoint.x},${svgPoint.y}`; }).join(' ')} className="deck-polygon upper-tier-preview" />}
             {(!drawingSequence && points.length >= 3) ? <polygon points={points.map((point) => { const svgPoint = toSvgPoint(point); return `${svgPoint.x},${svgPoint.y}`; }).join(' ')} className="deck-polygon" /> : points.length > 1 ? <polyline points={points.map((point) => { const svgPoint = toSvgPoint(point); return `${svgPoint.x},${svgPoint.y}`; }).join(' ')} className="deck-polyline" fill="none" /> : null}
@@ -817,7 +918,7 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
               const start = toSvgPoint(segment.start); const end = toSvgPoint(segment.end); const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
               const isRailing = railingEdges.has(segment.index) || (!activeDeckValues.manualRailingEdges && model.exposedSegments.some((item) => item.index === segment.index));
               const isHouse = houseEdges.has(segment.index) || model.houseEdgeIndices.includes(segment.index);
-              const isStairEdge = Number(values.stairEdgeIndex ?? -1) === segment.index;
+              const isStairEdge = Number(activeDeckValues.stairEdgeIndex ?? -1) === segment.index;
               const edgeClass = isHouse ? 'interactive-edge active-house' : isRailing ? 'interactive-edge active-railing' : isStairEdge ? 'interactive-edge active-stair' : 'interactive-edge';
               return <g key={`edge-${segment.index}`}>
                 {mode==='railing'&&<line x1={start.x} y1={start.y} x2={end.x} y2={end.y}
@@ -825,7 +926,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
                   strokeDasharray={isRailing?undefined:'12 9'} opacity={.9}
                   pointerEvents="none"/>}
                 <line x1={start.x} y1={start.y} x2={end.x} y2={end.y}
-                  className={edgeClass} onClick={()=>{
+                  className={edgeClass} pointerEvents={mode === 'concrete' ? 'none' : undefined} onClick={(event)=>{
+                    event.stopPropagation();
                     if(mode==='points')insertPointAtEdge(segment.index);
                     if(mode==='house')toggleHouseEdge(segment.index);
                     if(mode==='railing')toggleRailingEdge(segment.index);
@@ -896,7 +998,74 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
               return <g key={`angled-beam-${index}`}><line x1={a.x} y1={a.y - 3} x2={b.x} y2={b.y - 3} className="beam-line beam-line-editable" /><line x1={a.x} y1={a.y + 3} x2={b.x} y2={b.y + 3} className="beam-line beam-line-secondary" />{beam.postPoints.map((post, postIndex) => { const p = toSvgPoint(post); return <rect key={`angled-post-${index}-${postIndex}`} x={p.x - 4} y={p.y - 4} width={8} height={8} className="post-lock" />; })}</g>;
             })}
             {points.map((point, index) => { const svgPoint = toSvgPoint(point); const isClosePoint = drawingSequence && index === 0 && points.length >= 3; return <g key={`${point.x}-${point.y}-${index}`}><circle cx={svgPoint.x} cy={svgPoint.y} r={selectedIndex === index ? 9 : 7} className={selectedIndex === index ? 'deck-point active' : isClosePoint ? 'deck-point close-target' : 'deck-point'} pointerEvents={mode === 'points' ? 'auto' : 'none'} onPointerDown={(event) => onPointPointerDown(event, index)} onClick={(event) => { event.stopPropagation(); if (drawingSequence && !isClosePoint) return; if (isClosePoint) { finishDrawing(); return; } setSelectedIndex(index); }} /><text x={svgPoint.x + 10} y={svgPoint.y - 10} className="deck-point-label">P{index + 1}{isClosePoint ? ' · close' : ''}</text></g>; })}
-            {(model.stairPlacements ?? [model.stairPlacement]).map((placement, stairIdx) => placement.start && placement.end ? <g key={`stair-placement-${stairIdx}`} onClick={() => setActiveStairIndex(stairIdx)}><line x1={toSvgPoint(placement.start).x} y1={toSvgPoint(placement.start).y} x2={toSvgPoint(placement.end).x} y2={toSvgPoint(placement.end).y} className={activeStairIndex === stairIdx ? "stair-edge-highlight active-stair" : "stair-edge-highlight"} pointerEvents={mode === 'stairs' ? 'auto' : 'none'} onPointerDown={onStairPointerDown} /><circle cx={(toSvgPoint(placement.start).x + toSvgPoint(placement.end).x) / 2} cy={(toSvgPoint(placement.start).y + toSvgPoint(placement.end).y) / 2} r={activeStairIndex === stairIdx ? 10 : 7} className="stair-handle" /><text x={(toSvgPoint(placement.start).x + toSvgPoint(placement.end).x) / 2 + 10} y={(toSvgPoint(placement.start).y + toSvgPoint(placement.end).y) / 2 - 10} className="deck-point-label">Stair {stairIdx + 1}</text></g> : null)}
+            {!drawingSequence && stairFootprints.map(flight => {
+              const corners = flight.corners.map(toSvgPoint);
+              const center = toSvgPoint(flight.center);
+              const entryA = corners[0], entryB = corners[1];
+              return <g key={'stair-plan-' + flight.sourceIndex} data-stair-plan={flight.sourceIndex + 1}>
+                <polygon points={corners.map(p => p.x + ',' + p.y).join(' ')}
+                  fill="#e4d2b7" fillOpacity={.65} stroke="#a58358" strokeWidth={1.5} pointerEvents="none"/>
+                {flight.treads.map(([a,b], step) => {
+                  const from = toSvgPoint(a), to = toSvgPoint(b);
+                  return <line key={step} x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                    stroke="#a58358" strokeWidth={1.2} pointerEvents="none"/>;
+                })}
+                {flight.sides.map(side => {
+                  const from = toSvgPoint(side.start), to = toSvgPoint(side.end);
+                  const toggle = () => toggleStairRailing(flight.sourceIndex, side.side, !side.enabled);
+                  return <g key={side.side}>
+                    <line x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                      stroke={side.enabled ? '#0d7859' : '#788694'} strokeWidth={side.enabled ? 7 : 4}
+                      strokeDasharray={side.enabled ? undefined : '10 7'} pointerEvents="none"/>
+                    {(mode === 'railing' || mode === 'stairs') && <rect
+                      x={0} y={-11} width={Math.hypot(to.x-from.x,to.y-from.y)} height={22}
+                      transform={`translate(${from.x} ${from.y}) rotate(${Math.atan2(to.y-from.y,to.x-from.x)*180/Math.PI})`}
+                      fill="transparent" style={{cursor:'pointer'}}
+                      role="button" tabIndex={0} aria-pressed={side.enabled}
+                      aria-label={'Toggle stair ' + (flight.sourceIndex + 1) + ' ' + side.side + ' railing'}
+                      onClick={event => {event.stopPropagation(); toggle();}}
+                      onKeyDown={event => {if (event.key === 'Enter' || event.key === ' ') {event.preventDefault(); toggle();}}}/>}
+                  </g>;
+                })}
+                <line x1={entryA.x} y1={entryA.y} x2={entryB.x} y2={entryB.y}
+                  className={activeStairIndex === flight.sourceIndex ? 'stair-edge-highlight active-stair' : 'stair-edge-highlight'}
+                  pointerEvents={mode === 'stairs' ? 'auto' : 'none'}
+                  onPointerDown={event => onStairPointerDown(event, flight.sourceIndex)}
+                  onClick={event => {event.stopPropagation(); setActiveStairIndex(flight.sourceIndex);}}/>
+                <text x={center.x} y={center.y} textAnchor="middle" fill="#543f26" fontSize={12} fontWeight={700}
+                  pointerEvents="none">Stair {flight.sourceIndex + 1}</text>
+              </g>;
+            })}
+            {mode === 'concrete' && activeConcrete && !concreteDraft && activeConcrete.points.map((point, index) => {
+              const p = toSvgPoint(point);
+              return <g key={'concrete-point-' + index}>
+                <circle cx={p.x} cy={p.y} r={concretePointIndex === index ? 9 : 7}
+                  fill={concretePointIndex === index ? '#dfb95f' : '#136c7c'} stroke="#ffffff" strokeWidth={2}
+                  style={{cursor: 'move'}} role="button" tabIndex={0}
+                  aria-label={'Concrete corner ' + (index + 1)}
+                  onPointerDown={event => {
+                    event.preventDefault(); event.stopPropagation();
+                    setConcretePointIndex(index); setDraggingConcretePoint(index); pushHistory(); setFuture([]);
+                    try {svgRef.current?.setPointerCapture(event.pointerId);} catch {}
+                  }}
+                  onClick={event => {event.stopPropagation(); setConcretePointIndex(index);}}
+                  onKeyDown={event => {if(event.key === 'Enter') setConcretePointIndex(index);}}/>
+                <text x={p.x + 11} y={p.y - 10} fontSize={12} fill="#136c7c" pointerEvents="none">C{index + 1}</text>
+              </g>;
+            })}
+            {mode === 'concrete' && concreteDraft && <g>
+              <polyline points={[...concreteDraft, ...(previewPoint ? [previewPoint] : [])].map(toSvgPoint).map(p => p.x + ',' + p.y).join(' ')}
+                fill="none" stroke="#136c7c" strokeWidth={3} strokeDasharray="9 5" pointerEvents="none"/>
+              {concreteDraft.map((point, index) => {
+                const p = toSvgPoint(point);
+                return <g key={'draft-concrete-' + index}>
+                  <circle cx={p.x} cy={p.y} r={index === 0 && concreteDraft.length >= 3 ? 10 : 6}
+                    fill="#136c7c" stroke="#ffffff" strokeWidth={2}
+                    onClick={event => {event.stopPropagation(); if(index === 0) finishConcrete();}}/>
+                  <text x={p.x + 10} y={p.y - 10} fontSize={12} fill="#136c7c" pointerEvents="none">C{index + 1}{index === 0 && concreteDraft.length >= 3 ? ' · close' : ''}</text>
+                </g>;
+              })}
+            </g>}
           </svg>
           </div>
         </div>
@@ -928,11 +1097,11 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           {mode === 'stairs' && <div className="callout-box compact-card"><h4>Staircases</h4><p className="muted">Use Place stairs, choose which staircase is active, then click/drag an edge for that staircase.</p><div className="stack-list"><button type="button" className={activeStairIndex === 0 ? 'secondary-btn block-btn' : 'ghost-btn block-btn'} onClick={() => { setActiveStairIndex(0); setMode('stairs'); }}>Edit staircase 1</button>{extraStairs.map((stair, index) => <div key={`extra-stair-${index}`} className="beam-editor-row beam-edit-grid"><button type="button" className={activeStairIndex === index + 1 ? 'secondary-btn small-btn' : 'ghost-btn small-btn'} onClick={() => { setActiveStairIndex(index + 1); setMode('stairs'); }}>Stair {index + 2}</button><label className="inline-mini-field"><span>Width</span><input type="number" step={GRID_SIZE} value={stair.width} onChange={(event) => { const next = [...extraStairs]; next[index] = { ...stair, width: Number(event.target.value) }; updateExtraStairs(next); }} /></label><label className="inline-mini-field"><span>Offset</span><input type="number" step={GRID_SIZE} value={stair.offset} onChange={(event) => { const next = [...extraStairs]; next[index] = { ...stair, offset: snap(Number(event.target.value)) }; updateExtraStairs(next); }} /></label>
               <label className="inline-mini-field"><span>Left railing</span>
                 <input type="checkbox" aria-label={'Stair '+(index+2)+' left railing'}
-                  checked={stair.left!==false}
+                  checked={stair.left ?? model.stairRailingLeft}
                   onChange={e=>{const next=[...extraStairs];next[index]={...stair,left:e.target.checked};updateExtraStairs(next);}}/></label>
               <label className="inline-mini-field"><span>Right railing</span>
                 <input type="checkbox" aria-label={'Stair '+(index+2)+' right railing'}
-                  checked={stair.right!==false}
+                  checked={stair.right ?? model.stairRailingRight}
                   onChange={e=>{const next=[...extraStairs];next[index]={...stair,right:e.target.checked};updateExtraStairs(next);}}/></label>
               <button type="button" className="ghost-btn small-btn" onClick={() => removeExtraStair(index)}>Remove</button></div>)}<button type="button" className="ghost-btn block-btn" onClick={addExtraStair}>Add another staircase</button></div></div>}
           {mode === 'stairs' && <div className="callout-box compact-card">
@@ -1030,8 +1199,8 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
           </div>}
           {mode === 'railing' && <div className="callout-box compact-card">
             <h4>Choose railing edges</h4>
-            <p className="muted">Solid green = railing selected, gray dashed = no railing. Click any deck edge to toggle and confirm it below. Stairs remain open unless a gate is specified. {railingEdges.size} of {model.edgeSegments.length} edges selected.</p>
-             <p role="status" className="deck-designer-feedback">{railingFeedback||'Click an edge to add or remove railing.'}</p>
+            <p className="muted">Solid green = railing selected, gray dashed = no railing. Click a deck edge or either side of a drawn staircase to toggle its railing. Stair entrances remain open. {railingEdges.size} of {model.edgeSegments.length} edges selected.</p>
+             <p role="status" className="deck-designer-feedback">{railingFeedback||'Click a deck edge or a stair side to add or remove railing.'}</p>
              <div className="tag-row">{model.edgeSegments.map(edge=>
                <button type="button" key={'rail-edge-status-'+edge.index}
                  className={railingEdges.has(edge.index)?'secondary-btn small-btn':'ghost-btn small-btn'}
@@ -1039,6 +1208,83 @@ export function DeckDesigner({ values, onValuesChange }: DeckDesignerProps) {
                  onClick={()=>toggleRailingEdge(edge.index)}>
                  E{edge.index+1}: {railingEdges.has(edge.index)?'✓ railing':'— no rail'}
                </button>)}</div>
+          </div>}
+          {mode === 'railing' && stairFootprints.length > 0 && <div className="callout-box compact-card">
+            <h4>Stair railing edges</h4>
+            <p className="muted">Left and right are viewed looking down each staircase.</p>
+            {stairFootprints.map(flight => <div className="tag-row" key={'stair-rail-controls-' + flight.sourceIndex}>
+              <strong>Stair {flight.sourceIndex + 1}</strong>
+              {flight.sides.map(side => <button type="button" key={side.side}
+                className={side.enabled ? 'secondary-btn small-btn' : 'ghost-btn small-btn'}
+                aria-label={'Stair ' + (flight.sourceIndex + 1) + ' ' + side.side + ' railing'}
+                aria-pressed={side.enabled}
+                onClick={() => toggleStairRailing(flight.sourceIndex, side.side, !side.enabled)}>
+                {side.side}: {side.enabled ? '✓ railing' : '— no rail'}
+              </button>)}
+            </div>)}
+          </div>}
+          {allowSiteConcrete && mode === 'concrete' && <div className="callout-box compact-card">
+            <h4>Concrete areas</h4>
+            <p className="muted">Draw patios, paths or landing areas anywhere on this plan. Each closed outline appears in 3D and contributes its measured concrete volume.</p>
+            {concreteDraft ? <>
+              <p>Click each corner, then C1 or Finish area to close. {concreteDraft.length} corner(s) drawn.</p>
+              <div className="tag-row">
+                <button type="button" className="secondary-btn small-btn" disabled={concreteDraft.length < 3} onClick={finishConcrete}>Finish concrete area</button>
+                <button type="button" className="ghost-btn small-btn" disabled={!concreteDraft.length} onClick={() => setConcreteDraft(concreteDraft.slice(0,-1))}>Undo last corner</button>
+                <button type="button" className="ghost-btn small-btn" onClick={() => {setConcreteDraft(null); setPreviewPoint(null);}}>Cancel drawing</button>
+              </div>
+            </> : <button type="button" className="secondary-btn block-btn" onClick={() => {
+              setConcreteDraft([]); setActiveConcreteId(null); setConcretePointIndex(null); setConcreteFeedback(''); setPreviewPoint(null);
+            }}>Draw concrete area</button>}
+            {concreteAreas.length > 0 && <div className="stack-list" style={{marginTop:12}}>
+              {concreteAreas.map(area => <button type="button" key={area.id}
+                className={area.id === activeConcreteId ? 'secondary-btn small-btn' : 'ghost-btn small-btn'}
+                aria-pressed={area.id === activeConcreteId} onClick={() => {
+                  setActiveConcreteId(area.id); setConcretePointIndex(null); setConcreteDraft(null);
+                }}>{area.name} · {polygonArea(area.points).toFixed(1)} sq ft</button>)}
+            </div>}
+            {activeConcrete && !concreteDraft && <div className="stack-list" style={{marginTop:12}}>
+              <label className="form-field">Area name<input aria-label="Concrete area name" value={activeConcrete.name}
+                onChange={event => updateConcrete({name:event.target.value})}/></label>
+              <div className="form-grid compact-grid">
+                <label className="form-field">X position (ft)<input aria-label="Concrete X position" type="number" step={GRID_SIZE}
+                  value={Math.min(...activeConcrete.points.map(p => p.x))}
+                  onChange={event => moveConcrete('x', Number(event.target.value))}/></label>
+                <label className="form-field">Y position (ft)<input aria-label="Concrete Y position" type="number" step={GRID_SIZE}
+                  value={Math.min(...activeConcrete.points.map(p => p.y))}
+                  onChange={event => moveConcrete('y', Number(event.target.value))}/></label>
+                <label className="form-field">Thickness (in)<input aria-label="Concrete thickness" type="number" min={2} max={24} step={.5}
+                  value={activeConcrete.thicknessIn} onChange={event => updateConcrete({thicknessIn:Number(event.target.value)})}/></label>
+                <label className="form-field">Top above grade (ft)<input aria-label="Concrete top elevation" type="number" min={-10} max={20} step={.05}
+                  value={activeConcrete.elevationFt} onChange={event => updateConcrete({elevationFt:Number(event.target.value)})}/></label>
+              </div>
+              <label className="form-field">Edit corner<select aria-label="Concrete selected corner"
+                value={concretePointIndex ?? ''} onChange={event => setConcretePointIndex(event.target.value === '' ? null : Number(event.target.value))}>
+                <option value="">Select a corner</option>
+                {activeConcrete.points.map((_,i) => <option key={i} value={i}>C{i+1}</option>)}
+              </select></label>
+              {concretePointIndex !== null && activeConcrete.points[concretePointIndex] && <>
+                <div className="form-grid compact-grid">
+                  <label className="form-field">Corner X (ft)<input aria-label="Concrete corner X" type="number" step={GRID_SIZE}
+                    value={activeConcrete.points[concretePointIndex].x}
+                    onChange={event => updateConcretePoint(concretePointIndex, 'x', Number(event.target.value))}/></label>
+                  <label className="form-field">Corner Y (ft)<input aria-label="Concrete corner Y" type="number" step={GRID_SIZE}
+                    value={activeConcrete.points[concretePointIndex].y}
+                    onChange={event => updateConcretePoint(concretePointIndex, 'y', Number(event.target.value))}/></label>
+                </div>
+                <button type="button" className="ghost-btn small-btn" disabled={activeConcrete.points.length <= 3} onClick={() => {
+                  updateConcrete({points:activeConcrete.points.filter((_,i) => i !== concretePointIndex)}); setConcretePointIndex(null);
+                }}>Remove selected concrete corner</button>
+              </>}
+              <button type="button" className="ghost-btn small-btn" onClick={() => {
+                writeConcrete(concreteAreas.filter(area => area.id !== activeConcrete.id)); setActiveConcreteId(null); setConcretePointIndex(null);
+              }}>Remove concrete area</button>
+            </div>}
+            {concreteFeedback && <p role="status" className="deck-designer-feedback">{concreteFeedback}</p>}
+            {concretePlan.validationIssues.length > 0 && <div role="alert" className="deck-designer-feedback">
+              {concretePlan.validationIssues.map((issue,index) => <p key={index}>{issue}</p>)}
+            </div>}
+            {concreteAreas.length > 0 && <p className="muted">{concretePlan.canQuantify ? `Total: ${concretePlan.totalAreaSqFt.toFixed(1)} sq ft · ${concretePlan.totalVolumeCuYd.toFixed(2)} cubic yards before allowance.` : 'Concrete quantities are unavailable until the drawing issues above are corrected.'}</p>}
           </div>}
           {mode === 'points' && <div className="callout-box compact-card"><h4>Reset</h4><button type="button" className="ghost-btn block-btn" onClick={resetShape}>Reset shape and manual overrides</button></div>}
           {mode === 'points' && <div className="callout-box compact-card workflow-card"><h4>Geometry summary</h4><div className="metrics-mini-grid"><div><span>Area</span><strong>{polygonArea(points).toFixed(1)} sq ft</strong></div><div><span>Perimeter</span><strong>{polygonPerimeter(points).toFixed(1)} lf</strong></div><div><span>Viewport</span><strong>{feetAndInches(viewFeet)} × {feetAndInches(viewFeet)}</strong></div><div><span>Origin</span><strong>{feetAndInches(limits.minX)} , {feetAndInches(limits.minY)}</strong></div></div></div>}
