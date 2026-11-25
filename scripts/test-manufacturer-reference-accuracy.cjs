@@ -69,8 +69,10 @@ const {renaissanceRoofPanelUndersideAtPost,renaissanceVisiblePostTopFt}=
 const postIntersection={xFt:5,zFt:11,headerCrownFt:9,roofRearZFt:0,roofFrontZFt:12,
  roofRearCenterFt:10,roofFrontCenterFt:8.8,roofPanelThicknessFt:.25,
  gable:false,midXFt:0,roofWidthFt:16,eaveCenterFt:9,gableRiseFt:0};
-assert.ok(renaissanceVisiblePostTopFt(postIntersection)+.025<
- renaissanceRoofPanelUndersideAtPost(postIntersection),
+// Rendered cap is centered 0.029 ft BELOW the visible post stop and
+// is 0.050 ft tall: its upper face is stop-.004, not stop+.025.
+const capUpperFaceFt=renaissanceVisiblePostTopFt(postIntersection)-.029+.05/2;
+assert.ok(capUpperFaceFt<renaissanceRoofPanelUndersideAtPost(postIntersection),
  'Even the full trim cap must stay UNDER the insulated roof skin');
 assert.ok(cover.includes('roofRearY-.24+trussLift')&&cover.includes('roofRearY-.25+trussLift'));
 const extrusions=source('src/components/visual3d/RenaissanceExtrusions.tsx');
