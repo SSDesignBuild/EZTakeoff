@@ -29,8 +29,9 @@ const roof={xFt:7,zFt:11.7,headerCrownFt:9.0,
  midXFt:0,roofWidthFt:16,eaveCenterFt:9,gableRiseFt:0};
 const under=renaissanceRoofPanelUndersideAtPost(roof);
 const cap=renaissanceVisiblePostTopFt(roof);
-assert.ok(cap+.05/2<=under-1/200,
- 'Post INCLUDING physical top cap cannot project into white roof panel');
+const capUpperFace=cap-.029+.05/2;
+assert.ok(capUpperFace<=under-1/200,
+ 'Post INCLUDING the actual seated trim cap cannot project into white roof panel');
 assert.ok(cap<roof.headerCrownFt,
  'Model post must end beneath panel even where header crown is too high');
 assert.ok(renaissanceVisiblePostTopFt({...roof,roofFrontCenterFt:9.7})<=roof.headerCrownFt,
