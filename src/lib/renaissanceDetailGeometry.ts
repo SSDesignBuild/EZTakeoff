@@ -11,6 +11,10 @@ export interface DolceScreenProfile {
   topToFt:number;
   bayCount:number;
   contour:Array<{alongFt:number;riseFt:number}>;
+  /** Mesh-only panel; starts AT the chair rail, not behind solid kick. */
+  screenContour:Array<{alongFt:number;riseFt:number}>;
+  screenBottomOffsetFt:number;
+  screenAreaFt2:number;
   mullions:Array<{alongFt:number;bottomFt:number;topFt:number;heightFt:number}>;
 }
 export function planDolceScreenProfile(input:{
@@ -19,6 +23,8 @@ export function planDolceScreenProfile(input:{
   openView:boolean;
   /** Intermediate mullions only; outer support columns are modeled separately. */
   interiorUprights?:number;
+  /** Rise above bottom flange where the actual mesh screen starts. */
+  screenBottomOffsetFt?:number;
 }):DolceScreenProfile|null{
   const [x0,z0]=input.from,[x1,z1]=input.to;
   const vals=[x0,z0,x1,z1,input.bottomFt,input.topFromFt,input.topToFt];
@@ -46,7 +52,19 @@ export function planDolceScreenProfile(input:{
     {alongFt:lengthFt,riseFt:clearTo},
     {alongFt:0,riseFt:clearFrom},
   ];
-  return {...input,lengthFt,bayCount,contour,mullions};
+  const maxBandStart=Math.min(clearFrom,clearTo)-.04;
+  const screenBottomOffsetFt=Math.min(Math.max(0,
+    Number(input.screenBottomOffsetFt??0)),Math.max(0,maxBandStart));
+  const screenContour=[
+    {alongFt:0,riseFt:screenBottomOffsetFt},
+    {alongFt:lengthFt,riseFt:screenBottomOffsetFt},
+    {alongFt:lengthFt,riseFt:clearTo},
+    {alongFt:0,riseFt:clearFrom},
+  ];
+  const screenAreaFt2=lengthFt*
+    Math.max(0,(clearFrom+clearTo)/2-screenBottomOffsetFt);
+  return {...input,lengthFt,bayCount,contour,screenContour,
+    screenBottomOffsetFt,screenAreaFt2,mullions};
 }
 /** Height on the canopy's front/back supporting rail, from frame roof line. */
 export function roofLineAtX(input:{
@@ -70,4 +88,5 @@ export function roofLineAtX(input:{
  */
 export const showDolceStandardIntermediateRail = (
   openView:boolean,treatment:string,
-):boolean => !openView && treatment !== 'integrated-picket';
+):boolean => !openView &&
+  treatment!=='integrated-picket' && treatment!=='integrated-kick';

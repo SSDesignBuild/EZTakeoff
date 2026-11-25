@@ -147,9 +147,10 @@ assert.ok(render.includes('outsideFaceZ=frameFront+') &&
   render.includes('frontZ={outsideFaceZ}') &&
   render.includes('fresco-front-polycarbonate-end-cap-'),
   'Contempo tails stay outside beam, Fresco panels receive front end closure');
-assert.ok(downspout.includes('reverse S-inflection') &&
-  downspout.includes('shape.bezierCurveTo(front*.51'),
-  'Curved tail ends require actual reverse S curvature');
+assert.ok(downspout.includes('renaissanceTrussTailTopDropFt(distance,front,') &&
+  downspout.includes('renaissanceTrussTailLowerDropFt(distance,front,') &&
+  downspout.includes('makeContinuousFormedTrussGeometry(length,width,height,rise,endStyle)'),
+  'Factory cast cap must shape both upper and lower S boundaries, not a fake roof-straight decorative wedge');
 assert.ok(stair.includes('fasciaGeo') &&
   stair.includes('g.rotateY(-Math.PI/2)') &&
   stair.includes('position={[x,0,0]} castShadow receiveShadow'),

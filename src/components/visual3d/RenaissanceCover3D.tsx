@@ -20,7 +20,7 @@ import { currentEliteSunroomSettings,eliteWallSections } from '../../lib/eliteSu
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
 import {
   inchToFoot,
-  RENAISSANCE_INSULATED_ROOF,RENAISSANCE_SHADE_TUBE,
+  RENAISSANCE_INSULATED_ROOF,RENAISSANCE_SHADE_TUBE,RENAISSANCE_TRUSS,
 } from '../../lib/renaissanceManufacturer';
 import {
   RenaissancePost,RenaissanceHeader,RenaissanceGutter,RenaissanceTruss,RenaissanceShadeTube,
@@ -36,17 +36,19 @@ function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish,treatment=
   const profile=planDolceScreenProfile({
     from,to,bottomFt:bottom,topFromFt:topFrom,topToFt:topTo,openView,
     interiorUprights:uprights,
+    screenBottomOffsetFt:treatment==='integrated-kick'?2:0,
   });
   if(!profile)return null;
   const dx=to[0]-from[0],dz=to[1]-from[1];
   const shape=new THREE.Shape();
-  profile.contour.forEach((point,i)=>{
+  profile.screenContour.forEach((point,i)=>{
     if(i===0)shape.moveTo(point.alongFt,point.riseFt);
     else shape.lineTo(point.alongFt,point.riseFt);
   });
   shape.closePath();
   return <group name={openView?'Dolce-open-view-wall':'Dolce-screened-wall'}>
-    <mesh position={[from[0],bottom,from[1]]}
+    <mesh name="dolce-screen-mesh-stops-at-chair-rail-above-kick"
+      position={[from[0],bottom,from[1]]}
       rotation={[0,-Math.atan2(dz,dx),0]} receiveShadow>
       <shapeGeometry args={[shape]}/>
       <meshPhysicalMaterial color="#819399" side={THREE.DoubleSide}
@@ -75,6 +77,9 @@ function DolceScreenRun({from,to,bottom,topFrom,topTo,openView,finish,treatment=
         <meshStandardMaterial color={finish} metalness={.38} roughness={.34}
           side={THREE.DoubleSide}/>
       </mesh>
+      {/* Chair rail is the actual top edge of the 24-in solid kick;
+          the upper screen contour begins at the identical elevation.
+          The mesh cannot z-fight through this opaque panel. */}
       <Beam start={from} end={to} height={bottom+2}
         thickness={.12} depth={.10} color={finish}/>
     </group>}
@@ -456,19 +461,17 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           studioRearFt:roofRearY,studioFrontFt:roofFrontY,rear:false,
         });
         const drop=inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn)/2+
-          inchToFoot(6)/2;
-        const lapEnd=Math.max(roofBackEdge+.2,frameFront-.27);
-        const t=Math.min(1,Math.max(0,(lapEnd-roofBackEdge)/Math.max(.001,front-roofBackEdge)));
-        const lapY=yBack+(yFront-yBack)*t;
-        return <group key={'classico-projection-truss-'+i}>
-          <RenaissanceTruss from={[x,yBack-drop,roofBackEdge]}
-            to={accentEnd==='curved'?[x,lapY-drop,lapEnd]:[x,yFront-drop,front]} color={powder}/>
-          {accentEnd==='curved'&&<RenaissanceCurvedTrussEnd x={x} frontZ={frameFront}
-            topY={yFront+(shape==='studio'?(front-frameFront)*plan.pitchInPerFt/12:0)-
-              roofPanelThicknessFt/2}
-            pitchInPerFt={shape==='studio'?plan.pitchInPerFt:0}
-            projectionFt={plan.frontOverhangFt} color={powder}/>}
-        </group>;
+          inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn)/2;
+        // Classico has a FULL, continuous factory 2x6 truss beneath the
+        // insulated panel. The former straight section stopped 3.24in
+        // SHORT of the header and a second free-floating S tip started on
+        // the opposite side. One sweep must pass through the real header
+        // bearing station, not stop before the beam.
+        return <RenaissanceContinuousProjectionTruss
+          key={'classico-continuous-projection-truss-'+i}
+          rear={[x,yBack-drop,roofBackEdge]}
+          nose={[x,yFront-drop,front]}
+          color={powder} endStyle={accentEnd==='curved'?'classico-s':'straight'}/>;
       })}
     {/* Fresco: correctly oriented translucent polycarbonate sheets captured by
         aluminum projection trusses and snap-cover channels, not glass or rods. */}

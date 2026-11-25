@@ -99,6 +99,9 @@ export interface StairPlacement {
   landingProjection: number;
   start: DeckPoint | null;
   end: DeckPoint | null;
+  /** Per-flight guard overrides, shared by actual takeoff and 3D. */
+  left?: boolean;
+  right?: boolean;
 }
 
 export interface DeckModel {
@@ -289,7 +292,7 @@ function parseIndexArray(raw: string | number | boolean | undefined) {
 }
 
 function parseAdditionalStairs(raw: string | number | boolean | undefined) {
-  if (typeof raw !== 'string' || !raw.trim()) return [] as { edgeIndex: number; offset: number; width: number }[];
+  if (typeof raw !== 'string' || !raw.trim()) return [] as { edgeIndex: number; offset: number; width: number; left?:boolean; right?:boolean }[];
   try {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -297,6 +300,10 @@ function parseAdditionalStairs(raw: string | number | boolean | undefined) {
       edgeIndex: Math.max(0, Math.round(Number(item.edgeIndex ?? 0))),
       offset: Math.max(0, round2(Number(item.offset ?? 0))),
       width: Math.max(0.1, round2(Number(item.width ?? 4))),
+      // Preserve explicit per-stair choices; undefined inherits global
+      // main-stair setting for old projects.
+      left: typeof item.left==='boolean'?item.left:undefined,
+      right:typeof item.right==='boolean'?item.right:undefined,
     })).filter((item) => Number.isFinite(item.edgeIndex) && Number.isFinite(item.offset) && Number.isFinite(item.width));
   } catch { return []; }
 }
@@ -773,13 +780,19 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const stairOffset = stairEdge ? clamp(Number(inputs.stairOffset ?? 0), 0, Math.max(0, stairEdge.length - stairWidth)) : 0;
   const stairStart = stairEdge ? segmentPointAtOffset(stairEdge, stairOffset) : null;
   const stairEnd = stairEdge ? segmentPointAtOffset(stairEdge, stairOffset + Math.min(stairWidth, stairEdge.length)) : null;
-  const stairPlacement: StairPlacement = { edgeIndex: stairEdge ? stairEdge.index : null, offset: stairOffset, width: stairWidth, landingProjection: plannedStairRunFt, start: stairStart, end: stairEnd };
+  const mainStairLeft=inputs.stairRailingLeft !== false &&
+    String(inputs.stairRailingLeft ?? 'true') !== 'false';
+  const mainStairRight=inputs.stairRailingRight !== false &&
+    String(inputs.stairRailingRight ?? 'true') !== 'false';
+  const stairPlacement: StairPlacement = { edgeIndex: stairEdge ? stairEdge.index : null, offset: stairOffset, width: stairWidth, landingProjection: plannedStairRunFt, start: stairStart, end: stairEnd,
+    left:mainStairLeft,right:mainStairRight };
   const extraStairPlacements = parseAdditionalStairs(inputs.additionalStairs).map((item) => {
     const edge = segments[item.edgeIndex];
     if (!edge) return null;
     const width = Math.min(item.width, edge.length);
     const offset = clamp(item.offset, 0, Math.max(0, edge.length - width));
-    return { edgeIndex: edge.index, offset, width, landingProjection: plannedStairRunFt, start: segmentPointAtOffset(edge, offset), end: segmentPointAtOffset(edge, offset + width) } as StairPlacement;
+    return { edgeIndex: edge.index, offset, width, landingProjection: plannedStairRunFt, start: segmentPointAtOffset(edge, offset), end: segmentPointAtOffset(edge, offset + width),
+      left:item.left??mainStairLeft,right:item.right??mainStairRight } as StairPlacement;
   }).filter(Boolean) as StairPlacement[];
   const stairPlacements = [stairPlacement, ...extraStairPlacements].filter((item) => item.edgeIndex !== null && item.start && item.end) as StairPlacement[];
   // A staircase only exists for material takeoff when it has been placed on a valid deck edge.
@@ -807,9 +820,14 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const stairStringerCutLength = stairStringers > 0 ? Math.max(4, Math.sqrt(stairRiseFt ** 2 + stairRunFt ** 2)) : 0;
   const stairStringerLength = chooseStockLength(stairStringerCutLength, [12, 16, 20]);
   const stairStringerBoardCount = stairStringers > 0 ? Math.ceil(stairStringers / Math.max(1, Math.floor((stairStringerLength + 1e-6) / stairStringerCutLength))) : 0;
-  const stairRailingLeft = inputs.stairRailingLeft !== false && String(inputs.stairRailingLeft ?? 'true') !== 'false';
-  const stairRailingRight = inputs.stairRailingRight !== false && String(inputs.stairRailingRight ?? 'true') !== 'false';
-  const stairRailSideCount = stairCount > 0 ? Number(stairRailingLeft) + Number(stairRailingRight) : 0;
+  const stairRailingLeft=mainStairLeft;
+  const stairRailingRight=mainStairRight;
+  // Count EVERY selected side of EVERY positioned flight. Previously the
+  // takeoff counted only one flight's global guard choice and threw away
+  // left/right settings for additional staircases.
+  const stairRailSideCount=stairPlacements.reduce((n,placement)=>
+    n+Number(placement.left??mainStairLeft)+
+    Number(placement.right??mainStairRight),0);
   const useFascia = String(inputs.deckingType ?? 'composite') !== 'pressure-treated';
   // Fascia covers only the exposed deck edges plus stair-specific cuts:
   // both stair stringer sides and each riser face. For a 12 x 16 attached

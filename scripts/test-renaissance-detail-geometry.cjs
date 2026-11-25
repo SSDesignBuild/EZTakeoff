@@ -14,7 +14,8 @@ assert.equal(showDolceStandardIntermediateRail(false,'screens-only'),true,
   'Standard screens-only retains its normal horizontal mid-rail');
 assert.equal(showDolceStandardIntermediateRail(false,'inside'),true);
 assert.equal(showDolceStandardIntermediateRail(false,'outside'),true);
-assert.equal(showDolceStandardIntermediateRail(false,'integrated-kick'),true);
+assert.equal(showDolceStandardIntermediateRail(false,'integrated-kick'),false,
+  'Physical 24in kick chair rail REPLACES redundant standard intermediate rail');
 for(const variant of ['integrated-picket','integrated-kick','screens-only','inside','outside'])
   assert.equal(showDolceStandardIntermediateRail(true,variant),false,
     'Open-view stays free of all standard intermediate rails: '+variant);
@@ -69,7 +70,7 @@ assert.ok(render.includes("product.family==='full-trusses'")&&
 assert.ok(render.includes('RenaissanceCurvedTrussEnd'),'Contempo and Classico need sculpted tail contour');
 assert.ok(!render.includes("Math.ceil(depth/7)+1"),'remove sideways generic full-truss array');
 assert.ok(!render.includes("radius={.075}"),'remove cylinder proxy truss geometry');
-assert.ok(extrude.includes('shape.bezierCurveTo'),'tail needs a curved profile');
+assert.ok(extrude.includes('renaissanceTrussTailDepthFt'),'Decorative tail must follow the same bounded manufacturer cap trace as one-piece trusses');
 assert.ok(extrude.includes('ExtrudeGeometry'),'contour must be a 3D mesh');
 assert.ok(!render.includes('roofWidthFt:width,eaveFt,'),
   '3D roofline inputs must refer to the actual eaveY variable');

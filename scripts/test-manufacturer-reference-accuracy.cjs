@@ -88,8 +88,8 @@ assert.ok(cover.includes('nose={[x,roofFrontY-.25+trussLift,front]}'));
 assert.ok(!/accentEnd==='curved'\s*&&\s*<RenaissanceCurvedTrussEnd[\s\S]*?profileStyle="aria-scallop"/.test(cover),
  'Aria must never attach a second detached decorative end mesh');
 assert.ok(extrusions.includes("continuous-'+endStyle+'-renaissance-truss")&&
- extrusions.includes("endStyle==='fresco-s'")&&
- extrusions.includes("endStyle==='aria-scallop'"),'Distinct molded ends share a single watertight 3D member');
+ extrusions.includes('renaissanceTrussTailDepthFt')&&
+ extrusions.includes('makeContinuousFormedTrussGeometry(length,width,height,rise,endStyle)'),'Distinct molded ends share a single watertight 3D member');
 assert.ok(cover.includes('capStart={i===0')&&cover.includes('capEnd={i===frontHeaderSpans.length-1'),
  'Only exposed ends of side-connected headers receive matching caps');
 assert.ok(extrusions.includes('renaissance-exposed-beam-end-cap'));
