@@ -20,7 +20,7 @@ import { currentEliteSunroomSettings,eliteWallSections } from '../../lib/eliteSu
 import { RenaissancePanelMaterials } from './RenaissanceRoofMaterials3D';
 import {
   inchToFoot,
-  RENAISSANCE_INSULATED_ROOF,RENAISSANCE_SHADE_TUBE,
+  RENAISSANCE_INSULATED_ROOF,RENAISSANCE_SHADE_TUBE,RENAISSANCE_TRUSS,
 } from '../../lib/renaissanceManufacturer';
 import {
   RenaissancePost,RenaissanceHeader,RenaissanceGutter,RenaissanceTruss,RenaissanceShadeTube,
@@ -456,19 +456,17 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           studioRearFt:roofRearY,studioFrontFt:roofFrontY,rear:false,
         });
         const drop=inchToFoot(RENAISSANCE_INSULATED_ROOF.defaultThicknessIn)/2+
-          inchToFoot(6)/2;
-        const lapEnd=Math.max(roofBackEdge+.2,frameFront-.27);
-        const t=Math.min(1,Math.max(0,(lapEnd-roofBackEdge)/Math.max(.001,front-roofBackEdge)));
-        const lapY=yBack+(yFront-yBack)*t;
-        return <group key={'classico-projection-truss-'+i}>
-          <RenaissanceTruss from={[x,yBack-drop,roofBackEdge]}
-            to={accentEnd==='curved'?[x,lapY-drop,lapEnd]:[x,yFront-drop,front]} color={powder}/>
-          {accentEnd==='curved'&&<RenaissanceCurvedTrussEnd x={x} frontZ={frameFront}
-            topY={yFront+(shape==='studio'?(front-frameFront)*plan.pitchInPerFt/12:0)-
-              roofPanelThicknessFt/2}
-            pitchInPerFt={shape==='studio'?plan.pitchInPerFt:0}
-            projectionFt={plan.frontOverhangFt} color={powder}/>}
-        </group>;
+          inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn)/2;
+        // Classico has a FULL, continuous factory 2x6 truss beneath the
+        // insulated panel. The former straight section stopped 3.24in
+        // SHORT of the header and a second free-floating S tip started on
+        // the opposite side. One sweep must pass through the real header
+        // bearing station, not stop before the beam.
+        return <RenaissanceContinuousProjectionTruss
+          key={'classico-continuous-projection-truss-'+i}
+          rear={[x,yBack-drop,roofBackEdge]}
+          nose={[x,yFront-drop,front]}
+          color={powder} endStyle={accentEnd==='curved'?'classico-s':'straight'}/>;
       })}
     {/* Fresco: correctly oriented translucent polycarbonate sheets captured by
         aluminum projection trusses and snap-cover channels, not glass or rods. */}
