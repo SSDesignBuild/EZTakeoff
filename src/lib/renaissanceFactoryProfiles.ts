@@ -59,7 +59,9 @@ export function renaissanceFormedProfileContour(
   [hx,hy],
  ];
  const left=[...right].reverse().map(([x,y]):FormedOutlinePoint=>[-x,y]);
- return [[-hx,-hy],...right,...left.slice(1)];
+ // Keep the full LEFT upper corner and omit only the repeated left
+ // lower endpoint: last edge closes on the starting bottom-left vertex.
+ return [[-hx,-hy],...right,...left.slice(0,-1)];
 }
 export function renaissanceFormedProfileGrooveCount(
  contour:readonly FormedOutlinePoint[],
