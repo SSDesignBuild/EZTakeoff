@@ -183,10 +183,16 @@ function ElitePrimeDoor({section,frameColor,glazing}:{
  const width=rect.end-rect.start;
  const isSlider=section.doorType==='slider';
  const hinge=section.doorHinge==='right'?'right':'left';
- const jamb=.11,leafStile=.155,head=.16,bottomRail=.23;
- const glassWidth=Math.max(.35,width-2*jamb-2*leafStile);
- const glassHeight=DOOR_HEIGHT_FT-head-bottomRail-.12;
- const handleX=hinge==='left'?width-.205:.205;
+ // Photo-reference: real 32/36-inch Prime has a substantial aluminum
+ // leaf, wider 3.5-inch stiles, a visible top rail and a roughly 9-inch
+ // lower kick rail, not a sheet of glass almost touching the threshold.
+ // These are concept-view sightlines, not Elite shop fabrication cuts.
+ const jamb=.13,leafStile=.30,head=.34,bottomRail=.78;
+ const glassWidth=Math.max(.35,width-2*jamb-2*leafStile-.025);
+ const glassBottom=.12+bottomRail,glassTop=DOOR_HEIGHT_FT-head-.12;
+ const glassHeight=glassTop-glassBottom;
+ const glassCenterY=(glassTop+glassBottom)/2;
+ const handleX=hinge==='left'?width-jamb-leafStile/2:jamb+leafStile/2;
  return <group name={isSlider?'elite-legacy-sliding-door':'elite-prime-full-view-outswing-door'}
    position={[rect.start,0,.03]}>
    {/* Prime full-view commercial aluminum entry: Z-bar perimeter,
@@ -208,22 +214,25 @@ function ElitePrimeDoor({section,frameColor,glazing}:{
      size={[leafStile,DOOR_HEIGHT_FT-.12,.115]} color={frameColor} metalness={.35}/>
    <Block name="full-view-door-leaf-top-rail"
      position={[width/2,DOOR_HEIGHT_FT-head-.048,.055]}
-     size={[width-jamb*2,.095,.115]} color={frameColor}/>
+     size={[width-jamb*2,head,.115]} color={frameColor}/>
    <Block name="full-view-door-leaf-bottom-rail"
      position={[width/2,bottomRail/2+.085,.055]}
      size={[width-jamb*2,bottomRail,.12]} color={frameColor}/>
+   <Block name="prime-lower-raised-sill-trim"
+     position={[width/2,.16,.125]} size={[width-jamb*2,.075,.045]}
+     color={frameColor} metalness={.34}/>
    {/* Prime glazing gasket is perimeter-only: keep full-view pane CLEAR. */}
    {[-1,1].map((sign,i)=><Block key={'prime-glazing-gasket-side-'+i}
      name="tempered-glass-black-edge-seal"
-     position={[width/2+sign*glassWidth/2,DOOR_HEIGHT_FT/2+.014,-.015]}
-     size={[.028,glassHeight+.025,.031]} color="#78858b"/>)}
+     position={[width/2+sign*glassWidth/2,glassCenterY,-.015]}
+     size={[.029,glassHeight+.025,.031]} color="#78858b"/>)}
    {[-1,1].map((sign,i)=><Block key={'prime-glazing-gasket-head-'+i}
      name="tempered-glass-black-edge-seal"
-     position={[width/2,DOOR_HEIGHT_FT/2+.014+sign*glassHeight/2,-.015]}
+     position={[width/2,glassCenterY+sign*glassHeight/2,-.015]}
      size={[glassWidth+.02,.028,.031]} color="#78858b"/>)}
    {[-1,1].map((face,i)=><mesh key={'prime-glass-'+i}
      name="prime-clear-full-view-glazed-lite"
-     position={[width/2,DOOR_HEIGHT_FT/2+.014,face*.021]}>
+     position={[width/2,glassCenterY,face*.021]}>
      <planeGeometry args={[glassWidth,glassHeight]}/>
      <meshPhysicalMaterial color={glazing} transparent opacity={.19}
        roughness={.045} metalness={.03} depthWrite={false}
@@ -236,20 +245,35 @@ function ElitePrimeDoor({section,frameColor,glazing}:{
      <Block key={'prime-outswing-hinge-'+i} name="three-outswing-hinges"
        position={[hinge==='left'?jamb:width-jamb,y,.145]}
        size={[.06,.24,.085]} color="#70777d" metalness={.74}/>)}
-   {!isSlider&&<>
-     {/* Round keyed passage lock/deadbolt hardware, as on the supplied
-         white Elite door photographs (not a generic massive lever plate). */}
-     <mesh name="keyed-entry-hardware-handle"
-       position={[handleX,3.2,.168]} rotation={[Math.PI/2,0,0]}>
-       <cylinderGeometry args={[.084,.084,.046,20]}/>
-       <meshStandardMaterial color="#aaaeb2" metalness={.82} roughness={.23}/>
-     </mesh>
-     <mesh name="deadbolt"
-       position={[handleX,3.73,.168]} rotation={[Math.PI/2,0,0]}>
-       <cylinderGeometry args={[.062,.062,.041,20]}/>
-       <meshStandardMaterial color="#b0b3b7" metalness={.8} roughness={.25}/>
-     </mesh>
-   </>}
+   {!isSlider&&<group name="elite-prime-entry-lockset-visible-both-sides">
+     {/* The supplied real door has a ROUND metal knob and a separate
+         deadbolt. Model both outward and inward faces so camera orientation
+         cannot hide hardware behind the glazing leaf. */}
+     {[-1,1].map((face,i)=><group key={'prime-lock-face-'+i}>
+       <mesh name="prime-door-brushed-nickel-knob-escutcheon"
+         position={[handleX,3.18,face*.166]}
+         rotation={[Math.PI/2,0,0]}>
+         <cylinderGeometry args={[.105,.105,.048,28]}/>
+         <meshStandardMaterial color="#a9adb3" metalness={.86} roughness={.25}/>
+       </mesh>
+       <mesh name="keyed-entry-hardware-handle"
+         position={[handleX,3.18,face*.240]}>
+         <sphereGeometry args={[.104,24,16]}/>
+         <meshStandardMaterial color="#c2c6cc" metalness={.82} roughness={.18}/>
+       </mesh>
+       <mesh name="prime-deadbolt-round-backplate"
+         position={[handleX,3.79,face*.164]}
+         rotation={[Math.PI/2,0,0]}>
+         <cylinderGeometry args={[.084,.084,.045,28]}/>
+         <meshStandardMaterial color="#a3a8ae" metalness={.82} roughness={.24}/>
+       </mesh>
+       <mesh name="deadbolt" position={[handleX,3.79,face*.205]}
+         rotation={[Math.PI/2,0,0]}>
+         <cylinderGeometry args={[.047,.047,.031,20]}/>
+         <meshStandardMaterial color="#d0d3d7" metalness={.75} roughness={.21}/>
+       </mesh>
+     </group>)}
+   </group>}
    <group name={'prime-door-glazing-'+section.doorType}/>
  </group>;
 }
