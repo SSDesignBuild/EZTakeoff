@@ -42,7 +42,12 @@ export function planStairRailingRuns(model:DeckModel,
   if(!frame)continue;
   const runFt=model.stairRunFt;
   const count=Math.max(1,Math.ceil(runFt/Math.max(.5,maxBayFt)));
-  for(const [side,sign,enabled]of sides){
+  for(const [side,sign,defaultEnabled]of sides){
+   // The stored placement is authoritative, including independently
+   // configured additional stair flights. A screen room must never
+   // override this explicit selected side.
+   const enabled=side==='left'
+     ?placement.left??defaultEnabled:placement.right??defaultEnabled;
    if(!enabled)continue;
    const cross=sign*(frame.widthFt/2+postOutsideWidthFt/2+.045);
    const at=(fraction:number):StairRailPoint3D=>{
