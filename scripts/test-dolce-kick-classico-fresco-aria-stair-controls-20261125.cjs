@@ -49,8 +49,8 @@ for(const style of ['fresco-s','classico-s','aria-scallop']){
  assert.equal(body,.5,'Actual body remains full-depth 6-inch aluminum');
 }
 const classicoSource=read('src/components/visual3d/RenaissanceCover3D.tsx');
-const classicoStart=classicoSource.indexOf("product.family==='full-trusses'");
-const classicoEnd=classicoSource.indexOf('isTranslucent&&<group',classicoStart);
+const classicoStart=classicoSource.indexOf("{product.family==='full-trusses'&&");
+const classicoEnd=classicoSource.indexOf('{isTranslucent&&<group',classicoStart);
 const classico=classicoSource.slice(classicoStart,classicoEnd);
 assert.ok(classico.includes('<RenaissanceContinuousProjectionTruss'));
 assert.ok(classico.includes("?'classico-s':'straight'"));
