@@ -49,6 +49,25 @@ const topTip=end.renaissanceTrussTailTopDropFt(12,12,.5,style);
 const bottomTip=end.renaissanceTrussTailLowerDropFt(12,12,.5,style);
 assert.ok(topTip>.20&&bottomTip>topTip+.05,
  'Factory illustrated S has a visibly DOWN-TURNED top and separate low rounded nose, not a straight roof top with an inverted wedge');
+// A user-rejected random/finicky S cannot have flat kinks at control
+// stations. Both visible boundaries must remain smooth (C1) across every
+// manufacturer-traced reference station, including the reversed lower S.
+const spec=end.RENAISSANCE_END_REFERENCE[style],tailFt=spec.tailIn/12;
+const fullLengthFt=12,tailStart=fullLengthFt-tailFt,step=.00001;
+for(const [u]of spec.samples.slice(1,-1)){
+ const station=tailStart+u*tailFt;
+ for(const boundary of [
+   end.renaissanceTrussTailTopDropFt,
+   end.renaissanceTrussTailLowerDropFt,
+ ]){
+  const left=(boundary(station,fullLengthFt,.5,style)-
+    boundary(station-step,fullLengthFt,.5,style))/step;
+  const right=(boundary(station+step,fullLengthFt,.5,style)-
+    boundary(station,fullLengthFt,.5,style))/step;
+  assert.ok(Math.abs(left-right)<.03,
+   'Factory cap visual contours must be tangent-continuous, never stop/start in jagged steps at S control stations: '+style+' u='+u);
+ }
+}
  const body=end.renaissanceTrussTailDepthFt(3,12,.5,style);
  assert.equal(body,.5,'Actual body remains full-depth 6-inch aluminum');
 }
