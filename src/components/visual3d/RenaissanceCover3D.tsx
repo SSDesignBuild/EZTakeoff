@@ -10,6 +10,7 @@ import { planWrapAroundGutter } from '../../lib/renaissanceGutterGeometry';
 import { planRenaissanceDownspout } from '../../lib/renaissanceDownspoutRouting';
 import { actualPostWidthFt } from '../../lib/visualStructure';
 import { planRenaissanceCoverWalls } from '../../lib/renaissanceCoverWallLayout';
+import { renaissanceVisiblePostTopFt } from '../../lib/renaissancePostClearance';
 import { planPcaDoorOnWall,effectivePcaKickPlateIn, type PcaDoorModel,type PcaPetDoor,type ScreenDoorWall } from '../../lib/pcaScreenDoorGeometry';
 import { PcaScreenDoor3D } from './PcaScreenDoor3D';
 import { RenaissancePrivacyWall3D } from './RenaissancePrivacyWall3D';
@@ -280,7 +281,15 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       // Columns extend to the header CROWN. In the manufacturer post/beam
       // drawing the main header is side-clipped INTO each continuous post,
       // never perched above a truncated post.
-      const topY=rear?roofBack:roofFront;
+      const structuralHeaderCrownY=rear?roofBack:roofFront;
+      const topY=isSolid?renaissanceVisiblePostTopFt({
+        xFt:x,zFt:z,headerCrownFt:structuralHeaderCrownY,
+        roofRearZFt:roofBackEdge,roofFrontZFt:front,
+        roofRearCenterFt:roofRearY,roofFrontCenterFt:roofFrontY,
+        roofPanelThicknessFt, gable:shape==='gable',
+        midXFt:xMid,roofWidthFt:width,
+        eaveCenterFt:eaveY,gableRiseFt:gableRise,
+      }):structuralHeaderCrownY;
       const baseOutside=inchToFoot(profile.postOutsideIn+1.8);
       const postCap=inchToFoot(profile.postCapOutsideIn);
       return <group key={'renaissance-column-'+i}>
@@ -306,7 +315,11 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           size={[inchToFoot(profile.postOutsideIn+.45),.045,
             inchToFoot(profile.postOutsideIn+.45)]}
           color={powder} metalness={.36}/>
-        <Block position={[x,topY-.008,z]}
+        {/* The structural cap is nested UNDER the roof skin. Earlier the
+            visible cap sat on the roof mid-plane and showed as gray blocks
+            sticking through the white roof panel in client presentations. */}
+        <Block name="renaissance-post-cap-below-roof-underside"
+          position={[x,topY-.029,z]}
           size={[postCap,.05,postCap]} color={powder} metalness={.38}/>
         {/* Physical header clips and fastener head placements, not fake oversized collars. */}
         {[-1,1].map(side=>[-1,1].map(level=>

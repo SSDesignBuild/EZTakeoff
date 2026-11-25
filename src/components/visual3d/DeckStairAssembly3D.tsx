@@ -5,6 +5,7 @@ import type { ConsultationProject } from '../../lib/consultationProject';
 import { Block, type P2 } from './Primitives';
 import { planStairFasciaCoverage,planStairStringerFaceStations,type StairSideFasciaPoint } from '../../lib/stairFasciaGeometry';
 import { planStairLanding,landingSurface } from '../../lib/stairConcreteLanding';
+import { stairFlightFrame } from '../../lib/stairRailVisualGeometry';
 
 const riseFor=(model:DeckModel,height:number)=>height/Math.max(1,model.stairRisers);
 function makeStringer(runFt:number,treads:number,riseFt:number,height:number){
@@ -89,14 +90,11 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   fasciaTexture:THREE.Texture|null;
   riserTexture:THREE.Texture|null;skirtTexture:THREE.Texture|null;
 }){
-  const start=placement.start!,end=placement.end!;
-  const dx=end.x-start.x,dz=end.y-start.y;
-  const width=Math.hypot(dx,dz);
-  const winding=model.points.reduce((sum,p,i)=>{
-    const next=model.points[(i+1)%model.points.length];return sum+p.x*next.y-next.x*p.y;
-  },0);
-  const outwardX=(winding>=0?dz:-dz)/width,outwardZ=(winding>=0?-dx:dx)/width;
-  const yaw=Math.atan2(outwardX,outwardZ);
+  // One physical frame authority for stair stringers, finishes and the
+  // independently chosen stair railing. Enclosure placement never changes it.
+  const stairFrame=stairFlightFrame(model,placement,center);
+  const width=stairFrame?.widthFt??placement.width;
+  const yaw=stairFrame?.yaw??0;
   const treads=Math.max(1,model.stairTreadsPerRun);
   const rise=riseFor(model,height);
   const treadDepth=Math.max(.65,model.stairRunFt/treads);
@@ -151,7 +149,7 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   };
   const lowerStart=underFasciaAt(0)+.04;
   return <group name={'stair-flight-'+placement.edgeIndex}
-    position={[(start.x+end.x)/2-center[0],0,(start.y+end.y)/2-center[1]]}
+    position={[stairFrame?.originX??0,0,stairFrame?.originZ??0]}
     rotation={[0,yaw,0]}>
     {/* The measured concrete pad sits at the stair exit, rather than
         under the entire staircase. Most of its thickness is below grade. */}

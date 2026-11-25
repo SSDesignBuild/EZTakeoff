@@ -57,7 +57,23 @@ for(const family of ['Aria','Fresco']){
 }
 assert.equal(trussMountLiftFt('Moderno','raised'),0);
 const cover=source('src/components/visual3d/RenaissanceCover3D.tsx');
-assert.ok(cover.includes('planSideConnectedHeader')&&cover.includes('const topY=rear?roofBack:roofFront;'));
+// Posts still meet the side-clipped header, but their visible upper mesh
+// must stop beneath the insulation roof plane, never poke through the
+// colored roof (the exact screenshot regression from Nov 24).
+assert.ok(cover.includes('planSideConnectedHeader')&&
+ cover.includes('renaissanceVisiblePostTopFt({')&&
+ cover.includes('headerCrownFt:structuralHeaderCrownY')&&
+ cover.includes('renaissance-post-cap-below-roof-underside'));
+const {renaissanceRoofPanelUndersideAtPost,renaissanceVisiblePostTopFt}=
+ load('src/lib/renaissancePostClearance');
+const postIntersection={xFt:5,zFt:11,headerCrownFt:9,roofRearZFt:0,roofFrontZFt:12,
+ roofRearCenterFt:10,roofFrontCenterFt:8.8,roofPanelThicknessFt:.25,
+ gable:false,midXFt:0,roofWidthFt:16,eaveCenterFt:9,gableRiseFt:0};
+// Rendered cap is centered 0.029 ft BELOW the visible post stop and
+// is 0.050 ft tall: its upper face is stop-.004, not stop+.025.
+const capUpperFaceFt=renaissanceVisiblePostTopFt(postIntersection)-.029+.05/2;
+assert.ok(capUpperFaceFt<renaissanceRoofPanelUndersideAtPost(postIntersection),
+ 'Even the full trim cap must stay UNDER the insulated roof skin');
 assert.ok(cover.includes('roofRearY-.24+trussLift')&&cover.includes('roofRearY-.25+trussLift'));
 const extrusions=source('src/components/visual3d/RenaissanceExtrusions.tsx');
 // Video QA 2026-11-24 (83s, fully transcribed): Aria raised and Fresco
