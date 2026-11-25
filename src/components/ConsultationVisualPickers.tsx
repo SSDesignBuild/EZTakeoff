@@ -176,6 +176,19 @@ export function ManufacturerRailPicker({values,onValues}:{
           <select value={String(values.railingHeightIn??'36')} onChange={(e)=>onValues({...values,railingHeightIn:e.target.value})}>
             <option value="36">36 inches</option><option value="42">42 inches</option>
           </select></label>
+        <label>Stair railing — installed sides
+          <select aria-label="Choose whether stairs have the selected railing"
+            value={(values.stairRailingLeft!==false && String(values.stairRailingLeft??'true')!=='false'?'L':'')+
+              (values.stairRailingRight!==false && String(values.stairRailingRight??'true')!=='false'?'R':'')}
+            onChange={e=>onValues({...values,
+              stairRailingLeft:e.target.value.includes('L'),
+              stairRailingRight:e.target.value.includes('R')})}>
+            <option value="LR">Both sides · chosen deck railing</option>
+            <option value="L">Left side only</option>
+            <option value="R">Right side only</option>
+            <option value="">No stair railing · verify code/egress</option>
+          </select></label>
+        <p className="muted">Stair guardrails use the same selected finish and balusters. The stair editor can independently override the left/right sides of each additional flight. Guardrail requirements must be checked for each project.</p>
       </div>
       {selected.sourcePage&&<a href={selected.sourcePage} target="_blank" rel="noreferrer">Manufacturer specifications</a>}
       {selected.takeoffSystem!=='timbertech-ire'&&<p className="manufacturer-selection-caution">
