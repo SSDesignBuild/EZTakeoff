@@ -285,8 +285,7 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
     <group name="real-finish-decking-board-against-elite-sunroom-walls">
       {eliteFloorClosure.pieces.map((piece,i)=>
         <DeckTrimBeam key={'elite-interior-floor-closure-'+piece.wallId+'-'+i}
-          start={[piece.from[0]-center[0],piece.from[1]-center[1]]}
-          end={[piece.to[0]-center[0],piece.to[1]-center[1]]}
+          start={piece.from} end={piece.to}
           height={deckHeight+.020} widthFt={piece.widthFt}
           texture={closureMap} color="#9a968f"/>)}
     </group>
