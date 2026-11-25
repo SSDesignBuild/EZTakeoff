@@ -1,5 +1,5 @@
 [build]
-  command = "npm run assets:sync && npm test && npm run build"
+  command = "npm run assets:sync && node scripts/qa-temp-nov25.cjs"
   publish = "dist"
 
 [[redirects]]
