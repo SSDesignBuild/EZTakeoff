@@ -20,3 +20,9 @@
 - Access skirting gates must have uninterrupted upper horizontal courses and no see-through strip. For a short gate, model the single full-wall ripped header course and keep the gate aligned to its bottom. Material order must match the renderer.
 - Renaissance SD/HD 3-7/8-in outside posts have a **3-3/8-in central flat span with 1/4-in projecting corner ribs**, as shown by the supplied manufacturer SD drawing. Preserve actual outside envelope and gauge; undimensioned groove details are design references, not exact factory dies.
 - Do not automatically draw duplicate independent railing across stair access or inside an enclosure. Preserve required guardrail safety checks and user-selected independent rail conditions, and flag cases needing approved guard/egress solutions.
+
+## Owner screenshot corrections — persisted rules
+- User-selected left/right **stair railing is independent of enclosure-level deck edge rail suppression**. Any sunroom or screen room at the landing must NOT remove the chosen stair rail down the flight. The stair railing style, color, balusters and post rules must match the main deck railing selection.
+- Actual Elite Prime door is not a frameless full-height sheet of glass; preserve photo-derived opaque aluminum stiles, top/bottom rails, visible round knob and independent deadbolt on both sides. Factory hardware specs still need supplier confirmation.
+- A Renaissance post and trim cap must not protrude above an insulated roof panel. Clip visible post top to the real roof-panel underside at the post's seated location without rewriting manufacturer stock dimensions.
+- An Elite sunroom requires completed deck finish boards immediately INSIDE the wall receiver. Use one coordinate authority for visual geometry and supplemental, stocked material takeoff rather than leaving a dark substrate strip or rendering a free painted patch.
