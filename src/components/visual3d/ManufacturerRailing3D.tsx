@@ -3,6 +3,7 @@ import { getRailVisualProduct, railVisualProducts, type RailVisualProduct } from
 import { Beam, Block, Rod, type P2, type P3 } from './Primitives';
 import { parseDeckGates } from '../../lib/deckGates';
 import { subtractRailingOpenings } from '../../lib/salesRailOpenings';
+import { ManufacturerStairRailing3D } from './ManufacturerStairRailing3D';
 
 type Values=Record<string,string|number|boolean>;
 const colors:Record<string,string>={
@@ -162,6 +163,12 @@ export function ManufacturerRailing3D({model,values,center,deckHeight,screenInte
           size={[.17,.16,.17]} color="#58606a" metalness={.52}/>)}
       </group>;
     })}
+    {/* The top-landing room wall replaces only a LEVEL guard edge, not
+        the real left/right stair guards chosen in the Deck inputs.
+        Materials for these runs are already counted by buildDeckModel. */}
+    <ManufacturerStairRailing3D model={model} center={center}
+      deckHeight={deckHeight} style={style} color={color} infill={infill}
+      height={height} hideCap={hideCap}/>
   </group>;
 }
 export const namedRailingStyles=railVisualProducts.map((p)=>({id:p.id,label:p.label,family:p.family}));
