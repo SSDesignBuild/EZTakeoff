@@ -2,9 +2,47 @@ import {useEffect,useMemo} from 'react';
 import * as THREE from 'three';
 import type {DeckModel} from '../../lib/deckModel';
 import type {RailVisualProduct} from '../../data/visualCatalog';
-import {planStairRailingRuns,type StairRailPoint3D} from '../../lib/stairRailVisualGeometry';
-import {Block,Rod,SlopedBeam,type P2,type P3} from './Primitives';
+import {planStairRailingRuns,stairDrinkPostVertices,type StairRailPoint3D,type StairRailVisualRun} from '../../lib/stairRailVisualGeometry';
+import {Block,Rod,type P2,type P3} from './Primitives';
+import {railPointKey} from '../../lib/railingLayout';
 
+/** Rail section whose width remains horizontal across the flight. A generic
+ * shortest-arc box rotation rolls its width on diagonal stair directions. */
+function SlopedBeam({start,end,thickness,depth,color,bend}:{
+ start:P3;end:P3;thickness:number;depth:number;color:string;bend?:P3;
+}){
+ const points=bend?[start,bend,end]:[start,end];
+ return <>{points.slice(0,-1).map((from,i)=>{
+  const to=points[i+1],dx=to[0]-from[0],dy=to[1]-from[1],dz=to[2]-from[2];
+  const horizontal=Math.hypot(dx,dz),length=Math.hypot(dx,dy,dz);if(length<.001)return null;
+  const x=new THREE.Vector3(dx,dy,dz).normalize();
+  const z=new THREE.Vector3(-dz,0,dx).normalize();
+  const y=new THREE.Vector3().crossVectors(z,x).normalize();
+  const rotation=new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x,y,z));
+  return <mesh key={i} position={[(from[0]+to[0])/2,(from[1]+to[1])/2,(from[2]+to[2])/2]}
+    quaternion={rotation} castShadow receiveShadow>
+   <boxGeometry args={[length,thickness*horizontal/length,depth]}/>
+   <meshStandardMaterial color={color} roughness={.65}/>
+  </mesh>;
+ })}</>;
+}
+function PitchCutStairPost({run,index,width,height,color,metalness}:{
+ run:StairRailVisualRun;index:number;width:number;height:number;color:string;metalness:number;
+}){
+ const geometry=useMemo(()=>{
+  const {top,bottom}=stairDrinkPostVertices(run,index,width,height);
+  const vertices=[...top,...bottom],positions:number[]=[];
+  for(const face of [[0,3,2,1],[4,5,6,7],[0,1,5,4],[1,2,6,5],[2,3,7,6],[3,0,4,7]])
+   for(const corner of [0,1,2,0,2,3])positions.push(...vertices[face[corner]]);
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.computeVertexNormals();
+  return g;
+ },[run,index,width,height]);
+ useEffect(()=>()=>geometry.dispose(),[geometry]);
+ return <mesh name="selected-stair-guard-post" geometry={geometry} castShadow receiveShadow>
+  <meshStandardMaterial color={color} metalness={metalness} roughness={.65}/>
+ </mesh>;
+}
 function StairGlassPanel({from,to,guardHeight}:{
  from:StairRailPoint3D;to:StairRailPoint3D;guardHeight:number;
 }){
@@ -30,15 +68,17 @@ function StairGlassPanel({from,to,guardHeight}:{
  </mesh>;
 }
 export function ManufacturerStairRailing3D({model,center,deckHeight,style,color,infill,
- height,hideCap}:{
+ height,hideCap,runs:providedRuns,sharedTopPosts=new Set<string>()}:{
  model:DeckModel;center:P2;deckHeight:number;style:RailVisualProduct;
  color:string;infill:string;height:number;hideCap:boolean;
+ runs?:StairRailVisualRun[];sharedTopPosts?:Set<string>;
 }){
  const wooden=style.family==='wood',metallic=style.family==='metal';
+ const drink=style.geometry.includes('drink');
  const postWidth=style.postWidthIn/12;
  const topWidth=style.topWidthIn/12;
  const topThick=Math.max(.12,style.topHeightIn/12);
- const runs=planStairRailingRuns(model,center,deckHeight,postWidth,metallic?7.1:6);
+ const runs=providedRuns??planStairRailingRuns(model,center,deckHeight,postWidth,metallic?7.1:6);
  const at=(a:StairRailPoint3D,upper:number):P3=>[a[0],a[1]+upper,a[2]];
  const metal=metallic?.64:.02;
  const glass=infill==='glass',cable=infill==='horizontal-cable';
@@ -48,12 +88,18 @@ export function ManufacturerStairRailing3D({model,center,deckHeight,style,color,
      {run.panels.map((panel,i)=>{
        const {from,to}=panel;
        const len=panel.endFt-panel.startFt;
-       const topFrom=at(from,height-.13),topTo=at(to,height-.13);
+       const upper=drink?height+.0285-topThick/2:height-.13;
+       const topFrom=at(from,upper),topTo=at(to,upper);
        const bottomFrom=at(from,.38),bottomTo=at(to,.38);
+       const first=run.posts[0],last=run.posts[run.posts.length-1];
+       const horizontal=Math.hypot(last[0]-first[0],last[2]-first[2]);
+       const landing:StairRailPoint3D=[first[0]+(last[0]-first[0])*run.insetFt/horizontal,
+         first[1],first[2]+(last[2]-first[2])*run.insetFt/horizontal];
+       const landingFraction=i===0?run.insetFt/Math.max(.001,len):0;
        const balusterCount=Math.max(2,Math.ceil(len/(wooden?.42:metallic?.39:.43)));
        const interpolate=(fraction:number):StairRailPoint3D=>[
         from[0]+(to[0]-from[0])*fraction,
-        from[1]+(to[1]-from[1])*fraction,
+        from[1]+(to[1]-from[1])*Math.max(0,(fraction-landingFraction)/(1-landingFraction)),
         from[2]+(to[2]-from[2])*fraction,
        ];
        return <group key={'selected-stair-rail-bay-'+i}>
@@ -61,9 +107,9 @@ export function ManufacturerStairRailing3D({model,center,deckHeight,style,color,
              The same manufacturer style and finish drives deck-level and
              stair railing; never draw a horizontal guard across the stair
              entry opening at the top of this run. */}
-         <SlopedBeam start={topFrom} end={topTo}
+         <SlopedBeam start={topFrom} end={topTo} bend={i===0?at(landing,upper):undefined}
            thickness={topThick} depth={topWidth} color={color}/>
-         <SlopedBeam start={bottomFrom} end={bottomTo}
+         <SlopedBeam start={bottomFrom} end={bottomTo} bend={i===0?at(landing,.38):undefined}
            thickness={wooden?.24:.10} depth={wooden?.24:.13} color={color}/>
          {style.geometry==='ire-classic'&&<SlopedBeam
            start={at(from,height+.01)} end={at(to,height+.01)}
@@ -71,9 +117,7 @@ export function ManufacturerStairRailing3D({model,center,deckHeight,style,color,
          {style.geometry==='ire-modern'&&<SlopedBeam
            start={at(from,height+.03)} end={at(to,height+.03)}
            thickness={.048} depth={topWidth+.02} color={color}/>}
-         {style.geometry.includes('drink')&&<SlopedBeam
-           start={at(from,height+.05)} end={at(to,height+.05)}
-           thickness={.09} depth={5.5/12} color="#a28767"/>}
+
          {wooden&&<SlopedBeam start={at(from,height-.32)}
            end={at(to,height-.32)} thickness={.17}
            depth={3.5/12} color={color}/>}
@@ -116,20 +160,24 @@ export function ManufacturerStairRailing3D({model,center,deckHeight,style,color,
            })}
        </group>;
      })}
-     {run.posts.map((p,i)=><group key={'selected-stair-post-'+i}>
-       <Block name="selected-stair-guard-post"
-         position={at(p,height/2)}
-         size={[postWidth,height+.08,postWidth]} color={color}
-         metalness={metal}/>
+     {run.posts.map((p,i)=>{
+       if(i===0&&sharedTopPosts.has(railPointKey(p)))return null;
+       const base=run.postBaseYs[i],postTop=p[1]+height+.0285;
+       return <group key={'selected-stair-post-'+i}>
+       {drink?<PitchCutStairPost run={run} index={i} width={postWidth} height={height}
+         color={color} metalness={metal}/>:<Block name="selected-stair-guard-post"
+         position={[p[0],(base+postTop)/2,p[2]]}
+         size={[postWidth,Math.max(.1,postTop-base),postWidth]} color={color}
+         metalness={metal}/>}
        {!hideCap&&<Block name="selected-stair-post-cap"
          position={at(p,height+.06)}
          size={[postWidth+.045,.085,postWidth+.045]} color={color}
          metalness={metal}/>}
        {!wooden&&<Block name="selected-stair-post-base-skirt"
-         position={at(p,.07)}
+         position={[p[0],base+.0675,p[2]]}
          size={[postWidth+.06,.135,postWidth+.06]} color={color}
          metalness={metal}/>}
-     </group>)}
+     </group>;})}
    </group>)}
  </group>;
 }

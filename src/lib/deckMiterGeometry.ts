@@ -62,7 +62,7 @@ export function planMiteredPictureFrames(points:DeckPoint[],segments:DeckEdgeSeg
         if(!selected.has(neighbor))return basic;
         const other=shiftedEdge(points,neighbor,offset,sign);
         const intersection=other&&intersect(e,other);
-        if(!intersection||length(minus(intersection,basic))>Math.max(.2,offset*3))return basic;
+        if(!intersection||length(minus(intersection,basic))>Math.max(.2,Math.abs(offset)*3))return basic;
         return intersection;
       };
       const corners:[V2,V2,V2,V2]=[at(outer,true),at(outer,false),at(inner,false),at(inner,true)];
@@ -73,6 +73,30 @@ export function planMiteredPictureFrames(points:DeckPoint[],segments:DeckEdgeSeg
     }
   }
   return result;
+}
+
+/** Open the physical saw-cut gap at shared miters, without changing the
+ * nominal corner location used by layout dimensions and stock allowances. */
+export function openPictureFrameMiterGaps(strips:MiterFrameStrip[],
+  seams:readonly PictureFrameMiterSeam[],gapFt=.125/12):MiterFrameStrip[]{
+  if(!Number.isFinite(gapFt)||gapFt<=0)return strips;
+  const isSeam=(a:V2,b:V2,course:number)=>seams.some(seam=>seam.course===course&&
+    ((length(minus(a,seam.from))<1e-6&&length(minus(b,seam.to))<1e-6)||
+     (length(minus(a,seam.to))<1e-6&&length(minus(b,seam.from))<1e-6)));
+  return strips.map(strip=>{
+    const [a,b,c,d]=strip.corners;
+    const outer=minus(b,a),inner=minus(c,d);
+    const ot=scale(outer,1/length(outer)),it=scale(inner,1/length(inner));
+    const shift=(point:V2,other:V2,tangent:V2,sign:number):V2=>{
+      const cut=minus(other,point),cutLen=length(cut);
+      const sine=Math.abs(cross(scale(cut,1/cutLen),tangent));
+      if(sine<.05)return point;
+      return add(point,scale(tangent,sign*Math.min(gapFt/(2*sine),.05)));
+    };
+    const start=isSeam(a,d,strip.course),end=isSeam(b,c,strip.course);
+    return {...strip,corners:[start?shift(a,d,ot,1):a,end?shift(b,c,ot,-1):b,
+      end?shift(c,b,it,-1):c,start?shift(d,a,it,1):d] as [V2,V2,V2,V2]};
+  });
 }
 
 /**

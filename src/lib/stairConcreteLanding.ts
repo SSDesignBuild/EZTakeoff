@@ -5,7 +5,7 @@
  * 80 lb dry concrete bags typically yield about 0.60 cubic feet; field mix,
  * slab thickness, soil/base prep and local code require independent review.
  */
-export type StairLandingSurface='unknown'|'existing'|'bare-ground';
+export type StairLandingSurface='unknown'|'existing'|'bare-ground'|'site-plan';
 export interface StairLandingPlan{
  widthFt:number;depthFt:number;thicknessIn:number;volumeCuFt:number;
  wasteAdjustedCuFt:number;bags80lb:number;
@@ -26,7 +26,7 @@ export function planStairLanding(widthFt:number,depthFt=DEFAULT_LANDING_DEPTH_FT
    wasteAdjustedCuFt:waste,bags80lb:Math.ceil(waste/CONCRETE_BAG_80LB_YIELD_CUFT-1e-9)};
 }
 export function landingSurface(input:unknown):StairLandingSurface{
- return input==='bare-ground'||input==='existing'?input:'unknown';
+ return input==='bare-ground'||input==='existing'||input==='site-plan'?input:'unknown';
 }
 export function planStairLandings(stairWidthsFt:readonly number[],
  values:Record<string,string|number|boolean>):StairLandingPlan[]{

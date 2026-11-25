@@ -828,6 +828,8 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const timberTechPlan = inputs.railingSystem === 'timbertech-ire' ? buildTimberTechIRE(deck, inputs) : null;
   const lowerTimberTechPlan = lowerDeck && timberTechPlan ? buildTimberTechIRE(lowerDeck, {
     ...inputs, railingType: valuesLowerRailingType(inputs),
+    // Match the lower-tier renderer when measuring the pitched rail path.
+    deckHeight: Math.max(.35,Math.min(26,Number(inputs.lowerDeckHeight??3))),
   }, 'Lower deck') : null;
   const lowerRailingBreakdown = lowerDeck ? classifyRailing(lowerDeck) : null;
   const lowerRailingPosts = lowerRailingBreakdown ? lowerRailingBreakdown.endLevelPosts + lowerRailingBreakdown.inlineLevelPosts + lowerRailingBreakdown.cornerLevelPosts + lowerRailingBreakdown.stairsLevelToAngledCornerPosts + lowerRailingBreakdown.stairsInlinePosts + lowerRailingBreakdown.stairsEndPosts : 0;

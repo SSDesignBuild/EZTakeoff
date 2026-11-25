@@ -1,12 +1,15 @@
 import { DECK_BOARD_FACE_FT, DECK_GAP_FT, boardStockSegments, type DeckModel } from './deckModel';
 import type { DeckPoint } from './types';
 import { planMiteredPictureFrames } from './deckMiterGeometry';
+import { subtractDeckFace, mergeDeckFaces, deckFaceArea, type DeckFacePoint } from './deckSurfaceClipping';
 import { getCoverVisualProduct, getRailVisualProduct, getDeckVisualProduct } from '../data/visualCatalog';
 
 export interface SurfaceStrip {
   axis:'x'|'z';
   x:number;z:number;lengthFt:number;widthFt:number;
   startFt:number;endFt:number;row:number;
+  /** Exact saw-cut face when a border or angled edge leaves a nonrectangular piece. */
+  outline?:DeckFacePoint[];
 }
 export const VISIBLE_BOARD_WIDTH_FT = DECK_BOARD_FACE_FT;
 export const VISIBLE_BOARD_GAP_FT = DECK_GAP_FT;
@@ -52,9 +55,15 @@ export function surfaceStrips(
   };
   const result:SurfaceStrip[]=[];
   for(let row=0;row<2000;row++){
-    const bandStart=min+row*step;
-    if(bandStart>=max-.001||result.length>=1400)break;
-    const bandWidth=Math.min(boardWidthFt,max-bandStart);
+    const rowStart=min+row*step;
+    if(rowStart>=max-.001||result.length>=1400)break;
+    const rowEnd=Math.min(rowStart+boardWidthFt,max);
+    // A notch may change the available width partway across one board.
+    // Keep the surviving rip on both sides of that exact vertex station.
+    const stations=[...new Set([rowStart,...points.map(p=>runX?p.y:p.x)
+      .filter(v=>v>rowStart+1e-8&&v<rowEnd-1e-8),rowEnd])].sort((a,b)=>a-b);
+    for(let bandIndex=0;bandIndex+1<stations.length;bandIndex++){
+    const bandStart=stations[bandIndex],bandWidth=stations[bandIndex+1]-bandStart;
     if(bandWidth<=.001)continue;
     const sample=bandStart+bandWidth/2;
     // Sample extremely near the true edge: a wider inset can leave 3D board
@@ -108,63 +117,46 @@ export function surfaceStrips(
       }
       if(result.length>=1400)break;
     }
+    }
   }
 
-  // Clip all field boards around mitered picture-frame bands. Raising border
-  // meshes alone is not acceptable: two overlapping surfaces create z-fighting.
+  // Subtract the real picture-frame faces in TWO dimensions. A narrow rip
+  // alongside a parallel border is still a real board; projecting the whole
+  // blocker onto the run axis used to throw that entire row away.
   const frames=planMiteredPictureFrames(model.points,model.pictureFrameSegments??[],
     model.pictureFrameCount??0,boardWidthFt,gapFt);
   if(!frames.length)return result;
   const margin=Math.max(.005,Math.min(.025,gapFt));
-  const clip=(polygon:Array<readonly [number,number]>,coord:0|1,
-    plane:number,keepAbove:boolean):Array<readonly [number,number]>=>{
-    const inside=(p:readonly [number,number])=>keepAbove?p[coord]>=plane-1e-9:p[coord]<=plane+1e-9;
-    const out:Array<readonly [number,number]>=[];
-    for(let i=0;i<polygon.length;i++){
-      const start=polygon[i],end=polygon[(i+1)%polygon.length];
-      const inA=inside(start),inB=inside(end);
-      if(inA)out.push(start);
-      if(inA!==inB){
-        const denominator=end[coord]-start[coord];
-        if(Math.abs(denominator)>1e-12){
-          const t=Math.min(1,Math.max(0,(plane-start[coord])/denominator));
-          out.push([start[0]+(end[0]-start[0])*t,start[1]+(end[1]-start[1])*t]);
-        }
-      }
-    }
-    return out;
-  };
   return result.flatMap(strip=>{
-    const runAxis:0|1=strip.axis==='x'?0:1;
-    const crossAxis:0|1=strip.axis==='x'?1:0;
-    const center=strip.axis==='x'?strip.z:strip.x;
-    const low=center-strip.widthFt/2,high=center+strip.widthFt/2;
-    const blockers:Array<[number,number]>=[];
+    const low=(strip.axis==='x'?strip.z:strip.x)-strip.widthFt/2;
+    const high=low+strip.widthFt;
+    const face:DeckFacePoint[]=strip.axis==='x'
+      ?[[strip.startFt,low],[strip.endFt,low],[strip.endFt,high],[strip.startFt,high]]
+      :[[low,strip.startFt],[high,strip.startFt],[high,strip.endFt],[low,strip.endFt]];
+    let pieces:DeckFacePoint[][]=[face];
     for(const frame of frames){
-      let polygon:Array<readonly [number,number]>=frame.corners;
-      polygon=clip(polygon,crossAxis,low,true);
-      polygon=clip(polygon,crossAxis,high,false);
-      if(polygon.length<3)continue;
-      const min=Math.min(...polygon.map(p=>p[runAxis]));
-      const max=Math.max(...polygon.map(p=>p[runAxis]));
-      if(max>=strip.startFt&&min<=strip.endFt)
-        blockers.push([Math.max(strip.startFt,min-margin),Math.min(strip.endFt,max+margin)]);
-    }
-    let permitted:Array<[number,number]>=[[strip.startFt,strip.endFt]];
-    for(const [lowCut,highCut] of blockers){
-      permitted=permitted.flatMap(([a,b])=>{
-        if(b<=lowCut||a>=highCut)return [[a,b] as [number,number]];
-        const pieces:Array<[number,number]>=[];
-        if(lowCut-a>.04)pieces.push([a,lowCut]);
-        if(b-highCut>.04)pieces.push([highCut,b]);
-        return pieces;
+      const minX=Math.min(...frame.corners.map(p=>p[0]))-margin;
+      const maxX=Math.max(...frame.corners.map(p=>p[0]))+margin;
+      const minY=Math.min(...frame.corners.map(p=>p[1]))-margin;
+      const maxY=Math.max(...frame.corners.map(p=>p[1]))+margin;
+      pieces=pieces.flatMap(poly=>{
+        if(poly.every(p=>p[0]<minX)||poly.every(p=>p[0]>maxX)||
+          poly.every(p=>p[1]<minY)||poly.every(p=>p[1]>maxY))return [poly];
+        return subtractDeckFace(poly,frame.corners,margin);
       });
+      if(!pieces.length)break;
     }
-    return permitted.filter(([a,b])=>b-a>.04).map(([startFt,endFt])=>({
-      ...strip,startFt,endFt,lengthFt:endFt-startFt,
-      x:strip.axis==='x'?(startFt+endFt)/2:strip.x,
-      z:strip.axis==='z'?(startFt+endFt)/2:strip.z,
-    }));
+    return mergeDeckFaces(pieces).flatMap(poly=>{
+      const xs=poly.map(p=>p[0]),ys=poly.map(p=>p[1]);
+      const x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+      const startFt=strip.axis==='x'?x0:y0,endFt=strip.axis==='x'?x1:y1;
+      const widthFt=strip.axis==='x'?y1-y0:x1-x0;
+      if(endFt-startFt<=.04||widthFt<=.001||deckFaceArea(poly)<.0001)return [];
+      const rectangle=poly.every(([x,y])=>(Math.abs(x-x0)<1e-7||Math.abs(x-x1)<1e-7)&&
+        (Math.abs(y-y0)<1e-7||Math.abs(y-y1)<1e-7));
+      return [{...strip,startFt,endFt,lengthFt:endFt-startFt,widthFt,
+        x:(x0+x1)/2,z:(y0+y1)/2,...(rectangle?{}:{outline:poly})}];
+    });
   });
 }
 export interface BreakerVisualStrip extends SurfaceStrip {

@@ -82,7 +82,7 @@ export const makeConsultationProject = (id: string): ConsultationProject => ({
     pictureFrameMaterial:'match',pictureFrameMaterial2:'match',pictureFrameMaterial3:'match',
     borderSameBoard:true,stairFasciaStyle:'profiled',
     breakerBoardMaterial:'match',breakerBoardMaterial2:'match',breakerBoardMaterial3:'match',
-    fasciaMaterial:'match',stairFasciaMaterial:'match-fascia',
+    fasciaMaterial:'match',stairFasciaMaterial:'match-fascia',fasciaHouseSide:true,
     deckingType:'composite',
     railingVisualId:'tt-ire-modern',
     railingType:'aluminum',railingSystem:'timbertech-ire',
@@ -131,7 +131,7 @@ export const loadConsultations = (): ConsultationProject[] => {
       coverFrontOverhangFt:p.coverFrontOverhangFt??1,
       client:{name:p.client?.name??'',address:p.client?.address??'',phone:p.client?.phone??'',email:p.client?.email??''},
       calibration:{scale:p.calibration?.scale??1,offsetX:p.calibration?.offsetX??0,offsetY:p.calibration?.offsetY??0,rotationDeg:p.calibration?.rotationDeg??0},
-      values:{...deckDefaults,...p.values},
+      values:{...deckDefaults,fasciaHouseSide:true,...p.values},
     }));
   }catch{return [];}
 };

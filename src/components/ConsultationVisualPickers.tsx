@@ -121,6 +121,10 @@ export function ManufacturerRailPicker({values,onValues}:{
   const [filter,setFilter]=useState('All');
   const selectedColor=String(values.railingColor??'black');
   const selectedInfill=String(values.railingInfill??selected.infills[0]) as RailInfill;
+  const hasDrinkBoard=selected.geometry.includes('drink');
+  const drinkBoardName=String(values.drinkRailMaterial??'match');
+  const drinkBoard=getDeckVisualProduct(drinkBoardName==='match'?values.deckingMaterial:drinkBoardName);
+  const drinkOptions=deckVisualProducts.filter(board=>!/^(Terrain|Prime|Reliaboard)/i.test(board.collection));
   const choose=(style:RailVisualProduct)=>{
     const color=style.colors.includes(selectedColor)?selectedColor:style.colors[0];
     const infill=style.infills.includes(selectedInfill)?selectedInfill:style.infills[0];
@@ -129,6 +133,9 @@ export function ManufacturerRailPicker({values,onValues}:{
       railingSystem:style.takeoffSystem==='timbertech-ire'?'timbertech-ire':'standard',
       railingTopProfile:style.geometry==='ire-modern'?'modern':style.geometry==='ire-drink'?'drink':'classic',
       railingColor:color,railingInfill:infill,
+      drinkRail:style.geometry.includes('drink'),
+      ...(style.geometry.includes('drink')?{railingPostTermination:'flush-drink',railingPostCap:'none'}:
+        values.railingPostTermination==='flush-drink'?{railingPostTermination:'at-top',railingPostCap:'standard'}:{}),
       spindleType:style.geometry==='wood-round-aluminum'?'black-round':style.geometry==='wood-picket'?'wood-pickets':values.spindleType});
   };
   return <section className="consultation-option-card manufacturer-rail-picker">
@@ -176,6 +183,21 @@ export function ManufacturerRailPicker({values,onValues}:{
           <select value={String(values.railingHeightIn??'36')} onChange={(e)=>onValues({...values,railingHeightIn:e.target.value})}>
             <option value="36">36 inches</option><option value="42">42 inches</option>
           </select></label>
+        {hasDrinkBoard&&<label>Drink rail board color
+          <select aria-label="Drink rail board color" value={drinkBoardName}
+            onChange={event=>onValues({...values,drinkRail:true,drinkRailMaterial:event.target.value,
+              railingPostTermination:'flush-drink',railingPostCap:'none'})}>
+            <option value="match">Match deck board color</option>
+            {!drinkOptions.some(board=>board.label===drinkBoardName)&&drinkBoardName!=='match'&&
+              <option value={drinkBoardName}>{drinkBoardName}</option>}
+            {drinkOptions.map(board=><option key={board.id} value={board.label}>
+              {board.collection} · {board.color}
+            </option>)}
+          </select>
+          {drinkBoard&&<img src={drinkBoard.swatch} alt={drinkBoard.color+' drink rail board sample'}
+            style={{width:120,height:48,objectFit:'cover',borderRadius:4,marginTop:6}}/>}
+          <small>Continuous board over the posts, with mitered corners. Select a compatible full-profile, square-shouldered board.</small>
+        </label>}
         <label>Stair railing — installed sides
           <select aria-label="Choose whether stairs have the selected railing"
             value={(values.stairRailingLeft!==false && String(values.stairRailingLeft??'true')!=='false'?'L':'')+

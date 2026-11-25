@@ -2,8 +2,10 @@ import type { DeckModel } from '../../lib/deckModel';
 import { getRailVisualProduct, railVisualProducts, type RailVisualProduct } from '../../data/visualCatalog';
 import { Beam, Block, Rod, type P2, type P3 } from './Primitives';
 import { parseDeckGates } from '../../lib/deckGates';
-import { subtractRailingOpenings } from '../../lib/salesRailOpenings';
 import { ManufacturerStairRailing3D } from './ManufacturerStairRailing3D';
+import { planLevelRailingRuns,planDrinkRailPieces,railingEdgePoint,railingSurfaceInsetFt,railPointKey,resolveDrinkRailMaterial } from '../../lib/railingLayout';
+import { planStairRailingRuns } from '../../lib/stairRailVisualGeometry';
+import { DrinkRailBoards3D } from './DrinkRailBoards3D';
 
 type Values=Record<string,string|number|boolean>;
 const colors:Record<string,string>={
@@ -23,7 +25,10 @@ export function ManufacturerRailing3D({model,values,center,deckHeight,screenInte
   model:DeckModel;values:Values;center:P2;deckHeight:number;
   screenIntegrated?:boolean;
 }){
-  const style=resolveStyle(values);
+  const selectedStyle=resolveStyle(values);
+  const requestedPost=Number(String(values.railingPostSize??'3x3').split('x')[0]);
+  const style=selectedStyle.takeoffSystem==='timbertech-ire'&&[2,3,4].includes(requestedPost)
+    ?{...selectedStyle,postWidthIn:requestedPost}:selectedStyle;
   const finish=String(values.railingColor??style.colors[0]);
   const color=colors[style.colors.includes(finish)?finish:style.colors[0]]??'#292c30';
   const infill=style.infills.includes(String(values.railingInfill) as typeof style.infills[number])
@@ -33,7 +38,8 @@ export function ManufacturerRailing3D({model,values,center,deckHeight,screenInte
   const height=Math.max(3,Math.min(3.5,Number(values.railingHeightIn??36)/12));
   const yTop=deckHeight+height,yBottom=deckHeight+.28;
   const postWidth=style.postWidthIn/12;
-  const hideCap=['flush-top','flush-drink'].includes(String(values.railingPostTermination));
+  const drink=style.geometry.includes('drink');
+  const hideCap=drink||['flush-top','flush-drink'].includes(String(values.railingPostTermination));
   const edgeMap=new Map(model.edgeSegments.map((edge)=>[edge.index,edge]));
   const gates=parseDeckGates(values.deckGateEntries);
   const gatePlacements=gates.flatMap(gate=>{
@@ -44,52 +50,50 @@ export function ManufacturerRailing3D({model,values,center,deckHeight,screenInte
     const start=Math.min(Math.max(0,edge.length-width),Math.max(0,stair?.offset??gate.offsetFt??0));
     return [{...gate,edgeIndex:edge.index,start,end:start+width}];
   });
-  const stairOpenings=model.stairPlacements.filter(s=>s.edgeIndex!==null)
-    .map(s=>({edgeIndex:s.edgeIndex!,startFt:s.offset,endFt:s.offset+s.width}));
   const gateOpenings=gatePlacements.map(g=>({edgeIndex:g.edgeIndex,startFt:g.start,endFt:g.end}));
   // A PCA screen entry does not authorize a gap in a required deck guardrail.
   // Only explicit stair openings or individually configured railing gates
   // can remove railing sections. The screen door remains independent.
-  const visibleRails=screenIntegrated?[]:subtractRailingOpenings(model.railCoverage,
-    [...stairOpenings,...gateOpenings],.08);
-  const startCoords=(edge:typeof model.edgeSegments[number],position:number):P2=>{
-    const t=Math.max(0,Math.min(1,position/Math.max(.001,edge.length)));
-    return [edge.start.x+(edge.end.x-edge.start.x)*t-center[0],
-      edge.start.y+(edge.end.y-edge.start.y)*t-center[1]];
-  };
+  const inset=railingSurfaceInsetFt(postWidth,drink?5.5/12:topWidth);
+  const stairs=planStairRailingRuns(model,center,deckHeight,postWidth,metallic?7.1:6,inset);
+  const visibleRails=screenIntegrated?[]:planLevelRailingRuns(model,center,deckHeight,postWidth,
+    drink?5.5/12:topWidth,metallic?7.1:6,model.railCoverage,gateOpenings);
+  const startCoords=(edge:typeof model.edgeSegments[number],position:number):P2=>
+    railingEdgePoint(model,edge.index,position,center,inset)??[0,0];
+  const drinkPieces=drink?planDrinkRailPieces(visibleRails,stairs,5.5/12,height+.075+.093/2):[];
+  const postKeys=new Set<string>();
+  const sharedTopPosts=new Set(visibleRails.flatMap(run=>run.posts.map(railPointKey)));
   return <group name={'railing-'+style.id}>
-    {visibleRails.map((coverage,index)=>{
-      const edge=edgeMap.get(coverage.edgeIndex);
-      if(!edge)return null;
-      const runLength=coverage.end-coverage.start;
-      if(runLength<=.05)return null;
-      const from=startCoords(edge,coverage.start),to=startCoords(edge,coverage.end);
-      const bays=Math.max(1,Math.ceil(runLength/(metallic?7.1:6)));
-      const at=(t:number):P2=>startCoords(edge,coverage.start+runLength*t);
+    {visibleRails.map((run,index)=>{
+      const runLength=run.lengthFt;
+      const from:P2=[run.from[0],run.from[2]],to:P2=[run.to[0],run.to[2]];
+      const bays=run.posts.length-1;
+      const at=(t:number):P2=>[from[0]+(to[0]-from[0])*t,from[1]+(to[1]-from[1])*t];
       const isGlass=infill==='glass';
       return <group key={'railing-'+index}>
         <Beam start={from} end={to} height={yBottom} thickness={wooden ? .26 : .11} depth={wooden ? .28 : .13} color={color} metalness={metallic ? .64 : 0}/>
-        <Beam start={from} end={to} height={yTop-.13} thickness={topThick} depth={topWidth} color={color} metalness={metallic ? .68 : 0}/>
+        <Beam start={from} end={to} height={drink?yTop+.0285-topThick/2:yTop-.13} thickness={topThick} depth={topWidth} color={color} metalness={metallic ? .68 : 0}/>
         {style.geometry==='ire-classic'&&<>
           <Beam start={from} end={to} height={yTop+.025} thickness={.055} depth={topWidth+.045} color={color} metalness={.7}/>
           <Beam start={from} end={to} height={yTop-.26} thickness={.045} depth={topWidth*.72} color={color} metalness={.7}/>
         </>}
         {style.geometry==='ire-modern'&&<Beam start={from} end={to} height={yTop+.045} thickness={.055} depth={topWidth+.018} color={color} metalness={.7}/>}
-        {style.geometry.includes('drink')&&<Beam start={from} end={to} height={yTop+.075} thickness={.093} depth={5.5/12} color="#a28767"/>}
-        {(style.family==='pvc'||style.family==='composite'||style.family==='vinyl')&&<>
+
+        {!drink&&(style.family==='pvc'||style.family==='composite'||style.family==='vinyl')&&<>
           <Beam start={from} end={to} height={yTop+.065} thickness={.055} depth={topWidth+.07} color={color}/>
           <Beam start={from} end={to} height={yTop-.25} thickness={.065} depth={topWidth*.65} color={color}/>
         </>}
         {wooden&&<Beam start={from} end={to} height={yTop-.33} thickness={.18} depth={3.5/12} color={color}/>}
         {infill==='midrail'&&<Beam start={from} end={to} height={deckHeight+height/2+.02} thickness={.11} depth={.13} color={color} metalness={.5}/>}
         {Array.from({length:bays+1},(_,i)=>{
-          const p=at(i/bays);
+          const p=at(i/bays),key=railPointKey([p[0],deckHeight,p[1]]);
+          if(postKeys.has(key))return null;postKeys.add(key);
           return <group key={'railing-post-'+i}>
-            <Block position={[p[0],deckHeight+height/2,p[1]]}
-              size={[postWidth,height+.08,postWidth]} color={color} metalness={metallic ? .65 : .025}/>
+            <Block position={[p[0],deckHeight+.0625+(height-.034)/2,p[1]]}
+              size={[postWidth,height-.034,postWidth]} color={color} metalness={metallic ? .65 : .025}/>
             {!hideCap&&<Block position={[p[0],yTop+.06,p[1]]}
               size={[postWidth+.045,.085,postWidth+.045]} color={color} metalness={metallic ? .66 : 0}/>}
-            {!wooden&&<Block position={[p[0],deckHeight+.07,p[1]]}
+            {!wooden&&<Block position={[p[0],deckHeight+.13,p[1]]}
               size={[postWidth+.06,.135,postWidth+.06]} color={color} metalness={metallic ? .6 : 0}/>}
           </group>;
         })}
@@ -168,7 +172,8 @@ export function ManufacturerRailing3D({model,values,center,deckHeight,screenInte
         Materials for these runs are already counted by buildDeckModel. */}
     <ManufacturerStairRailing3D model={model} center={center}
       deckHeight={deckHeight} style={style} color={color} infill={infill}
-      height={height} hideCap={hideCap}/>
+      height={height} hideCap={hideCap} runs={stairs} sharedTopPosts={sharedTopPosts}/>
+    {drink&&<DrinkRailBoards3D pieces={drinkPieces} material={resolveDrinkRailMaterial(values)}/>}
   </group>;
 }
 export const namedRailingStyles=railVisualProducts.map((p)=>({id:p.id,label:p.label,family:p.family}));

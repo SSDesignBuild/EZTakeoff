@@ -1,5 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { exportSvgAsPdf, exportSvgSectionsAsPdf } from '../lib/export';
+import { surfaceStrips, type SurfaceStrip } from '../lib/visualGeometry';
+import { planMiteredPictureFrames,splitMiteredPictureFrames,planVisiblePictureFrameMiterSeams,openPictureFrameMiterGaps } from '../lib/deckMiterGeometry';
+import type { DeckFacePoint } from '../lib/deckSurfaceClipping';
 import { buildDeckModel, buildLowerTierDeckModel } from '../lib/deckModel';
 import { buildPatioPanelLayout, serializeFanSelections, shiftFanSelection } from '../lib/patioLayout';
 import { parseGableSections, parseSections, parseSunroomSections } from '../lib/sectioning';
@@ -284,32 +287,6 @@ function vertexTouchesHouseSide(points: DeckPoint[], vertex: DeckPoint, houseEdg
   });
 }
 
-function segmentFromPoints(points: DeckPoint[], startIndex: number): DeckEdgeSegment {
-  const start = points[(startIndex + points.length) % points.length];
-  const end = points[(startIndex + 1 + points.length) % points.length];
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const orientation = Math.abs(dx) < 0.01 ? 'vertical' : Math.abs(dy) < 0.01 ? 'horizontal' : 'angled';
-  return { start, end, length: Math.hypot(dx, dy), orientation, index: (startIndex + points.length) % points.length };
-}
-
-function offsetLineForPictureFrame(
-  segment: DeckEdgeSegment,
-  points: DeckPoint[],
-  toSvg: (x: number, y: number) => { x: number; y: number },
-  offset: number,
-) {
-  const a = toSvg(segment.start.x, segment.start.y);
-  const b = toSvg(segment.end.x, segment.end.y);
-  const inward = inwardNormal(segment, points);
-  const normalA = toSvg(segment.start.x + inward.x, segment.start.y + inward.y);
-  const normal = svgUnitVector(a, normalA);
-  return {
-    a: { x: a.x + normal.x * offset, y: a.y + normal.y * offset },
-    b: { x: b.x + normal.x * offset, y: b.y + normal.y * offset },
-  };
-}
-
 function lineIntersection(
   lineA: { a: { x: number; y: number }; b: { x: number; y: number } },
   lineB: { a: { x: number; y: number }; b: { x: number; y: number } },
@@ -328,64 +305,6 @@ function lineIntersection(
     x: ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom,
     y: ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom,
   };
-}
-
-function pointOnOffsetSegment(
-  segment: DeckEdgeSegment,
-  points: DeckPoint[],
-  toSvg: (x: number, y: number) => { x: number; y: number },
-  atEnd: 'start' | 'end',
-  offset: number,
-) {
-  const base = atEnd === 'start' ? toSvg(segment.start.x, segment.start.y) : toSvg(segment.end.x, segment.end.y);
-  const inward = inwardNormal(segment, points);
-  const normalA = toSvg((atEnd === 'start' ? segment.start.x : segment.end.x) + inward.x, (atEnd === 'start' ? segment.start.y : segment.end.y) + inward.y);
-  const normal = svgUnitVector(base, normalA);
-  return { x: base.x + normal.x * offset, y: base.y + normal.y * offset };
-}
-
-function pictureFrameCoursePolygon(
-  segment: DeckEdgeSegment,
-  points: DeckPoint[],
-  toSvg: (x: number, y: number) => { x: number; y: number },
-  course: number,
-  boardWidthPx: number,
-  houseEdgeIndices: number[] = [],
-) {
-  const outer = course * boardWidthPx;
-  const inner = (course + 1) * boardWidthPx;
-  const currentOuter = offsetLineForPictureFrame(segment, points, toSvg, outer);
-  const currentInner = offsetLineForPictureFrame(segment, points, toSvg, inner);
-  const startIdx = findVertexIndex(points, segment.start);
-  const endIdx = findVertexIndex(points, segment.end);
-  const startIsHouse = vertexTouchesHouseSide(points, segment.start, houseEdgeIndices);
-  const endIsHouse = vertexTouchesHouseSide(points, segment.end, houseEdgeIndices);
-
-  // Use true offset-line intersections for picture-frame corners. This makes
-  // angled and odd-shape picture-frame boards meet tight instead of relying on
-  // an overlay or guessed 45-degree trims. If a board terminates at a house
-  // side, keep that end square because it butts into the house/ledger side.
-  let p1 = pointOnOffsetSegment(segment, points, toSvg, 'start', outer);
-  let p4 = pointOnOffsetSegment(segment, points, toSvg, 'start', inner);
-  if (!startIsHouse && startIdx >= 0) {
-    const prev = segmentFromPoints(points, startIdx - 1);
-    const prevOuter = offsetLineForPictureFrame(prev, points, toSvg, outer);
-    const prevInner = offsetLineForPictureFrame(prev, points, toSvg, inner);
-    p1 = lineIntersection(prevOuter, currentOuter) ?? p1;
-    p4 = lineIntersection(prevInner, currentInner) ?? p4;
-  }
-
-  let p2 = pointOnOffsetSegment(segment, points, toSvg, 'end', outer);
-  let p3 = pointOnOffsetSegment(segment, points, toSvg, 'end', inner);
-  if (!endIsHouse && endIdx >= 0) {
-    const next = segmentFromPoints(points, endIdx);
-    const nextOuter = offsetLineForPictureFrame(next, points, toSvg, outer);
-    const nextInner = offsetLineForPictureFrame(next, points, toSvg, inner);
-    p2 = lineIntersection(currentOuter, nextOuter) ?? p2;
-    p3 = lineIntersection(currentInner, nextInner) ?? p3;
-  }
-
-  return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
 }
 
 function interlockedBandCoursePolygon(
@@ -834,6 +753,24 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
 
   const printPlan = () => { void exportSvgAsPdf(svgRef.current, projectExportTitle('Deck framing plan', values), 'sns-deck-plan.pdf'); };
 
+  const fieldFaces=useMemo(()=>surfaceStrips(deck),[deck]);
+  const lowerFieldFaces=useMemo(()=>lowerDeck?surfaceStrips(lowerDeck):[],[lowerDeck]);
+  const installedFrameFaces=(model:typeof deck)=>openPictureFrameMiterGaps(
+    splitMiteredPictureFrames(planMiteredPictureFrames(model.points,
+      model.pictureFrameSegments,model.pictureFrameCount)),
+    planVisiblePictureFrameMiterSeams(model.points,model.pictureFrameSegments,
+      model.pictureFrameCount,model.houseEdgeIndices,model.pictureFrameHouseSide));
+  const frameFaces=useMemo(()=>installedFrameFaces(deck),[deck]);
+  const lowerFrameFaces=useMemo(()=>lowerDeck?installedFrameFaces(lowerDeck):[],[lowerDeck]);
+  const facePoints=(points:readonly DeckFacePoint[])=>points.map(([x,y])=>{
+    const p=toSvg(x,y);return p.x+','+p.y;
+  }).join(' ');
+  const fieldFacePoints=(piece:SurfaceStrip)=>facePoints(piece.outline??(piece.axis==='x'
+    ?[[piece.startFt,piece.z-piece.widthFt/2],[piece.endFt,piece.z-piece.widthFt/2],
+      [piece.endFt,piece.z+piece.widthFt/2],[piece.startFt,piece.z+piece.widthFt/2]]
+    :[[piece.x-piece.widthFt/2,piece.startFt],[piece.x+piece.widthFt/2,piece.startFt],
+      [piece.x+piece.widthFt/2,piece.endFt],[piece.x-piece.widthFt/2,piece.endFt]]));
+
   const boardRuns = deck.boardRun === 'width'
     ? Array.from({ length: Math.max(1, Math.floor(deck.depth / 0.47)) }, (_, i) => deck.minY + 0.22 + i * 0.47)
     : Array.from({ length: Math.max(1, Math.floor(deck.width / 0.47)) }, (_, i) => deck.minX + 0.22 + i * 0.47);
@@ -844,7 +781,7 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const breakerBoardCount = Math.max(0, Math.round(Number(values.breakerBoardCount ?? deck.breakerBoardCount ?? 0)));
   const breakerPositions = deck.breakerBoardPositions;
   const pictureFrameSegments = mergeCollinearDeckSegments(deck.pictureFrameSegments);
-  const pictureFrameBoardWidthPx = Math.max(10, scale * 0.44);
+  const pictureFrameBoardWidthPx = scale * (5.5/12);
   const pictureFrameTrimPx = pictureFrameCount * pictureFrameBoardWidthPx;
   const cleanBandPointString = useMemo(() => closedPointString(deck.points, toSvg), [deck.points, toSvg]);
   const pointTouchesPictureFrame = (point: DeckPoint) => pictureFrameCount > 0 && pictureFrameSegments.some((segment) => pointOnSegment(point, segment, 0.06));
@@ -1121,9 +1058,6 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const renderLowerTierDeck = () => {
     if (!lowerDeck) return null;
     const lowerPointString = lowerDeck.points.map((p) => `${toSvg(p.x, p.y).x},${toSvg(p.x, p.y).y}`).join(' ');
-    const lowerBoardRuns = lowerDeck.boardRun === 'width'
-      ? Array.from({ length: Math.max(1, Math.floor(lowerDeck.depth / 0.47)) }, (_, i) => lowerDeck.minY + 0.22 + i * 0.47)
-      : Array.from({ length: Math.max(1, Math.floor(lowerDeck.width / 0.47)) }, (_, i) => lowerDeck.minX + 0.22 + i * 0.47);
     const lowerRails = railSegmentsForDeck(lowerDeck);
     const lowerNodes = buildRailingNodes(lowerDeck);
     const lowerStairPx = lowerDeck.stairRunFt * scale;
@@ -1131,29 +1065,15 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
       <polygon points={lowerPointString} className="deck-polygon muted-fill lower-tier-fill" />
       <text x={toSvg(lowerDeck.minX, lowerDeck.minY).x + 8} y={toSvg(lowerDeck.minX, lowerDeck.minY).y - 12} className="svg-note tier-label">LOWER TIER · {feetAndInches(Number(values.lowerDeckHeight ?? 0))} HIGH</text>
       {showBoards && useSubfloorDecking && <g clipPath="url(#lower-deck-clip)">{lowerSubfloorSheets.map((sheet, idx) => { const a = toSvg(sheet.x, sheet.y); const b = toSvg(sheet.x + sheet.w, sheet.y + sheet.h); return <rect key={`lower-subfloor-${idx}`} x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)} className="subfloor-sheet lower-tier-board" />; })}</g>}
-      {showBoards && !useSubfloorDecking && lowerBoardRuns.map((value, idx) => lowerDeck.boardRun === 'width'
-        ? scanlineIntersections(lowerDeck.points, 'horizontal', value).map((pair, pairIdx) => {
-            const y = toSvg(pair.start, value).y;
-            const x1 = toSvg(pair.start, value).x;
-            const x2 = toSvg(pair.end, value).x;
-            return <rect key={`lower-board-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - Math.max(4, scale * 0.22)} width={Math.abs(x2 - x1)} height={Math.max(8, scale * 0.44)} className="deck-board-strip lower-tier-board" />;
-          })
-        : scanlineIntersections(lowerDeck.points, 'vertical', value).map((pair, pairIdx) => {
-            const x = toSvg(value, pair.start).x;
-            const y1 = toSvg(value, pair.start).y;
-            const y2 = toSvg(value, pair.end).y;
-            return <rect key={`lower-board-v-${idx}-${pairIdx}`} x={x - Math.max(4, scale * 0.22)} y={Math.min(y1, y2)} width={Math.max(8, scale * 0.44)} height={Math.abs(y2 - y1)} className="deck-board-strip lower-tier-board" />;
-          }))}
-      {showBoards && !useSubfloorDecking && lowerDeck.pictureFrameCount > 0 && lowerDeck.pictureFrameSegments.flatMap((segment) =>
-        Array.from({ length: lowerDeck.pictureFrameCount }, (_, course) => (
-          <polygon key={`lower-pf-${segment.index}-${course}`}
-            points={pictureFrameCoursePolygon(segment, lowerDeck.points, toSvg, course, pictureFrameBoardWidthPx,
-              lowerDeck.pictureFrameHouseSide ? [] : lowerDeck.houseEdgeIndices)}
-            className={`picture-frame-board lower-tier-board course-${course + 1}`}
-            onClick={() => setInspect({ title: `Lower-tier picture frame course ${course + 1}`,
-              detail: `Side ${segment.index + 1}: ${feetAndInches(segment.length)} perimeter run. House-facing side ${lowerDeck.pictureFrameHouseSide ? 'included' : 'excluded'}.` })} />
-        ))
-      )}
+      {showBoards && !useSubfloorDecking && lowerFieldFaces.map((piece,index)=><polygon
+        key={'lower-field-'+index} points={fieldFacePoints(piece)}
+        className="deck-board-strip lower-tier-board"/>)}
+      {showBoards && !useSubfloorDecking && lowerFrameFaces.map((piece,index)=><polygon
+        key={'lower-pf-'+piece.edgeIndex+'-'+piece.course+'-'+index}
+        points={facePoints(piece.corners)}
+        className={`picture-frame-board lower-tier-board course-${piece.course+1}`}
+        onClick={()=>setInspect({title:`Lower-tier picture frame course ${piece.course+1}`,
+          detail:`Side ${piece.edgeIndex+1}: actual miter-cut board, with the same 1/8-inch joints and stock splices as the 3D model.`})}/>)}
       {showFraming && lowerDeck.beamLines.map((beam, beamIdx) => <g key={`lower-beam-${beamIdx}`}>{beam.segments.map((segment, segIdx) => {
         const lowerVerticalBeam = lowerDeck.joistDirection === 'horizontal';
         const p1 = lowerVerticalBeam ? toSvg(beam.y, segment.startX) : toSvg(segment.startX, beam.y);
@@ -1222,35 +1142,15 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
             <polygon points={pointString} className="deck-polygon muted-fill" />
 
             {showBoards && useSubfloorDecking && <g clipPath="url(#main-deck-clip)">{subfloorSheets.map((sheet, idx) => { const a = toSvg(sheet.x, sheet.y); const b = toSvg(sheet.x + sheet.w, sheet.y + sheet.h); return <rect key={`subfloor-${idx}`} x={Math.min(a.x,b.x)} y={Math.min(a.y,b.y)} width={Math.abs(b.x-a.x)} height={Math.abs(b.y-a.y)} className="subfloor-sheet" />; })}</g>}
-            {showBoards && !useSubfloorDecking && boardRuns.map((value, idx) => deck.boardRun === 'width'
-              ? scanlineIntersections(deck.points, 'horizontal', value).map((pair, pairIdx) => {
-                  const y = toSvg(pair.start, value).y;
-                  const x1 = toSvg(pair.start, value).x;
-                  const x2 = toSvg(pair.end, value).x;
-                  return <g key={`board-h-${idx}-${pairIdx}`} onClick={() => setInspect({ title: `Deck board`, detail: `${feetAndInches(pair.end - pair.start)} continuous run. Use breaker boards when the run is over 20 ft.` })}>
-                    <rect x={Math.min(x1, x2)} y={y - Math.max(4, scale * 0.22)} width={Math.abs(x2 - x1)} height={Math.max(8, scale * 0.44)} className="deck-board-strip" />
-                  </g>;
-                })
-              : scanlineIntersections(deck.points, 'vertical', value).map((pair, pairIdx) => {
-                  const x = toSvg(value, pair.start).x;
-                  const y1 = toSvg(value, pair.start).y;
-                  const y2 = toSvg(value, pair.end).y;
-                  return <g key={`board-v-${idx}-${pairIdx}`} onClick={() => setInspect({ title: `Deck board`, detail: `${feetAndInches(pair.end - pair.start)} continuous run. Use breaker boards when the run is over 20 ft.` })}>
-                    <rect x={x - Math.max(4, scale * 0.22)} y={Math.min(y1, y2)} width={Math.max(8, scale * 0.44)} height={Math.abs(y2 - y1)} className="deck-board-strip" />
-                  </g>;
-                }))}
-
-            {showBoards && !useSubfloorDecking && pictureFrameCount > 0 && pictureFrameSegments.flatMap((segment) => (
-              Array.from({ length: pictureFrameCount }, (_, course) => (
-                <polygon
-                  key={`pf-${segment.index}-${course}`}
-                  points={pictureFrameCoursePolygon(segment, deck.points, toSvg, course, pictureFrameBoardWidthPx, deck.pictureFrameHouseSide ? [] : deck.houseEdgeIndices)}
-                  className={`picture-frame-board course-${course + 1}`}
-                  onClick={() => setInspect({ title: `Picture frame board ${course + 1}`, detail: `Picture-frame course with outside and inside corner miters around exposed deck perimeter.` })}
-                />
-              ))
-            ))}
-
+            {showBoards && !useSubfloorDecking && fieldFaces.map((piece,index)=><polygon
+              key={'field-'+index} points={fieldFacePoints(piece)} className="deck-board-strip"
+              onClick={()=>setInspect({title:'Deck board',detail:
+                `${feetAndInches(piece.lengthFt)} installed length × ${(piece.widthFt*12).toFixed(2)} in face; clipped to the actual picture frame and stock joints.`})}/>)}
+            {showBoards && !useSubfloorDecking && frameFaces.map((piece,index)=><polygon
+              key={'pf-'+piece.edgeIndex+'-'+piece.course+'-'+index}
+              points={facePoints(piece.corners)} className={`picture-frame-board course-${piece.course+1}`}
+              onClick={()=>setInspect({title:`Picture frame board ${piece.course+1}`,detail:
+                'Actual miter-cut course with 1/8-inch corner joints and stock splices, shared with the 3D model.'})}/>)}
 
             {showBoards && !useSubfloorDecking && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => {
               const boardWidthFt = 0.47;
