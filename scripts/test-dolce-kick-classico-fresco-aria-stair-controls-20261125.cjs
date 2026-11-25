@@ -44,7 +44,11 @@ for(const style of ['fresco-s','classico-s','aria-scallop']){
  assert.ok(samples.every(d=>Number.isFinite(d)&&d>.04&&d<=.5+.0001),
   'Reference-shaped 2x6 ornamental tip cannot self-overrun real extrusion envelope');
  assert.ok(samples[0]>samples[samples.length-1],
-  'S/scallop nose should rise from full-depth truss, not have a random down-turned spur');
+  'Cast nose must transition from full 6in section to its bounded terminal width');
+const topTip=end.renaissanceTrussTailTopDropFt(12,12,.5,style);
+const bottomTip=end.renaissanceTrussTailLowerDropFt(12,12,.5,style);
+assert.ok(topTip>.20&&bottomTip>topTip+.05,
+ 'Factory illustrated S has a visibly DOWN-TURNED top and separate low rounded nose, not a straight roof top with an inverted wedge');
  const body=end.renaissanceTrussTailDepthFt(3,12,.5,style);
  assert.equal(body,.5,'Actual body remains full-depth 6-inch aluminum');
 }
