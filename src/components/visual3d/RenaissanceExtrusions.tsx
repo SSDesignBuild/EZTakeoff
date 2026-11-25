@@ -401,7 +401,8 @@ function makeContinuousFormedTrussGeometry(length:number,width:number,
      renaissanceTrussTailLowerDropFt(z,length,height,endStyle);
    const gauge=inner?wall:0;
    const ringDepth=Math.max(.018,
-     renaissanceTrussTailDepthFt(z,length,height,endStyle)-2*gauge);
+     Math.min(outerTop-outerBottom,
+       renaissanceTrussTailDepthFt(z,length,height,endStyle))-2*gauge);
    const bottom=outerBottom+gauge;
    const mid=bottom+ringDepth/2;
    return renaissanceFormedProfileContour(
