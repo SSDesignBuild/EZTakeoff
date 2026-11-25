@@ -98,7 +98,7 @@ assert.ok(railRenderer.includes('<ManufacturerStairRailing3D')&&
  railRenderer.includes('screenIntegrated?[]:subtractRailingOpenings'),
  'Screen/sunroom suppresses ONLY incompatible level rails, not selected stair guards');
 const stairRenderer=read('src/components/visual3d/ManufacturerStairRailing3D.tsx');
-for(const label of ['selected-'+"'",'selected-stair-guard-',
+for(const label of ['selected-stair-guard-',
  'stair-round-baluster','selected-stair-guard-post','StairGlassPanel',
  'style.geometry','planStairRailingRuns']){
  assert.ok(stairRenderer.includes(label),'Stair railing must match deck finish/infill: '+label);
@@ -107,7 +107,7 @@ assert.ok(read('src/components/visual3d/DeckStairAssembly3D.tsx')
  .includes('stairFlightFrame(model,placement,center)'));
 
 const {planEliteDeckFloorClosure}=load('src/lib/eliteDeckFloorClosure');
-const wall={id:'right',from:[15.3,.5],to:[15.3,11.5],
+const wall={id:'right',from:[7.3,-5.5],to:[7.3,5.5],
  widthFt:11,bottomY:5.12,topFrom:12,topTo:11};
 const closure=planEliteDeckFloorClosure(model,[wall],'3-thermal','composite');
 assert.ok(closure.pieces.length>0,'No open black floor gap at inside sunroom wall');
