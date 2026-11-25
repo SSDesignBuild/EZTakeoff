@@ -1,71 +1,97 @@
 /**
- * Reference-derived visible sculpted truss end CAP silhouette.
+ * Image-traced *presentation* silhouette of the Renaissance cast truss ends.
  *
- * Fresco Connection Details 2025 p4 shows "TRUSS CURVED END CAP":
- * a continuous reverse-S nose with a strong lower rear shoulder.
- * Aria Connection Details 2025 p3 shows "TRUSS SCALLOP END CAP":
- * a smooth elongated concave scallop with a rounded terminal nose.
+ * Fresco 2025 structural parts p4 "TRUSS CURVED END CAP" and
+ * Aria 2025 p3 "TRUSS SCALLOP END CAP" were inspected visually.
+ * The molded cap in BOTH pictures curves DOWNWARD at the exposed nose:
+ * its TOP bends downward; its UNDERSIDE first scoops up and then drops
+ * again. The earlier single-boundary model kept an impossible straight
+ * roof top through the cast nose, creating a sharp decorative wedge.
  *
- * The manufacturer sheets do NOT DIMENSION the cast tip contour length
- * or mold radii; these normalized tracing stations reproduce the visual
- * profile of the supplied perspective parts illustration, but are NOT
- * fabrication CAD. All main trusses remain exact 2x6x.060in extrusions.
- * Classico uses the same visibly curved exposed truss tip family as the
- * manufacturer's fully exposed Classico/Contempo construction photos.
- *
- * Stations monotonically increase along the last 12.6in of the member;
- * depth values are a proportion of the main 6in member, measured from
- * the unbroken UPPER edge. A single bounded contour (no overlapping cap
- * mesh) prevents the old random-wavy/finicky S from self-intersecting.
+ * Trace contains top and lower outline values independently, as ratios
+ * of the measured 6in beam height; [u,upperDrop,lowerDrop].
+ * u=0 starts at the full structural 6in section; u=1 is the exposed tip.
+ * These sampled, smoothed points match the visible perspective outline
+ * and are NOT factory mold dimensions / fabrication CAD. The manufacturer
+ * sheets omit the actual cast tip length, radii and side-view dimensions.
  */
 export type RenaissanceTrussEndStyle=
  'straight'|'fresco-s'|'aria-scallop'|'classico-s';
+type Section=[number,number,number];
 export const RENAISSANCE_END_REFERENCE={
  'fresco-s':{
   tailIn:12.6,
-  // side view: rear body 6-in full depth -> rising sweep -> rounded nose.
-  samples:[[0,1],[.12,.98],[.23,.92],[.38,.66],[.49,.45],
-   [.58,.42],[.67,.46],[.75,.47],[.83,.40],[.92,.26],[1,.22]],
+  samples:[
+   [0,0,1],[.12,.00,.98],[.23,.03,.91],[.38,.10,.77],
+   [.49,.16,.64],[.58,.23,.58],[.67,.33,.60],
+   [.75,.42,.69],[.83,.50,.79],[.92,.55,.85],[1,.57,.92],
+  ] as Section[],
  },
  'aria-scallop':{
   tailIn:12.6,
-  samples:[[0,1],[.14,.98],[.30,.88],[.46,.68],
-   [.61,.47],[.76,.35],[.90,.26],[1,.22]],
+  samples:[
+   [0,0,1],[.14,.01,.98],[.30,.05,.86],[.46,.12,.73],
+   [.61,.20,.63],[.76,.35,.69],[.90,.47,.81],[1,.55,.88],
+  ] as Section[],
  },
  'classico-s':{
   tailIn:12.6,
-  samples:[[0,1],[.12,.98],[.23,.92],[.38,.66],[.49,.45],
-   [.58,.42],[.67,.46],[.75,.47],[.83,.40],[.92,.26],[1,.22]],
+  // Classico full trusses use the 2025 curved cast-tip family; do not
+  // substitute a short loose brace between its tip and main beam.
+  samples:[
+   [0,0,1],[.12,.00,.98],[.23,.03,.91],[.38,.10,.77],
+   [.49,.16,.64],[.58,.23,.58],[.67,.33,.60],
+   [.75,.42,.69],[.83,.50,.79],[.92,.55,.85],[1,.57,.92],
+  ] as Section[],
  },
 } as const;
 const clamp=(n:number)=>Math.min(1,Math.max(0,n));
-export function referenceTrussTailDepthRatio(
- progress:number,style:RenaissanceTrussEndStyle,
-):number{
- if(style==='straight')return 1;
+const sample=(progress:number,style:RenaissanceTrussEndStyle):Section=>{
+ if(style==='straight')return [clamp(progress),0,1];
  const u=clamp(progress),pts=RENAISSANCE_END_REFERENCE[style].samples;
  for(let i=1;i<pts.length;i++){
   const a=pts[i-1],b=pts[i];
   if(u>b[0])continue;
-  // Smoothly interpolate each vector-traced part without creating
-  // additional overshooting S-bends outside the reference contour.
-  const fraction=clamp((u-a[0])/(b[0]-a[0]));
-  const eased=fraction*fraction*(3-2*fraction);
-  return a[1]+(b[1]-a[1])*eased;
+  const t=clamp((u-a[0])/(b[0]-a[0]));
+  const eased=t*t*(3-2*t);
+  const top=a[1]+(b[1]-a[1])*eased;
+  const lower=a[2]+(b[2]-a[2])*eased;
+  return [u,top,Math.max(top+.13,lower)];
  }
- return pts[pts.length-1][1];
+ const last=pts[pts.length-1];
+ return [u,last[1],last[2]];
+};
+export function referenceTrussTailDepthRatio(
+ progress:number,style:RenaissanceTrussEndStyle,
+):number{
+ const [,top,lower]=sample(progress,style);
+ return lower-top;
+}
+const tailFraction=(stationFt:number,lengthFt:number,
+ style:RenaissanceTrussEndStyle):number=>{
+ if(style==='straight')return 0;
+ const tailFt=Math.min(RENAISSANCE_END_REFERENCE[style].tailIn/12,
+  Math.max(.16,lengthFt*.35));
+ return clamp((stationFt-(lengthFt-tailFt))/Math.max(.001,tailFt));
+};
+export function renaissanceTrussTailTopDropFt(
+ stationFt:number,lengthFt:number,fullDepthFt:number,
+ style:RenaissanceTrussEndStyle,
+):number{
+ return fullDepthFt*sample(tailFraction(stationFt,lengthFt,style),style)[1];
+}
+export function renaissanceTrussTailLowerDropFt(
+ stationFt:number,lengthFt:number,fullDepthFt:number,
+ style:RenaissanceTrussEndStyle,
+):number{
+ return fullDepthFt*sample(tailFraction(stationFt,lengthFt,style),style)[2];
 }
 export function renaissanceTrussTailDepthFt(
  stationFt:number,lengthFt:number,fullDepthFt:number,
  style:RenaissanceTrussEndStyle,
 ):number{
- if(style==='straight')return fullDepthFt;
- const tailFt=Math.min(RENAISSANCE_END_REFERENCE[style].tailIn/12,
-  Math.max(.16,lengthFt*.35));
- const tailStart=Math.max(0,lengthFt-tailFt);
- if(stationFt<=tailStart)return fullDepthFt;
- return fullDepthFt*referenceTrussTailDepthRatio(
-  (stationFt-tailStart)/Math.max(.001,lengthFt-tailStart),style);
+ return renaissanceTrussTailLowerDropFt(stationFt,lengthFt,fullDepthFt,style)-
+  renaissanceTrussTailTopDropFt(stationFt,lengthFt,fullDepthFt,style);
 }
 export function renaissanceTrussContactOverlapFt(input:{
  beamTopFt:number;beamBottomFt:number;
