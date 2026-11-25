@@ -22,6 +22,9 @@ export interface EliteDeckClosurePlan{
  * The previous renderer exposed bare dark substrate between the last
  * visible deck row and Elite's base channel on a user-supplied scene.
  *
+ * Wall endpoints use the centered Renaissance 3D frame, not the absolute
+ * Admin footprint coordinates; this remains the geometry contract.
+ *
  * This additional finish course is counted in the Sales estimating handoff,
  * not silently painted onto existing cut stock. It runs along the wall,
  * inside the 2/3in Elite base channel with a 1/8in expansion joint, and
@@ -38,7 +41,15 @@ export function planEliteDeckFloorClosure(
 ):EliteDeckClosurePlan{
  const material=String(deckingType??'composite');
  const stocks=material==='pressure-treated'?[8,12,16,20]:[16,20];
- const center:[number,number]=[(model.minX+model.maxX)/2,(model.minY+model.maxY)/2];
+ // RenaissanceWallMeasure points are already deck-CENTERED scene coordinates.
+ // The raw DeckModel polygon is ABSOLUTE. Convert its centroid to the same
+ // local frame; mixing these systems previously placed trims away from walls.
+ const centroidX=model.points.reduce((n,p)=>n+p.x,0)/Math.max(1,model.points.length);
+ const centroidY=model.points.reduce((n,p)=>n+p.y,0)/Math.max(1,model.points.length);
+ const center:[number,number]=[
+  centroidX-(model.minX+model.maxX)/2,
+  centroidY-(model.minY+model.maxY)/2,
+ ];
  const wallHalfDepthFt=(system==='3-thermal'?3:2)/24;
  const nearOffset=wallHalfDepthFt+DECK_GAP_FT+DECK_BOARD_FACE_FT/2;
  const pieces:EliteDeckClosurePiece[]=[];
