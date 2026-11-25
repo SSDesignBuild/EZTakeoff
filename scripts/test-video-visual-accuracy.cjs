@@ -147,9 +147,9 @@ assert.ok(render.includes('outsideFaceZ=frameFront+') &&
   render.includes('frontZ={outsideFaceZ}') &&
   render.includes('fresco-front-polycarbonate-end-cap-'),
   'Contempo tails stay outside beam, Fresco panels receive front end closure');
-assert.ok(downspout.includes('reverse S-inflection') &&
-  downspout.includes('shape.bezierCurveTo(front*.51'),
-  'Curved tail ends require actual reverse S curvature');
+assert.ok(downspout.includes('renaissanceTrussTailDepthFt(distance,front,') &&
+  downspout.includes('makeContinuousFormedTrussGeometry(length,width,height,rise,endStyle)'),
+  'Curved cap and continuous truss must use one bounded source-traced reverse S silhouette, not free-floating ad hoc Bézier control points');
 assert.ok(stair.includes('fasciaGeo') &&
   stair.includes('g.rotateY(-Math.PI/2)') &&
   stair.includes('position={[x,0,0]} castShadow receiveShadow'),
