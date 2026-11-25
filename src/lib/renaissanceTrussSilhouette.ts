@@ -46,20 +46,47 @@ export const RENAISSANCE_END_REFERENCE={
  },
 } as const;
 const clamp=(n:number)=>Math.min(1,Math.max(0,n));
+/** Continuous, shape-preserving C1 cubic for factory illustration trace.
+ * The previous segment-by-segment smoothstep made each reference station a
+ * FLAT spot with a visible step-like change in slope -- exactly the kind of
+ * finicky ornamental curve rejected by the user. These PCHIP tangents
+ * preserve a smooth line without overshooting the traced nose envelope. */
+function traceCoordinate(pts:readonly Section[],u:number,coordinate:1|2):number{
+ const t=clamp(u),n=pts.length;
+ if(t<=pts[0][0])return pts[0][coordinate];
+ if(t>=pts[n-1][0])return pts[n-1][coordinate];
+ const secant=(i:number)=>
+   (pts[i+1][coordinate]-pts[i][coordinate])/
+   (pts[i+1][0]-pts[i][0]);
+ const tangent=(i:number):number=>{
+   if(i===0)return secant(0);
+   if(i===n-1)return secant(n-2);
+   const a=secant(i-1),b=secant(i);
+   if(a*b<=0)return 0;
+   const h0=pts[i][0]-pts[i-1][0];
+   const h1=pts[i+1][0]-pts[i][0];
+   const w0=2*h1+h0,w1=h1+2*h0;
+   return (w0+w1)/(w0/a+w1/b);
+ };
+ for(let i=1;i<n;i++){
+  const a=pts[i-1],b=pts[i];
+  if(t>b[0])continue;
+  const h=b[0]-a[0],v=(t-a[0])/h;
+  const v2=v*v,v3=v2*v;
+  const interpolated=(2*v3-3*v2+1)*a[coordinate]+
+    (v3-2*v2+v)*h*tangent(i-1)+
+    (-2*v3+3*v2)*b[coordinate]+
+    (v3-v2)*h*tangent(i);
+  return Math.max(Math.min(a[coordinate],b[coordinate]),
+    Math.min(Math.max(a[coordinate],b[coordinate]),interpolated));
+ }
+ return pts[n-1][coordinate];
+}
 const sample=(progress:number,style:RenaissanceTrussEndStyle):Section=>{
  if(style==='straight')return [clamp(progress),0,1];
  const u=clamp(progress),pts=RENAISSANCE_END_REFERENCE[style].samples;
- for(let i=1;i<pts.length;i++){
-  const a=pts[i-1],b=pts[i];
-  if(u>b[0])continue;
-  const t=clamp((u-a[0])/(b[0]-a[0]));
-  const eased=t*t*(3-2*t);
-  const top=a[1]+(b[1]-a[1])*eased;
-  const lower=a[2]+(b[2]-a[2])*eased;
-  return [u,top,Math.max(top+.13,lower)];
- }
- const last=pts[pts.length-1];
- return [u,last[1],last[2]];
+ const top=traceCoordinate(pts,u,1),lower=traceCoordinate(pts,u,2);
+ return [u,top,Math.max(top+.13,lower)];
 };
 export function referenceTrussTailDepthRatio(
  progress:number,style:RenaissanceTrussEndStyle,
