@@ -67,7 +67,7 @@ export function renaissanceFormedProfileGrooveCount(
 ):number{
  const outside=widthFt/2;
  let count=0,inside=false;
- for(const [x] of contour){
+ for(const [x] of contour.slice(1)){
   if(x<0)break;
   const current=outside-x>.01/12;
   if(current&&!inside)count++;
