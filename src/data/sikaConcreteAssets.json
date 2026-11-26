@@ -1,0 +1,272 @@
+[
+  {
+    "id": "sikastamp-9-x-54-bluestone",
+    "path": "/manufacturer/sika/9-x-54-bluestone.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2018/03/IMG_2009-as-Smart-Object-1-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/9-x-54-bluestone/",
+    "sha256": "3246f117f5a4fa28326a5d34a3c999295af5f2ee4307f0149c95fc0e10c40a5e",
+    "bytes": 28738,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-travertine-texture",
+    "path": "/manufacturer/sika/travertine-texture.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2018/03/all_DSC9314-as-Smart-Object-1-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/travertine-texture/",
+    "sha256": "9a999dbaac3bbcdf948a71337ca21750ada9567f5d6ec61b64c7507d307782d4",
+    "bytes": 17950,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-majestic-ashlar",
+    "path": "/manufacturer/sika/majestic-ashlar.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/Majestic-Ashlar-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/majestic-ashlar/",
+    "sha256": "8382306c99ef7f150ce6be32e409344da6c8b08166a934fd9d8945fdbea3d694",
+    "bytes": 20471,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-3-x-3-slate",
+    "path": "/manufacturer/sika/3-x-3-slate.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/3%E2%80%B2-x-3%E2%80%B2-Slate-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/3-x-3-slate/",
+    "sha256": "f4f8674d2212dd04d637bccb1f4b5c89ac1d2c2165e66e93b5c6430f44c9b655",
+    "bytes": 13191,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-cottage-slate",
+    "path": "/manufacturer/sika/cottage-slate.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/Cottage-Slate-2-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/cottage-slate/",
+    "sha256": "61f877d3f118a3f91a2c7c839efb0c1cf31ee49bbb0709384b4aacfb5101df5b",
+    "bytes": 19907,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-6-x-6-slate",
+    "path": "/manufacturer/sika/6-x-6-slate.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/IMG_5127-as-Smart-Object-1-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/6-x-6-slate/",
+    "sha256": "f99b993eba6430ab6b328cd4c0e49febe74cb282f42d479e8d7b3ac21f213647",
+    "bytes": 22382,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-12-x-12-slate",
+    "path": "/manufacturer/sika/12-x-12-slate.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/12-x-12-Slate2-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/12-x-12-slate/",
+    "sha256": "1806b08ac9eb1a3561522a2b1840b1573d2faae3e446f773779b509c82fed517",
+    "bytes": 20192,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-18-x-18-slate",
+    "path": "/manufacturer/sika/18-x-18-slate.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/18in-x-18in-Slate-Sample-e1335214960233-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/18-x-18-slate/",
+    "sha256": "514f9d06c951a80ca17279eafa653c950b6f0ce7ec08ae8ca5af92435353d07d",
+    "bytes": 15036,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-orchard-stone",
+    "path": "/manufacturer/sika/orchard-stone.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/OrSt_Samp_P24R23_001-as-Smart-Object-1-1-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/orchard-stone/",
+    "sha256": "e3e04eb91b8ea0df80ceccd6e7031ffc70f55817a5ee4beee95e80c0947ed755",
+    "bytes": 16846,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-fieldstone",
+    "path": "/manufacturer/sika/fieldstone.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/sample-87_img5438_640-as-Smart-Object-1-resized-Lanczos-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/fieldstone-2/",
+    "sha256": "e2869ea1a09be2594dde76a20a9c20f8ce6d0a9d75df08eb777a1f97cbd42e44",
+    "bytes": 27405,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-18-x-36-bluestone",
+    "path": "/manufacturer/sika/18-x-36-bluestone.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/18inx36inBl_Samp_P28R13_002-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/18-x-36-bluestone/",
+    "sha256": "b55306c4d405125a004513dafb1de0f06ace68481567eeeb486ddbbdf6d915e6",
+    "bytes": 14479,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-24-x-24-bluestone",
+    "path": "/manufacturer/sika/24-x-24-bluestone.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/24inx24inBlSt_Samp_001-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/24-x-24-bluestone/",
+    "sha256": "35650e151b0a2545a8ecd030ac8429ac1d4f0b57ad9c22fe9f388de88b01fcb9",
+    "bytes": 22243,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-old-chicago-running-bond-brick",
+    "path": "/manufacturer/sika/old-chicago-running-bond-brick.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/OlChBrRuBo_Samp_P15R12_001-resized-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/old-chicago-running-bond-brick/",
+    "sha256": "f751b5f77134cfce0f24eaa443a32136b9c916692b200cdfcdfd143882afdfd8",
+    "bytes": 22676,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-new-brick-basket-weave",
+    "path": "/manufacturer/sika/new-brick-basket-weave.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/NeBrBaWeSt_Samp_005-LARGE-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/new-brick-basket-weave/",
+    "sha256": "17d433d0b273748a2ead96231cbfcf8a7973b5d50e77768171e2afc0a6fccb98",
+    "bytes": 21677,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-new-brick-herringbone",
+    "path": "/manufacturer/sika/new-brick-herringbone.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/NeBrHe_Samp_P16R26_001-resized-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/new-brick-herringbone/",
+    "sha256": "f4912e37270c57261f27e1f9b0a63901750d84ca9d067e06105207bd5e81d498",
+    "bytes": 28583,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-new-brick-running-bond",
+    "path": "/manufacturer/sika/new-brick-running-bond.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/NeBrRuBoSt_Samp_003-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/new-brick-running-bond/",
+    "sha256": "82b3f1a7f7bab7c7bb420c07f8f04f201751d858896367df6443f827887e62e3",
+    "bytes": 23739,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-12-wood-plank",
+    "path": "/manufacturer/sika/12-wood-plank.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/12inWoPl_Samp_U20R25_001-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/12-wood-plank/",
+    "sha256": "a82df0e8c786234e3f491991e52a649813549c3f72ea9d3c6713b1149d078fdd",
+    "bytes": 16293,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-6-wood-plank",
+    "path": "/manufacturer/sika/6-wood-plank.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/029_FinishedBooth-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/6-wood-plank/",
+    "sha256": "aa9d0e7bc342422e79fbdb04de7dcad51d06b215c6547fe0901e3024f3f10300",
+    "bytes": 22561,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-3-12-hardwood-planks",
+    "path": "/manufacturer/sika/3-12-hardwood-planks.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/3_5inHaPl_Samp_U11R14_001_01-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/3-12-hardwood-planks/",
+    "sha256": "52d3dc7dc4b38bc2be3cb69ed2d3bc7cf346c6b26226cc552749d56eada09749",
+    "bytes": 23241,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-roman-rope",
+    "path": "/manufacturer/sika/roman-rope.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/RoRo_Samp_U34ClLiRe_004-resized-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/roman-rope/",
+    "sha256": "6d6d588e1f8572f3396a7593363be286efef8ea2e61b561fbba35e1d94e4c637",
+    "bytes": 11368,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-oxford-slate-texture",
+    "path": "/manufacturer/sika/oxford-slate-texture.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/FiBo_TrSh_01272012_121-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/oxford-slate-texture-mats-touch-skin/",
+    "sha256": "3ac8f72da0801323fd3654d4ce0935dd70cf24f6bc50fb9e805beb6a16a82810",
+    "bytes": 18538,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-4-x-4-granite-border-3-row",
+    "path": "/manufacturer/sika/4-x-4-granite-border-3-row.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/4inx4inGrBo3RoSt_Samp_001-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/4-x-4-granite-border-3-row/",
+    "sha256": "b37207299a098c7bf731e77ca8fcefbe7f18965a4747d9763a42887d092902db",
+    "bytes": 21633,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-4-x-4-granite-border-2-row",
+    "path": "/manufacturer/sika/4-x-4-granite-border-2-row.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/4inx4inGrBo2RoSt_Samp_001-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/4-x-4-granite-border-2-row-2/",
+    "sha256": "0ada017f6c8e6ae92d45a648e458c44b4f3c2ed57f661b42b81a2630d2deb0b9",
+    "bytes": 21115,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-4-tumbled-edge-stone-border",
+    "path": "/manufacturer/sika/4-tumbled-edge-stone-border.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/4inTuEdStBoAnHeStTe_Samp_U31R25U16R25_001-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/4-tumbled-edge-stone-border-2/",
+    "sha256": "863973d9bfc6af574a0e6065d1eafdb3aec859908287c429165229a8d3b5f5b0",
+    "bytes": 27069,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-heavy-stone-texture",
+    "path": "/manufacturer/sika/heavy-stone-texture.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/HeStTe_Samp_U26R23_001-LARGE-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/heavy-stone-texture-mats-touch-skin/",
+    "sha256": "4c3de6f99425b287550bc2166f9e4a14d9e96df3fa73d1b5aaf59ec835440f47",
+    "bytes": 20401,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-new-brick-sailor-course",
+    "path": "/manufacturer/sika/new-brick-sailor-course.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/NeBrSaCoSt_Samp_001-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/new-brick-sailor-course/",
+    "sha256": "b4cf0ed9c6cccad2032f099d96719d66de5f889d4e19037b232e355afc3fcc6f",
+    "bytes": 28096,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-old-chicago-soldier-course",
+    "path": "/manufacturer/sika/old-chicago-soldier-course.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/OlChBrSoCoAnFiCo_Samp_U34R12_001-as-Smart-Object-1-resized-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/old-chicago-soldier-course/",
+    "sha256": "fa938cd41f4549657966a112a89e546e954809b1c62358ea17ff18d1eda6fbb8",
+    "bytes": 29512,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-new-brick-soldier-course",
+    "path": "/manufacturer/sika/new-brick-soldier-course.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/NeBrSoCoAnFiCo_Samp_U33R15_001-LARGE-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/new-brick-soldier-course/",
+    "sha256": "e1396c51118f71991c355422b19e56139954ccaf6f77272e7d192b3d85e84367",
+    "bytes": 34439,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikastamp-ashlar-slate",
+    "path": "/manufacturer/sika/ashlar-slate.jpg",
+    "sourceUrl": "https://www.butterfieldcolor.com/wp-content/uploads/2017/04/Jerry-pic_DSC7111-as-Smart-Object-1-375x205.jpg",
+    "productUrl": "https://www.butterfieldcolor.com/tool/ashlar-slate/",
+    "sha256": "2c3c703d3890c11dd0dc894ce20f74a39861de2c38a77aefdd2eb4d82b7b88d4",
+    "bytes": 17804,
+    "kind": "official-manufacturer-thumbnail"
+  },
+  {
+    "id": "sikacolor-200-chart",
+    "path": "/manufacturer/sika/sikacolor-200-color-chart.pdf",
+    "sourceUrl": "https://usa.sika.com/dam/dms/us01/t/SikaColor-200-Color-Hardener-Color-Chart.pdf",
+    "productUrl": "https://usa.sika.com/en/construction/concrete/downloads/sikacolor-technical-literature.html",
+    "sha256": "9c617ca92a5147db392c9919c51ab02b766bdabb166830556d703d4c9bc3bce2",
+    "bytes": 1697241,
+    "kind": "official-manufacturer-color-chart"
+  }
+]

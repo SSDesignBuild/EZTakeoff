@@ -85,10 +85,22 @@ assert.ok(!select.includes('Lumino window &amp; insulated knee-wall concept'));
 assert.ok(!cover3D.includes('RenaissanceLuminoWall3D'));
 assert.ok(cover3D.includes('EliteAddARoomWall3D'));
 const deckRenderer=read('src/components/visual3d/ManufacturerDeck3D.tsx');
-assert.ok(deckRenderer.includes("project.coverScreenStyle==='elite-add-a-room'||"),
- 'Sunroom always suppresses duplicate independent deck/stair-entry rails even if legacy Dolce setting is inside/outside');
-assert.ok(deckRenderer.includes("!['inside','outside'].includes(project.coverScreenRailTreatment??'integrated-kick')"),
- 'Preserve explicitly chosen independent Dolce guardrail where required by code');
+const {lightingScreenIntegrated}=load('src/lib/lightingAddons');
+assert.ok(deckRenderer.includes('screenIntegrated=covered&&lightingScreenIntegrated(project)')&&
+ deckRenderer.includes('screenIntegrated={screenIntegrated}'),
+ 'Deck renderer must consume the shared level-rail enclosure authority');
+for(const treatment of ['integrated-kick','integrated-picket','inside','outside','screens-only']){
+ const coveredProject={...modelProject,kind:'covered-deck',coverFamily:'Moderno',coverScreenRailTreatment:treatment};
+ const eliteEnclosure={...coveredProject,coverScreenStyle:'elite-add-a-room'};
+ const dolceEnclosure={...coveredProject,coverScreenStyle:'dolce-standard'};
+ assert.equal(lightingScreenIntegrated(eliteEnclosure),true,
+  'Sunroom suppresses duplicate level rails even with a legacy independent Dolce treatment');
+ assert.equal(lightingScreenIntegrated(dolceEnclosure),
+  !['inside','outside'].includes(treatment),'Explicit independent Dolce level guards remain present');
+ for(const enclosed of [eliteEnclosure,dolceEnclosure])
+  assert.equal(lightingScreenIntegrated({...enclosed,coverFamily:'none'}),false,
+   'Retained enclosure choices cannot suppress open-deck rails after removing the cover');
+}
 const sunroom=read('src/components/visual3d/EliteAddARoomWall3D.tsx');
 for(const part of ['RectangularSashLite','separate-sash-stile','sash-bottom-track',
  'clear-insulated-glass-lite','double-track-sill-rail',

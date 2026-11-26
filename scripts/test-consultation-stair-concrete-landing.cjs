@@ -22,7 +22,7 @@ assert.deepEqual(planner.planStairLandings([4,6],{}),[]);
 assert.deepEqual(planner.planStairLandings([4,6],{stairLandingSurface:'bare-ground'}).map(x=>x.bags80lb),[12,18]);
 const render=read('src/components/visual3d/DeckStairAssembly3D.tsx');
 assert.ok(render.includes('planStairLanding(width')&&render.includes('stairLandingSurface')&&render.includes('run+landing.depthFt/2')&&render.includes('automatic-dimensioned-concrete-stair-landing'));
-const ui=read('src/components/ConsultationStudio.tsx');
+const ui=read('src/components/ConsultationStudio.tsx')+read('src/components/ConsultationDetailsPanel.tsx');
 assert.ok(ui.includes('stairLandingSurface')&&ui.includes('stairLandingDepthFt')&&ui.includes('stairLandingThicknessIn'));
 const bridge=read('src/lib/estimatingBridge.ts');
 assert.ok(bridge.includes('80-lb bagged concrete')&&bridge.includes('validLandings.reduce')&&bridge.includes('landingSurface(project.values.stairLandingSurface)'));

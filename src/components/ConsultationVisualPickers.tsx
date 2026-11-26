@@ -3,6 +3,7 @@ import { railingPhotos, coverPhotos, type PhotoReference } from '../data/consult
 import { hasRenaissanceReferenceChart, maxReferenceOverhangFt } from '../lib/renaissanceGuidance';
 import { effectivePcaKickPlateIn } from '../lib/pcaScreenDoorGeometry';
 import type { ConsultationProject } from '../lib/consultationProject';
+import { changeCoverFinishStyle, coverFinishStyleIssue } from '../lib/consultationFinishDock';
 import {
   deckVisualProducts, deckCollections, getDeckVisualProduct,
   railVisualProducts, getRailVisualProduct, coverVisualProducts, getCoverVisualProduct,
@@ -237,16 +238,18 @@ export function ManufacturerCoverPicker({project,onChange}:{
       {coverVisualProducts.map((item)=><button type="button" key={item.id}
         className={'manufacturer-cover-card'+(project.coverFamily===item.id?' selected':'')}
         aria-pressed={project.coverFamily===item.id}
-        onClick={()=>onChange({coverFamily:item.id,kind:item.id==='none'?'deck':'covered-deck',
-          coverColor:item.colors.includes(project.coverColor)?project.coverColor:item.colors[0],
-          coverRoofStyle:item.roofStyles.includes(project.coverRoofStyle??'studio')?project.coverRoofStyle:'studio',
-           coverAccentEnd:['Contempo','Classico'].includes(item.id)?'curved':'straight'})}>
+        disabled={!!coverFinishStyleIssue(project,item.id)}
+        title={coverFinishStyleIssue(project,item.id)}
+        onClick={()=>{
+          const patch=changeCoverFinishStyle(project,item.id);
+          if(Object.keys(patch).length)onChange(patch);
+        }}>
         {item.id==='none'?<div className="manufacturer-photo manufacturer-photo--missing">
           <strong>Open-air deck</strong><span>No cover or pergola included</span>
         </div>:<ProductPhoto photo={coverPhotos[item.id]} name={item.name+' Renaissance'} fallback={item.sourcePage}/>}
 
         <strong>{item.name}</strong>
-        <small>{item.description}</small>
+        <small>{coverFinishStyleIssue(project,item.id)??item.description}</small>
       </button>)}
     </div>
     {project.coverFamily!=='none'&&<div className="manufacturer-cover-options">

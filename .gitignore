@@ -3,3 +3,5 @@ dist
 *.tsbuildinfo
 vite.config.js
 vite.config.d.ts
+# Reconstructed manufacturer assets; source manifests/bundles live in src/data.
+public/manufacturer/

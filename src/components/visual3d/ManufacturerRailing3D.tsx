@@ -21,9 +21,10 @@ function resolveStyle(values:Values):RailVisualProduct {
   const profile=values.railingTopProfile==='modern'?'tt-ire-modern':values.railingTopProfile==='drink'?'tt-ire-drink':'tt-ire-classic';
   return getRailVisualProduct(profile);
 }
-export function ManufacturerRailing3D({model,values,center,deckHeight,screenIntegrated=false}:{
+export function ManufacturerRailing3D({model,values,center,deckHeight,screenIntegrated=false,lightCapPostKeys}:{
   model:DeckModel;values:Values;center:P2;deckHeight:number;
   screenIntegrated?:boolean;
+  lightCapPostKeys?:ReadonlySet<string>;
 }){
   const selectedStyle=resolveStyle(values);
   const requestedPost=Number(String(values.railingPostSize??'3x3').split('x')[0]);
@@ -91,7 +92,7 @@ export function ManufacturerRailing3D({model,values,center,deckHeight,screenInte
           return <group key={'railing-post-'+i}>
             <Block position={[p[0],deckHeight+.0625+(height-.034)/2,p[1]]}
               size={[postWidth,height-.034,postWidth]} color={color} metalness={metallic ? .65 : .025}/>
-            {!hideCap&&<Block position={[p[0],yTop+.06,p[1]]}
+            {!hideCap&&!lightCapPostKeys?.has(key)&&<Block position={[p[0],yTop+.06,p[1]]}
               size={[postWidth+.045,.085,postWidth+.045]} color={color} metalness={metallic ? .66 : 0}/>}
             {!wooden&&<Block position={[p[0],deckHeight+.13,p[1]]}
               size={[postWidth+.06,.135,postWidth+.06]} color={color} metalness={metallic ? .6 : 0}/>}
@@ -172,7 +173,7 @@ export function ManufacturerRailing3D({model,values,center,deckHeight,screenInte
         Materials for these runs are already counted by buildDeckModel. */}
     <ManufacturerStairRailing3D model={model} center={center}
       deckHeight={deckHeight} style={style} color={color} infill={infill}
-      height={height} hideCap={hideCap} runs={stairs} sharedTopPosts={sharedTopPosts}/>
+      height={height} hideCap={hideCap} runs={stairs} sharedTopPosts={sharedTopPosts} lightCapPostKeys={lightCapPostKeys}/>
     {drink&&<DrinkRailBoards3D pieces={drinkPieces} material={resolveDrinkRailMaterial(values)}/>}
   </group>;
 }

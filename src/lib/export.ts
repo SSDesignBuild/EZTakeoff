@@ -1,3 +1,5 @@
+import { wrapMaterialExportText } from './materialExport';
+
 function concatBytes(parts: Uint8Array[]) {
   const total = parts.reduce((sum, part) => sum + part.length, 0);
   const out = new Uint8Array(total);
@@ -27,14 +29,10 @@ function makePdfFromJpegs(images: PdfImage[], title: string) {
   const landscape = { width: 792, height: 612 };
   const margin = 14;
   const objects: Uint8Array[] = [];
-  const offsets: number[] = [0];
   const header = stringBytes('%PDF-1.4\n%\xFF\xFF\xFF\xFF\n');
-  let cursor = header.length;
 
   const addObject = (body: Uint8Array) => {
-    offsets.push(cursor);
     objects.push(body);
-    cursor += body.length;
   };
 
   const pageKids: string[] = [];
@@ -75,8 +73,18 @@ function makePdfFromJpegs(images: PdfImage[], title: string) {
   });
 
   objects[pagesIndex] = stringBytes(`2 0 obj\n<< /Type /Pages /Kids [${pageKids.join(' ')}] /Count ${images.length} >>\nendobj\n`);
-  addObject(stringBytes(`${infoObjNum} 0 obj\n<< /Title (${title.replace(/[()\\]/g, '')}) >>\nendobj\n`));
+  // PDF text strings use UTF-16BE with a BOM. A hex string preserves Unicode,
+  // parentheses and backslashes without relying on a viewer's legacy encoding.
+  let titleHex='FEFF';
+  for(let index=0;index<title.length;index++)titleHex+=title.charCodeAt(index).toString(16).padStart(4,'0');
+  addObject(stringBytes(`${infoObjNum} 0 obj\n<< /Title <${titleHex}> >>\nendobj\n`));
 
+  // Compute byte offsets only after /Pages has its final Kids array. Replacing
+  // that object changes its length; earlier offsets made every later xref entry
+  // stale and forced permissive readers to reconstruct the PDF on open.
+  const offsets: number[] = [0];
+  let cursor = header.length;
+  for(const object of objects){offsets.push(cursor);cursor+=object.length;}
   const xrefStart = cursor;
   let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
   for (let i = 1; i <= objects.length; i += 1) xref += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
@@ -133,36 +141,24 @@ function inlineComputedStyles(source: Element, target: Element) {
   });
 }
 
-function wrapTitleLines(title: string, pageWidth: number, fontSize = 18) {
+export function wrapDrawingExportTitle(title: string, pageWidth: number, fontSize = 18, measure?: (text: string) => number) {
   const rawLines = String(title || '').split(/\n+/).map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
   if (!rawLines.length) return [] as string[];
-  const maxChars = Math.max(24, Math.floor((pageWidth - 56) / (fontSize * 0.54)));
-  const lines: string[] = [];
-  rawLines.forEach((clean) => {
-    const words = clean.split(' ');
-    let line = '';
-    for (const word of words) {
-      const next = line ? `${line} ${word}` : word;
-      if (next.length <= maxChars || !line) {
-        line = next;
-        continue;
-      }
-      lines.push(line);
-      line = word;
-    }
-    if (line) lines.push(line);
-  });
-  return lines;
+  const context = !measure && typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null;
+  if (context) context.font = `700 ${fontSize}px Arial`;
+  const measured = measure ?? (context ? (text: string) => context.measureText(text).width :
+    (text: string) => Array.from(text).length * fontSize * .65);
+  return rawLines.flatMap(line => wrapMaterialExportText(line, Math.max(1, pageWidth - 56), measured));
 }
 
 function appendWrappedTitle(svg: SVGSVGElement, title: string, x: number, y: number, pageWidth: number, fontSize = 18) {
-  const lines = wrapTitleLines(title, pageWidth, fontSize);
+  const lines = wrapDrawingExportTitle(title, pageWidth, fontSize);
   if (!lines.length) return 0;
   const titleText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
   titleText.setAttribute('x', String(x));
   titleText.setAttribute('y', String(y));
   titleText.setAttribute('font-size', String(fontSize));
-  titleText.setAttribute('font-family', 'Inter, Arial, sans-serif');
+  titleText.setAttribute('font-family', 'Arial, sans-serif');
   titleText.setAttribute('font-weight', '700');
   titleText.setAttribute('text-anchor', 'middle');
   titleText.setAttribute('fill', '#111111');
@@ -205,7 +201,7 @@ async function svgToCanvas(svg: SVGSVGElement, exportTitle = '') {
     width = Math.max(1200, width);
     height = Math.max(900, height);
   }
-  const titleLines = wrapTitleLines(exportTitle, width, 22);
+  const titleLines = wrapDrawingExportTitle(exportTitle, width, 22);
   const headerHeight = titleLines.length ? Math.max(72, 30 + titleLines.length * 28) : 0;
   if (headerHeight) {
     const contentGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -335,7 +331,7 @@ export async function svgElementToExportCanvases(svg: SVGSVGElement | null, titl
     const bbox = section.getBBox();
     const legendBox = legend?.getBBox();
     const paddingX = 36;
-    const titleLines = wrapTitleLines(title, Math.max(612, bbox.width + paddingX * 2), 18);
+    const titleLines = wrapDrawingExportTitle(title, Math.max(612, bbox.width + paddingX * 2), 18);
     const paddingTop = Math.max(78, 44 + titleLines.length * 24);
     const paddingBottom = 36;
     const legendGap = legend && legendBox ? 18 : 0;

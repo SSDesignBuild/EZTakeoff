@@ -1,4 +1,5 @@
 import { useState, type Dispatch, type SetStateAction } from 'react';
+import { Link } from 'react-router-dom';
 import { FieldRenderer } from './FieldRenderer';
 import { DeckDesigner } from './DeckDesigner';
 import { DeckSkirtingEditor } from './DeckSkirtingEditor';
@@ -7,6 +8,7 @@ import { DeckGateEditor } from './DeckGateEditor';
 import { LayoutPreview } from './LayoutPreview';
 import { MaterialTable } from './MaterialTable';
 import { MetricCard } from './MetricCard';
+import { SiteConcretePlanSheet } from './SiteConcretePlanSheet';
 import type { ServiceField } from '../data/services';
 import type { EstimateResult } from '../lib/types';
 
@@ -18,6 +20,8 @@ interface Props {
   onValuesChange: ChangeValues;
   estimate: EstimateResult;
   visibleFields: ServiceField[];
+  initialStep?:StepId;
+  studioContext?:{title:string;revision:number;returnHref:string;coverFamily:string};
 }
 
 const steps: { id: StepId; title: string; subtitle: string }[] = [
@@ -62,8 +66,8 @@ const goTop = () => {
   if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
-export function DeckWorkspaceFlow({ values, onValuesChange, estimate, visibleFields }: Props) {
-  const [step, setStep] = useState<StepId>('structure');
+export function DeckWorkspaceFlow({ values, onValuesChange, estimate, visibleFields,initialStep,studioContext }: Props) {
+  const [step, setStep] = useState<StepId>(initialStep??'structure');
   const stepIndex = steps.findIndex((item) => item.id === step);
   const active = steps[stepIndex];
   const available = new Map(visibleFields.map((field) => [field.key, field]));
@@ -87,10 +91,16 @@ export function DeckWorkspaceFlow({ values, onValuesChange, estimate, visibleFie
     <header className="content-card deck-workflow-overview">
       <div>
         <p className="eyebrow">S&S Design Build · EZTakeoff</p>
-        <h2>Deck takeoff builder</h2>
-        <p className="muted">Work in order from structural setup through the drawing and finish selections. Your project is saved automatically in this browser.</p>
+        <h2>{studioContext?'Studio design · takeoff copy':'Deck takeoff builder'}</h2>
+        <p className="muted">{studioContext?
+          studioContext.title+' · Studio revision '+studioContext.revision+'. Edits are saved in this separate takeoff copy. Return to Studio to keep designing the original.':
+          'Work in order from structural setup through the drawing and finish selections. Your project is saved automatically in this browser.'}</p>
+        {studioContext&&studioContext.coverFamily!=='none'&&<p className="muted">
+          {studioContext.coverFamily} cover and enclosure selections remain in Studio. The sheets below cover the deck, stairs, railing and drawn concrete.
+        </p>}
       </div>
       <div className="deck-workflow-overview-actions">
+        {studioContext&&<Link className="secondary-btn small-btn" to={studioContext.returnHref}>Return to Studio</Link>}
         <span className="deck-workflow-status">{estimate.summary.find((s) => s.label === 'Deck area')?.value ?? 'Draw a footprint'}</span>
         {estimate.validationIssues?.length ? <span className="deck-workflow-warning">{estimate.validationIssues.length} issue(s) to resolve before exporting</span> : <span className="deck-workflow-status">Ready for review</span>}
         {step !== 'review' && <button type="button" className="secondary-btn small-btn" onClick={() => select('review')}>Review takeoff</button>}
@@ -154,8 +164,9 @@ export function DeckWorkspaceFlow({ values, onValuesChange, estimate, visibleFie
           <h4>Customer, extra materials & supplier order</h4>
           <p className="muted">Complete the client information and any additional items, then review the printable plan and elevations beneath the material list.</p>
         </div>
-        <MaterialTable items={estimate.materials} values={values} onValuesChange={onValuesChange} validationIssues={estimate.validationIssues ?? []}/>
+        <MaterialTable items={estimate.materials} values={values} onValuesChange={onValuesChange} validationIssues={estimate.validationIssues ?? []} orderNotes={estimate.orderNotes}/>
         <LayoutPreview serviceSlug="decks" values={values} onValuesChange={onValuesChange}/>
+        <SiteConcretePlanSheet values={values}/>
         <div className="deck-workflow-export-elevations">
           {hasSkirting && <DeckSkirtingEditor values={values} onValuesChange={onValuesChange}/>}
           <DeckRailingElevation values={values}/>

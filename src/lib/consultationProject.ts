@@ -23,6 +23,7 @@ export interface ConsultationProject {
   values: Record<string,string|number|boolean>;
   coverFamily: CoverFamily;
   coverColor: CoverColor; // Legacy field, retained as the aluminum FRAME finish.
+  coverScreenColor?: 'match' | CoverColor;
   coverRoofColor?: CoverRoofColor;
   coverCeilingFinish?: CoverCeilingFinish;
   coverRoofStyle?: 'studio'|'gable';
@@ -87,7 +88,7 @@ export const makeConsultationProject = (id: string): ConsultationProject => ({
     railingVisualId:'tt-ire-modern',
     railingType:'aluminum',railingSystem:'timbertech-ire',
     railingTopProfile:'modern',railingColor:'black',railingInfill:'aluminum'},
-  coverFamily:'none',coverColor:'White',coverRoofColor:'White',coverCeilingFinish:'White',coverRoofStyle:'studio',coverShadePercent:65,coverLouverAngle:12,
+  coverFamily:'none',coverColor:'White',coverScreenColor:'match',coverRoofColor:'White',coverCeilingFinish:'White',coverRoofStyle:'studio',coverShadePercent:65,coverLouverAngle:12,
   coverFraming:'standard',coverMount:'wall-attached',coverScreenStyle:'none',
   coverAccentEnd:'straight',coverTrussMount:'flush',coverScreenUprights:{front:2,left:1,right:1,rear:2},
   coverScreenRailTreatment:'integrated-kick',coverPrivacyWallGaps:{front:0,left:0,right:0,rear:0},coverDoorEnabled:true,
@@ -107,7 +108,7 @@ export const loadConsultations = (): ConsultationProject[] => {
     const stored=JSON.parse(window.localStorage.getItem(KEY)??'[]') as unknown;
     if(!Array.isArray(stored))return [];
     return stored.filter(valid).map((p)=>({
-      ...p,coverRoofColor:p.coverRoofColor??'White',coverCeilingFinish:p.coverCeilingFinish??'White',
+      ...p,coverScreenColor:p.coverScreenColor??'match',coverRoofColor:p.coverRoofColor??'White',coverCeilingFinish:p.coverCeilingFinish??'White',
       coverRoofStyle:p.coverRoofStyle??'studio',coverShadePercent:p.coverShadePercent??65,
       coverLouverAngle:p.coverLouverAngle??12,
       coverFraming:p.coverFraming??'standard',coverMount:p.coverMount??'wall-attached',
