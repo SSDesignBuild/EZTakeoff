@@ -1,10 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
-import { exportCanvasAsPdf, exportCanvasAsPng, exportCanvasesAsPdf, svgElementToExportCanvases, svgElementToCanvas } from '../lib/export';
+import { exportCanvasAsPng, exportCanvasesAsPdf, svgElementToExportCanvases, svgElementToCanvas } from '../lib/export';
 import { MaterialItem } from '../lib/types';
+import { renderMaterialExportPages,stackMaterialExportPages } from '../lib/materialExport';
 
 interface MaterialTableProps {
   items: MaterialItem[];
   validationIssues?: string[];
+  orderNotes?: string[];
   values: Record<string, string | number | boolean>;
   onValuesChange: (updater: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => void;
 }
@@ -68,159 +70,6 @@ function sanitizeFilePart(value: string) {
   return value.trim().replace(/[^a-z0-9-_ ]/gi, '').replace(/\s+/g, '-').toLowerCase() || 'sns-material-order-list';
 }
 
-function fitText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number) {
-  let out = value;
-  while (out.length > 0 && ctx.measureText(out).width > maxWidth) out = `${out.slice(0, -2)}…`;
-  return out;
-}
-
-function wrapText(ctx: CanvasRenderingContext2D, value: string, maxWidth: number) {
-  const words = String(value || '').split(/\s+/).filter(Boolean);
-  if (!words.length) return ['—'];
-  const lines: string[] = [];
-  let current = words[0];
-  for (let i = 1; i < words.length; i += 1) {
-    const attempt = `${current} ${words[i]}`;
-    if (ctx.measureText(attempt).width <= maxWidth) current = attempt;
-    else { lines.push(current); current = words[i]; }
-  }
-  lines.push(current);
-  return lines;
-}
-
-function renderMaterialCanvas(title: string, values: Record<string, string | number | boolean>, grouped: Record<string, DisplayMaterialItem[]>) {
-  const margin = 28;
-  const rowBaseHeight = 28;
-  const gutter = 10;
-  const minWidths = [52, 150, 128, 44, 44, 130, 180];
-  const maxWidths = [60, 210, 260, 58, 58, 220, 320];
-  const headers = ['Label', 'Material', 'Stock recommendation', 'Qty', 'Unit', 'Color', 'Notes'];
-  const canvas = document.createElement('canvas');
-  const probe = canvas.getContext('2d');
-  if (!probe) throw new Error('Canvas unavailable');
-  probe.font = '12px Arial';
-  const colWidths = headers.map((header, idx) => {
-    let width = probe.measureText(header).width + 16;
-    Object.values(grouped).forEach((rows) => {
-      rows.forEach((row) => {
-        const value = [row.layoutLabel ?? '', row.name, row.stockRecommendation ?? '', String(row.quantity), row.unit, row.color ?? '—', row.notes ?? '—'][idx];
-        const measured = probe.measureText(String(value)).width + 16;
-        width = Math.max(width, measured);
-      });
-    });
-    return Math.min(maxWidths[idx], Math.max(minWidths[idx], Math.ceil(width)));
-  });
-  const tableWidth = colWidths.reduce((sum, width) => sum + width, 0) + gutter * (colWidths.length - 1);
-  const pageWidth = Math.max(940, tableWidth + margin * 2);
-  const rowHeightsByCategory = Object.fromEntries(Object.entries(grouped).map(([category, rows]) => [category, rows.map((row) => {
-    const stockLines = wrapText(probe, row.stockRecommendation ?? '—', colWidths[2] - 16).length;
-    const colorLines = wrapText(probe, row.color ?? '—', colWidths[5] - 16).length;
-    const noteLines = wrapText(probe, row.notes ?? '—', colWidths[6] - 16).length;
-    return Math.max(rowBaseHeight, 18 + Math.max(stockLines, colorLines, noteLines) * 14);
-  })]));
-  let pageHeight = 138;
-  Object.entries(grouped).forEach(([category]) => {
-    const heights = rowHeightsByCategory[category] as number[];
-    pageHeight += 44 + 28 + heights.reduce((sum, height) => sum + height, 0) + 18;
-  });
-  pageHeight += String(values.jobNotes ?? '').trim() ? 92 : 32;
-  canvas.width = pageWidth;
-  canvas.height = Math.max(700, pageHeight);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas unavailable');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, pageWidth, canvas.height);
-
-  ctx.fillStyle = '#111111';
-  ctx.font = '700 28px Arial';
-  ctx.fillText(title, margin, 44);
-  const info = [
-    ['P.O / Job name', String(values.poJobName ?? '') || '—'],
-    ['Address', String(values.jobAddress ?? '') || '—'],
-    ['Phone', String(values.customerPhone ?? '') || '—'],
-    ['Balance due', String(values.balanceDueCompletion ?? '') || '—'],
-    ['Financed', String(values.financedYesNo ?? 'No')],
-    ['Deliver', String(values.deliverYesNo ?? 'No')],
-    ['Deliver date', String(values.deliverDate ?? '') || '—'],
-  ];
-  const infoWidths = info.map(([label, value], idx) => {
-    const preferred = idx === 1 ? pageWidth * 0.34 : idx === 0 ? 145 : idx === 3 ? 130 : 105;
-    return Math.min(preferred, Math.max(idx === 1 ? 170 : 84, probe.measureText(String(value)).width + 18, probe.measureText(label).width + 12));
-  });
-  const infoTotal = infoWidths.reduce((a,b) => a+b,0);
-  const stretch = Math.max(0, pageWidth - margin * 2 - infoTotal);
-  infoWidths[1] += stretch;
-  let infoCursor = margin;
-  ctx.font = '12px Arial';
-  info.forEach(([label, value], idx) => {
-    const x = infoCursor; const infoColWidth = infoWidths[idx]; infoCursor += infoColWidth;
-    ctx.fillStyle = '#6b7280';
-    ctx.fillText(label, x, 68);
-    ctx.fillStyle = '#111111';
-    ctx.font = '600 14px Arial';
-    ctx.fillText(fitText(ctx, value, infoColWidth - 16), x, 88);
-    ctx.font = '12px Arial';
-  });
-
-  const cols = [margin];
-  for (let i = 0; i < colWidths.length - 1; i += 1) cols.push(cols[i] + colWidths[i] + gutter);
-  let y = 116;
-  Object.entries(grouped).forEach(([category, rows]) => {
-    ctx.fillStyle = '#111111';
-    ctx.font = '700 18px Arial';
-    ctx.fillText(category, margin, y);
-    ctx.font = '12px Arial';
-    ctx.fillStyle = '#6b7280';
-    ctx.fillText(`${rows.length} line items`, margin + 220, y);
-    y += 16;
-    ctx.fillStyle = '#f3f4f6';
-    ctx.fillRect(margin, y, tableWidth, 28);
-    ctx.fillStyle = '#111111';
-    ctx.font = '600 12px Arial';
-    headers.forEach((label, idx) => ctx.fillText(label, cols[idx] + 8, y + 18));
-    y += 28;
-    ctx.font = '12px Arial';
-    rows.forEach((row, idx) => {
-      const rowHeight = (rowHeightsByCategory[category] as number[])[idx];
-      const rowY = y;
-      ctx.fillStyle = idx % 2 ? '#dce7f3' : '#ffffff';
-      ctx.fillRect(margin, rowY, tableWidth, rowHeight);
-      ctx.strokeStyle = '#d1d5db';
-      ctx.strokeRect(margin, rowY, tableWidth, rowHeight);
-      ctx.fillStyle = '#111111';
-      const rowValues = [row.layoutLabel ?? '', row.name];
-      rowValues.forEach((value, colIdx) => {
-        const x = cols[colIdx] + 8;
-        const maxWidth = colWidths[colIdx] - 16;
-        ctx.fillText(fitText(ctx, String(value), maxWidth), x, rowY + 18);
-      });
-      const stockLines = wrapText(ctx, row.stockRecommendation ?? '—', colWidths[2] - 16);
-      stockLines.forEach((line, lineIdx) => ctx.fillText(line, cols[2] + 8, rowY + 18 + lineIdx * 14));
-      ctx.fillText(fitText(ctx, String(row.quantity), colWidths[3] - 16), cols[3] + 8, rowY + 18);
-      ctx.fillText(fitText(ctx, String(row.unit), colWidths[4] - 16), cols[4] + 8, rowY + 18);
-      const colorLines = wrapText(ctx, row.color ?? '—', colWidths[5] - 16);
-      colorLines.forEach((line, lineIdx) => ctx.fillText(line, cols[5] + 8, rowY + 18 + lineIdx * 14));
-      const noteLines = wrapText(ctx, row.notes ?? '—', colWidths[6] - 16);
-      noteLines.forEach((line, lineIdx) => ctx.fillText(line, cols[6] + 8, rowY + 18 + lineIdx * 14));
-      y += rowHeight;
-    });
-    y += 20;
-  });
-  const jobNotes = String(values.jobNotes ?? '').trim();
-  if (jobNotes) {
-    y += 8;
-    ctx.fillStyle = '#111111';
-    ctx.font = '700 13px Arial';
-    ctx.fillText('Job notes', margin, y);
-    y += 18;
-    ctx.font = '12px Arial';
-    ctx.fillStyle = '#374151';
-    wrapText(ctx, jobNotes, pageWidth - margin * 2).forEach((line, idx) => ctx.fillText(line, margin, y + idx * 14));
-  }
-  return canvas;
-}
-
-
 async function renderCombinedSkirtingSheet(cards: Element[]) {
   if (!cards.length) return null;
   // Each side/flight gets BOTH finish and framing elevations grouped in one
@@ -274,7 +123,7 @@ async function renderCombinedSkirtingSheet(cards: Element[]) {
   return canvas;
 }
 
-export function MaterialTable({ items, values, onValuesChange, validationIssues = [] }: MaterialTableProps) {
+export function MaterialTable({ items, values, onValuesChange, validationIssues = [],orderNotes = [] }: MaterialTableProps) {
   const tableRef = useRef<HTMLDivElement | null>(null);
   const [customDraft, setCustomDraft] = useState(customDefaults);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -539,13 +388,13 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
 
   const exportPdf = async () => {
     if (hasBlockingIssues) return;
-    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, printGrouped);
-    await exportCanvasAsPdf(canvas, 'S&S Design Build · Material order list', `${exportBaseName}.pdf`);
+    const pages = renderMaterialExportPages('S&S Design Build · Material order list', values, printGrouped,orderNotes);
+    await exportCanvasesAsPdf(pages, 'S&S Design Build · Material order list', `${exportBaseName}.pdf`);
   };
 
   const exportPng = async () => {
     if (hasBlockingIssues) return;
-    const canvas = renderMaterialCanvas('S&S Design Build · Material order list', values, printGrouped);
+    const canvas = stackMaterialExportPages(renderMaterialExportPages('S&S Design Build · Material order list', values, printGrouped,orderNotes));
     await exportCanvasAsPng(canvas, `${exportBaseName}.png`);
   };
 
@@ -565,9 +414,9 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     const skirtingSheet = await renderCombinedSkirtingSheet(skirtingCards);
     if (skirtingSheet) layoutCanvases.push(skirtingSheet);
     if (!layoutCanvases.length) return;
-    const materialCanvas = renderMaterialCanvas('S&S Design Build · Material order list', values, printGrouped);
-    const forcePortraitByIndex = { [layoutCanvases.length]: true } as Record<number, boolean>;
-    await exportCanvasesAsPdf([...layoutCanvases, materialCanvas], 'S&S Design Build · Layout and material order list', `${exportBaseName}-layout-materials.pdf`, { forcePortraitByIndex });
+    const materialPages = renderMaterialExportPages('S&S Design Build · Material order list', values, printGrouped,orderNotes);
+    const forcePortraitByIndex = Object.fromEntries(materialPages.map((_,index)=>[layoutCanvases.length+index,true]));
+    await exportCanvasesAsPdf([...layoutCanvases, ...materialPages], 'S&S Design Build · Layout and material order list', `${exportBaseName}-layout-materials.pdf`, { forcePortraitByIndex });
   };
 
   return (

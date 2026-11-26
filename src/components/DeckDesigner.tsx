@@ -76,11 +76,12 @@ const snapPointFromAnchor = (anchor: DeckPoint, point: DeckPoint) => {
 
 interface DeckDesignerProps {
   allowSiteConcrete?: boolean;
+  requestedMode?: 'points'|'stairs'|'railing'|'concrete';
   values: Record<string, string | number | boolean>;
   onValuesChange: (updater: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => void;
 }
 
-export function DeckDesigner({ values, onValuesChange, allowSiteConcrete = false }: DeckDesignerProps) {
+export function DeckDesigner({ values, onValuesChange, allowSiteConcrete = false, requestedMode }: DeckDesignerProps) {
   const mainPoints = useMemo(() => {
     if (typeof values.deckShape === 'string') {
       try {
@@ -147,6 +148,9 @@ export function DeckDesigner({ values, onValuesChange, allowSiteConcrete = false
   const activeConcrete = concreteAreas.find(area => area.id === activeConcreteId) ?? null;
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [mode, setMode] = useState<EditMode>('points');
+  useEffect(()=>{
+    if(requestedMode&&(requestedMode!=='concrete'||allowSiteConcrete))setMode(requestedMode);
+  },[requestedMode,allowSiteConcrete]);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [draggingBeamIndex, setDraggingBeamIndex] = useState<number | null>(null);
   // Pointer refs are synchronous across React batching and model rebuilds.

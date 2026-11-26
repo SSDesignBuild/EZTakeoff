@@ -1,0 +1,74 @@
+[
+  {
+    "id": "tt-accent",
+    "label": "TimberTech Accent Light",
+    "swatch": "/manufacturer/timbertech/lighting-tt-accent.webp",
+    "sourceUrl": "https://www.timbertech.com/products/lighting/media_1caa4632882b41e72d1f6622967c52c753c892d36.webp?width=480&format=webp&optimize=medium",
+    "sourcePage": "https://www.timbertech.com/products/lighting/",
+    "verifiedAt": "2026-11-25",
+    "sourceHeading": "Accent Light"
+  },
+  {
+    "id": "tt-reversible-accent",
+    "label": "TimberTech Reversible LED Accent Light",
+    "swatch": "/manufacturer/timbertech/lighting-tt-reversible-accent.webp",
+    "sourceUrl": "https://www.timbertech.com/products/lighting/media_15d4b8ecb0b93459525310332f777ecfb25701c37.webp?width=480&format=webp&optimize=medium",
+    "sourcePage": "https://www.timbertech.com/products/lighting/",
+    "verifiedAt": "2026-11-25",
+    "sourceHeading": "Reversible LED Accent Light"
+  },
+  {
+    "id": "tt-small-accent",
+    "label": "TimberTech Small Accent Light",
+    "swatch": "/manufacturer/timbertech/lighting-tt-small-accent.webp",
+    "sourceUrl": "https://www.timbertech.com/products/lighting/media_156f5e28f7bf3a1843941b9e1eb544e8039c002ce.webp?width=480&format=webp&optimize=medium",
+    "sourcePage": "https://www.timbertech.com/products/lighting/",
+    "verifiedAt": "2026-11-25",
+    "sourceHeading": "Small Accent Light"
+  },
+  {
+    "id": "tt-ire-post-cap",
+    "label": "TimberTech 3\u2033 Post Cap Light",
+    "swatch": "/manufacturer/timbertech/lighting-tt-ire-post-cap.webp",
+    "sourceUrl": "https://www.timbertech.com/products/lighting/media_1abbcf90c4ea4f982868a04d7612f4b7dd0b13562.webp?width=480&format=webp&optimize=medium",
+    "sourcePage": "https://www.timbertech.com/products/lighting/",
+    "verifiedAt": "2026-11-25",
+    "sourceHeading": "3\u2033 Post Cap Light"
+  },
+  {
+    "id": "tt-lantern",
+    "label": "TimberTech LED Lantern Post Cap Light",
+    "swatch": "/manufacturer/timbertech/lighting-tt-lantern.webp",
+    "sourceUrl": "https://www.timbertech.com/products/lighting/media_1f483f075a331357eeb8309dd5e2dadf8fae35103.webp?width=480&format=webp&optimize=medium",
+    "sourcePage": "https://www.timbertech.com/products/lighting/",
+    "verifiedAt": "2026-11-25",
+    "sourceHeading": "LED Lantern Post Cap Light"
+  },
+  {
+    "id": "tt-in-deck",
+    "label": "TimberTech In-Deck Light",
+    "swatch": "/manufacturer/timbertech/lighting-tt-in-deck.webp",
+    "sourceUrl": "https://www.timbertech.com/products/lighting/media_1f356a8c4224e2824eccb58d44f96a012d9105563.webp?width=480&format=webp&optimize=medium",
+    "sourcePage": "https://www.timbertech.com/products/lighting/",
+    "verifiedAt": "2026-11-25",
+    "sourceHeading": "In-Deck Light"
+  },
+  {
+    "id": "tt-riser",
+    "label": "TimberTech Riser Light",
+    "swatch": "/manufacturer/timbertech/lighting-tt-riser.webp",
+    "sourceUrl": "https://www.timbertech.com/products/lighting/media_14d25e6c4c7b453b17ffc6b0feceb612e05cd9400.webp?width=480&format=webp&optimize=medium",
+    "sourcePage": "https://www.timbertech.com/products/lighting/",
+    "verifiedAt": "2026-11-25",
+    "sourceHeading": "Riser Light"
+  },
+  {
+    "id": "tt-recessed-riser",
+    "label": "TimberTech Recessed LED Riser",
+    "swatch": "/manufacturer/timbertech/lighting-tt-recessed-riser.webp",
+    "sourceUrl": "https://www.timbertech.com/products/lighting/media_18c87431aff8b7d7d041d49be0b97bc303a9ad5da.webp?width=480&format=webp&optimize=medium",
+    "sourcePage": "https://www.timbertech.com/products/lighting/",
+    "verifiedAt": "2026-11-25",
+    "sourceHeading": "Recessed LED Riser"
+  }
+]

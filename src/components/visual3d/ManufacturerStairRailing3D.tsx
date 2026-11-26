@@ -68,10 +68,11 @@ function StairGlassPanel({from,to,guardHeight}:{
  </mesh>;
 }
 export function ManufacturerStairRailing3D({model,center,deckHeight,style,color,infill,
- height,hideCap,runs:providedRuns,sharedTopPosts=new Set<string>()}:{
+ height,hideCap,runs:providedRuns,sharedTopPosts=new Set<string>(),lightCapPostKeys}:{
  model:DeckModel;center:P2;deckHeight:number;style:RailVisualProduct;
  color:string;infill:string;height:number;hideCap:boolean;
  runs?:StairRailVisualRun[];sharedTopPosts?:Set<string>;
+ lightCapPostKeys?:ReadonlySet<string>;
 }){
  const wooden=style.family==='wood',metallic=style.family==='metal';
  const drink=style.geometry.includes('drink');
@@ -169,7 +170,7 @@ export function ManufacturerStairRailing3D({model,center,deckHeight,style,color,
          position={[p[0],(base+postTop)/2,p[2]]}
          size={[postWidth,Math.max(.1,postTop-base),postWidth]} color={color}
          metalness={metal}/>}
-       {!hideCap&&<Block name="selected-stair-post-cap"
+       {!hideCap&&!lightCapPostKeys?.has(railPointKey(p))&&<Block name="selected-stair-post-cap"
          position={at(p,height+.06)}
          size={[postWidth+.045,.085,postWidth+.045]} color={color}
          metalness={metal}/>}

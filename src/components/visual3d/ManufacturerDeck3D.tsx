@@ -16,6 +16,7 @@ import { RenaissanceCover3D } from './RenaissanceCover3D';
 import { planRenaissanceCoverWalls } from '../../lib/renaissanceCoverWallLayout';
 import { currentEliteSunroomSettings } from '../../lib/eliteSunroomStudio';
 import { planEliteDeckFloorClosure } from '../../lib/eliteDeckFloorClosure';
+import { lightingCapPostKeys,lightingScreenIntegrated } from '../../lib/lightingAddons';
 
 /** Loads first-party Netlify-cached manufacturer photographs, not generated hue. */
 function useManufacturerTexture(name:unknown){
@@ -303,6 +304,9 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
     ?fasciaName:riserStyle==='auto'||riserStyle==='match'
       ?String(project.values.deckingMaterial):riserStyle;
   const {map:riserMap}=useManufacturerTexture(riserName);
+  const screenIntegrated=covered&&lightingScreenIntegrated(project);
+  const capLightPosts=useMemo(()=>lightingCapPostKeys(model,project.values,center,deckHeight,
+    screenIntegrated,lowerTier?'lower':'main'),[model,project.values,center,deckHeight,screenIntegrated,lowerTier]);
   return <group name="manufacturer-visualized-deck">
     <DeckStructure3D model={model} center={center} height={deckHeight}/>
     <PolygonSubstrate model={model} center={center} deckHeight={deckHeight}/>
@@ -322,12 +326,7 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
     <DeckFascia model={model} center={center} height={deckHeight} texture={fasciaMap}/>
     <DeckSkirting3D model={model} center={center} height={deckHeight} values={project.values} texture={skirtMap} lowerTier={lowerTier}/>
     <ManufacturerRailing3D model={model} values={project.values} center={center}
-      deckHeight={deckHeight}
-      screenIntegrated={covered&&(
-        project.coverScreenStyle==='elite-add-a-room'||
-        (['dolce-open-view','dolce-standard'].includes(project.coverScreenStyle??'none')&&
-         !['inside','outside'].includes(project.coverScreenRailTreatment??'integrated-kick'))
-      )}/>
+      deckHeight={deckHeight} screenIntegrated={screenIntegrated} lightCapPostKeys={capLightPosts}/>
     <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values}
       texture={stairMap} fasciaTexture={stairFasciaMap}
       riserTexture={riserMap} skirtTexture={skirtMap}/>

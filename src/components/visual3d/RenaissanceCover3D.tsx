@@ -218,6 +218,8 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const front=theoreticalFront+plan.frontOverhangFt;
   const roofMidZ=(roofBackEdge+front)/2;
   const powder=getCoverFinish(project.coverColor);
+  const screenPowder=getCoverFinish(project.coverScreenColor&&project.coverScreenColor!=='match'
+    ?project.coverScreenColor:project.coverColor);
   const shadowColor=project.coverColor==='White'?'#c1c5c5':project.coverColor==='Sandstone'?'#b4a78c':
     project.coverColor==='Black'?'#202327':'#3c352f';
   const shape=plan.gable?'gable':'studio';
@@ -553,7 +555,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       {coverWallRuns.filter(wall=>!privacyGap(wall.id)).map(wall=><DolceScreenWall key={'Dolce-wall-'+wall.id} {...wall}
         bottom={deckHeight+.12}
         openView={project.coverScreenStyle==='dolce-open-view'}
-        finish={powder} center={[xMid,zMid]}
+        finish={screenPowder} center={[xMid,zMid]}
         treatment={project.coverScreenRailTreatment??'integrated-kick'}
         uprights={project.coverScreenUprights?.[wall.id]??(wall.id==='front'||wall.id==='rear'?2:1)}
         door={{
@@ -564,7 +566,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           pet:project.coverDoorPet??'none',
           finish:project.coverDoorFinish&&project.coverDoorFinish!=='match'
             ?getCoverFinish(project.coverDoorFinish==='Clay'?'Sandstone':project.coverDoorFinish)
-            :powder,
+            :screenPowder,
           hinge:project.coverDoorHinge??'left',
           swing:project.coverDoorSwing??'out',
           kickPlateIn:effectivePcaKickPlateIn(project.coverDoorPet??'none',project.coverDoorKickPlateIn??8),
@@ -589,7 +591,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       !privacyGap('front')&&
       <DolceGableInfill leftX={frameLeft} rightX={frameRight} z={frameFront}
         beamTopY={eaveY} roofWidthFt={width} ridgeRiseFt={gableRise}
-        panelThicknessFt={roofPanelThicknessFt} finish={powder}/>}
+        panelThicknessFt={roofPanelThicknessFt} finish={screenPowder}/>}
     {/* Solid-roof gutter is included above; Fresco uses its own snap channels. */}
   </group>;
 }

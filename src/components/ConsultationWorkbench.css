@@ -1,0 +1,129 @@
+/* Consultation workbench: the live model and finish catalog are one surface. */
+.shell.shell--studio .topbar { padding:12px 24px 0; }
+.shell.shell--studio .topbar-brand { display:flex;gap:12px;margin:0;padding:10px 16px;border-radius:14px;box-shadow:none; }
+.shell.shell--studio .brand-logo-wrap { padding:4px 8px;border-radius:7px; }
+.shell.shell--studio .brand-logo { width:78px;max-height:38px;object-fit:contain; }
+.shell.shell--studio .topbar-copy h1 { font-size:16px;margin:0; }
+.shell.shell--studio .topbar-copy .eyebrow { font-size:9px;margin:0; }
+.shell.shell--studio .main-panel { padding:12px 24px 24px;min-width:0; }
+.studio-workspace.consultations-shell { max-width:1640px;gap:10px; }
+.studio-workspace-strip { display:flex;align-items:center;justify-content:space-between;gap:12px; }
+.studio-workspace .studio-save-sync { border-bottom:1px solid var(--border);padding:0 4px 9px; }
+.studio-save-sync>summary { cursor:pointer;font-size:12px;font-weight:700;color:var(--ink); }
+.studio-save-sync>summary span { color:var(--muted);font-size:11px;font-weight:400;margin-left:8px; }
+.studio-save-sync[open]>summary { margin-bottom:12px; }
+.studio-workspace .consultation-studio { gap:14px; }
+.studio-workspace .consultation-titlebar { background:transparent;padding:3px 1px;border:0;border-radius:0;box-shadow:none;gap:18px; }
+.studio-workspace .consultation-titlebar h2 { font-size:clamp(20px,2vw,28px);letter-spacing:-.035em;margin:2px 0 4px; }
+.studio-workspace .consultation-titlebar .eyebrow { font-size:9px; }
+.studio-workspace .consultation-titlebar .muted { font-size:12px; }
+.studio-project-meta { display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:7px 14px;font-size:11px;color:var(--muted); }
+.studio-save-status { display:inline-flex;align-items:center;gap:5px; }
+.studio-save-status::before { content:'';width:6px;height:6px;border-radius:50%;background:#479e79; }
+.studio-save-error { color:#c85b35;font-weight:700; }
+.studio-workspace .consultation-step-nav { gap:0;padding:5px;border:1px solid var(--border);border-radius:12px;background:var(--panel); }
+.studio-workspace .consultation-step-nav button { min-height:62px;padding:10px 14px;border:0;border-radius:8px;background:transparent;box-shadow:none; }
+.studio-workspace .consultation-step-nav button.active { background:var(--accent-soft);border:0;box-shadow:inset 0 -2px 0 var(--accent); }
+.studio-workspace .consultation-step-nav strong { font-size:12px; }
+.studio-workspace .consultation-step-nav small { font-size:10px;color:var(--muted);opacity:1; }
+.studio-workspace .consultation-panel { box-shadow:none; }
+.studio-field-help { font-size:12px;line-height:1.6;color:var(--muted); }
+.studio-live-section { display:grid;gap:14px;min-width:0; }
+.studio-workbench-intro { display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 2px; }
+.studio-workbench-intro h3 { font-size:19px;letter-spacing:-.025em;margin:3px 0 4px; }
+.studio-workbench-intro p { font-size:12px;line-height:1.5;color:var(--muted);margin:0; }
+.studio-workbench-intro .eyebrow { font-size:9px;color:var(--accent); }
+.studio-workbench-intro>button { flex-shrink:0; }
+.studio-workbench { display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:start;min-width:0; }
+.studio-workbench--with-inspector { grid-template-columns:minmax(0,1fr) minmax(320px,375px); }
+.studio-scene-column { min-width:0; }
+.studio-view-toolbar { display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;background:var(--panel);border:1px solid var(--border);border-bottom:0;border-radius:14px 14px 0 0; }
+.studio-segmented { display:flex;padding:3px;background:var(--bg-2);border:1px solid var(--border);border-radius:8px;gap:2px; }
+.studio-segmented button { min-height:30px;border:0;border-radius:5px;background:transparent;color:var(--muted);font:inherit;font-size:11px;font-weight:650;padding:6px 10px;cursor:pointer; }
+.studio-segmented button[aria-pressed=true] { background:var(--panel-strong);color:var(--ink);box-shadow:0 1px 4px #112c3315; }
+.studio-segmented button:disabled { opacity:.45;cursor:default; }
+.studio-view-actions { margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
+.studio-view-actions .small-btn,.studio-workbench-intro .small-btn { font-size:11px;padding:8px 10px;min-height:34px; }
+.studio-scene-column .consultation-3d-frame { min-height:280px;border-radius:0;border-bottom:0;transition:none; }
+.studio-scene-column .consultation-3d-frame.studio-evening { background:linear-gradient(180deg,#23364d 0%,#62758a 76%,#86939e 100%); }
+.studio-scene-column .consultation-3d-frame.with-photo { background:transparent; }
+.studio-scene-column .consultation-render-specs { top:12px;left:12px;right:12px;max-width:calc(100% - 24px);display:flex;flex-wrap:wrap;gap:5px;pointer-events:none; }
+.studio-scene-column .consultation-render-specs span { font-size:9px;padding:5px 8px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.studio-scene-column .consultation-render-stamp { bottom:9px;left:12px;max-width:calc(100% - 24px);font-size:9px;letter-spacing:.02em;font-weight:500;padding:5px 8px;border-radius:4px; }
+.studio-inspector { border:1px solid var(--border);border-radius:14px;background:var(--panel);min-width:0;overflow:hidden; }
+.studio-inspector-heading { display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px; }
+.studio-inspector-heading h3 { margin:3px 0 0;font-size:18px; }
+.studio-inspector-heading .eyebrow { font-size:9px; }
+.studio-inspector-sections { display:flex;gap:5px;overflow-x:auto;padding:0 12px 12px;border-bottom:1px solid var(--border);scrollbar-width:thin; }
+.studio-inspector-sections button { flex:0 0 auto;border:1px solid var(--border);border-radius:7px;background:var(--panel-strong);color:var(--ink);font:inherit;font-size:11px;padding:8px 10px;cursor:pointer; }
+.studio-inspector-sections button[aria-pressed=true] { background:var(--accent-soft);border-color:var(--accent);font-weight:700; }
+.studio-inspector-body { padding:12px;display:grid;gap:12px;max-height:850px;overflow-y:auto;overscroll-behavior-y:contain;min-width:0; }
+.studio-inspector-body .consultation-option-card { padding:10px;border-radius:9px;gap:10px;min-width:0; }
+.studio-inspector-body .consultation-option-card h4 { font-size:14px; }
+.studio-inspector-body .consultation-option-head { flex-wrap:wrap; }
+.studio-inspector-body .manufacturer-board-grid,.studio-inspector-body .manufacturer-rail-grid,.studio-inspector-body .manufacturer-cover-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.studio-inspector-body .manufacturer-rail-config,.studio-inspector-body .consultation-form-two,.studio-inspector-body .consultation-cover-finish-grid { grid-template-columns:minmax(0,1fr); }
+.studio-inspector-body .manufacturer-photo { height:104px; }
+.studio-inspector-body label { min-width:0; }
+.studio-inspector-body input,.studio-inspector-body select { max-width:100%;min-width:0; }
+.studio-inspector-body .consultation-skirting-finish { grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); }
+.studio-draw-link { border:1px dashed var(--border);padding:10px 12px;border-radius:8px;background:var(--accent-soft);color:var(--ink);font:inherit;font-size:12px;cursor:pointer;text-align:left; }
+.studio-estimator-exchange { border:1px solid var(--border);background:var(--panel);border-radius:12px; }
+.studio-estimator-exchange>summary { padding:16px;cursor:pointer;font-size:13px;font-weight:700; }
+.studio-estimator-exchange>summary small { margin-left:10px;font-weight:400;color:var(--muted);font-size:11px; }
+.studio-estimator-exchange .consultation-handoff { padding:0 14px 14px; }
+.studio-plan-access { display:flex;align-items:center;justify-content:space-between;gap:18px;border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:18px; }
+.studio-plan-access h4 { font-size:16px;margin:0 0 6px; }
+.studio-plan-access p { font-size:12px;line-height:1.5;margin:0;color:var(--muted); }
+.studio-plan-access button { flex-shrink:0; }
+.studio-material-review { border:1px solid var(--border);border-radius:12px;overflow:hidden;background:var(--panel); }
+.studio-material-review summary { cursor:pointer;padding:14px 16px;font-size:13px;font-weight:700; }
+.studio-material-review .studio-material-table { max-height:480px;overflow:auto; }
+.studio-material-review table { width:100%;border-collapse:collapse;font-size:12px; }
+.studio-material-review th { position:sticky;top:0;background:var(--panel-strong);z-index:1;text-align:left; }
+.studio-material-review th,.studio-material-review td { padding:10px 14px;border-top:1px solid var(--border);vertical-align:top; }
+.studio-material-review td small { display:block;margin-top:4px;font-size:10px;color:var(--muted); }
+.studio-material-review .quantity { text-align:right;white-space:nowrap; }
+.studio-storage-alert { padding:14px;border:1px solid #bc6f47;border-radius:9px;color:var(--ink);background:var(--panel);font-size:13px; }
+.studio-workspace .consultation-footer { padding:10px 12px;border-radius:10px;font-size:11px;box-shadow:none; }
+.studio-workspace button:focus-visible,.studio-workspace summary:focus-visible { outline:3px solid var(--accent);outline-offset:3px; }
+@media(min-width:1600px) { .studio-workbench--with-inspector { grid-template-columns:minmax(0,1fr) 410px; } }
+@media(max-width:1100px) {
+  .studio-workbench--with-inspector { grid-template-columns:minmax(0,1fr); }
+  .studio-inspector-body { max-height:650px; }
+  .studio-inspector-body .manufacturer-board-grid,.studio-inspector-body .manufacturer-rail-grid,.studio-inspector-body .manufacturer-cover-grid { grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); }
+  .studio-inspector-body .consultation-option-card { padding:14px; }
+  .studio-inspector-body .manufacturer-rail-config,.studio-inspector-body .consultation-cover-finish-grid { grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); }
+  .studio-project-meta { justify-content:flex-start; }
+}
+@media(max-width:700px) {
+  .shell.shell--studio .topbar { padding:8px 10px 0; }
+  .shell.shell--studio .topbar-brand { padding:8px;gap:8px; }
+  .shell.shell--studio .brand-logo { width:58px;max-height:28px; }
+  .shell.shell--studio .topbar-copy h1 { font-size:13px; }
+  .shell.shell--studio .topbar-copy .eyebrow { display:none; }
+  .shell.shell--studio .topbar-mode-actions { gap:5px; }
+  .shell.shell--studio .topbar-mode-actions .small-btn { font-size:10px;padding:7px; }
+  .shell.shell--studio .main-panel { padding:10px; }
+  .studio-workspace .consultation-titlebar { flex-direction:column;align-items:flex-start;gap:8px; }
+  .studio-workspace .consultation-titlebar h2 { font-size:21px; }
+  .studio-workspace .consultation-step-nav { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible; }
+  .studio-workspace .consultation-step-nav button { min-height:52px;padding:7px 5px; }
+  .studio-workspace .consultation-step-nav strong { font-size:10px;line-height:1.4; }
+  .studio-workspace .consultation-step-nav small { display:none; }
+  .studio-workbench-intro { gap:10px;align-items:flex-start; }
+  .studio-workbench-intro h3 { font-size:17px; }
+  .studio-workbench-intro p:not(.eyebrow) { font-size:11px; }
+  .studio-view-toolbar { gap:6px;padding:7px; }
+  .studio-view-actions { width:100%;margin:0;justify-content:flex-end; }
+  .studio-view-actions .small-btn { padding:7px 8px;font-size:10px; }
+  .studio-save-sync>summary span { display:none; }
+  .studio-project-meta { gap:7px 12px;font-size:10px; }
+  .studio-plan-access { flex-direction:column;align-items:stretch;padding:14px; }
+  .studio-estimator-exchange>summary small { display:block;margin:5px 0 0 17px; }
+  .studio-material-review th,.studio-material-review td { padding:9px;font-size:11px; }
+  .studio-scene-column .consultation-render-specs span { font-size:8px;padding:4px 6px; }
+  .studio-scene-column .consultation-render-specs span:nth-child(n+3) { display:none; }
+  .studio-workspace .consultation-footer .ghost-btn,.studio-workspace .consultation-footer .secondary-btn { padding:9px 12px;font-size:12px; }
+}
+@media(prefers-reduced-motion:reduce) { .studio-workspace * { scroll-behavior:auto!important;transition:none!important; } }

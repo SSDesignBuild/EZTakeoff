@@ -9,7 +9,10 @@ import path from 'node:path';
 import { fetchImageWithTimeout } from './assetFetch.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const entries = JSON.parse(await readFile(path.join(root, 'src/data/timbertechVisualAssets.json'), 'utf8'));
+const entries = [
+  ...JSON.parse(await readFile(path.join(root, 'src/data/timbertechVisualAssets.json'), 'utf8')),
+  ...JSON.parse(await readFile(path.join(root, 'src/data/timbertechLightingAssets.json'), 'utf8')),
+];
 const required = new Set(['vintage-coastline','vintage-weathered-teak','vintage-mahogany','landmark-boardwalk','legacy-ashwood']);
 const MAX_SYNC_MS = 45000;
 const MAX_TRIES = 2;

@@ -10,6 +10,8 @@ import { eliteSunroomTakeoff,currentEliteSunroomSettings,
  eliteWallSections } from './eliteSunroomStudio';
 import { planEliteDeckFloorClosure } from './eliteDeckFloorClosure';
 import { planSiteConcrete, type SiteConcreteAreaPlan } from './siteConcrete';
+import { siteConcreteFinishMaterials } from './siteConcreteFinishMaterials';
+import { planLightingAddons,lightingEstimateValues,type LightingAddonPlan } from './lightingAddons';
 
 export interface EstimateHandoffV1 {
   schemaVersion:1;
@@ -18,10 +20,11 @@ export interface EstimateHandoffV1 {
   revision:number;
   exportedAt:string;
   customer:{name:string;address:string;phone:string;email:string};
-  project:{kind:string;coverFamily:string;coverColor:string;coverRoofColor:string;coverCeilingFinish:string;coverRoofStyle:string;coverFraming:string;coverMount:string;coverTrussMount:string;coverScreenStyle:string;photoAttachedToThisPayload:false};
+  project:{kind:string;coverFamily:string;coverColor:string;coverRoofColor:string;coverCeilingFinish:string;coverScreenColor:string;coverRoofStyle:string;coverFraming:string;coverMount:string;coverTrussMount:string;coverScreenStyle:string;photoAttachedToThisPayload:false};
   geometry:{footprint:{x:number;y:number}[];areaSqFt:number;deckHeightFt:number;stairCount:number;
     siteConcreteAreas:SiteConcreteAreaPlan[];siteConcreteQuantitiesValid:boolean};
   selections:Record<string,string|number|boolean>;
+  addOns:Pick<LightingAddonPlan,'settings'|'fixtures'|'requestedCounts'|'placedCounts'>;
   materials:MaterialItem[];
   blockers:string[];
   assumptions:string[];
@@ -31,17 +34,27 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
   const lowerDeck=buildLowerTierDeckModel(project.values);
   const stairCount=deck.stairCount+(lowerDeck?.stairCount??0);
   const siteConcrete=planSiteConcrete(project.values);
-  const estimate=calculateEstimate('decks',project.values);
+  const takeoffValues=lightingEstimateValues(project.values);
+  const estimate=calculateEstimate('decks',takeoffValues);
+  // World plan coordinates (center [0,0]) match the exported footprint.
+  const lighting=planLightingAddons(project);
+  // Cover removal keeps the room configuration saved for restoration, but
+  // the renderer has no walls, openings or floor closure without a cover.
+  // Export only that active scope; never mutate the retained Studio choices.
+  const hasCover=project.coverFamily!=='none';
+  const screenStyle=hasCover?project.coverScreenStyle??'none':'none';
+  const privacyWallGaps=hasCover?project.coverPrivacyWallGaps??{}:{};
+  const screenColor=project.coverScreenColor&&project.coverScreenColor!=='match'?project.coverScreenColor:project.coverColor;
   const center:[number,number]=[(deck.minX+deck.maxX)/2,(deck.minY+deck.maxY)/2];
   const deckY=Math.max(.35,Math.min(26,Number(project.values.deckHeight??5)));
-  const actualCoverWalls=project.coverScreenStyle==='elite-add-a-room'
+  const actualCoverWalls=screenStyle==='elite-add-a-room'
     ?planRenaissanceCoverWalls(deck,project,center,deckY).measuredRuns:[];
   const eliteWalls=actualCoverWalls.filter(wall=>
-    ![2,4,6].includes(Number(project.coverPrivacyWallGaps?.[wall.id]??0)));
-  const elite=project.coverScreenStyle==='elite-add-a-room'
+    ![2,4,6].includes(Number(privacyWallGaps[wall.id]??0)));
+  const elite=screenStyle==='elite-add-a-room'
     ?eliteSunroomTakeoff(project,eliteWalls):null;
   const eliteSettings=currentEliteSunroomSettings(project);
-  const eliteFloorClosure=project.coverScreenStyle==='elite-add-a-room'
+  const eliteFloorClosure=screenStyle==='elite-add-a-room'
     ?planEliteDeckFloorClosure(deck,eliteWalls,eliteSettings.roomSystem,
       project.values.deckingType):null;
   const eliteWindowSelections=Object.fromEntries(actualCoverWalls.map(wall=>[
@@ -57,7 +70,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
         Number(project.values.stairLandingThicknessIn??5))):[];
   const validLandings=stairLandings.filter((p):p is NonNullable<typeof p>=>p!==null);
   const landingBags=validLandings.reduce((sum,p)=>sum+p.bags80lb,0);
-  const blockers=[...(estimate.validationIssues??[]),...siteConcrete.validationIssues];
+  const blockers=[...(estimate.validationIssues??[]),...siteConcrete.validationIssues,...siteConcrete.finishWarnings,...lighting.issues];
   if(landingSurface(project.values.stairLandingSurface)==='unknown'&&stairCount>0)
     blockers.push('Confirm existing grade-level landing for each stair flight before closing the project scope.');
   if(landingSurface(project.values.stairLandingSurface)==='bare-ground'&&stairCount>0){
@@ -65,15 +78,15 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
     if(validLandings.length!==stairLandings.length)
       blockers.push('One or more selected stair landing dimensions are invalid. Correct the dimensions before using concrete quantities.');
   }
-  if(project.kind!=='deck')blockers.push('Covered-deck patio cover is visual-only; patio cover takeoff not included.');
-  if(project.coverFamily!=='none')blockers.push('Renaissance framing and the supplied span charts are for estimating only. Obtain an engineering-approved, project-specific configuration before structural material ordering.');
+  if(hasCover&&project.kind!=='deck')blockers.push('Covered-deck patio cover is visual-only; patio cover takeoff not included.');
+  if(hasCover)blockers.push('Renaissance framing and the supplied span charts are for estimating only. Obtain an engineering-approved, project-specific configuration before structural material ordering.');
   blockers.push(...renaissanceReferenceIssues({
     family:project.coverFamily,
     sideOverhangFt:Number(project.coverSideOverhangFt??1),
     frontOverhangFt:Number(project.coverFrontOverhangFt??1),
     postHeightFt:Number(project.coverHeightFt??9),
   }));
-  const privacyWalls=Object.entries(project.coverPrivacyWallGaps??{})
+  const privacyWalls=Object.entries(privacyWallGaps)
     .filter(([,gap])=>[2,4,6].includes(Number(gap)));
   if(privacyWalls.length){
     blockers.push('Renaissance 2026 shade-tube privacy walls are dimensional design concepts only. Obtain manufacturer-approved stock lengths, receiver/channel fastening, tube span/wind checks and a separate privacy wall BOM before ordering.');
@@ -82,7 +95,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       blockers.push('PCA screen entry side conflicts with selected privacy shade-tube wall. Do not cut the privacy tubes or quote an access opening without an engineered manufacturer design.');
     blockers.push('Privacy shade-tube wall is not an independently certified code-required deck guardrail; review open deck edges and guard details.');
   }
-  if(project.coverScreenStyle==='elite-add-a-room'){
+  if(screenStyle==='elite-add-a-room'){
     blockers.push('Elite Add-A-Room wall panels reuse Admin Sunrooms 24-foot extrusion cut takeoff, but factory sash daylight dimensions, final glass spec, corner-to-Renaissance-post attachments, wind load and the Elite Prime Full View jamb/door require supplier and licensed design review.');
     if(!['Moderno','Contempo','Classico'].includes(project.coverFamily))
       blockers.push('Elite Add-A-Room is selected without an approved insulated solid Renaissance roof. Select an appropriate solid cover or obtain engineering approval.');
@@ -99,13 +112,13 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
     if(eliteFloorClosure?.notes.some(s=>s.includes('exceed purchasable')))
       blockers.push(...eliteFloorClosure.notes);
   }
-  if(project.coverScreenStyle==='lumino-sunroom'){
+  if(screenStyle==='lumino-sunroom'){
     blockers.push('Lumino glazing, insulated knee-wall profiles, window glass specifications, framing, flashing, thermal ratings and exact supplier takeoff are NOT verified by the design visual. Obtain a vendor-approved sunroom BOM and project engineering.');
     if(!['Moderno','Contempo','Classico'].includes(project.coverFamily))
       blockers.push('Lumino window-wall concept is not offered with this non-insulated roof family; select an approved solid roof assembly.');
     blockers.push('PCA screen doors are not certified Lumino sunroom entry doors. Specify and approve a separate sunroom door, safe egress and deck guard details.');
   }
-  if(['dolce-open-view','dolce-standard'].includes(project.coverScreenStyle??'none')){
+  if(['dolce-open-view','dolce-standard'].includes(screenStyle)){
     blockers.push('Dolce screen style is a visual selection, not a supplier-verified screen room extrusion/cut BOM; approve separate screen-room takeoff.');
     if(project.coverDoorEnabled!==false){
       blockers.push('PCA 3068 entry door, hinges, pet door and site-specific rough opening are visualization choices only; supplier ordering and egress/landing requirements must be verified.');
@@ -121,19 +134,21 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
     customer:{...project.client},
     project:{kind:project.kind,coverFamily:project.coverFamily,coverColor:project.coverColor,
       coverRoofColor:project.coverRoofColor??'White',coverCeilingFinish:project.coverCeilingFinish??'White',
+      coverScreenColor:screenColor,
       coverRoofStyle:project.coverRoofStyle??'studio',
       coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
       coverTrussMount:project.coverTrussMount??'flush',
-      coverScreenStyle:project.coverScreenStyle??'none',photoAttachedToThisPayload:false},
+      coverScreenStyle:screenStyle,photoAttachedToThisPayload:false},
     geometry:{footprint:deck.points,areaSqFt:deck.area,deckHeightFt:Number(project.values.deckHeight??0),stairCount,
       siteConcreteAreas:siteConcrete.areas,siteConcreteQuantitiesValid:siteConcrete.canQuantify},
-    selections:{...project.values,coverRoofStyle:project.coverRoofStyle??'studio',
+    selections:{...takeoffValues,coverRoofStyle:project.coverRoofStyle??'studio',
       coverShadePercent:project.coverShadePercent??65,coverLouverAngle:project.coverLouverAngle??12,
       coverFamily:project.coverFamily,coverColor:project.coverColor,
       coverRoofColor:project.coverRoofColor??'White',coverCeilingFinish:project.coverCeilingFinish??'White',
+      coverScreenColor:screenColor,
       coverFraming:project.coverFraming??'standard',coverMount:project.coverMount??'wall-attached',
       coverTrussMount:project.coverTrussMount??'flush',
-      coverScreenStyle:project.coverScreenStyle??'none',
+      coverScreenStyle:screenStyle,
       ...(elite?{
         eliteSunroomSystem:eliteSettings.roomSystem,
         eliteSunroomFramingColor:eliteSettings.framingColor,
@@ -144,17 +159,17 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
         eliteUsesRenaissanceCoverPosts:true,
         ...eliteWindowSelections,
       }:{}),
-      coverPrivacyFrontGapIn:project.coverPrivacyWallGaps?.front??0,
-      coverPrivacyLeftGapIn:project.coverPrivacyWallGaps?.left??0,
-      coverPrivacyRightGapIn:project.coverPrivacyWallGaps?.right??0,
-      coverPrivacyRearGapIn:project.coverPrivacyWallGaps?.rear??0,
+      coverPrivacyFrontGapIn:privacyWallGaps.front??0,
+      coverPrivacyLeftGapIn:privacyWallGaps.left??0,
+      coverPrivacyRightGapIn:privacyWallGaps.right??0,
+      coverPrivacyRearGapIn:privacyWallGaps.rear??0,
       coverAccentEnd:project.coverAccentEnd??(['Contempo','Classico'].includes(project.coverFamily)?'curved':'straight'),
       coverScreenUprightsFront:project.coverScreenUprights?.front??2,
       coverScreenUprightsLeft:project.coverScreenUprights?.left??1,
       coverScreenUprightsRight:project.coverScreenUprights?.right??1,
       coverScreenUprightsRear:project.coverScreenUprights?.rear??2,
       coverScreenRailTreatment:project.coverScreenRailTreatment??'integrated-kick',
-      coverDoorEnabled:project.coverDoorEnabled!==false,
+      coverDoorEnabled:hasCover&&project.coverDoorEnabled!==false,
       coverDoorSide:project.coverDoorSide??'front',
       coverDoorPositionPercent:project.coverDoorPositionPercent??50,
       coverDoorModel:project.coverDoorModel??'A-100',
@@ -167,7 +182,8 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       coverWidthFt:project.coverWidthFt??0,coverProjectionFt:project.coverProjectionFt??0,
       coverHeightFt:project.coverHeightFt??9,coverSideOverhangFt:project.coverSideOverhangFt??1,
       coverFrontOverhangFt:project.coverFrontOverhangFt??1},
-    materials:[...estimate.materials,...(elite?.estimate.materials??[]),
+    addOns:{settings:lighting.settings,fixtures:lighting.fixtures,requestedCounts:lighting.requestedCounts,placedCounts:lighting.placedCounts},
+    materials:[...estimate.materials,...(elite?.estimate.materials??[]),...lighting.materials,
       ...(siteConcrete.canQuantify&&siteConcrete.orderVolumeCuYd>0?[{
         name:'Concrete — drawn site areas',category:'Site concrete',
         quantity:siteConcrete.orderVolumeCuYd,unit:'cu yd',
@@ -176,6 +192,7 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
           ' sq ft × '+area.thicknessIn+' in = '+area.volumeCuYd.toFixed(3)+
           ' cu yd before allowance; top elevation '+area.elevationFt+' ft').join(' | '),
       }]:[]),
+      ...siteConcreteFinishMaterials(siteConcrete),
       ...(eliteFloorClosure?.stock??[]).map(board=>({
         name:'Interior deck closure board at Elite sunroom wall',
         category:'Sales sunroom floor transition — additional decking stock',
@@ -196,8 +213,10 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
         ' ft × '+p.thicknessIn+' in; '+p.bags80lb+' bags incl. 5% allowance').join(' | ')+
         '. Review subbase, reinforcement, disposal, forms and local specifications separately.',
     }]:[])],blockers,
-    assumptions:[...estimate.orderNotes,...(elite?.estimate.orderNotes??[]),
+    assumptions:[...estimate.orderNotes,...(elite?.estimate.orderNotes??[]),...lighting.notes,
       ...(siteConcrete.areas.length?['Site concrete quantities use the saved polygon boundaries and selected slab thicknesses. The volume includes a 5% allowance; reinforcement, subbase, excavation and drainage are separate scope.']:[]),
+      ...(siteConcrete.areas.some(area=>area.finish.stampId!=='plain'||area.finish.colorId!=='natural'||area.borderFinishAreaSqFt>0)
+        ?['Decorative concrete field and border surface quantities partition the existing slab. Pattern references are SikaStamp / Butterfield; selected colors are SikaColor-200 surface hardener. Screen color, stamp relief and layout are approximations; physical samples, release/sealer system and installer tool requirements remain to be specified.']:[]),
       ...(eliteFloorClosure?.notes??[])],
   };
 }

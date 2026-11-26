@@ -1,5 +1,14 @@
 # EZTakeoff Consultation Architecture (v1 foundation)
 
+## Current implementation — November 25, 2026
+
+The original foundation notes below are historical. Current implementation and acceptance are documented in [PROJECT_CONTINUATION.md](PROJECT_CONTINUATION.md) and [LIVE_STUDIO_CATALOG_20261125.md](LIVE_STUDIO_CATALOG_20261125.md).
+
+- `ConsultationStudio` keeps one live R3F Canvas across the finish/review stages. `ConsultationFinishDock` updates the same saved values as the detailed inspector; independent course tabs follow the actual deck geometry. `StudioCameraFit` fits rendered content bounds and preserves orbit direction.
+- The scene includes measured deck and stair geometry, source-referenced Renaissance/Dolce/Elite assemblies, independent concrete polygons/finishes, and compatible lighting. Undimensioned product details and stamped surface textures remain identified design approximations. Existing factory/engineering limitations still apply.
+- `consultationTakeoffBridge` creates a separate revision snapshot and routes to `/service/decks?studioTakeoff=<id>`. The copy reuses Admin plans, editing and exports while recalculating the full current Studio material handoff. Concrete plans/sections and paginated material/order notes are included. Neither the original Admin draft nor Studio photo/project is overwritten.
+- Optional private Estimator-backed save/sync already exists in `ConsultationCloudPanel`. The house overlay is still manually aligned, and automatic selling-price integration is still separate future work. Do not interpret those older roadmap entries as permission to replace working code.
+
 ## Two workflows, one geometry engine
 - Entry `/`: choose **Admin Takeoff** (`/service/decks` and other existing services) or **Sales Consultation** (`/consultation`). These are UI modes, **not** authorization roles. Add real team auth/RBAC separately.
 - Sales consultation four stages: photo/property → draw footprint → approved S&S product choices → actual Three.js/R3F interactive 3D + approximate house-photo overlay + estimator handoff.

@@ -83,7 +83,7 @@ for(const part of ['coverFraming','coverWidthFt','coverProjectionFt','makeRenais
 assert.ok(cover.includes('planRenaissanceCoverWalls')&&
   cover.includes('const coverWallRuns=wallAnchors.wallRuns'),
   'Covered-deck rendering must use the same seated columns as editable Elite/Dolce walls');
-const studio=read('src/components/ConsultationStudio.tsx');
+const studio=read('src/components/ConsultationStudio.tsx')+read('src/components/ConsultationDetailsPanel.tsx');
 assert.ok(studio.includes('ConsultationTechnicalSettings')&&studio.includes('ConsultationSkirtingOptions'));
 const css=read('src/styles/global.css');
 assert.ok(css.includes('--bg: #0a1824;')&&!css.includes('--bg: #171412;'));

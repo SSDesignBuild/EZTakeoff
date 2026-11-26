@@ -3,9 +3,11 @@ import { stairFlightFrame } from './stairRailVisualGeometry';
 import { landingSurface, planStairLanding, LANDING_CONCRETE_WASTE_FACTOR,
   type StairLandingPlan } from './stairConcreteLanding';
 import type { DeckPoint } from './types';
+import { resolveConcreteAppearance,type ConcreteAppearanceSelection } from './sikaConcreteCatalog';
+import { clipDeckFace,subtractDeckFace,deckFaceArea,type DeckFacePoint } from './deckSurfaceClipping';
 
 type SiteValues=Record<string,string|number|boolean>;
-export interface SiteConcreteArea {
+export interface SiteConcreteArea extends ConcreteAppearanceSelection {
   id:string;
   name:string;
   /** Same feet coordinates as the deck drawing; y becomes world z. */
@@ -20,6 +22,16 @@ export interface SiteConcreteAreaPlan extends SiteConcreteArea {
   volumeCuFt:number;
   volumeCuYd:number;
   wasteAdjustedCuYd:number;
+  fieldFinishAreaSqFt:number;
+  borderFinishAreaSqFt:number;
+  borderLengthFt:number;
+  finish:SiteConcreteFinishSelection;
+}
+export interface SiteConcreteFinishSelection {
+  stampId:string;stampName:string;colorId:string;colorName:string;
+  borderStampId:string;borderStampName:string;borderColorId:string;
+  borderColorName:string;borderWidthIn:number;sourceUrls:string[];
+  visualization:string;
 }
 export interface SiteConcretePlan {
   areas:SiteConcreteAreaPlan[];
@@ -30,6 +42,7 @@ export interface SiteConcretePlan {
   /** Invalid/overlapping scope is editable but cannot produce an order. */
   canQuantify:boolean;
   validationIssues:string[];
+  finishWarnings:string[];
 }
 export interface SiteStairLanding extends StairLandingPlan {
   id:string;
@@ -120,6 +133,9 @@ function readAreas(raw:unknown):{areas:SiteConcreteArea[];validAreas:SiteConcret
       points:record.points as DeckPoint[],
       thicknessIn:record.thicknessIn===undefined?DEFAULT_SITE_CONCRETE_THICKNESS_IN:record.thicknessIn as number,
       elevationFt:record.elevationFt===undefined?DEFAULT_SITE_CONCRETE_ELEVATION_FT:record.elevationFt as number,
+      ...Object.fromEntries(['stampId','colorId','borderStampId','borderColorId']
+        .filter(key=>typeof record[key]==='string').map(key=>[key,record[key]])),
+      ...(record.borderWidthIn!==undefined?{borderWidthIn:record.borderWidthIn as number}:{}),
     };
     const errors=validateSiteConcreteArea(area),duplicateId=ids.has(area.id);
     if(duplicateId)errors.push(area.name+': area identifiers must be unique.');
@@ -139,6 +155,13 @@ function readAreas(raw:unknown):{areas:SiteConcreteArea[];validAreas:SiteConcret
   return {areas,validAreas,validationIssues};
 }
 export function readSiteConcreteAreas(raw:unknown):SiteConcreteArea[]{return readAreas(raw).areas;}
+export function serializeSiteConcreteAreas(areas:readonly SiteConcreteArea[]):string{
+  return JSON.stringify(areas);
+}
+export function updateSiteConcreteArea(raw:unknown,id:string,patch:Partial<SiteConcreteArea>):string{
+  return serializeSiteConcreteAreas(readSiteConcreteAreas(raw).map(area=>
+    area.id===id?{...area,...patch,id:area.id}:area));
+}
 
 function pointInTriangle(p:DeckPoint,a:DeckPoint,b:DeckPoint,c:DeckPoint){
   return cross(a,b,p)>=-EPS&&cross(b,c,p)>=-EPS&&cross(c,a,p)>=-EPS;
@@ -171,6 +194,76 @@ function triangles(input:DeckPoint[]):DeckPoint[][]{
   }
   if(points.length===3)result.push(points);
   return result;
+}
+export function triangulateSiteConcretePolygon(points:DeckPoint[]):DeckPoint[][]{
+  return triangles(points);
+}
+export interface ConcreteBorderPiece {
+  edgeIndex:number;points:DeckPoint[];origin:DeckPoint;direction:DeckPoint;
+}
+export interface ConcreteDecorativeGeometry {
+  fieldPolygons:DeckPoint[][];borderPieces:ConcreteBorderPiece[];
+  fieldAreaSqFt:number;borderAreaSqFt:number;borderLengthFt:number;
+}
+/** Partition the actual slab face into field and perimeter courses. Mitered
+ * strips are clipped to the slab and to already assigned pieces, so concave
+ * corners and narrow areas never create overlapping quantities or off-slab
+ * decorative surfaces. A border is part of this slab, not another pour. */
+export function concreteDecorativeGeometry(area:SiteConcreteArea):ConcreteDecorativeGeometry{
+  const selected=resolveConcreteAppearance(area),width=selected.borderWidthIn/12;
+  const ring=openRing(area.points);
+  if(signedArea(ring)<0)ring.reverse();
+  let remaining=triangles(ring).map(face=>face.map(p=>[p.x,p.y] as DeckFacePoint));
+  const total=remaining.reduce((sum,face)=>sum+deckFaceArea(face),0);
+  if(!width||selected.border.id==='none')return {fieldPolygons:triangles(ring),
+    borderPieces:[],fieldAreaSqFt:total,borderAreaSqFt:0,borderLengthFt:0};
+  const directions=ring.map((p,i)=>{
+    const q=ring[(i+1)%ring.length],len=distance(p,q);
+    return {x:(q.x-p.x)/len,y:(q.y-p.y)/len};
+  });
+  const inset=ring.map((p,i)=>{
+    const previous=directions[(i+ring.length-1)%ring.length],next=directions[i];
+    const a={x:p.x-previous.y*width,y:p.y+previous.x*width};
+    const b={x:p.x-next.y*width,y:p.y+next.x*width};
+    const den=previous.x*next.y-previous.y*next.x;
+    if(Math.abs(den)<1e-8)return b;
+    const t=((b.x-a.x)*next.y-(b.y-a.y)*next.x)/den;
+    // Extremely acute tips get a finite cut; the polygon clip below keeps it
+    // inside the original slab. This is a visual course, not fabricated mat CAD.
+    const limit=width*16,offset=Math.max(-limit,Math.min(limit,t));
+    return {x:a.x+previous.x*offset,y:a.y+previous.y*offset};
+  });
+  const borderPieces:ConcreteBorderPiece[]=[];
+  let borderLengthFt=0;
+  for(let i=0;i<ring.length;i++){
+    const j=(i+1)%ring.length,a=ring[i],b=ring[j],direction=directions[i];
+    let ia=inset[i],ib=inset[j];
+    // A course wider than a short tip collapses to a triangle, not a bow-tie.
+    if((ib.x-ia.x)*direction.x+(ib.y-ia.y)*direction.y<0){
+      const middle={x:(ia.x+ib.x)/2,y:(ia.y+ib.y)/2};ia=middle;ib=middle;
+    }
+    const candidate=[a,b,ib,ia].filter((p,k,points)=>
+      k===0||distance(p,points[k-1])>EPS);
+    const cuts=triangles(candidate).map(face=>face.map(p=>[p.x,p.y] as DeckFacePoint));
+    const before=borderPieces.length;
+    for(const cut of cuts){
+      const kept:DeckFacePoint[][]=[];
+      for(const face of remaining){
+        let intersection=face;
+        const signed=cut.reduce((sum,p,k)=>sum+p[0]*cut[(k+1)%cut.length][1]-cut[(k+1)%cut.length][0]*p[1],0);
+        for(let k=0;k<cut.length&&intersection.length>=3;k++)
+          intersection=clipDeckFace(intersection,cut[k],cut[(k+1)%cut.length],signed>=0);
+        if(intersection.length>=3&&deckFaceArea(intersection)>EPS)
+          borderPieces.push({edgeIndex:i,points:intersection.map(p=>({x:p[0],y:p[1]})),origin:a,direction});
+        kept.push(...subtractDeckFace(face,cut));
+      }
+      remaining=kept;
+    }
+    if(borderPieces.length>before)borderLengthFt+=distance(a,b);
+  }
+  const fieldAreaSqFt=remaining.reduce((sum,face)=>sum+deckFaceArea(face),0);
+  return {fieldPolygons:remaining.map(face=>face.map(p=>({x:p[0],y:p[1]}))),
+    borderPieces,fieldAreaSqFt,borderAreaSqFt:Math.max(0,total-fieldAreaSqFt),borderLengthFt};
 }
 function clipConvex(subject:DeckPoint[],clip:DeckPoint[]){
   let output=subject;
@@ -223,13 +316,25 @@ export function siteConcreteStairLandings(values:SiteValues):SiteStairLanding[]{
     ...(lower?modelLandings(lower,values,'lower'):[])];
 }
 export function planSiteConcrete(values:SiteValues):SiteConcretePlan{
-  const parsed=readAreas(values.siteConcreteAreas),validationIssues=[...parsed.validationIssues];
+  const parsed=readAreas(values.siteConcreteAreas),validationIssues=[...parsed.validationIssues],finishWarnings:string[]=[];
   const areas:SiteConcreteAreaPlan[]=parsed.validAreas.map(area=>{
     const areaSqFt=areaOf(area.points),perimeterFt=area.points.reduce((sum,p,i)=>
       sum+distance(p,area.points[(i+1)%area.points.length]),0);
     const volumeCuFt=areaSqFt*area.thicknessIn/12,volumeCuYd=volumeCuFt/27;
+    const appearance=resolveConcreteAppearance(area),decorative=concreteDecorativeGeometry(area);
+    finishWarnings.push(...appearance.issues.map(issue=>area.name+': '+issue));
+    const finish:SiteConcreteFinishSelection={stampId:appearance.stamp.id,stampName:appearance.stamp.name,
+      colorId:appearance.color.id,colorName:appearance.color.name,
+      borderStampId:appearance.border.id,borderStampName:appearance.border.name,
+      borderColorId:appearance.borderColor.id,borderColorName:appearance.borderColor.name,
+      borderWidthIn:appearance.borderWidthIn,
+      sourceUrls:Array.from(new Set([appearance.stamp.sourceUrl,appearance.color.sourceUrl,
+        ...(appearance.borderWidthIn?[appearance.border.sourceUrl,appearance.borderColor.sourceUrl]:[])])),
+      visualization:'Manufacturer-reference pattern illustration; approximate screen colors and surface relief.'};
     return {...area,areaSqFt,perimeterFt,volumeCuFt,volumeCuYd,
-      wasteAdjustedCuYd:volumeCuYd*LANDING_CONCRETE_WASTE_FACTOR};
+      wasteAdjustedCuYd:volumeCuYd*LANDING_CONCRETE_WASTE_FACTOR,
+      fieldFinishAreaSqFt:decorative.fieldAreaSqFt,borderFinishAreaSqFt:decorative.borderAreaSqFt,
+      borderLengthFt:decorative.borderLengthFt,finish};
   });
   for(let i=0;i<areas.length;i++)for(let j=i+1;j<areas.length;j++){
     if(siteConcreteOverlapAreaSqFt(areas[i].points,areas[j].points)>.00001)
@@ -266,7 +371,7 @@ export function planSiteConcrete(values:SiteValues):SiteConcretePlan{
   const canQuantify=validationIssues.length===0;
   return {areas,totalAreaSqFt,totalVolumeCuFt,totalVolumeCuYd:totalVolumeCuFt/27,
     orderVolumeCuYd:canQuantify?totalVolumeCuFt/27*LANDING_CONCRETE_WASTE_FACTOR:0,
-    canQuantify,validationIssues};
+    canQuantify,validationIssues,finishWarnings};
 }
 
 /** A single scene datum includes deck tiers, stair exits and arbitrary site

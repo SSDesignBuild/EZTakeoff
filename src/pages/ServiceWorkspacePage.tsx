@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect,useMemo,useState,type Dispatch,type SetStateAction } from 'react';
+import { Link,useParams,useSearchParams } from 'react-router-dom';
 import { FieldRenderer } from '../components/FieldRenderer';
 import { LayoutPreview } from '../components/LayoutPreview';
 import { MaterialTable } from '../components/MaterialTable';
@@ -8,15 +8,52 @@ import { DeckWorkspaceFlow } from '../components/DeckWorkspaceFlow';
 import { SectionEditor } from '../components/SectionEditor';
 import { SunroomSectionEditor } from '../components/SunroomSectionEditor';
 import { WoodenStructureEditor } from '../components/WoodenStructureEditor';
-import { getServiceBySlug } from '../data/services';
+import { getServiceBySlug,type ServiceDefinition } from '../data/services';
 import { useLocalProjectState } from '../hooks/useLocalProjectState';
 import { calculateEstimate } from '../lib/estimate';
+import { readConsultationTakeoff,saveConsultationTakeoffValues,consultationTakeoffEstimate,
+  consultationTakeoffReturnHref,type ConsultationTakeoffSnapshot } from '../lib/consultationTakeoffBridge';
+
+type Values=Record<string,string|number|boolean>;
 
 export function ServiceWorkspacePage() {
   const { serviceSlug } = useParams();
+  const [search]=useSearchParams();
   const service = getServiceBySlug(serviceSlug);
+  const copyId=service.slug==='decks'?search.get('studioTakeoff'):null;
+  return copyId?<StudioTakeoffWorkspace key={'copy-'+copyId} service={service} copyId={copyId}/>:
+    <LocalServiceWorkspace key={service.slug} service={service}/>;
+}
+
+function LocalServiceWorkspace({service}:{service:ServiceDefinition}){
   const { values, setValues } = useLocalProjectState(service);
-  const estimate = useMemo(() => calculateEstimate(service.slug, values), [service.slug, values]);
+  return <ServiceWorkspaceContent service={service} values={values} setValues={setValues}/>;
+}
+
+function StudioTakeoffWorkspace({service,copyId}:{service:ServiceDefinition;copyId:string}){
+  const [snapshot]=useState(()=>readConsultationTakeoff(copyId));
+  const [values,setValues]=useState<Values>(()=>snapshot?{...snapshot.values}:{});
+  const [saveError,setSaveError]=useState('');
+  useEffect(()=>{
+    if(!snapshot)return;
+    try{saveConsultationTakeoffValues(snapshot,values);setSaveError('');}
+    catch{setSaveError('This takeoff copy could not be saved on this device. Keep the page open and free browser storage before leaving.');}
+  },[snapshot,values]);
+  if(!snapshot)return <section className="content-card page-stack" role="alert">
+    <h2>Studio takeoff copy is unavailable</h2>
+    <p>Open the current design in Studio and choose its takeoff button again.</p>
+    <div><Link className="secondary-btn" to="/consultation">Open Studio</Link>{' '}
+      <Link className="ghost-btn" to="/service/decks">Open saved Admin deck</Link></div>
+  </section>;
+  return <>{saveError&&<div className="content-card" role="alert">{saveError}</div>}
+    <ServiceWorkspaceContent service={service} values={values} setValues={setValues} snapshot={snapshot}/>
+  </>;
+}
+
+function ServiceWorkspaceContent({service,values,setValues,snapshot}:{service:ServiceDefinition;
+  values:Values;setValues:Dispatch<SetStateAction<Values>>;snapshot?:ConsultationTakeoffSnapshot}){
+  const estimate = useMemo(() => snapshot?consultationTakeoffEstimate(snapshot,values):
+    calculateEstimate(service.slug, values), [service.slug, values,snapshot]);
   const visibleFields = service.fields.filter((field) => {
     if (service.slug === 'decks') {
       const lowerEnabled = values.multiTierEnabled === true || String(values.multiTierEnabled ?? 'false') === 'true';
@@ -50,7 +87,10 @@ export function ServiceWorkspacePage() {
   });
 
   if (service.slug === 'decks') return (
-    <DeckWorkspaceFlow values={values} onValuesChange={setValues} estimate={estimate} visibleFields={visibleFields}/>
+    <DeckWorkspaceFlow values={values} onValuesChange={setValues} estimate={estimate} visibleFields={visibleFields}
+      initialStep={snapshot?'review':undefined}
+      studioContext={snapshot?{title:snapshot.title,revision:snapshot.sourceRevision,
+        returnHref:consultationTakeoffReturnHref(snapshot),coverFamily:snapshot.project.coverFamily}:undefined}/>
   );
 
   return (
@@ -79,7 +119,7 @@ export function ServiceWorkspacePage() {
           <div className="metrics-grid">
             {estimate.summary.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value} />)}
           </div>
-          <MaterialTable items={estimate.materials} values={values} onValuesChange={setValues} validationIssues={estimate.validationIssues ?? []} />
+          <MaterialTable items={estimate.materials} values={values} onValuesChange={setValues} validationIssues={estimate.validationIssues ?? []} orderNotes={estimate.orderNotes} />
           {estimate.orderNotes.length > 0 && (
             <article className="content-card order-notes-card">
               <div className="section-heading">

@@ -43,7 +43,7 @@ export default function App() {
   }, [theme]);
 
   return (
-    <div className="shell shell-top-tabs">
+    <div className={'shell shell-top-tabs'+(onSales?' shell--studio':'')}>
       <header className="topbar">
         <div className="brand-card brand-panel topbar-brand">
           <div className="brand-logo-wrap">

@@ -460,6 +460,10 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
   const framingWoodGrade = String(inputs.framingWoodGrade ?? '#2 Prime pressure treated');
   const railingWoodGrade = String(inputs.railingWoodGrade ?? '#2 prime pressure treated');
   const deckingMaterial = String(inputs.deckingMaterial ?? (isPressureTreatedDecking ? 'Pressure treated 5/4x6' : 'Composite / PVC decking'));
+  const finishStockLengths=(style:string)=>(/pressure\s*treated/i.test(style)||
+    (isPressureTreatedDecking&&!/^(trex|timbertech)\b/i.test(style)))?[8,12,16,20]:[16,20];
+  const fieldStockLengths=finishStockLengths(deckingMaterial);
+  const fieldStockLabel=fieldStockLengths.slice(0,-1).join(', ')+' and '+fieldStockLengths[fieldStockLengths.length-1];
   // One material source, separate CUT LIST and PURCHASABLE STOCK order.
   // Field courses, picture-frame miters and breaker boards may share an
   // actual 16/20ft board whenever the selected SKU/finish is identical.
@@ -480,9 +484,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       group.push(req);byStyle.set(req.style,group);
     });
     for(const [style,requests] of byStyle){
-      const isPT=/pressure\s*treated/i.test(style)||
-        (isPressureTreatedDecking&&!/^(trex|timbertech)\b/i.test(style));
-      const stockLengths=isPT?[8,12,16,20]:[16,20];
+      const stockLengths=finishStockLengths(style);
       const cuts:SkirtCut[]=[];
       let serial=0,fieldFootage=0;
       for(const req of requests){
@@ -1034,7 +1036,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       deck.attachment === 'brick' ? 'Brick attachment is treated as freestanding, so the house side still needs beam and post support, including beam segments at any inside corner/jut-out.' : 'Siding attachment keeps ledger logic active unless the deck is marked freestanding.',
       deck.stairPlacement.edgeIndex !== null ? `Stairs sit on edge ${deck.stairPlacement.edgeIndex + 1}. Preview now shows tread count, stringer layout, and ${deck.stairRailSideCount === 0 ? 'no stair-side railing' : `${deck.stairRailSideCount} stair-side railing run(s)`} based on the left/right stair railing inputs.` : 'No stair edge is assigned yet in the drawing tool.',
       'Railing optimizer solves each straight run separately, subtracts stair openings from the deck edge, and adds stair-side railing runs when the left/right stair railing inputs are selected.',
-      deck.requiredFieldBoardBreaks.length > 0 ? 'Field board run exceeds 20 ft. Add a breaker board to avoid staggered decking; the app no longer shows staggered board seams.' : 'Field decking uses available 8, 12, 16, and 20 ft board lengths with breaker boards where selected.',
+      deck.requiredFieldBoardBreaks.length > 0 ? 'Field board run exceeds 20 ft. Add a breaker board to avoid staggered decking; the app no longer shows staggered board seams.' : 'Field decking uses available '+fieldStockLabel+' ft board lengths with breaker boards where selected.',
       lowerDeck ? `Multi-tier deck mode: lower tier is drawn and included in layout/materials at ${feetAndInches(Number(inputs.lowerDeckHeight ?? 0))} high with ${lowerDeck.area.toFixed(1)} sq ft.` : 'Single tier deck mode.',
       deck.beamLines.some((beam) => beam.postMode === 'manual') ? 'Manual post coordinates are authoritative for drawing, footing, post-base, anchor and structural bolt counts; engineer review required.' : 'Automatic post spacing is a preliminary layout only.',
       'Main deck support references: ' + deck.postLocations.map((post) => post.reference + ' at X ' + feetAndInches(post.x) + ', Y ' + feetAndInches(post.y)).join('; '),

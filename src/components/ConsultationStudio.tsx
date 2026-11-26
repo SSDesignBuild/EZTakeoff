@@ -1,29 +1,27 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DeckDesigner } from './DeckDesigner';
-import { DeckGateEditor } from './DeckGateEditor';
-import { ConsultationSkirtingOptions } from './ConsultationSkirtingOptions';
 import { ConsultationTechnicalSettings } from './ConsultationTechnicalSettings';
-import { ManufacturerBoardPicker, ManufacturerRailPicker, ManufacturerCoverPicker } from './ConsultationVisualPickers';
-import { buildDeckModel } from '../lib/deckModel';
-import { calculateEstimate } from '../lib/estimate';
+import { buildDeckModel, buildLowerTierDeckModel } from '../lib/deckModel';
 import { loadConsultations, saveConsultations, makeConsultationProject, updateConsultation,
   isPricedRevision, type ConsultationProject,
   type PhotoCalibration } from '../lib/consultationProject';
 import { saveHousePhoto, readHousePhoto, deleteHousePhoto } from '../lib/consultationPhoto';
 import { createEstimateHandoff, parseEstimateResponse, makeAcceptedScope, downloadJson, selectedPricedTier } from '../lib/estimatingBridge';
-import { ConsultationDeckFinishes, StairFasciaFinishSelect } from './ConsultationDeckFinishes';
-import { deckVisualProducts } from '../data/visualCatalog';
 import { ConsultationCloudPanel } from './ConsultationCloudPanel';
-import { EliteSunroomStudioOptions } from './EliteSunroomStudioOptions';
+import { ConsultationFinishDock } from './ConsultationFinishDock';
+import { ConsultationDetailsPanel, type ConsultationDetailSection } from './ConsultationDetailsPanel';
+import { openConsultationInTakeoff } from '../lib/consultationTakeoffBridge';
+import { finishDockDetailSection } from '../lib/consultationFinishDock';
+import './ConsultationWorkbench.css';
 
 const Live3D=lazy(()=>import('./Consultation3D').then((module)=>({default:module.Consultation3D})));
 type Step='photo'|'layout'|'options'|'render';
 const STEPS:{id:Step;name:string;hint:string}[]=[
-  {id:'photo',name:'1 · Home photo',hint:'Client, location and site reference'},
-  {id:'layout',name:'2 · Draw the design',hint:'Footprint, dimension, stairs and levels'},
-  {id:'options',name:'3 · Choose finishes',hint:'Boards, borders, rails, skirting and cover'},
-  {id:'render',name:'4 · Visualize & handoff',hint:'Live 3D, house overlay and estimator exchange'},
+  {id:'photo',name:'1 · Property',hint:'Customer & site reference'},
+  {id:'layout',name:'2 · Draw the design',hint:'Shape, stairs & outdoor areas'},
+  {id:'options',name:'3 · Choose finishes',hint:'Explore materials in live 3D'},
+  {id:'render',name:'4 · Review & export',hint:'Present, drawings & material list'},
 ];
 function savePreview(photoUrl:string|null,calibration:PhotoCalibration){
   const webgl=document.querySelector<HTMLCanvasElement>('.consultation-3d-frame canvas');
@@ -64,21 +62,37 @@ function savePreview(photoUrl:string|null,calibration:PhotoCalibration){
   });
 }
 const number=(value:unknown,fall:number)=>Number.isFinite(Number(value))?Number(value):fall;
-function ConsultationEditor({project,onChange}:{project:ConsultationProject;onChange:(changes:Partial<ConsultationProject>)=>void}){
-  const [step,setStep]=useState<Step>('photo');
+function ConsultationEditor({project,onChange,saveError}:{project:ConsultationProject;onChange:(changes:Partial<ConsultationProject>)=>void;saveError:string}){
+  const navigate=useNavigate();
+  const [step,setStep]=useState<Step>(()=>{
+    const stage=new URLSearchParams(window.location.search).get('stage');
+    return STEPS.some(item=>item.id===stage)?stage as Step:'photo';
+  });
   const [photoUrl,setPhotoUrl]=useState<string|null>(null);
   const [photoVersion,setPhotoVersion]=useState(0);
   const [photoError,setPhotoError]=useState('');
   const [notice,setNotice]=useState('');
   const [overlay,setOverlay]=useState(false);
+  const [lightingPreview,setLightingPreview]=useState(false);
+  const [expandedView,setExpandedView]=useState(false);
+  const [fitRequest,setFitRequest]=useState(0);
+  const [inspectorSection,setInspectorSection]=useState<ConsultationDetailSection|null>(null);
+  const [layoutMode,setLayoutMode]=useState<'points'|'stairs'|'railing'|'concrete'>('points');
   const [renderBusy,setRenderBusy]=useState(false);
-  const [viewportHeight,setViewportHeight]=useState(740);
-  const [pricingBusy,setPricingBusy]=useState(false);
+  const [viewportHeight,setViewportHeight]=useState(500);
   const [bridgeError,setBridgeError]=useState('');
   const model=useMemo(()=>buildDeckModel(project.values),[project.values]);
-  const estimate=useMemo(()=>calculateEstimate('decks',project.values),[project.values]);
+  const lowerModel=useMemo(()=>buildLowerTierDeckModel(project.values),[project.values]);
+  const totalDeckArea=model.area+(lowerModel?.area??0);
+  const totalStairs=model.stairCount+(lowerModel?.stairCount??0);
   const handoff=useMemo(()=>createEstimateHandoff(project),[project]);
   const currentTier=selectedPricedTier(project);
+  useEffect(()=>{
+    const resize=()=>setViewportHeight(Math.max(window.innerWidth<700?280:360,
+      Math.min(expandedView?1000:700,window.innerHeight-(expandedView?180:410))));
+    resize();window.addEventListener('resize',resize);
+    return ()=>window.removeEventListener('resize',resize);
+  },[expandedView]);
   useEffect(()=>{
     let alive=true,activeUrl:string|null=null;
     readHousePhoto(project.id).then((blob)=>{
@@ -124,14 +138,32 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
     finally{setRenderBusy(false);}
   };
   const changeStep=(next:Step)=>{setStep(next);window.scrollTo({top:0,behavior:'smooth'});};
+  const openPlans=()=>{
+    try{navigate(openConsultationInTakeoff(project).href);}
+    catch(error){setNotice(error instanceof Error?error.message:'Could not open the Takeoff copy. Keep this design open and try again.');}
+  };
+  const editLayout=(mode:'points'|'stairs'|'railing'|'concrete')=>{
+    setLayoutMode(mode);changeStep('layout');
+  };
+  const requestDetails=(section:string)=>{
+    if(section==='concrete'){editLayout('concrete');return;}
+    if(section==='stairs'&&totalStairs===0){editLayout('stairs');return;}
+    if(section==='railing'&&model.railingRun+model.stairRailSideCount+
+      (lowerModel?.railingRun??0)+(lowerModel?.stairRailSideCount??0)===0){editLayout('railing');return;}
+    setInspectorSection(finishDockDetailSection(project,section));
+  };
   return <div className="consultation-studio">
     <div className="consultation-titlebar">
       <div>
-        <p className="eyebrow">S&S / SALES CONSULTATION STUDIO</p>
+        <p className="eyebrow">Design studio</p>
         <h2>{project.client.name?project.client.name+"'s outdoor living design":project.title}</h2>
-        <p className="muted">Show the homeowner the design. Geometry drives the takeoff; pricing stays in your separate estimating app.</p>
+        <p className="muted">{project.client.address||'Explore your outdoor living design together.'}</p>
       </div>
-      <span className="consultation-local-label">Saved locally · Revision {project.revision}</span>
+      <div className="studio-project-meta"><span>{totalDeckArea.toFixed(0)} sq ft deck</span>
+        <span>{totalStairs} stair {totalStairs===1?'flight':'flights'}</span>
+        <span className={saveError?'studio-save-error':'studio-save-status'} role="status">{saveError?'Save needs attention':'Saved on this device'} · Rev {project.revision}</span>
+        <button type="button" className="ghost-btn small-btn" onClick={openPlans}>Plans & materials</button>
+      </div>
     </div>
     <nav className="consultation-step-nav" aria-label="Sales consultation stages">
       {STEPS.map((s)=><button type="button" key={s.id} aria-current={step===s.id?'step':undefined}
@@ -141,7 +173,7 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
     </nav>
     {step==='photo'&&<section className="consultation-panel">
       <div className="consultation-panel-copy"><p className="eyebrow">Step 1 / Property</p><h3>Start with the client's actual home</h3>
-        <p>Capture the property and your contact information before drawing. The picture stays in this browser until a secure shared storage system is connected.</p></div>
+        <p>Add the customer's details and an optional property photo. You can start drawing at any time.</p></div>
       <div className="consultation-photo-grid">
         <div className="consultation-photo-drop">
           {photoUrl?<img src={photoUrl} alt="Client's house"/>:<div className="consultation-photo-placeholder">
@@ -161,21 +193,21 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
           <label>Property address<input value={project.client.address} onChange={(e)=>setClient('address',e.target.value)} placeholder="Project location"/></label>
           <div className="consultation-form-two">
             <label>Phone<input value={project.client.phone} onChange={(e)=>setClient('phone',e.target.value)} placeholder="Phone"/></label>
-            <label>Email<input inputMode="email" value={project.client.email} onChange={(e)=>setClient('email',e.target.value)} placeholder="Email"/></label>
+            <label>Email<input type="email" value={project.client.email} onChange={(e)=>setClient('email',e.target.value)} placeholder="Email"/></label>
           </div>
           <label>Initial project scope<select value={project.kind} onChange={(e)=>
             onChange({kind:e.target.value as ConsultationProject['kind'],coverFamily:e.target.value==='covered-deck'?'Moderno':'none'})}>
             <option value="deck">Deck / multi-tier deck</option>
-            <option value="covered-deck">Covered deck (visual concept + deck takeoff)</option>
+            <option value="covered-deck">Deck with a patio cover</option>
           </select></label>
-          <p className="muted">Photo upload is optional. Deck and covered-deck consultations are available in this first release; standalone patio, screening and sunroom assembly engines will be added separately.</p>
+          <p className="studio-field-help">Add screens, a sunroom, concrete areas and lighting as you develop the design. Photos are saved on this device; private cloud sync is available under Save & sync.</p>
         </div>
       </div>
     </section>}
     {step==='layout'&&<section className="consultation-panel">
       <div className="consultation-panel-copy"><p className="eyebrow">Step 2 / Footprint</p>
         <h3>Draw the deck together</h3>
-        <p>Sketch the footprint, place stairs and railing edges, then move support beams/posts if needed. It shares the exact geometry engine with Admin Takeoff.</p>
+        <p>Start with the footprint. Then place stairs, choose railing sides and draw concrete areas. Select a dimension to adjust it.</p>
       </div>
       <div className="consultation-quick-inputs">
         <label>Height above grade (ft)<input type="number" min={.25} step={.25} value={number(project.values.deckHeight,8)}
@@ -188,97 +220,50 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
         <label className="consultation-checkbox"><input type="checkbox" checked={project.values.multiTierEnabled===true}
           onChange={(e)=>setValue('multiTierEnabled',e.target.checked)}/>Add lower deck tier</label>
       </div>
-      <DeckDesigner values={project.values} onValuesChange={updateValues} allowSiteConcrete/>
+      <DeckDesigner values={project.values} onValuesChange={updateValues} allowSiteConcrete requestedMode={layoutMode}/>
       <ConsultationTechnicalSettings values={project.values} onValuesChange={updateValues}/>
       <p className="consultation-engineering-note">Dimensioned geometry is reused in the 3D scene and material estimator. Structural sizes and foundations require field verification before ordering.</p>
     </section>}
-    {step==='options'&&<section className="consultation-panel">
-      <div className="consultation-panel-copy"><p className="eyebrow">Step 3 / Materials</p>
-        <h3>Curate the outdoor living finishes</h3>
-        <p>Choose the details homeowners see. Structural sizing, foundations and framing hardware live in the expandable construction settings on the design step.</p>
+    {(step==='options'||step==='render')&&<section className="studio-live-section" aria-label="Live design workbench">
+      <div className="studio-workbench-intro">
+        <div><p className="eyebrow">{step==='options'?'Step 3 / Live materials':'Step 4 / Review & export'}</p>
+          <h3>{step==='options'?'See every choice come together':'Your outdoor living design'}</h3>
+          <p>{step==='options'?'Choose a part below the model, then browse its finishes. Rotate or zoom to see the details.':'Review the design together, save a concept image, then open the plans and material list.'}</p>
+        </div>
+        <button type="button" className="ghost-btn small-btn" onClick={()=>editLayout('points')}>Edit layout</button>
       </div>
-      <ManufacturerBoardPicker values={project.values} onValues={(values)=>onChange({values})}/>
-      <div className="consultation-option-columns">
-        <ConsultationDeckFinishes values={project.values} onValues={(values)=>onChange({values})}/>
-        <ManufacturerRailPicker values={project.values} onValues={(values)=>onChange({values})}/>
-        <article className="consultation-option-card">
-          <h4>Stair options</h4>
-          <label>Stair width (ft)<input type="number" min={2} step={.5}
-            value={number(project.values.stairWidth,4)} onChange={(e)=>setValue('stairWidth',Number(e.target.value))}/></label>
-          <label>Stair landing at grade
-            <select value={String(project.values.stairLandingSurface??'unknown')}
-              onChange={e=>setValue('stairLandingSurface',e.target.value)}>
-              <option value="unknown">Not verified — no pad added</option>
-              <option value="existing">Existing suitable concrete landing</option>
-              <option value="site-plan">Included in drawn concrete area</option>
-              <option value="bare-ground">No existing concrete — include landing pad</option>
-            </select>
-          </label>
-          {project.values.stairLandingSurface==='bare-ground'&&<>
-            <label>Concrete pad depth (ft)
-              <input type="number" min={3} max={20} step={.5}
-                value={number(project.values.stairLandingDepthFt,4)}
-                onChange={e=>setValue('stairLandingDepthFt',Number(e.target.value))}/>
-            </label>
-            <label>Concrete pad thickness (in)
-              <input type="number" min={4} max={12} step={1}
-                value={number(project.values.stairLandingThicknessIn,5)}
-                onChange={e=>setValue('stairLandingThicknessIn',Number(e.target.value))}/>
-            </label>
-            <small className="consultation-visual-note">One pad per drawn stair flight; minimum 4-foot width or the stair width, whichever is greater. 80-lb concrete bag quantities derive from actual volume with a 5% handling allowance and 0.60 cu ft nominal yield. Site grade, base, landings, footings and code approval require field review.</small>
-          </>}
-          <label>Tread material<select value={String(project.values.stairTreadStyle??'match')}
-            onChange={(e)=>setValue('stairTreadStyle',e.target.value)}>
-            <option value="match">Match deck board style</option>
-            {deckVisualProducts.map(board=><option key={board.id} value={board.label}>
-              {board.collection} · {board.color}
-            </option>)}
-          </select></label>
-          <label>Stair fascia edge<select value={String(project.values.stairFasciaStyle??'profiled')}
-            onChange={(e)=>setValue('stairFasciaStyle',e.target.value)}>
-            <option value="profiled">Cut to follow the stringer</option>
-            <option value="straight">Straight clean fascia</option>
-          </select></label>
-          <StairFasciaFinishSelect values={project.values} onValues={(values)=>onChange({values})}/>
-          <label>Riser material<select value={String(project.values.stairRiserStyle??'auto')}
-            onChange={(e)=>setValue('stairRiserStyle',e.target.value)}>
-            <option value="auto">Standard coordinated riser</option>
-            <option value="match">Match deck board</option>
-            <option value="fascia">Match fascia trim</option>
-            <option value="open">Open risers (subject to approved code)</option>
-            {deckVisualProducts.map(board=><option key={board.id} value={board.label}>
-              {board.collection} · {board.color}
-            </option>)}
-          </select></label>
-        </article>
-        <ConsultationSkirtingOptions values={project.values} onValuesChange={updateValues}/>
-        <ManufacturerCoverPicker project={project} onChange={onChange}/>
+      <div className={'studio-workbench'+(inspectorSection?' studio-workbench--with-inspector':'')}>
+        <div className="studio-scene-column">
+          <div className="studio-view-toolbar">
+            <div className="studio-segmented" role="group" aria-label="Design view">
+              <button type="button" aria-pressed={!overlay} onClick={()=>setOverlay(false)}>Interactive 3D</button>
+              <button type="button" aria-pressed={overlay} onClick={()=>setOverlay(true)} disabled={!photoUrl}
+                title={!photoUrl?'Add a property photo in step 1':'Align the design with the property photo'}>House photo</button>
+            </div>
+            <div className="studio-segmented" role="group" aria-label="Scene lighting">
+              <button type="button" aria-pressed={!lightingPreview} onClick={()=>setLightingPreview(false)}>Day</button>
+              <button type="button" aria-pressed={lightingPreview} onClick={()=>setLightingPreview(true)}>Evening</button>
+            </div>
+            <div className="studio-view-actions">
+              <button type="button" className="ghost-btn small-btn" aria-expanded={!!inspectorSection}
+                onClick={()=>setInspectorSection(current=>current?null:'deck')}>Detailed options</button>
+              <button type="button" className="ghost-btn small-btn" onClick={()=>setFitRequest(current=>current+1)}>Fit design</button>
+              <button type="button" className="ghost-btn small-btn" aria-pressed={expandedView}
+                onClick={()=>setExpandedView(current=>!current)}>{expandedView?'Standard size':'Expand view'}</button>
+              <button type="button" className="secondary-btn small-btn" disabled={renderBusy} onClick={preview}>
+                {renderBusy?'Saving…':'Save image'}</button>
+            </div>
+          </div>
+          <Suspense fallback={<div className="consultation-3d-loading">Loading your 3D design…</div>}>
+            <Live3D project={project} photoUrl={photoUrl} photoMode={overlay}
+              viewportHeight={viewportHeight} lightingPreview={lightingPreview} fitRequest={fitRequest}/>
+          </Suspense>
+          <ConsultationFinishDock project={project} onChange={onChange} onRequestDetails={requestDetails}/>
+        </div>
+        {inspectorSection&&<ConsultationDetailsPanel project={project} onChange={onChange}
+          section={inspectorSection} onSectionChange={setInspectorSection}
+          onClose={()=>setInspectorSection(null)} onEditLayout={editLayout}/>}
       </div>
-      {project.coverScreenStyle==='elite-add-a-room'&&
-        <EliteSunroomStudioOptions project={project} model={model} onChange={onChange}/>}
-      <DeckGateEditor values={project.values} onValuesChange={updateValues}/>
-    </section>}
-    {step==='render'&&<section className="consultation-panel">
-      <div className="consultation-panel-copy"><p className="eyebrow">Step 4 / Present</p><h3>Show the vision. Keep the takeoff connected.</h3>
-        <p>Rotate and zoom the real geometry, or place it over the homeowner's photograph as an approximate concept overlay. A photorealistic AI pass is not yet connected.</p>
-      </div>
-      <div className="consultation-preview-toolbar">
-        <button type="button" className={!overlay?'active':''} onClick={()=>setOverlay(false)}>Interactive 3D</button>
-        <button type="button" className={overlay?'active':''} onClick={()=>setOverlay(true)} disabled={!photoUrl}>Overlay on house photo</button>
-        <button type="button" className="secondary-btn small-btn" disabled={renderBusy} onClick={preview}>
-          {renderBusy?'Exporting…':'Download concept PNG'}</button>
-        <label className="consultation-viewport-resize">3D view height · {viewportHeight}px
-          <input type="range" min={450} max={1200} step={25} value={viewportHeight}
-            onChange={e=>setViewportHeight(Number(e.target.value))}/>
-        </label>
-        <button type="button" className="ghost-btn small-btn"
-          onClick={()=>setViewportHeight(current=>current>=1125?740:1150)}>
-          {viewportHeight>=1125?'Standard view':'Expand view'}</button>
-      </div>
-      <Suspense fallback={<div className="consultation-3d-loading">Loading professional 3D viewer…</div>}>
-        <Live3D project={project} photoUrl={photoUrl} photoMode={overlay}
-          viewportHeight={viewportHeight}/>
-      </Suspense>
       {overlay&&<div className="consultation-calibration">
         <p className="muted">Align the preliminary 3D perspective by hand. Use the 3D viewport to orbit the design, then move and scale it on the home photograph.</p>
         {([
@@ -290,10 +275,28 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
           <input type="range" min={min} max={max} step={step} value={project.calibration[key]}
             onChange={(e)=>setCalibration(key,Number(e.target.value))}/></label>)}
       </div>}
+      {step==='render'&&<div className="studio-plan-access">
+        <div><h4>Plans, quantities & exports</h4>
+          <p>Open this revision in Takeoff to review framing and installation drawings, the concrete site plan and the full material order. Your consultation stays saved.</p></div>
+        <button type="button" className="secondary-btn" onClick={openPlans}>Open plans & exports →</button>
+      </div>}
+      {step==='render'&&<details className="studio-material-review">
+        <summary>Current material list · {handoff.materials.length} lines</summary>
+        <div className="studio-material-table"><table>
+          <thead><tr><th scope="col">Material / selection</th><th scope="col">Group</th><th scope="col" className="quantity">Quantity</th></tr></thead>
+          <tbody>{handoff.materials.map((item,index)=><tr key={item.category+'-'+item.name+'-'+index}>
+            <td><strong>{item.name}</strong>{item.color&&<small>{item.color}</small>}
+              <small>{item.stockRecommendation}</small>{item.notes&&<small>{item.notes}</small>}</td>
+            <td>{item.category}</td><td className="quantity">{item.quantity.toLocaleString('en-US',{maximumFractionDigits:2})} {item.unit}</td>
+          </tr>)}</tbody>
+        </table></div>
+      </details>}
+      {step==='render'&&<details className="studio-estimator-exchange">
+        <summary><span>Pricing & scope exchange</span><small>Consultant tools · external estimator</small></summary>
       <div className="consultation-handoff">
         <div>
           <h4>Send the design to your estimating app</h4>
-          <p className="muted">{model.area.toFixed(1)} sq ft deck · {model.stairCount} stair flight(s) · {estimate.materials.length} material lines. No prices are calculated here.</p>
+          <p className="muted">Export the current dimensions, material quantities and selected options for pricing.</p>
           {!!handoff.blockers.length&&<div className="consultation-handoff-warnings">
             <strong>Review before pricing / ordering</strong>
             {handoff.blockers.slice(0,8).map((note,i)=><p key={i}>{note}</p>)}
@@ -302,13 +305,13 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
             downloadJson('EZTakeoff-'+project.id+'-revision-'+project.revision+'-estimate-request.json',handoff)}>
             Export dimensions & options (JSON)
           </button>
-          <p className="muted">Use the JSON in your separate estimator. The bridge is ready to connect to its API once its endpoint and authentication contract are provided.</p>
+          <p className="muted">Import this design request into your estimating workflow.</p>
         </div>
         <div>
           <h4>Import the estimating app's pricing tiers</h4>
           <label className="consultation-upload">
             Import validated pricing response JSON
-            <input type="file" accept=".json,application/json" onChange={onImport} disabled={pricingBusy}/>
+            <input type="file" accept=".json,application/json" onChange={onImport}/>
           </label>
           {bridgeError&&<p role="alert">{bridgeError}</p>}
           {!!project.estimatingResponse&&isPricedRevision(project)&&<div className="consultation-pricing-tiers">
@@ -330,12 +333,13 @@ function ConsultationEditor({project,onChange}:{project:ConsultationProject;onCh
           <p className="muted">Pricing is salesperson-facing until the final scope is intentionally exported. Imported pricing becomes invalid after a design change.</p>
         </div>
       </div>
-      <button type="button" className="ghost-btn small-btn" onClick={()=>{setPricingBusy(false);setNotice('');}}>Clear notices</button>
+      </details>}
     </section>}
+    {saveError&&<div className="studio-storage-alert" role="alert">{saveError}</div>}
     {notice&&<div className="consultation-notice" role="status">{notice}</div>}
     <footer className="consultation-footer">
       <button type="button" className="ghost-btn" disabled={step==='photo'} onClick={()=>changeStep(STEPS[Math.max(0,STEPS.findIndex(s=>s.id===step)-1)].id)}>Previous</button>
-      <span>{STEPS.findIndex(s=>s.id===step)+1} / 4 · {model.area.toFixed(1)} sq ft</span>
+      <span>{STEPS.findIndex(s=>s.id===step)+1} / 4 · {totalDeckArea.toFixed(1)} sq ft</span>
       {step!=='render'&&<button type="button" className="secondary-btn" onClick={()=>changeStep(STEPS[Math.min(3,STEPS.findIndex(s=>s.id===step)+1)].id)}>Continue →</button>}
     </footer>
   </div>;
@@ -345,7 +349,11 @@ export function ConsultationStudio(){
   const navigate=useNavigate();
   const [projects,setProjects]=useState<ConsultationProject[]>(loadConsultations);
   const [search,setSearch]=useState('');
-  useEffect(()=>{try{saveConsultations(projects);}catch{/* Limited browser storage; existing photos remain in IndexedDB. */}},[projects]);
+  const [saveError,setSaveError]=useState('');
+  useEffect(()=>{
+    try{saveConsultations(projects);setSaveError('');}
+    catch{setSaveError('This browser could not save your latest changes. Keep this page open and use Save & sync or export the design before leaving.');}
+  },[projects]);
   const project=projects.find((p)=>p.id===projectId);
   const create=()=>{
     const id=crypto.randomUUID();
@@ -358,15 +366,17 @@ export function ConsultationStudio(){
     if(!projectId)return;
     setProjects((current)=>current.map((p)=>p.id===projectId?updateConsultation(p,changes):p));
   };
-  return <div className="consultations-shell">
-    <div className="consultations-banner">
+  return <div className={'consultations-shell studio-workspace'+(project?' studio-workspace--editing':'')}>
+    <div className={project?'studio-workspace-strip':'consultations-banner'}>
+      {project?<button type="button" className="ghost-btn small-btn" onClick={()=>navigate('/consultation')}>← All consultations</button>:
       <div><p className="eyebrow">S&S / CLIENT PRESENTATIONS</p><h2>Sales Consultation Studio</h2>
-        <p className="muted">Design live with the client. Accurate deck geometry flows into takeoff and your external pricing workflow.</p></div>
+        <p className="muted">Draw together. Explore finishes. Turn the design into plans and a material list.</p></div>}
       <div className="consultations-banner-actions">
-        {project&&<button type="button" className="ghost-btn" onClick={()=>navigate('/consultation')}>All consultations</button>}
-        <button type="button" className="secondary-btn" onClick={create}>+ New consultation</button>
+        <button type="button" className="ghost-btn small-btn" onClick={create}>+ New consultation</button>
       </div>
     </div>
+    <details className="studio-save-sync">
+      <summary>Save & sync <span>Private cloud projects and property photos</span></summary>
     <ConsultationCloudPanel project={project??null} onOpen={(remote)=>{
       // Opening a cloud revision replaces only that matching local record.
       // A photo that was already saved in this browser is kept unchanged.
@@ -380,7 +390,8 @@ export function ConsultationStudio(){
       setProjects(current=>current.map(p=>p.id===id?
         updateConsultation(p,{photoPresent:true}):p));
     }}/>
-    {project?<ConsultationEditor key={project.id} project={project} onChange={update}/>:
+    </details>
+    {project?<ConsultationEditor key={project.id} project={project} onChange={update} saveError={saveError}/>:
       <section className="consultation-list">
         <div className="consultation-list-heading">
           <h3>Saved consultations</h3>
