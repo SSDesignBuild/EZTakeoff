@@ -88,6 +88,7 @@ function ServiceWorkspaceContent({service,values,setValues,snapshot}:{service:Se
 
   if (service.slug === 'decks') return (
     <DeckWorkspaceFlow values={values} onValuesChange={setValues} estimate={estimate} visibleFields={visibleFields}
+      project={snapshot ? { ...snapshot.project, values } : undefined}
       initialStep={snapshot?'review':undefined}
       studioContext={snapshot?{title:snapshot.title,revision:snapshot.sourceRevision,
         returnHref:consultationTakeoffReturnHref(snapshot),coverFamily:snapshot.project.coverFamily}:undefined}/>

@@ -27,8 +27,8 @@ const INSTALLATION_END_GAP_FT = 0.125 / 12;
  */
 export function surfaceStrips(
   model:Pick<DeckModel,'points'|'boardRun'|'minX'|'maxX'|'minY'|'maxY'> &
-    Partial<Pick<DeckModel,'breakerBoardPositions'|'breakerBoardCount'|'pictureFrameSegments'|'pictureFrameCount'>>,
-  boardWidthFt=VISIBLE_BOARD_WIDTH_FT,gapFt=VISIBLE_BOARD_GAP_FT,
+    Partial<Pick<DeckModel,'breakerBoardPositions'|'breakerBoardCount'|'pictureFrameSegments'|'pictureFrameCount'|'deckBoardFaceFt'|'pictureFrameFaceFts'|'breakerFaceFts'|'fasciaThicknessFt'>>,
+  boardWidthFt=model.deckBoardFaceFt??VISIBLE_BOARD_WIDTH_FT,gapFt=VISIBLE_BOARD_GAP_FT,
 ):SurfaceStrip[]{
   const points=model.points;
   if(points.length<3||!Number.isFinite(boardWidthFt)||boardWidthFt<=0||
@@ -83,7 +83,7 @@ export function surfaceStrips(
       // A visual breaker is a REAL perpendicular board with physical face
       // width. Reserve its full footprint + edge gaps in the field board row.
       const breakerCount=Math.max(0,Math.min(3,Math.round(model.breakerBoardCount??0)));
-      const band=breakerCount*(boardWidthFt+gapFt)+gapFt;
+      const band=Array.from({length:breakerCount},(_,i)=>model.breakerFaceFts?.[i]??boardWidthFt).reduce((a,b)=>a+b,0)+(breakerCount+1)*gapFt;
       const blockers=breakerCount>0?(model.breakerBoardPositions??[]).map(station=>
         [station-band/2,station+band/2] as const):[];
       let permitted:[[number,number]]|Array<[number,number]>=[[start,end]];
@@ -125,7 +125,11 @@ export function surfaceStrips(
   // alongside a parallel border is still a real board; projecting the whole
   // blocker onto the run axis used to throw that entire row away.
   const frames=planMiteredPictureFrames(model.points,model.pictureFrameSegments??[],
-    model.pictureFrameCount??0,boardWidthFt,gapFt);
+    model.pictureFrameCount??0,model.pictureFrameFaceFts??boardWidthFt,gapFt,model.fasciaThicknessFt??.75/12);
+  if(!frames.length)return result;
+  return clipSurfaceStrips(result,frames,gapFt);
+}
+function clipSurfaceStrips<T extends SurfaceStrip>(result:T[],frames:ReturnType<typeof planMiteredPictureFrames>,gapFt:number):T[]{
   if(!frames.length)return result;
   const margin=Math.max(.005,Math.min(.025,gapFt));
   return result.flatMap(strip=>{
@@ -172,7 +176,7 @@ export interface BreakerVisualStrip extends SurfaceStrip {
  */
 export function breakerVisualStrips(
   model:Pick<DeckModel,'points'|'boardRun'|'minX'|'maxX'|'minY'|'maxY'> &
-    Partial<Pick<DeckModel,'breakerBoardPositions'|'breakerBoardCount'>>,
+    Partial<Pick<DeckModel,'breakerBoardPositions'|'breakerBoardCount'|'breakerFaceFts'|'pictureFrameSegments'|'pictureFrameCount'|'pictureFrameFaceFts'|'fasciaThicknessFt'>>,
   boardWidthFt=VISIBLE_BOARD_WIDTH_FT,gapFt=VISIBLE_BOARD_GAP_FT,
 ):BreakerVisualStrip[]{
   const count=Math.max(0,Math.min(3,Math.round(model.breakerBoardCount??0)));
@@ -199,11 +203,14 @@ export function breakerVisualStrips(
     for(let i=0;i+1<hits.length;i+=2)intervals.push([hits[i],hits[i+1]]);
     return intervals;
   };
+  const widths=Array.from({length:count},(_,i)=>model.breakerFaceFts?.[i]??boardWidthFt);
+  const bandWidth=widths.reduce((a,b)=>a+b,0)+Math.max(0,count-1)*gapFt;
   for(const station of model.breakerBoardPositions??[]){
     if(!Number.isFinite(station)||station<min||station>max)continue;
     for(let course=0;course<count;course++){
-      const center=station+(course-(count-1)/2)*(boardWidthFt+gapFt);
-      const side1=center-boardWidthFt/2,side2=center+boardWidthFt/2;
+      const faceWidth=widths[course];
+      const center=station-bandWidth/2+widths.slice(0,course).reduce((sum,width)=>sum+width+gapFt,0)+faceWidth/2;
+      const side1=center-faceWidth/2,side2=center+faceWidth/2;
       const epsilon=Math.min(.000001,boardWidthFt/1000);
       if(side1<min||side2>max)continue;
       const middle=scan(center),low=scan(side1+epsilon),high=scan(side2-epsilon);
@@ -224,7 +231,7 @@ export function breakerVisualStrips(
             axis:faceAxis==='x'?'z':'x',
             x:faceAxis==='x'?center:cursor+lengthFt/2,
             z:faceAxis==='x'?cursor+lengthFt/2:center,
-            lengthFt,widthFt:boardWidthFt,
+            lengthFt,widthFt:faceWidth,
             startFt:cursor,endFt:cursor+lengthFt,
             row:course,course,stationFt:station,
           });
@@ -233,5 +240,7 @@ export function breakerVisualStrips(
       }
     }
   }
-  return results;
+  const frames=planMiteredPictureFrames(model.points,model.pictureFrameSegments??[],model.pictureFrameCount??0,
+    model.pictureFrameFaceFts??boardWidthFt,gapFt,model.fasciaThicknessFt??.75/12);
+  return clipSurfaceStrips(results,frames,gapFt);
 }

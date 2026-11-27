@@ -21,7 +21,8 @@ export interface DeckFinishSupportPlan {
   totalLinearFt:number;coveredAreaSqFt:number;issues:string[];notes:string[];
 }
 type SupportModel=Pick<DeckModel,'points'|'edgeSegments'|'joistDirection'|'joistPositions'|
-  'pictureFrameSegments'|'pictureFrameCount'|'breakerBoardCount'|'breakerBoardPositions'>;
+  'pictureFrameSegments'|'pictureFrameCount'|'breakerBoardCount'|'breakerBoardPositions'> &
+  Partial<Pick<DeckModel,'pictureFrameFaceFts'|'breakerFaceFts'|'fasciaThicknessFt'>>;
 type Zone={kind:DeckFinishSupportPiece['kind'];id:string;face:DeckFacePoint[];direction:DeckFacePoint};
 const RIM_WIDTH_FT=3/12;
 const JOIST_HALF_WIDTH_FT=.75/12;
@@ -59,7 +60,7 @@ export function planDeckFinishSupport(model:SupportModel):DeckFinishSupportPlan 
     return hits.flatMap((v,i)=>i%2===0&&hits[i+1]>v?[[v,hits[i+1]] as [number,number]]:[]);
   };
   const zones:Zone[]=[];
-  const frames=planMiteredPictureFrames(model.points,model.pictureFrameSegments,model.pictureFrameCount);
+  const frames=planMiteredPictureFrames(model.points,model.pictureFrameSegments,model.pictureFrameCount,model.pictureFrameFaceFts??5.5/12,.125/12,model.fasciaThicknessFt??.75/12);
   for(const edge of model.pictureFrameSegments){
     const courses=frames.filter(frame=>frame.edgeIndex===edge.index);
     if(!courses.length)continue;
@@ -76,7 +77,7 @@ export function planDeckFinishSupport(model:SupportModel):DeckFinishSupportPlan 
     ]});
   }
   const breakerCount=Math.max(0,Math.min(3,Math.floor(model.breakerBoardCount)));
-  const breakerWidth=(breakerCount*5.5+Math.max(0,breakerCount-1)*.125)/12;
+  const breakerWidth=Array.from({length:breakerCount},(_,i)=>model.breakerFaceFts?.[i]??5.5/12).reduce((a,b)=>a+b,0)+Math.max(0,breakerCount-1)*.125/12;
   if(breakerCount)model.breakerBoardPositions.forEach((station,index)=>{
     const low=station-breakerWidth/2-FINISH_SUPPORT_FIELD_END_BACKING_FT;
     const high=station+breakerWidth/2+FINISH_SUPPORT_FIELD_END_BACKING_FT;

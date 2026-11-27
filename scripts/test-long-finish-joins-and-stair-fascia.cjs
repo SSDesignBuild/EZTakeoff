@@ -128,18 +128,17 @@ const visual=fs.readFileSync(path.join(root,'src/components/visual3d/DeckStairAs
 assert.ok(visual.includes('planStairFasciaCoverage')&&
  visual.includes('makeStairFinishGeometry')&&
  !visual.includes("straightFasciaGeo:geo")&&
- visual.includes('width/2+.75/24')&&
- visual.includes('lower-ripped-three-quarter-inch-fascia-strip')&&
- visual.includes('lowerStart=underFasciaAt(0)')&&
- visual.includes('fasciaCoverage.lowerRip')&&
- visual.includes('map={fasciaTexture}')&&
+ visual.includes('width/2+fasciaThicknessFt/2')&&
+ visual.includes('planStairFasciaStockPieces(fasciaCoverage,rise,treadDepth)')&&
+ visual.includes('fasciaCuts.map(cut=><StairFasciaCut')&&
+ visual.includes('texture={fasciaTexture}')&&
  visual.includes('toneMapped={false}'),
  'Stair fascia must be symmetric, independently profiled and use selected manufacturer texture');
 const render=fs.readFileSync(path.join(root,'src/components/visual3d/ManufacturerDeck3D.tsx'),'utf8');
 assert.ok(render.includes('splitMiteredPictureFrames(planMiteredPictureFrames'),
  'Picture-frame 3D must show physically split miter boards');
 const skirtingRender=fs.readFileSync(path.join(root,'src/components/visual3d/DeckSkirting3D.tsx'),'utf8');
-assert.ok(skirtingRender.includes('side.courses.map'),
+assert.ok(skirtingRender.includes('buildConstructionSkirting')&&skirtingRender.includes('assembly.parts.map'),
  'Skirting finish renderer must consume exact segment-level purchase course geometry');
 const supplierUI=fs.readFileSync(path.join(root,'src/components/MaterialTable.tsx'),'utf8');
 assert.ok(supplierUI.includes("displayItems.filter(item=>item.category!=='Deck finish cut schedule (not order)')")&&

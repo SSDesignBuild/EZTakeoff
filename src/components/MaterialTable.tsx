@@ -4,11 +4,17 @@ import { exportCanvasAsPng, exportCanvasesAsPdf, svgElementToExportCanvases, svg
 import { MaterialItem } from '../lib/types';
 import { renderMaterialExportPages,stackMaterialExportPages } from '../lib/materialExport';
 import { ConstructionCadPanel } from './ConstructionCadPanel';
+import { MaterialCutDetails } from './MaterialCutDetails';
+import { materialDrawingLabel, mergeMaterialCutPlans } from '../lib/materialCutPlan';
+import type { ConsultationProject } from '../lib/consultationProject';
+import { buildProjectConstructionDrawingSet as buildConstructionDrawingSet } from '../lib/constructionProjectCad';
+import { constructionVectorPdf } from '../lib/constructionCadExport';
 
 interface MaterialTableProps {
   items: MaterialItem[];
   validationIssues?: string[];
   orderNotes?: string[];
+  project?: ConsultationProject;
   values: Record<string, string | number | boolean>;
   onValuesChange: (updater: (current: Record<string, string | number | boolean>) => Record<string, string | number | boolean>) => void;
 }
@@ -30,6 +36,7 @@ const REMOVAL_REASONS:Record<RemovedMaterialRecord['reason'],string>={
 
 const infoFields = [
   { key: 'poJobName', label: 'P.O / Job name', type: 'text' as const },
+  { key: 'drawingRevision', label: 'Drawing revision', type: 'text' as const },
   { key: 'jobAddress', label: 'Address', type: 'text' as const },
   { key: 'customerPhone', label: 'Customer phone', type: 'text' as const },
   { key: 'balanceDueCompletion', label: 'Balance due at completion', type: 'text' as const },
@@ -125,13 +132,14 @@ async function renderCombinedSkirtingSheet(cards: Element[]) {
   return canvas;
 }
 
-export function MaterialTable({ items, values, onValuesChange, validationIssues = [],orderNotes = [] }: MaterialTableProps) {
+export function MaterialTable({ items, values, onValuesChange, validationIssues = [],orderNotes = [],project }: MaterialTableProps) {
   const { serviceSlug } = useParams();
   const tableRef = useRef<HTMLDivElement | null>(null);
   const [customDraft, setCustomDraft] = useState(customDefaults);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState({ name: '', quantity: '', unit: '', stockRecommendation: '', color: '', notes: '' });
   const [stockView, setStockView] = useState(false);
+  const [exportMessage, setExportMessage] = useState('');
 
   const customItems = useMemo(() => parseJsonArray<CustomMaterialItem>(values.customMaterialItems, []), [values.customMaterialItems]);
   const deletedKeys = useMemo(() => new Set(parseJsonArray<string>(values.deletedMaterialKeys, [])), [values.deletedMaterialKeys]);
@@ -227,7 +235,9 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
         return;
       }
       existing.quantity = Number((existing.quantity + item.quantity).toFixed(2));
-      const label = item.layoutLabel ? ` ${item.layoutLabel}` : '';
+      existing.cutPlan = mergeMaterialCutPlans(existing.cutPlan, item.cutPlan);
+      const drawingLabel = materialDrawingLabel(item);
+      const label = drawingLabel ? ` ${drawingLabel}` : '';
       const useNote = item.category + (item.name !== existing.name ? ` - ${item.name}` : '') + label;
       existing.notes = Array.from(new Set([existing.notes, useNote].filter(Boolean).join(' · ').split(' · ').filter(Boolean))).join(' · ');
     });
@@ -403,6 +413,21 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
 
   const exportCombinedPdf = async () => {
     if (hasBlockingIssues) return;
+    if (serviceSlug === 'decks') {
+      setExportMessage('Preparing CAD and material schedules...');
+      await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+      try {
+        const set = buildConstructionDrawingSet(values, displayItems, { computedItems: items, issues: validationIssues, project });
+        if (set.issues.length) { setExportMessage('Correct drawing errors before export: ' + set.issues.join(' / ')); return; }
+        const data = constructionVectorPdf(set);
+        const url = URL.createObjectURL(new Blob([new Uint8Array(data).buffer], { type: 'application/pdf' }));
+        const a = document.createElement('a'); a.href = url; a.download = `${exportBaseName}-cad-materials.pdf`;
+        document.body.appendChild(a); a.click(); a.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+        setExportMessage(`${set.sheets.length} CAD and material schedule sheets exported.`);
+      } catch (error) { setExportMessage('CAD export failed: ' + (error instanceof Error ? error.message : 'Review the model inputs.')); }
+      return;
+    }
     const root = document.getElementById('service-export-root');
     // Include the deck plan and every configured skirting/railing elevation.
     // All these SVGs are driven by the same geometry as the supplier cuts.
@@ -423,6 +448,8 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
   };
 
   return (
+    <>
+    {serviceSlug === 'decks' && <ConstructionCadPanel values={values} items={displayItems} computedItems={items} issues={validationIssues} blocked={hasBlockingIssues} project={project} />}
     <div className="table-card material-table-card">
       <div className="visual-header material-table-header">
         <div>
@@ -433,15 +460,16 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
           <button type="button" className={stockView ? 'secondary-btn small-btn' : 'ghost-btn small-btn'} onClick={() => setStockView((current) => !current)}>{stockView ? 'Installer view' : 'Stock order view'}</button>
           <button type="button" className="ghost-btn small-btn" disabled={hasBlockingIssues} title={hasBlockingIssues ? blockingMessage : undefined} onClick={exportPdf}>Export PDF</button>
           <button type="button" className="ghost-btn small-btn" disabled={hasBlockingIssues} title={hasBlockingIssues ? blockingMessage : undefined} onClick={exportPng}>Export image</button>
-          <button type="button" className="ghost-btn small-btn" disabled={hasBlockingIssues} title={hasBlockingIssues ? blockingMessage : undefined} onClick={exportCombinedPdf}>Export layout + materials</button>
+          <button type="button" className="ghost-btn small-btn" disabled={hasBlockingIssues} title={hasBlockingIssues ? blockingMessage : undefined} onClick={exportCombinedPdf}>{serviceSlug === 'decks' ? 'CAD + material schedules' : 'Export layout + materials'}</button>
         </div>
       </div>
+
+      {exportMessage && <p role="status" aria-live="polite">{exportMessage}</p>}
 
       {validationIssues.length > 0 && <div role="alert" style={{ border: '1px solid #dc2626', borderRadius: 8, padding: 12, marginBottom: 12 }}>
         <strong>Material export blocked — correct drawing errors</strong>
         {validationIssues.map((issue, index) => <p key={index}>{issue}</p>)}
       </div>}
-      {serviceSlug === 'decks' && <ConstructionCadPanel values={values} items={displayItems} computedItems={items} issues={validationIssues} blocked={hasBlockingIssues} />}
       <div className="material-header-grid compact-grid-4">
         {infoFields.map((field) => field.type === 'select' ? (
           <label key={field.key} className="form-field compact-form-field">
@@ -481,11 +509,11 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
 
       <div className="stack-list material-groups" ref={tableRef}>
         {Object.entries(grouped).map(([category, categoryItems]) => (
-          <div key={category} className="material-group">
-            <div className="material-group-header">
+          <details key={category} className="material-group" open={category !== 'Deck finish cut schedule (not order)'}>
+            <summary className="material-group-header" style={{ cursor: 'pointer' }}>
               <h4>{category}</h4>
               <span>{categoryItems.length} line items</span>
-            </div>
+            </summary>
             <div className="table-wrap">
               <table>
                 <thead>
@@ -503,13 +531,13 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
                 <tbody>
                   {categoryItems.map((item) => (
                     <tr key={item.rowKey}>
-                      <td>{item.layoutLabel ?? ''}</td>
+                      <td>{materialDrawingLabel(item)}</td>
                       <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.name} onChange={(event) => setEditingDraft((current) => ({ ...current, name: event.target.value }))} style={{ width: '100%' }} /> : item.name}</td>
                       <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.stockRecommendation} onChange={(event) => setEditingDraft((current) => ({ ...current, stockRecommendation: event.target.value }))} style={{ width: '100%' }} /> : item.stockRecommendation}</td>
                       <td>{editingKey === item.rowKey ? <input type="number" min="0" step="0.01" value={editingDraft.quantity} onChange={(event) => setEditingDraft((current) => ({ ...current, quantity: event.target.value }))} style={{ width: '82px' }} /> : item.quantity}</td>
                       <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.unit} onChange={(event) => setEditingDraft((current) => ({ ...current, unit: event.target.value }))} style={{ width: '72px' }} /> : item.unit}</td>
                       <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.color} onChange={(event) => setEditingDraft((current) => ({ ...current, color: event.target.value }))} style={{ width: '100%' }} /> : item.color ?? '—'}</td>
-                      <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.notes} onChange={(event) => setEditingDraft((current) => ({ ...current, notes: event.target.value }))} style={{ width: '100%' }} /> : item.notes ?? '—'}</td>
+                      <td>{editingKey === item.rowKey ? <input type="text" value={editingDraft.notes} onChange={(event) => setEditingDraft((current) => ({ ...current, notes: event.target.value }))} style={{ width: '100%' }} /> : <>{item.notes ?? '—'}<MaterialCutDetails item={item} /></>}</td>
                       <td data-export-ignore="true">
                         {editingKey === item.rowKey ? (
                           <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
@@ -530,7 +558,7 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
                 </tbody>
               </table>
             </div>
-          </div>
+          </details>
         ))}
       </div>
       {hiddenItemCount>0 && <details className="removed-materials-panel">
@@ -563,5 +591,6 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
         </div>
       </details>}
     </div>
+    </>
   );
 }

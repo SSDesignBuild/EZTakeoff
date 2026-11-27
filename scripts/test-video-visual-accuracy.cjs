@@ -71,9 +71,9 @@ assert.equal(fascia.length,4);
 for(let i=1;i<=7;i++){
   const t=i/7;
   const top=fascia[0].riseFt+(fascia[1].riseFt-fascia[0].riseFt)*t;
-  const nosing=5-i*(5/8)+.102;
-  assert.ok(top>nosing+.02,
-    'Straight stair side fascia MUST be above every tread front corner');
+  const nosing=5-i*(5/8);
+  assert.ok(top>=nosing-1e-8,
+    'Straight fascia reaches every actual finished tread front corner without cosmetic elevation offsets');
 }
 assert.equal(PCA_3068.widthFt,3);
 assert.equal(PCA_3068.heightFt,80/12);
@@ -151,7 +151,7 @@ assert.ok(render.includes('outsideFaceZ=trussEndFit.decorativeStartZFt') &&
 assert.ok(downspout.includes('buildRenaissanceTrussCutMesh') &&
   downspout.includes('makeContinuousFormedTrussGeometry(length,width,height,rise,endStyle,availableTailFt)'),
   'Full trusses and decorative ends must use the same constant-section ogee-cut geometry');
-assert.ok(stair.includes('fasciaGeo') &&
+assert.ok(stair.includes('makeStairFinishGeometry(cut.outline,thickness)') &&
   stair.includes('g.rotateY(-Math.PI/2)') &&
   stair.includes('position={[x,0,0]} castShadow receiveShadow'),
   'Selected fascia geometry must be correctly centered to stringer');
@@ -166,8 +166,10 @@ assert.ok(picks.includes('Independent screen doors do not remove deck guardrails
 assert.ok(railLayout.includes('subtractRailingOpenings')&&!railLayout.includes('screenDoorOpenings'),
   'Screen access never independently erases an existing deck guardrail');
 assert.ok(board.includes('planMiteredPictureFrames'));
-assert.ok(stair.includes('underFasciaAt')&&stair.includes('riserTexture'));
-assert.ok(skirt3d.includes("layer==='finish'")&&skirt3d.includes("layer==='jamb'"));
+assert.ok(stair.includes('planConstructionStair')&&stair.includes('riserTexture')&&
+ read('src/lib/stairSkirtingPhysical.ts').includes('stairSkirtRoof'));
+assert.ok(skirt3d.includes('buildConstructionSkirting')&&skirt3d.includes('assembly.parts.map')&&
+ read('src/lib/constructionSkirting.ts').includes('side.physicalMembers'));
 assert.ok(skirt3d.includes('placed-hinged-skirting-access-gate'));
 assert.ok(skirt3d.includes('rotation={[0,yaw,0]}'),
   'Perimeter skirting must follow angled deck edge vectors, not arbitrary X/Z axes');
@@ -206,7 +208,7 @@ const shortGate=buildDeckSkirting(deck.edgeSegments,deck.exposedSegments,5,7.25,
 });
 const gateStile=shortGate.cuts.find(c=>c.location==='hinged access leaf left stile');
 assert.ok(gateStile,'Adjustable gate must have independently cut stiles');
-assert.equal(gateStile.lengthFt,2.5);
+assert.equal(gateStile.lengthFt,2.5-2*(1.5/12),'Gate stiles fit between the actual top and bottom frame rails');
 assert.ok(shortGate.cuts.some(c=>c.location.includes('upper continuous-wall aligned vertical skirting'))||
   shortGate.sides[0].courses.some(c=>c.row===0&&c.start<=.5&&c.end>=3),
   'Short gate upper infill must follow existing wall-wide finish stations, never re-center a patch');
@@ -272,14 +274,16 @@ if(shortGate.options.orientation==='vertical'){
 assert.deepEqual(planSkirtingGateFace(2,2,'vertical',0,.25),[]);
 assert.deepEqual(planSkirtingGateFace(2,2,'vertical',4.5,-1),[]);
 const gateVisualSource=read('src/components/visual3d/DeckSkirting3D.tsx');
-assert.ok(gateVisualSource.includes('planSkirtingGateFace')&&
-  gateVisualSource.includes('SkirtingAccessFace')&&
-  gateVisualSource.includes('opening.width-.08')&&
-  gateVisualSource.includes('leastGrade'),
+const gatePhysicalSource=read('src/lib/skirtingPhysicalLayout.ts');
+assert.ok(gateVisualSource.includes('buildConstructionSkirting')&&
+  gateVisualSource.includes('part.vertices')&&
+  gatePhysicalSource.includes('planSkirtingGateFace')&&
+  gatePhysicalSource.includes('opening.offset+opening.width-.04')&&
+  gatePhysicalSource.includes('gradeSlope'),
   '3D gate boards, clearances and grade must match the material takeoff');
 const stairRiserSource=read('src/components/visual3d/DeckStairAssembly3D.tsx');
-assert.ok(stairRiserSource.includes('stepHeight-rise/2+.04')&&
-  stairRiserSource.includes('(i+1)*treadDepth-.004'),
+assert.ok(stairRiserSource.includes('physical?.risers')&&
+  stairRiserSource.includes('riser.stationFt+riser.thicknessFt/2'),
   'Stair riser must cover stringer plumb cuts without covering tread nosing');
 const visualGeometry=read('src/lib/visualGeometry.ts')+read('src/lib/deckSurfaceLayout.ts');
 assert.ok(visualGeometry.includes('subtractDeckFace(poly,frame.corners,margin)')&&
@@ -298,11 +302,10 @@ const viewer=read('src/components/Consultation3D.tsx');
 assert.ok(viewer.includes('alpha:true')&&viewer.includes("gl.setClearColor('#000000',0)"),
   'Photo overlay must keep WebGL transparent even after toggling photo mode');
 assert.ok(stair.includes('individual-deck-tread-board')&&
-  stair.includes('boardFaceFt=5.5/12,boardGapFt=.125/12')&&
-  stair.includes('StairSkirtPanel')&&stair.includes('clipUnderSlope'),
-  'Stairs need two real 5.5in boards and polygon-clipped stair skirting');
-assert.ok(skirt3d.includes('opening.heightFt??allowed')&&
-  skirt3d.includes('fixed-skirting-infill-above-short-gate'));
+  stair.includes('physical?.treadBoards')&&read('src/lib/constructionStairs.ts').includes('resolveBoardDimensions')&&
+  skirt3d.includes('assembly.parts.map')&&read('src/lib/stairSkirtingPhysical.ts').includes('clipSkirtProfile'),
+  'Stairs use selected actual board dimensions and the shared clipped skirting parts');
+assert.ok(gatePhysicalSource.includes('opening.heightFt')&&gatePhysicalSource.includes("case 'upper-finish'"));
 const skirtUI=read('src/components/ConsultationSkirtingOptions.tsx');
 assert.ok(skirtUI.includes('Gate height (ft)')&&!skirtUI.includes("addAccess('removable')"),
   'Sales skirting shows only open or adjustable hinged access');

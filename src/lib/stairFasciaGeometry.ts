@@ -16,8 +16,8 @@ export function planStraightStairFascia(input:{
   const run=treads*treadDepthFt;
   // Continuous straight fascia edge sits above every tread nosing.
   // Previously it was one full rise below the corner at each step.
-  const upperStart=Math.max(.15,heightFt+.14);
-  const upperEnd=Math.max(.15,heightFt-treads*riseFt+.14);
+  const upperStart=Math.max(.15,heightFt);
+  const upperEnd=Math.max(.15,heightFt-treads*riseFt);
   // A 12-in face is measured PERPENDICULAR to a diagonal board, not as
   // a 12-in vertical world-space box. An extra ripped lower strip may be
   // necessary to hide the structural stringer's underside (computed below).
@@ -44,7 +44,7 @@ export function planStraightStairFascia(input:{
  */
 export function planProfiledStairFascia(input:{
   treadDepthFt:number;treads:number;riseFt:number;heightFt:number;
-  nosingFt?:number;
+  nosingFt?:number;boardFaceFt?:number;
 }):StairSideFasciaPoint[]{
  const {treadDepthFt,riseFt,heightFt}=input;
  const count=Math.round(input.treads);
@@ -52,7 +52,7 @@ export function planProfiledStairFascia(input:{
    treadDepthFt<=0||riseFt<=0||heightFt<=0||count<1)return [];
  const nose=Math.max(0,Math.min(.125,Number(input.nosingFt??0)));
  const outline:StairSideFasciaPoint[]=[];
- const upper=(step:number)=>heightFt-step*riseFt+.09;
+ const upper=(step:number)=>heightFt-step*riseFt;
  outline.push({runFt:0,riseFt:upper(1)});
  for(let step=1;step<=count;step++){
   const z=step*treadDepthFt+nose;
@@ -61,8 +61,10 @@ export function planProfiledStairFascia(input:{
  }
  // The finish must hide the diagonal stringer underside all the way
  // to the toe, with both sides sharing the exact same cut coordinates.
- const end=Math.max(.025,heightFt-(count+1)*riseFt+.015);
- const start=Math.max(.08,heightFt-riseFt-.80);
+ const slope=riseFt/treadDepthFt;
+ const lower0=heightFt+slope*nose-(input.boardFaceFt??1)*Math.sqrt(1+slope*slope);
+ const end=Math.max(0,lower0-slope*(count*treadDepthFt+nose));
+ const start=Math.max(0,lower0);
  outline.push({runFt:count*treadDepthFt+nose,riseFt:end});
  outline.push({runFt:0,riseFt:start});
  return outline;
@@ -70,7 +72,7 @@ export function planProfiledStairFascia(input:{
 
 export function planStairSideFascia(input:{
   treadDepthFt:number;treads:number;riseFt:number;heightFt:number;
-  style:'profiled'|'straight';nosingFt?:number;
+  style:'profiled'|'straight';nosingFt?:number;boardFaceFt?:number;treadThicknessFt?:number;boardThicknessIn?:number;
 }):StairSideFasciaPoint[]{
  return input.style==='straight'?planStraightStairFascia(input):
   planProfiledStairFascia(input);
@@ -100,8 +102,8 @@ export interface StairFasciaCoverage {
  lowerRip:StairSideFasciaPoint[];
  ripMaxWidthIn:number;
  ripRunFt:number;
- boardThicknessIn:0.75;
- boardFaceIn:12;
+ boardThicknessIn:number;
+ boardFaceIn:number;
  stockLengthFt:12;
 }
 /**
@@ -117,21 +119,22 @@ export interface StairFasciaCoverage {
  */
 export function planStairFasciaCoverage(input:{
  treadDepthFt:number;treads:number;riseFt:number;heightFt:number;
- style:'profiled'|'straight';nosingFt?:number;
+ style:'profiled'|'straight';nosingFt?:number;boardFaceFt?:number;treadThicknessFt?:number;boardThicknessIn?:number;
 }):StairFasciaCoverage{
  const main=planStairSideFascia(input);
  const empty:StairFasciaCoverage={
   main,lowerRip:[],ripMaxWidthIn:0,ripRunFt:0,
-  boardThicknessIn:.75,boardFaceIn:12,stockLengthFt:12,
+  boardThicknessIn:input.boardThicknessIn??.75,boardFaceIn:(input.boardFaceFt??1)*12,stockLengthFt:12,
  };
- if(!main.length||input.style!=='straight')return empty;
+ if(!main.length)return empty;
  const {treadDepthFt,riseFt,heightFt}=input;
  const run=input.treads*treadDepthFt;
- const boardLowerStart=main[3].riseFt,boardLowerEnd=main[2].riseFt;
- const structuralStart=Math.max(.05,heightFt-riseFt-.72);
- const structuralEnd=Math.max(.055,heightFt-(input.treads+1)*riseFt+.02);
- const desiredStart=Math.max(.02,structuralStart-.055);
- const desiredEnd=Math.max(.02,structuralEnd-.055);
+ const boardLowerStart=main[main.length-1].riseFt,boardLowerEnd=main[main.length-2].riseFt;
+ const slope=riseFt/treadDepthFt;
+ const structuralStart=heightFt-(input.treadThicknessFt??1/12)-(11.25/12)*Math.sqrt(1+slope*slope);
+ const structuralEnd=structuralStart-slope*run;
+ const desiredStart=Math.max(0,structuralStart-.03);
+ const desiredEnd=Math.max(0,structuralEnd-.03);
  const diffStart=boardLowerStart-desiredStart;
  const diffEnd=boardLowerEnd-desiredEnd;
  if(Math.max(diffStart,diffEnd)<=.012)return empty;

@@ -19,9 +19,10 @@ function contourShape(system:EliteProfileSystem,kind:EliteSectionProfile){
  * metal section. Inner ribs/screw bosses are not dimensioned by catalog.
  * The Renaissance post itself remains separate: never create Elite corners.
  */
-export function EliteVerticalExtrusion({kind,system,x,bottom,height,color,flip=false,name}:{
+export function EliteVerticalExtrusion({kind,system,x,bottom,height,color,flip=false,name,topSlope=0}:{
  kind:'receiver'|'drc'|'h-vertical';system:EliteProfileSystem;
  x:number;bottom:number;height:number;color:string;flip?:boolean;name:string;
+ topSlope?:number;
 }){
  const geometry=useMemo(()=>{
   if(height<.03||!Number.isFinite(height))return null;
@@ -30,9 +31,18 @@ export function EliteVerticalExtrusion({kind,system,x,bottom,height,color,flip=f
     bevelEnabled:false,curveSegments:1});
   g.rotateX(-Math.PI/2); // extrusion axis +Y; section spans X/Z
   if(flip)g.scale(-1,1,1);
+  // A receiver is cut to the roof at its own station, across its complete
+  // catalog lip/H face. A flat end at the high corner still penetrates a
+  // pitched top cap even when the center height was measured correctly.
+  if(Math.abs(topSlope)>.000001){
+   const positions=g.getAttribute('position');
+   for(let i=0;i<positions.count;i++)if(positions.getY(i)>height/2)
+    positions.setY(i,height+positions.getX(i)*topSlope);
+   positions.needsUpdate=true;
+  }
   g.computeVertexNormals();
   return g;
- },[kind,system,height,flip]);
+ },[kind,system,height,flip,topSlope]);
  useEffect(()=>()=>geometry?.dispose(),[geometry]);
  if(!geometry)return null;
  return <mesh name={name} geometry={geometry} position={[x,bottom,0]}

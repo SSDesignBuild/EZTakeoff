@@ -94,11 +94,13 @@ function verifySupport(deck,rectangular=true){
   return plan;
 }
 for(const boardRun of ['width','projection']){
-  const single=verifySupport(buildDeckModel(values({boardRun,pictureFrameCount:1})));
+  const singleModel=buildDeckModel(values({boardRun,pictureFrameCount:1}));
+  const single=verifySupport(singleModel);
   const double=verifySupport(buildDeckModel(values({boardRun,pictureFrameCount:2})));
   const triple=verifySupport(buildDeckModel(values({boardRun,pictureFrameCount:3})));
   assert.ok(single.pieces.length>0&&single.pieces.every(p=>p.nominalSize==='2x6'));
-  near(Math.max(...single.pieces.map(p=>p.widthFt))*12,2.794,'Single-frame clear rip width');
+  const requiredClearIn=singleModel.pictureFrameFaceFts[0]*12-singleModel.fasciaThicknessFt*12-.75-3+1.5;
+  near(Math.max(...single.pieces.map(p=>p.widthFt))*12,requiredClearIn,'Single-frame clear width uses actual fascia/board faces and double-rim occupancy');
   near(Math.max(...double.pieces.map(p=>p.widthFt))*12,8.25,'Double-frame clear width before first joist');
   assert.ok(double.pieces.some(p=>p.nominalSize==='2x10'),'Double picture frame orders wider flat lumber');
   assert.ok(triple.coveredAreaSqFt>double.coveredAreaSqFt&&double.coveredAreaSqFt>single.coveredAreaSqFt);
@@ -145,6 +147,7 @@ const combinedValues=values({pictureFrameCount:2,breakerBoardCount:2});
 const combined=buildDeckModel(combinedValues),estimate=calculateEstimate('decks',combinedValues);
 const purchase=estimate.materials.filter(item=>item.name.includes('flat finish support nailers'));
 assert.equal(purchase.reduce((n,item)=>n+item.quantity,0),combined.finishSupport.stock.reduce((n,item)=>n+item.quantity,0));
-assert.ok(purchase.every(item=>item.notes.includes('Wide face horizontal')&&item.notes.includes('M-FS-')));
+assert.ok(purchase.every(item=>item.notes.includes('Wide face horizontal')&&
+ item.cutPlan?.boards.every(board=>board.cuts.every(cut=>cut.id.startsWith('M-FS-')))));
 assert.ok(!estimate.materials.some(item=>/closure board|sunroom floor transition/i.test(item.name)));
 console.log('PASS editable 18x12 footings / 4x4x4 pads, actual floor rips, rotated continuous flat nailers, no joist overlap, wider multi-course backing and optimized stock parity');

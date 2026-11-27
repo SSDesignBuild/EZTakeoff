@@ -306,6 +306,12 @@ export const SERVICES: ServiceDefinition[] = [
         ],
       },
       { key: 'deckingMaterial', label: 'Decking board style', type: 'select', options: DECK_BOARD_STYLE_OPTIONS },
+      { key: 'deckBoardFaceIn', label: 'Measured board face override (in)', type: 'number', min: 0, step: .001,
+        helper: 'Leave blank or 0 to use the selected product dimensions. Enter a measured face width for a supplied/custom board.' },
+      { key: 'deckBoardThicknessIn', label: 'Measured board thickness override (in)', type: 'number', min: 0, step: .001,
+        helper: 'Leave blank or 0 for the selected product. The finished deck elevation remains fixed; framing seats below the actual board thickness.' },
+      { key: 'fasciaThicknessIn', label: 'Measured fascia thickness override (in)', type: 'number', min: 0, step: .001,
+        helper: 'Leave blank or 0 for the selected fascia product. Used for the outside fascia face and picture-frame overhang.' },
       { key: 'beamCantilever', label: 'Beam cantilever to post (ft)', type: 'select', options: [
         { label: '0 ft', value: '0' },
         { label: '1 ft', value: '1' },
@@ -314,6 +320,8 @@ export const SERVICES: ServiceDefinition[] = [
       { key: 'stairCount', label: 'Stair runs', type: 'number', min: 0, step: 1 },
       { key: 'stairWidth', label: 'Stair width (ft)', type: 'number', min: 0, step: 0.1 },
       { key: 'stairTreadStyle', label: 'Stair tread board style', type: 'select', options: DECK_BOARD_STYLE_WITH_MATCH_OPTIONS, helper: 'Select independently from field deck boards. Match means same as main decking.' },
+      { key: 'stairTreadThicknessIn', label: 'Measured tread thickness override (in)', type: 'number', min: 0, step: .001,
+        helper: 'Leave blank or 0 to use the tread product dimensions. Tread/stringer seat elevations use this actual thickness.' },
       { key: 'stairRiserStyle', label: 'Stair riser board / fascia style', type: 'select', options: [
         {label: 'Automatic (PT deck boards; composite/PVC fascia)',value:'auto'},
         {label: 'Same deck board style as main decking',value:'match'},

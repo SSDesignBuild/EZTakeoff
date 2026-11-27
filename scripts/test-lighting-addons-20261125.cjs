@@ -228,7 +228,7 @@ for(const family of ['Moderno','Contempo','Classico'])for(const roofStyle of ['s
   const radius=f.sizeFt[0]/2;
   assert.ok(f.position[0]-radius>=cover.frameLeft+1.5-1e-8&&f.position[0]+radius<=cover.frameRight-1.5+1e-8);
   assert.ok(f.position[2]-radius>=cover.back+1.5-1e-8&&f.position[2]+radius<=cover.frameFront-1.5+1e-8);
-  assert.ok(f.position[1]-1-.04>=4.0625+7,'Generic fans retain the documented minimum blade height');
+  assert.ok(f.position[1]-1-.04>=4+7,'Generic fans retain the documented minimum blade height above the finished deck');
  }
  for(const c of cans){
   assert.ok(fans.every(f=>Math.hypot(f.position[0]-c.position[0],f.position[2]-c.position[2])>f.sizeFt[0]/2+.29),'Can lights avoid fan sweep');

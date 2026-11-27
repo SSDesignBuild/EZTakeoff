@@ -119,9 +119,9 @@ export function planStairRailingRuns(model:DeckModel,
    const posts=stations.map(at);
    const postBaseYs=posts.map((_,j)=>{
     const z=stations[j];
-    if(z<=0)return deckHeightFt+.0625;
+    if(z<=0)return deckHeightFt;
     const tread=Math.max(1,Math.min(model.stairTreadsPerRun,Math.ceil(z/treadDepth)));
-    return deckHeightFt-rise*tread+.1025;
+    return deckHeightFt-rise*tread;
    });
    runs.push({placementIndex:i,edgeIndex:placement.edgeIndex,side,
     runFt,widthFt:frame.widthFt,posts,postBaseYs,insetFt:inset,landingReturnFt,slopedLengthFt,

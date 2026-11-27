@@ -7,16 +7,17 @@ import { eliteWallBlockingIssues } from '../../lib/eliteSunroomStudio';
 import { sunroomDoorRect,sunroomSpansExcludingDoor,sunroomGlazingBays,
   sunroomKickHeightFt,sunroomHasTransom,sunroomWindowOpenings,
   sunroomUprightOffsetsExcludingDoor,sunroomUprightVerticalExtent,
-  sunroomMainTopFt,sunroomTransomBays,type EliteGlazingOpening } from '../../lib/sunroomSectionGeometry';
+  sunroomMainTopFt,sunroomRoofTopFtAt,sunroomTransomBays,type EliteGlazingOpening } from '../../lib/sunroomSectionGeometry';
 import { Block,SlopedBeam } from './Primitives';
 import { EliteVerticalExtrusion,EliteHorizontalExtrusion } from './EliteAddARoomExtrusions';
-import { ELITE_CATALOG_PROFILES } from '../../lib/eliteAddARoomExtrusions';
+import { ELITE_CATALOG_PROFILES,ELITE_ILLUSTRATIVE_SHEET_IN } from '../../lib/eliteAddARoomExtrusions';
+import { ELITE_PRIME_DOOR_HEIGHT_FT,planElitePrimeDoor } from '../../lib/elitePrimeDoorGeometry';
 
 const FINISH_COLORS:Record<EliteSunroomFinish,string>={
  white:'#e7e9e7',wheat:'#c6b59a',clay:'#aa998d',bronze:'#574b40',
 };
 const PICTURE_COLOR='#d9e8ef';
-const DOOR_HEIGHT_FT=6+8/12;
+const DOOR_HEIGHT_FT=ELITE_PRIME_DOOR_HEIGHT_FT;
 const ft=(inches:number)=>inches/12;
 
 function SolidInfill({left,right,bottom,topLeft,topRight,depth,color,name}:{
@@ -104,12 +105,28 @@ function GlazedBay({opening,frameColor}:{
    opening.zone==='above-door';
  const tapered=Math.abs(hl-hr)>.025;
  const outer=Math.min(.095,Math.max(.055,width*.028));
+ // topLeft/topRight are the opening boundary, not the centerline of a
+ // finite sash member. Keep its complete upper face inside that boundary.
+ const topRailDrop=outer/2*Math.hypot(1,(hr-hl)/Math.max(.01,width));
  const gasket=.017;
- const shape=new THREE.Shape();
  const inset=Math.min(outer+.025,width/6);
- shape.moveTo(inset,.025);shape.lineTo(width-inset,.025);
- shape.lineTo(width-inset,Math.max(.032,hr-inset));
- shape.lineTo(inset,Math.max(.032,hl-inset));shape.closePath();
+ const grade=(hr-hl)/Math.max(.01,width);
+ const heightAt=(x:number)=>hl+grade*x;
+ const spanAbove=(requiredHeight:number,left:number,right:number)=>{
+  if(Math.abs(grade)<1e-8)return hl>=requiredHeight?{left,right}:null;
+  const crossing=(requiredHeight-hl)/grade;
+  if(grade>0)left=Math.max(left,crossing);else right=Math.min(right,crossing);
+  return right-left>.005?{left,right}:null;
+ };
+ const glassTopInset=inset*Math.hypot(1,grade);
+ const glassSpan=spanAbove(.025+glassTopInset,inset,width-inset);
+ const baseSpan=spanAbove(outer,0,width);
+ const shape=glassSpan?new THREE.Shape():null;
+ if(shape&&glassSpan){
+  shape.moveTo(glassSpan.left,.025);shape.lineTo(glassSpan.right,.025);
+  shape.lineTo(glassSpan.right,heightAt(glassSpan.right)-glassTopInset);
+  shape.lineTo(glassSpan.left,heightAt(glassSpan.left)-glassTopInset);shape.closePath();
+ }
  const trackH=Math.max(.12,shorter-outer*2);
  const panes=opening.style==='double-horizontal-sliders'?4:
    opening.style==='horizontal-sliders'?2:1;
@@ -117,7 +134,7 @@ function GlazedBay({opening,frameColor}:{
    position={[opening.start,opening.bottomFt,0]}>
    {/* Real window assembly: a visible exterior frame, contrasting thin
        weatherseal and recessed glass surface, not bare transparent rectangles. */}
-   {[-1,1].map((face,i)=><mesh key={'factory-glass-'+i}
+   {shape&&[-1,1].map((face,i)=><mesh key={'factory-glass-'+i}
      name="clear-insulated-glass-lite"
      position={[0,0,face*.023]}>
      <shapeGeometry args={[shape]}/>
@@ -125,9 +142,10 @@ function GlazedBay({opening,frameColor}:{
        roughness={.045} metalness={0} depthWrite={false}
        side={THREE.DoubleSide}/>
    </mesh>)}
-   <Block name="elite-mill-finish-base-sash" position={[width/2,outer/2,.043]}
-     size={[width,outer,.10]} color={frameColor} metalness={.31}/>
-   <SlopedBeam start={[0,hl,.043]} end={[width,hr,.043]}
+   {baseSpan&&<Block name="elite-mill-finish-base-sash"
+     position={[(baseSpan.left+baseSpan.right)/2,outer/2,.043]}
+     size={[baseSpan.right-baseSpan.left,outer,.10]} color={frameColor} metalness={.31}/>}
+   <SlopedBeam start={[0,hl-topRailDrop,.043]} end={[width,hr-topRailDrop,.043]}
      thickness={outer} depth={.10} color={frameColor}/>
    {([hl,hr] as const).map((height,i)=>height>.02&&<Block
      key={'perimeter-stile-'+i} name="sunroom-sash-perimeter"
@@ -135,9 +153,10 @@ function GlazedBay({opening,frameColor}:{
      size={[outer,height,.10]} color={frameColor} metalness={.31}/>)}
    {/* Thin dark EPDM seal creates the actual gasket/readable sightline
        around the glass and behind its aluminum members. */}
-   <SlopedBeam start={[inset,Math.max(.03,hl-inset),.074]}
-     end={[width-inset,Math.max(.03,hr-inset),.074]}
-     thickness={gasket} depth={.018} color="#66737b"/>
+   {glassSpan&&<SlopedBeam
+     start={[glassSpan.left,heightAt(glassSpan.left)-glassTopInset,.074]}
+     end={[glassSpan.right,heightAt(glassSpan.right)-glassTopInset,.074]}
+     thickness={gasket} depth={.018} color="#66737b"/>}
    {picture||tapered?null:opening.style==='vertical-sliders'?<>
      <RectangularSashLite left={outer} width={Math.max(.15,width-outer*2)}
        bottom={outer} height={Math.max(.18,trackH/2)}
@@ -175,8 +194,8 @@ function GlazedBay({opening,frameColor}:{
    </>}
  </group>;
 }
-function ElitePrimeDoor({section,frameColor,glazing}:{
- section:SunroomSectionConfig;frameColor:string;glazing:string;
+function ElitePrimeDoor({section,frameColor,glazing,wallDepthFt}:{
+ section:SunroomSectionConfig;frameColor:string;glazing:string;wallDepthFt:number;
 }){
  const rect=sunroomDoorRect(section);
  if(!rect)return null;
@@ -187,63 +206,51 @@ function ElitePrimeDoor({section,frameColor,glazing}:{
  // leaf, wider 3.5-inch stiles, a visible top rail and a roughly 9-inch
  // lower kick rail, not a sheet of glass almost touching the threshold.
  // These are concept-view sightlines, not Elite shop fabrication cuts.
- const jamb=.13,leafStile=.30,head=.34,bottomRail=.78;
- const glassWidth=Math.max(.35,width-2*jamb-2*leafStile-.025);
- const glassBottom=.12+bottomRail,glassTop=DOOR_HEIGHT_FT-head-.12;
- const glassHeight=glassTop-glassBottom;
- const glassCenterY=(glassTop+glassBottom)/2;
- const handleX=hinge==='left'?width-jamb-leafStile/2:jamb+leafStile/2;
+ const door=planElitePrimeDoor(width,wallDepthFt);
+ const {glassWidth,glassHeight,glassCenterY,leafCenterZ,leafDepth}=door;
+ const handleX=hinge==='left'?door.leafRight-door.leafStile/2:
+   door.leafLeft+door.leafStile/2;
  return <group name={isSlider?'elite-legacy-sliding-door':'elite-prime-full-view-outswing-door'}
-   position={[rect.start,0,.03]}>
+   position={[rect.start,0,0]}>
    {/* Prime full-view commercial aluminum entry: Z-bar perimeter,
        distinct leaf rails, nearly full-height glazing and simple flush
        threshold. Visual sightlines are calibrated to supplied field photos. */}
-   {[-1,1].map((sign,i)=><Block key={'jamb-'+i}
+   {[door.leftJamb,door.rightJamb].map((part,i)=><Block key={'jamb-'+i}
      name={i===0?'door-left-zbar-or-jamb':'door-right-zbar-or-jamb'}
-     position={[sign<0?jamb/2:width-jamb/2,DOOR_HEIGHT_FT/2,0]}
-     size={[jamb,DOOR_HEIGHT_FT,.19]} color={frameColor} metalness={.35}/>)}
-   <Block name="door-head" position={[width/2,DOOR_HEIGHT_FT-head/2,0]}
-     size={[width,head,.19]} color={frameColor} metalness={.35}/>
-   <Block name="door-threshold" position={[width/2,.047,.04]}
-     size={[width,.094,.26]} color={frameColor} metalness={.35}/>
-   <Block name="full-view-door-leaf-left-stile"
-     position={[jamb+leafStile/2,DOOR_HEIGHT_FT/2,.055]}
-     size={[leafStile,DOOR_HEIGHT_FT-.12,.115]} color={frameColor} metalness={.35}/>
-   <Block name="full-view-door-leaf-right-stile"
-     position={[width-jamb-leafStile/2,DOOR_HEIGHT_FT/2,.055]}
-     size={[leafStile,DOOR_HEIGHT_FT-.12,.115]} color={frameColor} metalness={.35}/>
-   <Block name="full-view-door-leaf-top-rail"
-     position={[width/2,DOOR_HEIGHT_FT-head-.048,.055]}
-     size={[width-jamb*2,head,.115]} color={frameColor}/>
-   <Block name="full-view-door-leaf-bottom-rail"
-     position={[width/2,bottomRail/2+.085,.055]}
-     size={[width-jamb*2,bottomRail,.12]} color={frameColor}/>
-   <Block name="prime-lower-raised-sill-trim"
-     position={[width/2,.16,.125]} size={[width-jamb*2,.075,.045]}
+     {...part} color={frameColor} metalness={.35}/>)}
+   <Block name="door-head" {...door.head} color={frameColor} metalness={.35}/>
+   <Block name="door-threshold" {...door.threshold} color={frameColor} metalness={.35}/>
+   <Block name="full-view-door-leaf-left-stile" {...door.leftStile}
+     color={frameColor} metalness={.35}/>
+   <Block name="full-view-door-leaf-right-stile" {...door.rightStile}
+     color={frameColor} metalness={.35}/>
+   <Block name="full-view-door-leaf-top-rail" {...door.topRail} color={frameColor}/>
+   <Block name="full-view-door-leaf-bottom-rail" {...door.bottomRail} color={frameColor}/>
+   <Block name="prime-lower-raised-sill-trim" {...door.sillTrim}
      color={frameColor} metalness={.34}/>
    {/* Prime glazing gasket is perimeter-only: keep full-view pane CLEAR. */}
    {[-1,1].map((sign,i)=><Block key={'prime-glazing-gasket-side-'+i}
      name="tempered-glass-black-edge-seal"
-     position={[width/2+sign*glassWidth/2,glassCenterY,-.015]}
+     position={[width/2+sign*glassWidth/2,glassCenterY,leafCenterZ-.015]}
      size={[.029,glassHeight+.025,.031]} color="#78858b"/>)}
    {[-1,1].map((sign,i)=><Block key={'prime-glazing-gasket-head-'+i}
      name="tempered-glass-black-edge-seal"
-     position={[width/2,glassCenterY+sign*glassHeight/2,-.015]}
+     position={[width/2,glassCenterY+sign*glassHeight/2,leafCenterZ-.015]}
      size={[glassWidth+.02,.028,.031]} color="#78858b"/>)}
    {[-1,1].map((face,i)=><mesh key={'prime-glass-'+i}
      name="prime-clear-full-view-glazed-lite"
-     position={[width/2,glassCenterY,face*.021]}>
+     position={[width/2,glassCenterY,leafCenterZ+face*.021]}>
      <planeGeometry args={[glassWidth,glassHeight]}/>
      <meshPhysicalMaterial color={glazing} transparent opacity={.19}
        roughness={.045} metalness={.03} depthWrite={false}
        side={THREE.DoubleSide}/>
    </mesh>)}
    {isSlider&&<Block name="sliding-door-center-interlock"
-     position={[width/2,DOOR_HEIGHT_FT/2,.11]}
+     position={[width/2,DOOR_HEIGHT_FT/2,door.leafFront+.055]}
      size={[.075,DOOR_HEIGHT_FT-.18,.11]} color={frameColor}/>}
    {!isSlider&&[.65,DOOR_HEIGHT_FT/2,DOOR_HEIGHT_FT-.72].map((y,i)=>
      <Block key={'prime-outswing-hinge-'+i} name="three-outswing-hinges"
-       position={[hinge==='left'?jamb:width-jamb,y,.145]}
+       position={[hinge==='left'?door.leafLeft:door.leafRight,y,door.leafFront+.0425]}
        size={[.06,.24,.085]} color="#70777d" metalness={.74}/>)}
    {!isSlider&&<group name="elite-prime-entry-lockset-visible-both-sides">
      {/* The supplied real door has a ROUND metal knob and a separate
@@ -251,23 +258,23 @@ function ElitePrimeDoor({section,frameColor,glazing}:{
          cannot hide hardware behind the glazing leaf. */}
      {[-1,1].map((face,i)=><group key={'prime-lock-face-'+i}>
        <mesh name="prime-door-brushed-nickel-knob-escutcheon"
-         position={[handleX,3.18,face*.166]}
+         position={[handleX,3.18,leafCenterZ+face*(leafDepth/2+.024)]}
          rotation={[Math.PI/2,0,0]}>
          <cylinderGeometry args={[.105,.105,.048,28]}/>
          <meshStandardMaterial color="#a9adb3" metalness={.86} roughness={.25}/>
        </mesh>
        <mesh name="keyed-entry-hardware-handle"
-         position={[handleX,3.18,face*.240]}>
+         position={[handleX,3.18,leafCenterZ+face*(leafDepth/2+.098)]}>
          <sphereGeometry args={[.104,24,16]}/>
          <meshStandardMaterial color="#c2c6cc" metalness={.82} roughness={.18}/>
        </mesh>
        <mesh name="prime-deadbolt-round-backplate"
-         position={[handleX,3.79,face*.164]}
+         position={[handleX,3.79,leafCenterZ+face*(leafDepth/2+.0225)]}
          rotation={[Math.PI/2,0,0]}>
          <cylinderGeometry args={[.084,.084,.045,28]}/>
          <meshStandardMaterial color="#a3a8ae" metalness={.82} roughness={.24}/>
        </mesh>
-       <mesh name="deadbolt" position={[handleX,3.79,face*.205]}
+       <mesh name="deadbolt" position={[handleX,3.79,leafCenterZ+face*(leafDepth/2+.0635)]}
          rotation={[Math.PI/2,0,0]}>
          <cylinderGeometry args={[.047,.047,.031,20]}/>
          <meshStandardMaterial color="#d0d3d7" metalness={.75} roughness={.21}/>
@@ -291,6 +298,10 @@ function EliteSection({section,xStart,settings,index,total}:{
  const transomR=transom?Math.max(0,section.rightTransomHeight):0;
  const mainTop=sunroomMainTopFt(section);
  const topLeft=mainTop+transomL,topRight=mainTop+transomR;
+ const roofSlope=(topRight-topLeft)/Math.max(.01,section.width);
+ const capWebFt=ft(ELITE_ILLUSTRATIVE_SHEET_IN);
+ const roofCutAt=(x:number)=>sunroomRoofTopFtAt(section,x)-capWebFt;
+ const uprightsReachRoof=section.uprightMode!=='main-only'&&section.uprightMode!=='main-kick';
  const widths=sunroomSpansExcludingDoor(section);
  const bays=sunroomGlazingBays(section);
  const glass=sunroomWindowOpenings(section);
@@ -322,37 +333,40 @@ function EliteSection({section,xStart,settings,index,total}:{
         overlapping receivers or invented Elite structural corner posts). */}
    {index===0&&<group name="elite-exterior-left-receiver-and-drc">
       <EliteVerticalExtrusion system={settings.roomSystem} kind="receiver"
-        x={0} bottom={0} height={section.height}
+        x={0} bottom={0} height={roofCutAt(0)} topSlope={roofSlope}
         color={framing} name="receiving-channel-back"/>
       <EliteVerticalExtrusion system={settings.roomSystem} kind="drc"
         x={ft(ELITE_CATALOG_PROFILES[settings.roomSystem].receiverLipIn)}
-        bottom={0} height={section.height}
+        bottom={0} height={roofCutAt(ft(ELITE_CATALOG_PROFILES[settings.roomSystem].receiverLipIn))}
+        topSlope={roofSlope}
         color={windowColor} name="DRC-window-edge"/>
    </group>}
    {index===total-1&&<group name="elite-exterior-right-receiver-and-drc">
       <EliteVerticalExtrusion system={settings.roomSystem} kind="receiver"
-        x={section.width} bottom={0} height={section.height}
+        x={section.width} bottom={0} height={roofCutAt(section.width)} topSlope={roofSlope}
         flip color={framing} name="receiving-channel-back"/>
       <EliteVerticalExtrusion system={settings.roomSystem} kind="drc"
         x={section.width-ft(ELITE_CATALOG_PROFILES[settings.roomSystem].receiverLipIn)}
-        bottom={0} height={section.height}
+        bottom={0} height={roofCutAt(section.width-ft(ELITE_CATALOG_PROFILES[settings.roomSystem].receiverLipIn))}
+        topSlope={roofSlope}
         flip color={windowColor} name="DRC-window-edge"/>
    </group>}
    {index>0&&<group name="elite-shared-internal-section-H">
       <EliteVerticalExtrusion system={settings.roomSystem} kind="h-vertical"
-        x={0} bottom={0} height={section.height}
+        x={0} bottom={0} height={roofCutAt(0)} topSlope={roofSlope}
         color={framing} name="elite-h-beam-vertical-between-sections"/>
       {[-1,1].map((sign,j)=>
         <EliteVerticalExtrusion key={'shared-h-face-'+j}
           system={settings.roomSystem} kind="drc"
           x={sign*ft(ELITE_CATALOG_PROFILES[settings.roomSystem].hFaceIn/2)}
-          bottom={0} height={section.height} flip={j===1}
+          bottom={0} height={roofCutAt(0)+sign*ft(ELITE_CATALOG_PROFILES[settings.roomSystem].hFaceIn/2)*roofSlope}
+          topSlope={roofSlope} flip={j===1}
           color={windowColor} name="elite-shared-H-DRC-window-face"/>)}
    </group>}
    {widths.map((span,i)=><EliteHorizontalExtrusion key={'base-channel-'+i}
       system={settings.roomSystem} kind="bottom"
       name="elite-bottom-base-channel-weep" start={span.start} end={span.end}
-      yLeft={.035} yRight={.035} color={framing}/>)}
+      yLeft={0} yRight={0} color={framing}/>)}
    <EliteHorizontalExtrusion system={settings.roomSystem} kind="top"
       name="elite-top-cap-under-renaissance-roof"
       start={0} end={section.width} yLeft={topLeft} yRight={topRight}
@@ -362,13 +376,17 @@ function EliteSection({section,xStart,settings,index,total}:{
       if(extent.lengthFt<.06)return null;
       return <group key={'elite-hbeam-upright-'+i}>
         <EliteVerticalExtrusion system={settings.roomSystem} kind="h-vertical"
-          x={x} bottom={extent.bottomFt} height={extent.lengthFt}
+          x={x} bottom={extent.bottomFt} height={extent.lengthFt-(uprightsReachRoof?capWebFt:0)}
+          topSlope={uprightsReachRoof?roofSlope:0}
           color={framing} name="elite-h-beam-vertical-between-glazing"/>
         {[-1,1].map((sign,index)=>
           <EliteVerticalExtrusion key={'hbeam-drc-'+index} kind="drc"
             system={settings.roomSystem} name="elite-drc-h-beam-window-face"
             x={x+sign*(settings.roomSystem==='3-thermal'?.088:.046)}
-            bottom={extent.bottomFt} height={extent.lengthFt}
+            bottom={extent.bottomFt}
+            height={extent.lengthFt+(uprightsReachRoof?
+              sign*(settings.roomSystem==='3-thermal'?.088:.046)*roofSlope-capWebFt:0)}
+            topSlope={uprightsReachRoof?roofSlope:0}
             flip={index===1} color={windowColor}/>)}
       </group>;
    })}
@@ -381,7 +399,9 @@ function EliteSection({section,xStart,settings,index,total}:{
    {transom&&<EliteHorizontalExtrusion
         system={settings.roomSystem} kind="h-horizontal"
         name="elite-H-beam-and-DRC-transom-break-continuous"
-        start={0} end={section.width} yLeft={mainTop} yRight={mainTop}
+        start={0} end={section.width}
+        yLeft={mainTop-ft(ELITE_CATALOG_PROFILES[settings.roomSystem].hFaceIn/2)}
+        yRight={mainTop-ft(ELITE_CATALOG_PROFILES[settings.roomSystem].hFaceIn/2)}
         color={framing}/>}
    {section.electricChase&&uprights.map((x,i)=>{
      const extent=extentAt(x);
@@ -404,15 +424,15 @@ function EliteSection({section,xStart,settings,index,total}:{
      // side of the opening. They are not additional structural corner posts.
      return [door.start,door.end].filter(x=>x>.01&&x<section.width-.01)
        .map((x,i)=>{
-         const top=mainTop+transomL+(transomR-transomL)*x/Math.max(.01,section.width);
+         const top=roofCutAt(x);
          return <EliteVerticalExtrusion key={'elite-door-jamb-'+i}
            system={settings.roomSystem} kind="h-vertical"
            name="elite-prime-full-view-door-roof-reaching-jamb"
-           x={x} bottom={0} height={top} color={framing}/>;
+           x={x} bottom={0} height={top} topSlope={roofSlope} color={framing}/>;
        });
    })()}
    {section.doorType!=='none'&&<ElitePrimeDoor section={section}
-     frameColor={windowColor} glazing={PICTURE_COLOR}/>}
+     frameColor={windowColor} glazing={PICTURE_COLOR} wallDepthFt={systemDepth}/>}
  </group>;
 }
 /**

@@ -4,6 +4,8 @@ import type { RenaissanceWallMeasure,CoverWallSide } from './renaissanceCoverWal
 import { createSunroomSection,parseSunroomSections } from './sectioning';
 import { SERVICES } from '../data/services';
 import { calculateEstimate } from './estimate';
+import { sunroomDoorRect,sunroomRoofTopFtAt } from './sunroomSectionGeometry';
+import { ELITE_PRIME_DOOR_HEIGHT_FT } from './elitePrimeDoorGeometry';
 
 export type EliteSunroomFinish='white'|'wheat'|'clay'|'bronze';
 export type EliteSystem='3-thermal'|'2-nonthermal';
@@ -57,7 +59,7 @@ export function makeDefaultEliteWallSections(run:RenaissanceWallMeasure):Sunroom
  const lower=Math.min(leftHeight,rightHeight);
  const upper=Math.max(leftHeight,rightHeight);
  const slope=upper-lower;
- const includeDoor=run.id==='front'&&available>=7;
+ const includeDoor=run.id==='front'&&available>=7&&lower>=ELITE_PRIME_DOOR_HEIGHT_FT+.05;
  // Around 4-ft glazing bays: 11'6" side => two internal uprights => 3 lites.
  // For a front entry the door jambs already create two additional boundaries.
  const usable=available-(includeDoor?3:0);
@@ -119,6 +121,12 @@ export function eliteWallDimensionWarnings(run:RenaissanceWallMeasure,
     'set the left/right transom rise above the common horizontal window head.');
   if(!Number.isFinite(section.width)||section.width<.5||section.height<6)
    warnings.push(run.id+' / '+section.label+': incomplete or invalid width/height.');
+  const door=sunroomDoorRect(section);
+  if(door&&Math.min(sunroomRoofTopFtAt(section,door.start),
+     sunroomRoofTopFtAt(section,door.end))<ELITE_PRIME_DOOR_HEIGHT_FT+.05)
+   warnings.push(run.id+' / '+section.label+
+    ': door head exceeds the measured roof opening. Increase the cover clearance '+
+    'or remove the door before rendering/quoting this wall.');
   offset+=section.width;
  }
  return warnings;
@@ -130,6 +138,7 @@ export function eliteWallBlockingIssues(run:RenaissanceWallMeasure,
  return eliteWallDimensionWarnings(run,sections).filter(issue=>
    issue.includes('sections total')||
    issue.includes('saved window-sized sections')||
+   issue.includes('door head exceeds')||
    issue.includes('incomplete or invalid')||
    issue.includes('No valid Elite sections'));
 }

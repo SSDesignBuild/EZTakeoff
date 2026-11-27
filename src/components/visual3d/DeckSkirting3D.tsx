@@ -1,172 +1,79 @@
-import { useMemo } from 'react';
-import type * as THREE from 'three';
+import { useEffect,useMemo } from 'react';
+import * as THREE from 'three';
 import type { DeckModel } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
-import { buildDeckSkirting } from '../../lib/deckSkirting';
-import { planSkirtingGateFace } from '../../lib/skirtingGateFace';
-import { Block, Beam, SlopedBeam, type P2 } from './Primitives';
+import type { ConstructionPart,ConstructionConnection } from '../../lib/constructionAssembly';
+import { buildConstructionSkirting } from '../../lib/constructionSkirting';
+import { Block,type P2 } from './Primitives';
 
-/** Both the gate and the fixed header use real individually spaced finish
- * planks. The prior solid slab had no courses or reveals unlike adjacent skirting.
- */
-function SkirtingAccessFace({width,height,orientation,faceIn,gapIn,color,texture}:{
-  width:number;height:number;orientation:'vertical'|'horizontal';
-  faceIn:number;gapIn:number;color:string;texture:THREE.Texture|null;
-}){
-  const boards=planSkirtingGateFace(width,height,orientation,faceIn,gapIn);
-  return <group name="individual-skirting-access-finish-boards">
-    {boards.map((board,i)=>orientation==='vertical'
-      ?<Block key={'vertical-access-plank-'+i}
-        position={[-width/2+board.stationFt+board.faceFt/2,0,0]}
-        size={[board.faceFt,height,.075]} color={color} texture={texture}/>
-      :<Block key={'horizontal-access-plank-'+i}
-        position={[0,height/2-board.stationFt-board.faceFt/2,0]}
-        size={[width,board.faceFt,.075]} color={color} texture={texture}/>)}
-  </group>;
+/** The source polygon is the actual cut face. Two ordered profile faces
+ * make one physical prism; no full-width replacement board or extra jamb. */
+function SkirtPart({part,center,texture}:{part:ConstructionPart;center:P2;texture:THREE.Texture|null}){
+ const geometry=useMemo(()=>{
+  const vertices=part.vertices??[],profile=part.profile??[],n=profile.length;
+  if(n<3||vertices.length!==2*n)return null;
+  const shape=profile.map(p=>new THREE.Vector2(p.stationFt,p.elevationFt));
+  const faces=THREE.ShapeUtils.triangulateShape(shape,[]);
+  const indices:number[]=[];
+  for(const [a,b,c]of faces)indices.push(c,b,a,n+a,n+b,n+c);
+  for(let i=0;i<n;i++){const j=(i+1)%n;indices.push(i,j,n+j,i,n+j,n+i);}
+  const positions:number[]=[],uv:number[]=[];
+  const s0=Math.min(...profile.map(p=>p.stationFt)),s1=Math.max(...profile.map(p=>p.stationFt));
+  const vertical=Math.hypot(part.axis.to.x-part.axis.from.x,part.axis.to.y-part.axis.from.y)<.001;
+  for(const index of indices){
+   const p=vertices[index],q=profile[index%n];positions.push(p.x-center[0],p.z,p.y-center[1]);
+   const along=(q.stationFt-s0)/Math.max(.001,s1-s0),up=(q.elevationFt-part.zBottom)/Math.max(.001,part.zTop-part.zBottom);
+   uv.push(vertical?up:along,vertical?along:up);
+  }
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+  g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeVertexNormals();return g;
+ },[part,center]);
+ useEffect(()=>()=>geometry?.dispose(),[geometry]);
+ if(!geometry)return null;
+ const frame=part.kind==='skirt-support',synthetic=!frame&&!part.material.includes('KDAT');
+ const color=frame?'#927654':part.material.includes('PVC')?'#d8dad6':synthetic?'#bcb5aa':'#b19a79';
+ return <mesh name={part.id} geometry={geometry} castShadow receiveShadow
+   userData={{constructionPartId:part.id,stockReference:part.stockReference}}>
+   {synthetic&&texture?<meshBasicMaterial color="#ffffff" map={texture} toneMapped={false} side={THREE.DoubleSide}/>:
+    <meshStandardMaterial color={color} roughness={.82} side={THREE.DoubleSide}/>}
+ </mesh>;
+}
+function GateHardware({connection,parts,center}:{connection:ConstructionConnection;parts:ConstructionPart[];center:P2}){
+ const top=parts.find(p=>p.source.notes.some(n=>n.includes(': gate-top;')));
+ if(!top?.vertices?.length||!top.profile?.length)return null;
+ const n=top.profile.length,a=top.vertices[0],b=top.vertices[n];
+ const depth=Math.hypot(b.x-a.x,b.y-a.y),nx=(b.x-a.x)/depth,ny=(b.y-a.y)/depth;
+ const bottom=Math.min(...parts.map(p=>p.zBottom)),upper=Math.max(...parts.map(p=>p.zTop));
+ const count=connection.hardware.find(h=>h.name.includes('hinge'))?.quantity??2;
+ const along=[top.axis.to.x-top.axis.from.x,top.axis.to.y-top.axis.from.y];
+ const length=Math.hypot(...along),ux=along[0]/length,uy=along[1]/length;
+ const yaw=-Math.atan2(uy,ux);
+ const at=(s:number,z:number):[number,number,number]=>[
+  connection.point.x+ux*s+nx*.095-center[0],z,connection.point.y+uy*s+ny*.095-center[1]];
+ return <group name="placed-hinged-skirting-access-gate-hardware">
+   {Array.from({length:count},(_,i)=><group key={i} position={at(0,bottom+(upper-bottom)*(i+1)/(count+1))} rotation={[0,yaw,0]}>
+     <Block position={[0,0,0]} size={[.14,.13,.10]} color="#565b5f" metalness={.4}/>
+   </group>)}
+   <group position={at(length,(bottom+upper)/2)} rotation={[0,yaw,0]}>
+    <Block position={[0,0,0]} size={[.11,.13,.10]} color="#555c60" metalness={.42}/>
+   </group>
+   {connection.hardware.some(h=>h.name.includes('cane bolt'))&&<group position={at(length-.14,bottom+.25)} rotation={[0,yaw,0]}>
+    <Block position={[0,0,0]} size={[.045,.5,.055]} color="#555c60" metalness={.42}/>
+   </group>}
+ </group>;
 }
 export function DeckSkirting3D({model,center,height,values,texture,lowerTier=false}:{
-  model:DeckModel;center:P2;height:number;lowerTier?:boolean;
-  values:ConsultationProject['values'];texture:THREE.Texture|null;
+ model:DeckModel;center:P2;height:number;lowerTier?:boolean;
+ values:ConsultationProject['values'];texture:THREE.Texture|null;
 }){
-  const rimDepth=Math.max(3.5,Number(model.joistSize.split('x')[1]??8)-.75);
-  const plan=useMemo(()=>buildDeckSkirting(model.edgeSegments,model.exposedSegments,height,rimDepth,values,lowerTier?'lower':''),
-    [model,values,height,rimDepth,lowerTier]);
-  if(!plan.enabled||plan.sides.length===0)return null;
-  const top=height-(rimDepth+1)/12;
-  const color=plan.options.material==='kdat'?'#a89572':
-    plan.options.material==='pvc'?'#cdd0cd':'#bab3a9';
-  const showPhoto=plan.options.material!=='kdat';
-  const winding=model.points.reduce((sum,p,i)=>{
-    const q=model.points[(i+1)%model.points.length];
-    return sum+p.x*q.y-q.x*p.y;
-  },0);
-  const outwardSign=winding>=0?1:-1;
-  // Finish planks sit OUTSIDE the 2x4 support frame, leaving the real framing
-  // hidden behind finished skirting rather than exposed in front of it.
-  const point=(edge:typeof model.edgeSegments[number],s:number,
-    layer:'frame'|'finish'|'jamb'='frame'):P2=>{
-    const t=Math.min(1,Math.max(0,s/Math.max(.001,edge.length)));
-    const dx=(edge.end.x-edge.start.x)/Math.max(.001,edge.length),
-      dy=(edge.end.y-edge.start.y)/Math.max(.001,edge.length);
-    const nx=dy*outwardSign,ny=-dx*outwardSign;
-    const offset=layer==='finish'?.075:layer==='jamb'?.02:-.155;
-    return [edge.start.x+(edge.end.x-edge.start.x)*t-center[0]+nx*offset,
-      edge.start.y+(edge.end.y-edge.start.y)*t-center[1]+ny*offset];
-  };
-  return <group name="exact-deck-skirting-selected-sides-access-and-grade">
-    {plan.sides.map(side=>{
-      const edge=model.edgeSegments.find(e=>e.index===side.edgeIndex);
-      if(!edge)return null;
-      const face=Math.max(.10,plan.options.faceIn/12);
-      const yaw=-Math.atan2(edge.end.y-edge.start.y,edge.end.x-edge.start.x);
-      return <group key={'skirt-side-'+side.edgeIndex}>
-        {side.topRails.map((rail,i)=><Beam key={'top2x4-'+i}
-          start={point(edge,rail.start)} end={point(edge,rail.end)}
-          height={top-.12} thickness={.25} depth={.125} color="#977a58"/>)}
-        {side.bottomRails.map((rail,i)=>{
-          const a=point(edge,rail.start),b=point(edge,rail.end);
-          const grade=(s:number)=>side.startHeightFt+(side.endHeightFt-side.startHeightFt)*s/side.lengthFt;
-          return <SlopedBeam key={'bottom2x4-'+i}
-            start={[a[0],top-grade(rail.start)+.15,a[1]]}
-            end={[b[0],top-grade(rail.end)+.15,b[1]]}
-            thickness={.25} depth={.125} color="#79644c"/>;
-        })}
-        {side.verticals.map((v,i)=>{
-          const [x,z]=point(edge,v.station);
-          return <group key={'stud2x4-'+i} position={[x,top-v.heightFt/2,z]}
-            rotation={[0,yaw,0]}>
-            <Block position={[0,0,0]} size={[.125,v.heightFt,.292]} color="#867054"/>
-          </group>;
-        })}
-        {plan.options.orientation==='vertical'
-          ? side.finish.map((v,i)=>{
-            const [x,z]=point(edge,Math.min(side.lengthFt,v.station+face/2),'finish');
-            return <group key={'vertical-finish-'+i}
-              position={[x,top-v.heightFt/2,z]} rotation={[0,yaw,0]}>
-              <Block position={[0,0,0]} size={[face,v.heightFt,.082]}
-                color={color} texture={showPhoto?texture:null}/>
-            </group>;
-          })
-          :side.courses.map((course,i)=>{
-            const a=point(edge,course.start,'finish'),b=point(edge,course.end,'finish');
-            const y=top-(course.row*(plan.options.faceIn+plan.options.gapIn)/12)-course.depthFt/2;
-            return <Beam key={'horizontal-finish-'+i} start={a} end={b}
-              height={y} thickness={course.depthFt} depth={.09}
-              color={color} texture={showPhoto?texture:null}/>;
-          })}
-        {/* Hinged access gate leaf is actually modeled in its chosen gap,
-            with inset framing, vertical/horizontal selected finish and hinges. */}
-        {side.openings.filter(opening=>opening.kind==='hinged-gate').map((opening,i)=>{
-          const middle=opening.offset+opening.width/2;
-          const at=(station:number)=>side.startHeightFt+
-            (side.endHeightFt-side.startHeightFt)*station/side.lengthFt;
-          const leastGrade=Math.min(at(opening.offset),at(opening.offset+opening.width));
-          const allowed=Math.max(.3,leastGrade-.18);
-          const h=Math.max(.3,Math.min(allowed,opening.heightFt??allowed));
-          // Align the finished leaf with the last intact/ripped header
-          // course. Prior .09-ft offset left a 1-in see-through void above
-          // the leaf even though the wall-wide finish board was present.
-          const gateBottom=top-leastGrade+.18-.012;
-          const gateMid=gateBottom+h/2;
-          const infillH=Math.max(0,allowed-h);
-          const [x,z]=point(edge,middle,'finish');
-          const width=Math.max(.2,opening.width-.08);
-          return <group key={'access-gate-leaf-'+i} name="placed-hinged-skirting-access-gate">
-            {infillH>.12&&<group name="fixed-skirting-infill-above-short-gate">
-              {plan.options.orientation==='vertical'&&
-                // Follow exactly the adjacent continuous wall-wide station
-                // grid: never center a second patched upper-panel pattern.
-                Array.from({length:Math.ceil(side.lengthFt/((plan.options.faceIn+
-                  plan.options.gapIn)/12))},(_,boardIdx)=>{
-                  const pitch=(plan.options.faceIn+plan.options.gapIn)/12;
-                  const boardStart=boardIdx*pitch;
-                  const clippedStart=Math.max(opening.offset,boardStart);
-                  const clippedEnd=Math.min(opening.offset+opening.width,
-                    boardStart+plan.options.faceIn/12);
-                  if(clippedEnd-clippedStart<=.001)return null;
-                  const [cx,cz]=point(edge,(clippedStart+clippedEnd)/2,'finish');
-                  return <group key={'continuous-upper-wall-plank-'+boardIdx}
-                    position={[cx,top-infillH/2,cz]} rotation={[0,yaw,0]}>
-                    <Block position={[0,0,0]}
-                      size={[clippedEnd-clippedStart,infillH,.082]}
-                      color={color} texture={showPhoto?texture:null}/>
-                  </group>;
-                })}
-              {/* Horizontal upper courses, including the one continuous
-                  wall-wide ripped head course, are rendered by side.courses.
-                  Never add an isolated patched panel over the gate. */}
-              <Beam start={point(edge,opening.offset,'frame')}
-                end={point(edge,opening.offset+opening.width,'frame')}
-                height={top-infillH-.03} thickness={.125} depth={.25} color="#8b7657"/>
-            </group>}
-            <group position={[x,gateMid,z]} rotation={[0,yaw,0]}>
-              <SkirtingAccessFace width={width} height={h}
-                orientation={plan.options.orientation}
-                faceIn={plan.options.faceIn} gapIn={plan.options.gapIn}
-                color={color} texture={showPhoto?texture:null}/>
-            </group>
-            {[opening.offset+.12,opening.offset+opening.width-.12].map((station,k)=>{
-              const [sx,sz]=point(edge,station,'finish');
-              return <Block key={'access-gate-stile-'+k} position={[sx,gateMid,sz]}
-                size={[.08,h,.08]} color="#8c7357"/>;
-            })}
-            {(h>4?[.20,.50,.80]:[.25,.75]).map((portion,k)=>{
-              const [hx,hz]=point(edge,opening.offset,'jamb');
-              return <Block key={'access-gate-hinge-'+k} position={[hx,gateBottom+h*portion,hz]}
-                size={[.14,.13,.14]} color="#565b5f" metalness={.4}/>;
-            })}
-            <Block position={[x,gateMid,z]}
-              size={[.11,.13,.11]} color="#555c60" metalness={.42}/>
-          </group>;
-        })}
-        {/* Clear openings are excluded by the exact skirting cut model.
-            Show their jamb boundaries, not fake solid infill. */}
-        {side.openings.map((opening,i)=>[opening.offset,opening.offset+opening.width].map((s,k)=>{
-          const [x,z]=point(edge,s,'jamb');
-          return <Block key={'jamb-'+i+'-'+k} position={[x,top-(side.startHeightFt+side.endHeightFt)/4,z]}
-            size={[.12,(side.startHeightFt+side.endHeightFt)/2,.12]} color="#81694d"/>;
-        }))}
-      </group>;
-    })}
-  </group>;
+ const assembly=useMemo(()=>buildConstructionSkirting({id:lowerTier?'L':'M',label:lowerTier?'Lower deck':'Main deck',
+  deck:model,heightFt:height,values}),[model,height,values,lowerTier]);
+ if(!assembly.parts.length)return null;
+ const partMap=new Map(assembly.parts.map(part=>[part.id,part]));
+ return <group name="exact-deck-and-stair-skirting-from-construction-parts">
+  {assembly.parts.map(part=><SkirtPart key={part.id} part={part} center={center} texture={texture}/>)}
+  {assembly.connections.filter(c=>c.kind==='skirting-access-gate').map(connection=><GateHardware
+    key={connection.id} connection={connection} center={center}
+    parts={connection.partIds.flatMap(id=>{const part=partMap.get(id);return part?[part]:[];})}/>)}
+ </group>;
 }

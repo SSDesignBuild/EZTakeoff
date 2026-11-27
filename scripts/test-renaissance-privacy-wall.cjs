@@ -4,10 +4,11 @@ const fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
 const root=path.resolve(__dirname,'..'),cache=new Map();
 function load(file){
  let full=path.resolve(root,file);if(!fs.existsSync(full))full+='.ts';
+ if(full.endsWith('.json'))return JSON.parse(fs.readFileSync(full,'utf8'));
  if(cache.has(full))return cache.get(full).exports;
  const mod={exports:{}};cache.set(full,mod);
  const js=ts.transpileModule(fs.readFileSync(full,'utf8'),{
-  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true},
+  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true,resolveJsonModule:true},
  }).outputText;
  new Function('require','module','exports',js)((n)=>n.startsWith('.')?
    load(path.relative(root,path.resolve(path.dirname(full),n))):require(n),mod,mod.exports);

@@ -1,4 +1,5 @@
-import { DeckModel,boardStockSegments } from './deckModel';
+import type { DeckModel } from './deckModel';
+import { planPhysicalDeckBoards } from './deckPhysicalFinish';
 import { surfaceStrips } from './deckSurfaceLayout';
 
 export const PICTURE_FRAME_OVERHANG_ALLOWANCE_FT = 2 / 12;
@@ -34,35 +35,6 @@ const alphaLabel = (index: number) => {
   return out;
 };
 
-function scanlineIntersections(points: { x: number; y: number }[], axis: 'horizontal' | 'vertical', position: number) {
-  const intersections: number[] = [];
-  for (let index = 0; index < points.length; index += 1) {
-    const current = points[index];
-    const next = points[(index + 1) % points.length];
-    if (axis === 'horizontal') {
-      const min = Math.min(current.y, next.y);
-      const max = Math.max(current.y, next.y);
-      if (position < min || position >= max || Math.abs(current.y - next.y) < 1e-9) continue;
-      const t = (position - current.y) / (next.y - current.y);
-      intersections.push(current.x + t * (next.x - current.x));
-    } else {
-      const min = Math.min(current.x, next.x);
-      const max = Math.max(current.x, next.x);
-      if (position < min || position >= max || Math.abs(current.x - next.x) < 1e-9) continue;
-      const t = (position - current.x) / (next.x - current.x);
-      intersections.push(current.y + t * (next.y - current.y));
-    }
-  }
-  intersections.sort((a, b) => a - b);
-  const pairs: { start: number; end: number }[] = [];
-  for (let index = 0; index < intersections.length; index += 2) {
-    const start = intersections[index];
-    const end = intersections[index + 1];
-    if (end !== undefined && end > start) pairs.push({ start, end });
-  }
-  return pairs;
-}
-
 function groupedLengths(lengths: number[]) {
   const counts = new Map<number, number>();
   lengths.forEach((length) => {
@@ -90,31 +62,17 @@ export function deriveDeckingLabelPlan(deck: DeckModel): DeckingLabelPlan {
     groups.push({ kind: 'field', course: 0, cutLength, count, label });
   });
 
-  // Keep the manufacturer's two-inch miter/end trim allowance over each
-  // WHOLE picture-frame edge, then schedule supported shorter stock pieces.
-  const pictureLengths = groupedLengths(deck.pictureFrameSegments.flatMap((segment) =>
-    boardStockSegments(segment.length + PICTURE_FRAME_OVERHANG_ALLOWANCE_FT)));
+  const physical=planPhysicalDeckBoards(deck);
   for (let course = 0; course < deck.pictureFrameCount; course += 1) {
-    pictureLengths.forEach(({ cutLength, count }) => {
-      const label = alphaLabel(cursor++);
-      pictureFrameLabels[keyOf('picture-frame', course, cutLength)] = label;
-      groups.push({ kind: 'picture-frame', course, cutLength, count, label });
+    groupedLengths(physical.filter(board=>board.kind==='picture-frame'&&board.course===course).map(board=>board.lengthFt)).forEach(({cutLength,count})=>{
+      const label=alphaLabel(cursor++);pictureFrameLabels[keyOf('picture-frame',course,cutLength)]=label;
+      groups.push({kind:'picture-frame',course,cutLength,count,label});
     });
   }
-
-  const breakerLengths: number[] = [];
-  deck.breakerBoardPositions.forEach((position) => {
-    if (deck.boardRun === 'width') scanlineIntersections(deck.points, 'vertical', position).forEach((pair) =>
-      breakerLengths.push(...boardStockSegments(pair.end-pair.start)));
-    else scanlineIntersections(deck.points, 'horizontal', position).forEach((pair) =>
-      breakerLengths.push(...boardStockSegments(pair.end-pair.start)));
-  });
-  const breakerGroups = groupedLengths(breakerLengths);
   for (let course = 0; course < deck.breakerBoardCount; course += 1) {
-    breakerGroups.forEach(({ cutLength, count }) => {
-      const label = alphaLabel(cursor++);
-      breakerLabels[keyOf('breaker', course, cutLength)] = label;
-      groups.push({ kind: 'breaker', course, cutLength, count, label });
+    groupedLengths(physical.filter(board=>board.kind==='breaker'&&board.course===course).map(board=>board.lengthFt)).forEach(({cutLength,count})=>{
+      const label=alphaLabel(cursor++);breakerLabels[keyOf('breaker',course,cutLength)]=label;
+      groups.push({kind:'breaker',course,cutLength,count,label});
     });
   }
 

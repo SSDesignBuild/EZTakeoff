@@ -7,7 +7,9 @@ import { surfaceStrips, breakerVisualStrips } from '../../lib/visualGeometry';
 import { planMiteredPictureFrames,splitMiteredPictureFrames,planVisiblePictureFrameMiterSeams,openPictureFrameMiterGaps } from '../../lib/deckMiterGeometry';
 import { deckPlanToScene } from '../../lib/deckSurfaceClipping';
 import { resolvePictureFrameMaterials, resolveBreakerBoardMaterials, resolveFasciaMaterial, resolveStairSideFasciaMaterial } from '../../lib/deckTrimSelection';
-import { Beam, type P2 } from './Primitives';
+import { type P2 } from './Primitives';
+import { planDeckFasciaCuts,planSubfloorCuts } from '../../lib/constructionFinish';
+import { framingDepthFt } from '../../lib/constructionFraming';
 import { DeckStructure3D } from './DeckStructure3D';
 import { DeckStairAssembly3D } from './DeckStairAssembly3D';
 import { DeckSkirting3D } from './DeckSkirting3D';
@@ -64,21 +66,17 @@ function useManufacturerTexture(name:unknown){
   return {map,missing,hasVerifiedSource:!!sample};
 }
 function PolygonSubstrate({model,center,deckHeight}:{model:DeckModel;center:P2;deckHeight:number}){
-  const geo=useMemo(()=>{
-    const shape=new THREE.Shape();
-    model.points.forEach((point,i)=>{
-      const x=point.x-center[0],y=-(point.y-center[1]);
-      if(i===0)shape.moveTo(x,y);else shape.lineTo(x,y);
-    });
-    shape.closePath();
-    const mesh=new THREE.ExtrudeGeometry(shape,{depth:.15,bevelEnabled:false,curveSegments:1,steps:1});
-    mesh.rotateX(-Math.PI/2);
-    return mesh;
-  },[model.points,center]);
-  useEffect(()=>()=>geo.dispose(),[geo]);
-  return <mesh geometry={geo} position={[0,deckHeight-.21,0]} castShadow receiveShadow>
-    <meshStandardMaterial color="#504d45" roughness={.88}/>
-  </mesh>;
+  const pieces=useMemo(()=>planSubfloorCuts(model).map(cut=>{
+    const shape=new THREE.Shape();cut.footprint.forEach((p,i)=>i===0?shape.moveTo(p.x-center[0],-(p.y-center[1])):shape.lineTo(p.x-center[0],-(p.y-center[1])));shape.closePath();
+    const geometry=new THREE.ExtrudeGeometry(shape,{depth:.75/12,bevelEnabled:false,steps:1});geometry.rotateX(-Math.PI/2);
+    const edge=new THREE.BufferGeometry().setFromPoints([...cut.footprint,cut.footprint[0]].map(p=>new THREE.Vector3(p.x-center[0],deckHeight+.0001,p.y-center[1])));
+    return {id:cut.id,geometry,edge};
+  }),[model,center,deckHeight]);
+  useEffect(()=>()=>pieces.forEach(p=>{p.geometry.dispose();p.edge.dispose();}),[pieces]);
+  return <group name="actual-staggered-four-by-eight-subfloor-sheets">{pieces.map(piece=><group key={piece.id}>
+    <mesh name={piece.id} geometry={piece.geometry} position={[0,deckHeight-.75/12,0]} castShadow receiveShadow><meshStandardMaterial color="#b79a72" roughness={.88}/></mesh>
+    <lineLoop geometry={piece.edge}><lineBasicMaterial color="#6e5d48"/></lineLoop>
+  </group>)}</group>;
 }
 function VisibleDeckBoards({model,center,height,boardName}:{
   model:DeckModel;center:P2;height:number;boardName:unknown;
@@ -92,7 +90,7 @@ function VisibleDeckBoards({model,center,height,boardName}:{
       if(i===0)shape.moveTo(x,-z);else shape.lineTo(x,-z);
     });
     shape.closePath();
-    const geometry=new THREE.ExtrudeGeometry(shape,{depth:.095,bevelEnabled:false});
+    const geometry=new THREE.ExtrudeGeometry(shape,{depth:model.deckBoardThicknessFt,bevelEnabled:false});
     geometry.rotateX(-Math.PI/2);
     const positions=geometry.getAttribute('position'),uv=geometry.getAttribute('uv');
     for(let i=0;i<positions.count;i++){
@@ -102,7 +100,7 @@ function VisibleDeckBoards({model,center,height,boardName}:{
     }
     uv.needsUpdate=true;
     return geometry;
-  }),[allStrips,center]);
+  }),[allStrips,center,model.deckBoardThicknessFt]);
   useEffect(()=>()=>cutFaces.forEach(geometry=>geometry.dispose()),[cutFaces]);
   const {map,missing}=useManufacturerTexture(boardName);
   const ref=useRef<THREE.InstancedMesh>(null);
@@ -110,15 +108,15 @@ function VisibleDeckBoards({model,center,height,boardName}:{
     if(!ref.current)return;
     const d=new THREE.Object3D();
     strips.forEach((strip,i)=>{
-      d.position.set(strip.x-center[0],height+.015,strip.z-center[1]);
+      d.position.set(strip.x-center[0],height-model.deckBoardThicknessFt/2,strip.z-center[1]);
       d.rotation.set(0,strip.axis==='z'?Math.PI/2:0,0);
-      d.scale.set(strip.lengthFt,.095,strip.widthFt);
+      d.scale.set(strip.lengthFt,model.deckBoardThicknessFt,strip.widthFt);
       d.updateMatrix();
       ref.current!.setMatrixAt(i,d.matrix);
     });
     ref.current.instanceMatrix.needsUpdate=true;
     ref.current.computeBoundingSphere();
-  },[strips,center,height]);
+  },[strips,center,height,model.deckBoardThicknessFt]);
   if(!allStrips.length)return null;
   return <group name={missing?'decking-needs-manufacturer-texture':'genuine-manufacturer-board-texture'}>
     {strips.length>0&&<instancedMesh ref={ref} args={[undefined,undefined,strips.length]} castShadow receiveShadow>
@@ -135,7 +133,7 @@ function VisibleDeckBoards({model,center,height,boardName}:{
         : <meshStandardMaterial color="#bfc5c7" roughness={.78} metalness={0}/>}
     </instancedMesh>}
     {cutFaces.map((geometry,i)=><mesh key={'field-rip-'+i} name="field-board-ripped-to-picture-frame"
-      geometry={geometry} position={[0,height+.015-.0475,0]} castShadow receiveShadow>
+      geometry={geometry} position={[0,height-model.deckBoardThicknessFt,0]} castShadow receiveShadow>
       {map?<meshBasicMaterial map={map} color="#ffffff" toneMapped={false}/>
         :<meshStandardMaterial color="#bfc5c7" roughness={.78}/>}
     </mesh>)}
@@ -145,15 +143,15 @@ function VisibleDeckBoards({model,center,height,boardName}:{
  * Uses the SAME manufacturer top-surface photograph/material pipeline as
  * VisibleDeckBoards. A frame board isn't a white default Beam proxy anymore.
  */
-function DeckTrimBeam({start,end,height,texture,color,widthFt=.44}:{
+function DeckTrimBeam({start,end,height,texture,color,widthFt,thicknessFt}:{
   start:P2;end:P2;height:number;texture:THREE.Texture|null;color:string;
-  widthFt?:number;
+  widthFt:number;thicknessFt:number;
 }){
   const dx=end[0]-start[0],dz=end[1]-start[1],length=Math.hypot(dx,dz);
   if(length<.005)return null;
   return <mesh position={[(start[0]+end[0])/2,height,(start[1]+end[1])/2]}
     rotation={[0,-Math.atan2(dz,dx),0]} castShadow receiveShadow>
-    <boxGeometry args={[length,.095,widthFt]}/>
+    <boxGeometry args={[length,thicknessFt,widthFt]}/>
     {texture?<>
       <meshStandardMaterial attach="material-0" color="#ffffff" map={texture} roughness={.78}/>
       <meshStandardMaterial attach="material-1" color="#ffffff" map={texture} roughness={.78}/>
@@ -178,13 +176,13 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
     model.pictureFrameSegments.filter(edge=>!model.houseEdgeIndices.includes(edge.index)),
     [model.pictureFrameSegments,model.pictureFrameHouseSide,model.houseEdgeIndices]);
   const nominalOutlines=useMemo(()=>splitMiteredPictureFrames(planMiteredPictureFrames(
-    model.points,visibleEdges,model.pictureFrameCount)),
-    [model.points,visibleEdges,model.pictureFrameCount]);
+    model.points,visibleEdges,model.pictureFrameCount,model.pictureFrameFaceFts,.125/12,model.fasciaThicknessFt)),
+    [model.points,visibleEdges,model.pictureFrameCount,model.pictureFrameFaceFts,model.fasciaThicknessFt]);
   const cutSeams=useMemo(()=>planVisiblePictureFrameMiterSeams(
     model.points,model.pictureFrameSegments,model.pictureFrameCount,
-    model.houseEdgeIndices,model.pictureFrameHouseSide),
+    model.houseEdgeIndices,model.pictureFrameHouseSide,model.pictureFrameFaceFts,model.fasciaThicknessFt),
     [model.points,model.pictureFrameSegments,model.pictureFrameCount,
-      model.houseEdgeIndices,model.pictureFrameHouseSide]);
+      model.houseEdgeIndices,model.pictureFrameHouseSide,model.pictureFrameFaceFts,model.fasciaThicknessFt]);
   const outlines=useMemo(()=>openPictureFrameMiterGaps(nominalOutlines,cutSeams),
     [nominalOutlines,cutSeams]);
   const geometries=useMemo(()=>outlines.map(strip=>{
@@ -195,11 +193,11 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
     });
     s.closePath();
     const g=new THREE.ExtrudeGeometry(s,{
-      depth:.095,bevelEnabled:false,curveSegments:1,steps:1,
+      depth:model.pictureFrameThicknessFts[strip.course],bevelEnabled:false,curveSegments:1,steps:1,
     });
     g.rotateX(-Math.PI/2);g.computeVertexNormals();
     return {strip,geometry:g};
-  }),[outlines,center]);
+  }),[outlines,center,model.pictureFrameThicknessFts]);
   useEffect(()=>()=>geometries.forEach(item=>item.geometry.dispose()),[geometries]);
   // The dark joint occupies the real 1/8-inch saw-cut opening. Use the
   // SAME plan-to-scene transform as the boards so it cannot mirror away
@@ -213,7 +211,7 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
     }),[cutSeams,center]);
   return <group name="miter-cut-authentic-picture-frame-courses">
     {geometries.map(({strip,geometry},index)=><mesh key={'miter-'+strip.edgeIndex+'-'+strip.course+'-'+index}
-      geometry={geometry} position={[0,deckHeight+.015-.0475,0]} castShadow receiveShadow>
+      geometry={geometry} position={[0,deckHeight-model.pictureFrameThicknessFts[strip.course],0]} castShadow receiveShadow>
       {maps[strip.course]
         ?<meshBasicMaterial color="#ffffff" map={maps[strip.course]} toneMapped={false} side={THREE.DoubleSide}/>
         :<meshStandardMaterial color={colors[strip.course]??'#a5a29d'}
@@ -221,7 +219,7 @@ function BorderBoards({model,center,deckHeight,maps,colors}:{
     </mesh>)}
     {miterSeams.map(seam=><mesh key={'visible-miter-joint-'+seam.edgeIndex+'-'+seam.course}
       name="true-diagonal-picture-frame-miter-joint"
-      position={[seam.x,deckHeight+.058,seam.z]}
+      position={[seam.x,deckHeight-.002,seam.z]}
       rotation={[0,seam.yaw,0]}>
       <boxGeometry args={[seam.length,.004,.125/12]}/>
       <meshBasicMaterial color="#33312d"/>
@@ -237,6 +235,9 @@ function BreakerBoards({model,center,height,maps,colors}:{
   if(!strips.length)return null;
   return <group name="independently-selected-perpendicular-breaker-boards">
     {strips.map((strip,i)=>{
+      if(strip.outline)return <CutBreakerBoard key={'breaker-course-'+strip.course+'-'+i}
+        outline={strip.outline} center={center} height={height} thickness={model.breakerThicknessFts[strip.course]}
+        texture={maps[strip.course]??null} color={colors[strip.course]??'#a1a6a9'}/>;
       const start:P2=strip.axis==='x'
         ?[strip.startFt-center[0],strip.z-center[1]]
         :[strip.x-center[0],strip.startFt-center[1]];
@@ -244,20 +245,34 @@ function BreakerBoards({model,center,height,maps,colors}:{
         ?[strip.endFt-center[0],strip.z-center[1]]
         :[strip.x-center[0],strip.endFt-center[1]];
       return <DeckTrimBeam key={'breaker-course-'+strip.course+'-'+i}
-        start={start} end={end} height={height+.015}
+        start={start} end={end} height={height-model.breakerThicknessFts[strip.course]/2}
+        widthFt={strip.widthFt} thicknessFt={model.breakerThicknessFts[strip.course]}
         texture={maps[strip.course]??null} color={colors[strip.course]??'#a1a6a9'}/>;
     })}
   </group>;
 }
+function CutBreakerBoard({outline,center,height,thickness,texture,color}:{outline:readonly (readonly[number,number])[];center:P2;height:number;thickness:number;texture:THREE.Texture|null;color:string}){
+  const geometry=useMemo(()=>{const shape=new THREE.Shape();outline.forEach(([x,y],i)=>i===0?shape.moveTo(x-center[0],-(y-center[1])):shape.lineTo(x-center[0],-(y-center[1])));shape.closePath();
+    const g=new THREE.ExtrudeGeometry(shape,{depth:thickness,bevelEnabled:false,steps:1});g.rotateX(-Math.PI/2);return g;
+  },[outline,center,thickness]);
+  useEffect(()=>()=>geometry.dispose(),[geometry]);
+  return <mesh geometry={geometry} position={[0,height-thickness,0]} castShadow receiveShadow>
+    {texture?<meshBasicMaterial color="#ffffff" map={texture} toneMapped={false}/>:<meshStandardMaterial color={color} roughness={.82}/>}</mesh>;
+}
+function FasciaCut({cut,model,center,height,texture}:{cut:ReturnType<typeof planDeckFasciaCuts>[number];model:DeckModel;center:P2;height:number;texture:THREE.Texture|null}){
+  const depth=Math.min(model.fasciaFaceFt,framingDepthFt(model.joistSize));
+  const geometry=useMemo(()=>{
+    const shape=new THREE.Shape();cut.footprint.forEach((p,i)=>i===0?shape.moveTo(p.x-center[0],-(p.y-center[1])):shape.lineTo(p.x-center[0],-(p.y-center[1])));shape.closePath();
+    const g=new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:false,steps:1});g.rotateX(-Math.PI/2);return g;
+  },[cut,center,depth]);
+  useEffect(()=>()=>geometry.dispose(),[geometry]);
+  return <mesh name={cut.id} geometry={geometry} position={[0,height-model.deckBoardThicknessFt-depth,0]} castShadow receiveShadow>
+    <meshStandardMaterial color={texture?'#ffffff':'#a49c90'} map={texture} roughness={.82}/>
+  </mesh>;
+}
 function DeckFascia({model,center,height,texture}:{model:DeckModel;center:P2;height:number;texture:THREE.Texture|null}){
-  const rimDepth=(model.joistSize==='2x12'?11.25:model.joistSize==='2x10'?9.25:7.25)/12;
-  return <group name="full-depth-deck-fascia">
-    {model.fasciaSegments.map(edge=><Beam key={'fascia-'+edge.index}
-      start={[edge.start.x-center[0],edge.start.y-center[1]]}
-      end={[edge.end.x-center[0],edge.end.y-center[1]]}
-      height={height-.10-rimDepth/2} thickness={rimDepth+.05} depth={.076}
-      color="#a49c90" texture={texture}/>)}
-  </group>;
+  const cuts=useMemo(()=>planDeckFasciaCuts(model),[model]);
+  return <group name="full-depth-deck-fascia">{cuts.map(cut=><FasciaCut key={cut.id} cut={cut} model={model} center={center} height={height} texture={texture}/>)}</group>;
 }
 export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true,lowerTier=false}:{
   model:DeckModel;project:ConsultationProject;center:P2;deckHeight:number;covered?:boolean;lowerTier?:boolean;
@@ -298,8 +313,8 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
     screenIntegrated,lowerTier?'lower':'main',enclosureWalls),[model,project.values,center,deckHeight,screenIntegrated,lowerTier,enclosureWalls]);
   return <group name="manufacturer-visualized-deck">
     <DeckStructure3D model={model} center={center} height={deckHeight}/>
-    <PolygonSubstrate model={model} center={center} deckHeight={deckHeight}/>
-    <VisibleDeckBoards model={model} center={center} height={deckHeight} boardName={project.values.deckingMaterial}/>
+    {project.values.deckingSurface==='subfloor'&&<PolygonSubstrate model={model} center={center} deckHeight={deckHeight}/>}
+    {model.deckingSurface!=='subfloor'&&<VisibleDeckBoards model={model} center={center} height={deckHeight} boardName={project.values.deckingMaterial}/>}
     <BorderBoards model={model} center={center} deckHeight={deckHeight} maps={borderMaps} colors={borderColors}/>
     <BreakerBoards model={model} center={center} height={deckHeight} maps={breakerMaps} colors={breakerColors}/>
     <DeckFascia model={model} center={center} height={deckHeight} texture={fasciaMap}/>
@@ -308,7 +323,7 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
       deckHeight={deckHeight} screenIntegrated={screenIntegrated} lightCapPostKeys={capLightPosts} enclosureWalls={enclosureWalls}/>
     <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values}
       texture={stairMap} fasciaTexture={stairFasciaMap}
-      riserTexture={riserMap} skirtTexture={skirtMap}/>
+      riserTexture={riserMap}/>
     {covered&&<RenaissanceCover3D model={model} project={project} center={center} deckHeight={deckHeight}/>}
     {!selected&&<group name="manufacturer-board-texture-not-yet-verified"/>}
   </group>;

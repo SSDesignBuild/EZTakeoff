@@ -3,10 +3,11 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),ts=require('typescript');
 const cache=new Map();
 function load(file){
-  const full=path.resolve(__dirname,'..',file.endsWith('.ts')?file:file+'.ts');
+  const full=path.resolve(__dirname,'..',file.endsWith('.ts')||file.endsWith('.json')?file:file+'.ts');
+  if(full.endsWith('.json'))return JSON.parse(fs.readFileSync(full,'utf8'));
   if(cache.has(full))return cache.get(full).exports;
   const record={exports:{}};cache.set(full,record);
-  const compiled=ts.transpileModule(fs.readFileSync(full,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+  const compiled=ts.transpileModule(fs.readFileSync(full,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true,resolveJsonModule:true}}).outputText;
   new Function('require','module','exports',compiled)((name)=>name.startsWith('.')?load(path.resolve(path.dirname(full),name)):require(name),record,record.exports);
   return record.exports;
 }

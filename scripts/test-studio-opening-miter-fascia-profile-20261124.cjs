@@ -132,18 +132,20 @@ assert.equal(face.boardThicknessIn,.75);assert.equal(face.boardFaceIn,12);
 assert.equal(face.stockLengthFt,12);
 assert.equal(face.main.length,4);
 assert.ok(face.lowerRip.length===4,'Actual diagonal stringer requires lower rip');
-assert.ok(face.ripMaxWidthIn>2&&face.ripMaxWidthIn<8,
- 'Lower rip should be physically plausible (often around 3-5in)');
+const structuralStart=5-1/12-(11.25/12)*Math.hypot(1,.625/(11/12));
+const expectedRip=Math.max(face.main.at(-1).riseFt-Math.max(0,structuralStart-.03),
+ face.main.at(-2).riseFt-Math.max(0,structuralStart-.625*7-.03))*12;
+assert.ok(Math.abs(face.ripMaxWidthIn-expectedRip)<1e-7&&face.ripMaxWidthIn<face.boardFaceIn,
+ 'Lower rip covers the actual dressed stringer underside and fits selected fascia stock');
 const stair3d=read('src/components/visual3d/DeckStairAssembly3D.tsx');
-assert.ok(stair3d.includes('fasciaRipGeo')&&
- stair3d.includes('lower-ripped-three-quarter-inch-fascia-strip'));
-assert.ok(stair3d.includes('const thickFt=.75/12'));
+assert.ok(stair3d.includes('planStairFasciaStockPieces')&&stair3d.includes('fasciaCuts.map'));
+assert.ok(stair3d.includes('fasciaDimensions.thicknessIn/12'));
 const fasciaOrder=estimate.calculateEstimate('decks',{...deckDefaults,
  stairCount:1,stairEdgeIndex:2,stairWidth:4,stairOffset:2,
  stairFasciaStyle:'straight',deckHeight:5,
  deckingType:'composite',deckingMaterial:'Trex Enhance'});
-assert.ok(fasciaOrder.materials.some(m=>
- m.name.includes('rip lower stair strip')&&m.stockRecommendation.includes('12 ft')),
+assert.ok(fasciaOrder.materials.some(m=>m.stockRecommendation.includes('12 ft')&&
+ m.cutPlan?.boards.some(board=>board.cuts.some(cut=>cut.location.includes('lower-rip fascia')))),
  'Ripped under-stringer strip must be on the physical 12ft supplier order');
 
 // Skirting short gate: full-wall HORIZONTAL boards remain continuous ABOVE
@@ -163,9 +165,9 @@ assert.ok(side.courses.some(c=>c.row===0&&c.start<4&&c.end>6.5),
 assert.ok(!side.finishCuts.some(c=>c.location.includes('fixed upper infill above access gate')),
  'No double-order of independently patched top skirting boards');
 const skirt3d=read('src/components/visual3d/DeckSkirting3D.tsx');
-assert.ok(skirt3d.includes('side.courses.map')&&
- skirt3d.includes("plan.options.orientation==='vertical'&&"),
- 'Only vertically oriented panels need upper cut pieces');
+assert.ok(skirt3d.includes('buildConstructionSkirting')&&skirt3d.includes('assembly.parts.map')&&
+ read('src/lib/constructionSkirting.ts').includes('side.physicalMembers'),
+ 'Renderer consumes the exact purchased panel and gate-infill members');
 
 // Actual manufacturer outside profile and structural bent cheek references.
 const frame=read('src/components/visual3d/RenaissanceExtrusions.tsx');

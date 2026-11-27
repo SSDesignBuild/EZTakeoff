@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import * as THREE from 'three';
 import {getDeckVisualProduct} from '../../data/visualCatalog';
+import {resolveBoardDimensions} from '../../lib/deckProductDimensions';
 import type {DrinkRailPiece} from '../../lib/railingLayout';
 
 function useDrinkBoardTexture(material:string){
@@ -23,9 +24,9 @@ function useDrinkBoardTexture(material:string){
  return texture;
 }
 /** Six physical cut faces, including corner miters and plumb pitch joints. */
-function Board({piece,texture}:{piece:DrinkRailPiece;texture:THREE.Texture|null}){
+function Board({piece,texture,widthFt,thicknessFt}:{piece:DrinkRailPiece;texture:THREE.Texture|null;widthFt:number;thicknessFt:number}){
  const geometry=useMemo(()=>{
-  const top=piece.corners,bottom=top.map(p=>[p[0],p[1]-.093,p[2]]);
+  const top=piece.corners,bottom=top.map(p=>[p[0],p[1]-thicknessFt,p[2]]);
   const vertices=[...top,...bottom];
   const faces=[[0,1,2,3],[7,6,5,4],[0,4,5,1],[1,5,6,2],[2,6,7,3],[3,7,4,0]];
   const positions:number[]=[],uv:number[]=[];
@@ -37,7 +38,7 @@ function Board({piece,texture}:{piece:DrinkRailPiece;texture:THREE.Texture|null}
    for(const local of [0,1,2,0,2,3]){
     const p=vertices[face[local]];positions.push(...p);
     const u=((p[0]-start[0])*ux+(p[2]-start[2])*uz)/8;
-    const v=index<2?((p[0]-start[0])*-uz+(p[2]-start[2])*ux)/(5.5/12):(local<2?0:1);
+    const v=index<2?((p[0]-start[0])*-uz+(p[2]-start[2])*ux)/widthFt:(local<2?0:1);
     uv.push(u,v);
    }
    g.addGroup(offset,6,index===0?0:1);
@@ -45,7 +46,7 @@ function Board({piece,texture}:{piece:DrinkRailPiece;texture:THREE.Texture|null}
   g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
   g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.computeVertexNormals();
   return g;
- },[piece]);
+ },[piece,widthFt,thicknessFt]);
  useEffect(()=>()=>geometry.dispose(),[geometry]);
  return <mesh name={'mitered-continuous-drink-board-'+piece.id} geometry={geometry} castShadow receiveShadow>
   {texture?<meshBasicMaterial attach="material-0" map={texture} color="#ffffff" toneMapped={false} side={THREE.DoubleSide}/>
@@ -55,7 +56,8 @@ function Board({piece,texture}:{piece:DrinkRailPiece;texture:THREE.Texture|null}
 }
 export function DrinkRailBoards3D({pieces,material}:{pieces:DrinkRailPiece[];material:string}){
  const texture=useDrinkBoardTexture(material);
+ const dimensions=resolveBoardDimensions(material);
  return <group name="selected-manufacturer-drink-boards-over-posts">
-  {pieces.map(piece=><Board key={piece.id} piece={piece} texture={texture}/>)}
+  {pieces.map(piece=><Board key={piece.id} piece={piece} texture={texture} widthFt={dimensions.faceIn/12} thicknessFt={dimensions.thicknessIn/12}/>)}
  </group>;
 }

@@ -1,40 +1,30 @@
+import {planStairFasciaStockPieces,type StairFasciaStockPiece} from '../../lib/stairFasciaCuts';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import type { DeckModel, StairPlacement } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { Block, type P2 } from './Primitives';
-import { planStairFasciaCoverage,planStairStringerFaceStations,type StairSideFasciaPoint } from '../../lib/stairFasciaGeometry';
+import { planStairFasciaCoverage,type StairSideFasciaPoint } from '../../lib/stairFasciaGeometry';
 import { planStairLandingForValues,landingSurface } from '../../lib/stairConcreteLanding';
 import { stairFlightFrame } from '../../lib/stairRailVisualGeometry';
+import { planConstructionStair,type StairProfilePoint } from '../../lib/constructionStairs';
+import { resolveFasciaDimensions } from '../../lib/deckProductDimensions';
+import { resolveStairSideFasciaMaterial,hasDecorativeStairFascia,stairFasciaDimensionOverrides } from '../../lib/deckTrimSelection';
 
-const riseFor=(model:DeckModel,height:number)=>height/Math.max(1,model.stairRisers);
-function makeStringer(runFt:number,treads:number,riseFt:number,height:number){
-  // A sawn 2x12-style stair stringer has horizontal tread seats, plumb
-  // riser cuts and a continuous diagonal lower edge; it is not a cylinder.
-  const shape=new THREE.Shape();
-  shape.moveTo(0,height-riseFt-.04);
-  for(let i=0;i<treads;i++){
-    const z=(i+1)*runFt,stepY=height-(i+1)*riseFt-.04;
-    shape.lineTo(z,stepY);
-    if(i<treads-1)shape.lineTo(z,stepY-riseFt);
-  }
-  shape.lineTo(treads*runFt,Math.max(.055,height-(treads+1)*riseFt+.02));
-  shape.lineTo(0,Math.max(.05,height-riseFt-.72));
-  shape.closePath();
-  const geo=new THREE.ExtrudeGeometry(shape,{depth:.125,bevelEnabled:false,steps:1});
-  geo.computeVertexNormals();
-  return geo;
+function makeStringer(profile:readonly StairProfilePoint[]){
+  const shape=new THREE.Shape();profile.forEach((p,i)=>i===0?shape.moveTo(p.stationFt,p.elevationFt):shape.lineTo(p.stationFt,p.elevationFt));shape.closePath();
+  const geo=new THREE.ExtrudeGeometry(shape,{depth:1.5/12,bevelEnabled:false,steps:1});geo.computeVertexNormals();return geo;
 }
-/** Genuine 3/4-inch thick finish from a 12in-wide x 12ft stock board.
+/** Selected manufacturer/configured finish cut from 12ft fascia stock.
  * Both primary and optional ripped lower strip use the SAME silhouette
  * orientation and selected finish texture, never the structural stringer. */
-function makeStairFinishGeometry(outline:readonly StairSideFasciaPoint[]){
+function makeStairFinishGeometry(outline:readonly StairSideFasciaPoint[],thickFt:number){
  if(outline.length<3)return null;
  const shape=new THREE.Shape();
  outline.forEach((p,i)=>i===0?
   shape.moveTo(p.runFt,p.riseFt):shape.lineTo(p.runFt,p.riseFt));
  shape.closePath();
- const thickFt=.75/12;
+
  const g=new THREE.ExtrudeGeometry(shape,{
   depth:thickFt,bevelEnabled:false,curveSegments:1,steps:1,
  });
@@ -43,117 +33,47 @@ function makeStairFinishGeometry(outline:readonly StairSideFasciaPoint[]){
  g.computeVertexNormals();
  return g;
 }
-/** A stair-side board is cut to the fascia's diagonal underside, not a square box. */
-function StairSkirtPanel({contour,x,color,texture}:{
-  contour:readonly (readonly [number,number])[];
-  x:number;color:string;texture:THREE.Texture|null;
-}){
-  const geometry=useMemo(()=>{
-    if(contour.length<3)return null;
-    const shape=new THREE.Shape();
-    contour.forEach(([runFt,riseFt],i)=>{
-      if(i===0)shape.moveTo(runFt,riseFt);
-      else shape.lineTo(runFt,riseFt);
-    });
-    shape.closePath();
-    const geo=new THREE.ExtrudeGeometry(shape,{depth:.075,steps:1,bevelEnabled:false});
-    geo.translate(0,0,-.0375);
-    geo.rotateY(-Math.PI/2);
-    geo.computeVertexNormals();
-    return geo;
-  },[contour]);
-  useEffect(()=>()=>geometry?.dispose(),[geometry]);
-  if(!geometry)return null;
-  return <mesh geometry={geometry} position={[x,0,0]} castShadow receiveShadow>
-    <meshStandardMaterial color={texture?'#ffffff':color} map={texture??null}
-      roughness={.82} side={THREE.DoubleSide}/>
-  </mesh>;
-}
-const clipUnderSlope=(rectangle:Array<readonly [number,number]>,
-  heightAt:(z:number)=>number):Array<readonly [number,number]>=>{
-  const result:Array<readonly [number,number]>=[];
-  const d=(p:readonly [number,number])=>p[1]-heightAt(p[0]);
-  for(let i=0;i<rectangle.length;i++){
-    const a=rectangle[i],b=rectangle[(i+1)%rectangle.length];
-    const da=d(a),db=d(b);
-    if(da<=.000001)result.push(a);
-    if((da<0&&db>0)||(da>0&&db<0)){
-      const t=da/(da-db);
-      result.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t]);
-    }
-  }
-  return result;
-};
-function Flight({placement,model,center,height,values,texture,fasciaTexture,riserTexture,skirtTexture}:{
+function Flight({placement,model,center,height,values,texture,fasciaTexture,riserTexture}:{
   placement:StairPlacement;model:DeckModel;center:P2;height:number;
   values:ConsultationProject['values'];texture:THREE.Texture|null;
   fasciaTexture:THREE.Texture|null;
-  riserTexture:THREE.Texture|null;skirtTexture:THREE.Texture|null;
+  riserTexture:THREE.Texture|null;
 }){
   // One physical frame authority for stair stringers, finishes and the
   // independently chosen stair railing. Enclosure placement never changes it.
   const stairFrame=stairFlightFrame(model,placement,center);
-  const width=stairFrame?.widthFt??placement.width;
+  const physical=planConstructionStair(model,placement,height,values);
+  const width=physical?.widthFt??placement.width;
   const yaw=stairFrame?.yaw??0;
   const treads=Math.max(1,model.stairTreadsPerRun);
-  const rise=riseFor(model,height);
-  const treadDepth=Math.max(.65,model.stairRunFt/treads);
+  const rise=physical?.riseFt??height/Math.max(1,model.stairRisers);
+  const treadDepth=physical?.treadDepthFt??model.stairRunFt/treads;
   const run=treads*treadDepth;
   const landing=landingSurface(values.stairLandingSurface)==='bare-ground'
     ?planStairLandingForValues(width,values):null;
-  // Two individual 5.5-inch boards separated by 1/8 inch on an 11-inch tread.
-  const boardFaceFt=5.5/12,boardGapFt=.125/12;
-  const fasciaRisers=values.stairRiserStyle==='fascia'||
-    (values.stairRiserStyle==='auto'&&values.deckingType!=='pressure-treated');
-  const nosingFt=(fasciaRisers ? 0.5 : 1)/12;
-  const stringerStations=planStairStringerFaceStations(width,Math.max(2,Math.ceil(width)+1));
-  const geo=useMemo(()=>makeStringer(treadDepth,treads,rise,height),[treadDepth,treads,rise,height]);
+  const nosingFt=physical?.nosingFt??1/12;
+  const stringerStations=physical?.stringerStations??[];
+  const profile=physical?.stringerProfile??[];
+  const geo=useMemo(()=>makeStringer(profile),[profile]);
+  const fasciaDimensions=resolveFasciaDimensions(resolveStairSideFasciaMaterial(values),stairFasciaDimensionOverrides(values));
+  const fasciaThicknessFt=fasciaDimensions.thicknessIn/12;
   const fasciaStyle=values.stairFasciaStyle==='straight'?'straight':'profiled';
   // A FINISH board has its own geometry, not a clone of the notched 2x12
   // structural stringer. Both stair sides use this one mirrored outline.
   const fasciaCoverage=useMemo(()=>planStairFasciaCoverage({
     treadDepthFt:treadDepth,treads,riseFt:rise,heightFt:height,style:fasciaStyle,
-    nosingFt,
-  }),[treadDepth,treads,rise,height,fasciaStyle,nosingFt]);
-  const fasciaOutline=fasciaCoverage.main;
-  const fasciaGeo=useMemo(()=>makeStairFinishGeometry(fasciaCoverage.main),
-    [fasciaCoverage]);
-  const fasciaRipGeo=useMemo(()=>makeStairFinishGeometry(fasciaCoverage.lowerRip),
-    [fasciaCoverage]);
-  useEffect(()=>()=>{geo.dispose();fasciaGeo?.dispose();fasciaRipGeo?.dispose();},
-    [geo,fasciaGeo,fasciaRipGeo]);
-  const skirt=values.skirtingEnabled===true&&values.skirtingStairsEnabled!==false;
-  const boardFace=Math.max(.25,Number(values.skirtingFaceIn??4.5)/12);
-  const boardGap=Math.max(0,Number(values.skirtingGapIn??.25)/12);
-  const horizontal=values.skirtingOrientation==='horizontal';
-  const finish=values.skirtingMaterial==='pvc'?'#d8dad6':values.skirtingMaterial==='composite'?
-    '#bcb5aa':'#b19a79';
-  const fascia=values.stairStringerFascia!==false;
-  // Skirting terminates at the ACTUAL fascia underside instead of an
-  // unrelated guessed slope (which previously exposed unfinished stringers).
-  const mainLowerAt=(station:number)=>{
-    const lowerStart=fasciaOutline[fasciaOutline.length-1]?.riseFt??.08;
-    const lowerEnd=fasciaOutline[fasciaOutline.length-2]?.riseFt??.025;
-    return lowerStart+(lowerEnd-lowerStart)*Math.max(0,Math.min(1,station/run));
-  };
-  const underFasciaAt=(station:number)=>{
-    let underside=mainLowerAt(station);
-    const rip=fasciaCoverage.lowerRip;
-    if(rip.length===4&&station>=rip[0].runFt-.00001&&station<=rip[1].runFt+.00001){
-      const f=(station-rip[0].runFt)/Math.max(.001,rip[1].runFt-rip[0].runFt);
-      const ripUnder=rip[3].riseFt+(rip[2].riseFt-rip[3].riseFt)*Math.max(0,Math.min(1,f));
-      underside=Math.min(underside,ripUnder);
-    }
-    return Math.max(.04,underside-.04);
-  };
-  const lowerStart=underFasciaAt(0)+.04;
+    nosingFt,boardFaceFt:fasciaDimensions.faceIn/12,boardThicknessIn:fasciaDimensions.thicknessIn,treadThicknessFt:physical?.treadThicknessFt,
+  }),[treadDepth,treads,rise,height,fasciaStyle,nosingFt,fasciaDimensions.faceIn,fasciaDimensions.thicknessIn,physical?.treadThicknessFt]);
+  const fasciaCuts=useMemo(()=>planStairFasciaStockPieces(fasciaCoverage,rise,treadDepth),[fasciaCoverage,rise,treadDepth]);
+  useEffect(()=>()=>geo.dispose(),[geo]);
+  const fascia=hasDecorativeStairFascia(values);
   return <group name={'stair-flight-'+placement.edgeIndex}
     position={[stairFrame?.originX??0,0,stairFrame?.originZ??0]}
     rotation={[0,yaw,0]}>
     {/* The measured concrete pad sits at the stair exit, rather than
         under the entire staircase. Most of its thickness is below grade. */}
     {landing&&<group name="automatic-dimensioned-concrete-stair-landing">
-      <Block position={[0,.055-landing.thicknessIn/24,run+landing.depthFt/2]}
+      <Block position={[0,-landing.thicknessIn/24,run+landing.depthFt/2]}
         size={[landing.widthFt,landing.thicknessIn/12,landing.depthFt]}
         color="#aaa9a5"/>
     </group>}
@@ -163,93 +83,26 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
         <meshStandardMaterial color="#977759" roughness={.9}/>
       </mesh>;
     })}
-    {Array.from({length:treads},(_,i)=>{
-      const stepHeight=Math.max(.09,height-(i+1)*rise);
-      return <group key={'stair-tread-'+i}>
-        {Array.from({length:2},(_,boardIndex)=>{
-          const front=(i+1)*treadDepth+nosingFt;
-          const centerZ=front-boardFaceFt/2-boardIndex*(boardFaceFt+boardGapFt);
-          return <mesh key={'individual-deck-tread-board-'+i+'-'+boardIndex}
-            position={[0,stepHeight+.05,centerZ]} castShadow receiveShadow>
-            <boxGeometry args={[width,.105,boardFaceFt]}/>
-            {texture
-              ? <>
-                <meshStandardMaterial attach="material-0" color="#ffffff" map={texture} roughness={.77}/>
-                <meshStandardMaterial attach="material-1" color="#ffffff" map={texture} roughness={.77}/>
-                <meshBasicMaterial attach="material-2" color="#ffffff" map={texture} toneMapped={false}/>
-                <meshStandardMaterial attach="material-3" color="#786a5e" roughness={.87}/>
-                <meshStandardMaterial attach="material-4" color="#ffffff" map={texture} roughness={.77}/>
-                <meshStandardMaterial attach="material-5" color="#ffffff" map={texture} roughness={.77}/>
-              </>
-              :<meshStandardMaterial color="#b6b8b9" roughness={.82}/>}
-          </mesh>;
-        })}
-        {/* Move riser fascia in FRONT of the stringer plumb cut (rather than
-            coplanar with it), while preserving the selected tread nosing. */}
-        {values.stairRiserStyle!=='open'&&<Block
-          position={[0,stepHeight-rise/2+.04,(i+1)*treadDepth-.004]}
-          size={[width,Math.max(.12,rise-.08),.07]}
-          color={riserTexture?'#ffffff':'#ac9885'} texture={riserTexture}/>}
-      </group>;
-    })}
-    {[-1,1].map((sign)=>{
-      const x=sign*(width/2+.75/24),n=Math.max(2,Math.ceil(run/(boardFace+boardGap)));
-      return <group key={'stair-side-'+sign}>
-        {fascia&&fasciaGeo&&<mesh name="three-quarter-inch-by-twelve-inch-stair-side-fascia"
-          geometry={fasciaGeo} position={[x,0,0]} castShadow receiveShadow>
-          {fasciaTexture
-            ?<meshBasicMaterial color="#ffffff" map={fasciaTexture}
-              toneMapped={false} side={THREE.DoubleSide}/>
-            :<meshStandardMaterial color="#92795e" side={THREE.DoubleSide}
-              roughness={.78}/>}
-        </mesh>}
-        {fascia&&fasciaRipGeo&&<mesh
-          name="lower-ripped-three-quarter-inch-fascia-strip-conceals-structural-stringer"
-          geometry={fasciaRipGeo} position={[x,0,0]} castShadow receiveShadow>
-          {fasciaTexture
-            ?<meshBasicMaterial color="#ffffff" map={fasciaTexture}
-              toneMapped={false} side={THREE.DoubleSide}/>
-            :<meshStandardMaterial color="#92795e" side={THREE.DoubleSide}
-              roughness={.78}/>}
-        </mesh>}
-        {/* Actual polygon-cut skirting follows the underside of the fascia. */}
-        {skirt&&(horizontal
-          ?Array.from({length:Math.ceil(lowerStart/(boardFace+boardGap))},(_,i)=>{
-            const bottom=.10+i*(boardFace+boardGap);
-            const topBoard=bottom+boardFace;
-            const contour=clipUnderSlope([
-              [0,bottom],[run,bottom],[run,topBoard],[0,topBoard],
-            ],underFasciaAt);
-            if(contour.length<3)return null;
-            return <StairSkirtPanel key={'slope-cut-horizontal-skirt-'+i}
-              x={sign*(width/2-.09)} contour={contour}
-              color={finish} texture={skirtTexture}/>;
-          })
-          :Array.from({length:n},(_,i)=>{
-            const start=i*(boardFace+boardGap);
-            const end=Math.min(run,start+boardFace);
-            if(end-start<.025)return null;
-            const contour=clipUnderSlope([
-              [start,.10],[end,.10],[end,Math.max(.10,underFasciaAt(end))],
-              [start,Math.max(.10,underFasciaAt(start))],
-            ],underFasciaAt);
-            if(contour.length<3)return null;
-            return <StairSkirtPanel key={'slope-cut-vertical-skirt-'+i}
-              x={sign*(width/2-.09)} contour={contour}
-              color={finish} texture={skirtTexture}/>;
-          }))}
-        {skirt&&[0,1].map((endIdx)=><Block key={'concealed-stair-skirt-support-'+endIdx}
-          position={[sign*(width/2-.22),.20+endIdx*.22,run/2]}
-          size={[.125,.25,run]} color="#7c664c"/>)}
-      </group>;
-    })}
+    {(physical?.treadBoards??[]).map(board=><mesh key={'individual-deck-tread-board-'+board.step+'-'+board.board}
+      position={[0,(board.topFt+board.bottomFt)/2,(board.startFt+board.endFt)/2]} castShadow receiveShadow>
+      <boxGeometry args={[width,board.topFt-board.bottomFt,board.endFt-board.startFt]}/>
+      {texture?<meshBasicMaterial color="#ffffff" map={texture} toneMapped={false}/>:<meshStandardMaterial color="#b6b8b9" roughness={.82}/>}
+    </mesh>)}
+    {(physical?.risers??[]).map(riser=><Block key={'individual-riser-'+riser.step+'-'+riser.board}
+      position={[0,(riser.bottomFt+riser.topFt)/2,riser.stationFt+riser.thicknessFt/2]}
+      size={[width,riser.topFt-riser.bottomFt,riser.thicknessFt]}
+      color={riserTexture?'#ffffff':'#ac9885'} texture={riserTexture}/>)}
+    {[-1,1].map(sign=><group key={'stair-side-'+sign}>
+      {fascia&&fasciaCuts.map(cut=><StairFasciaCut key={cut.kind+'-'+cut.index} cut={cut}
+        x={sign*(width/2+fasciaThicknessFt/2)} thickness={fasciaThicknessFt} texture={fasciaTexture}/>)}
+    </group>)}
   </group>;
 }
-export function DeckStairAssembly3D({model,center,height,values,texture,fasciaTexture,riserTexture,skirtTexture}:{
+export function DeckStairAssembly3D({model,center,height,values,texture,fasciaTexture,riserTexture}:{
   model:DeckModel;center:P2;height:number;
   values:ConsultationProject['values'];texture:THREE.Texture|null;
   fasciaTexture:THREE.Texture|null;
-  riserTexture:THREE.Texture|null;skirtTexture:THREE.Texture|null;
+  riserTexture:THREE.Texture|null;
 }){
   if(!model.stairCount||!model.stairPlacements.length)return null;
   return <group name="stair-stringer-framing-and-selectable-fascia">
@@ -257,6 +110,14 @@ export function DeckStairAssembly3D({model,center,height,values,texture,fasciaTe
       <Flight key={placement.edgeIndex+'-'+i} placement={placement} model={model}
         center={center} height={height} values={values} texture={texture}
         fasciaTexture={fasciaTexture} riserTexture={riserTexture}
-        skirtTexture={skirtTexture}/>)}
+/>)}
   </group>;
+}
+
+function StairFasciaCut({cut,x,thickness,texture}:{cut:StairFasciaStockPiece;x:number;thickness:number;texture:THREE.Texture|null}){
+  const geometry=useMemo(()=>makeStairFinishGeometry(cut.outline,thickness),[cut,thickness]);
+  useEffect(()=>()=>geometry?.dispose(),[geometry]);
+  if(!geometry)return null;
+  return <mesh name={cut.kind==='main'?'actual-selected-stair-side-fascia-cut':'lower-ripped-fascia-strip-conceals-structural-stringer'} geometry={geometry} position={[x,0,0]} castShadow receiveShadow>
+    {texture?<meshBasicMaterial color="#ffffff" map={texture} toneMapped={false} side={THREE.DoubleSide}/>:<meshStandardMaterial color="#92795e" side={THREE.DoubleSide} roughness={.78}/>}</mesh>;
 }

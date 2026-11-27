@@ -35,3 +35,25 @@ export function resolveStairSideFasciaMaterial(values:TrimValues):string{
   return values.stairFasciaMaterial==='match-fascia'||!values.stairFasciaMaterial?
     perimeter:resolveBoardFinish(values.stairFasciaMaterial,text(values.deckingMaterial));
 }
+type FasciaChoices=TrimValues&{deckingType?:unknown;fasciaThicknessIn?:unknown;fasciaFaceIn?:unknown;
+  stairFasciaThicknessIn?:unknown;stairFasciaFaceIn?:unknown;stairStringerFascia?:unknown};
+/** Matching perimeter fascia includes its configured dimensions. Independent
+ * stair choices inherit only their selected product's dimensions. */
+export function stairFasciaDimensionOverrides(values:FasciaChoices):{faceIn:number;thicknessIn:number}{
+  const match=!values.stairFasciaMaterial||values.stairFasciaMaterial==='match-fascia';
+  const positive=(value:unknown)=>Number(value)>0?Number(value):0;
+  return {faceIn:positive(values.stairFasciaFaceIn)||(match?positive(values.fasciaFaceIn):0),
+    thicknessIn:positive(values.stairFasciaThicknessIn)||(match?positive(values.fasciaThicknessIn):0)};
+}
+/** Matching pressure-treated finish is exposed structural wood. A separately
+ * selected finish or explicit custom fascia dimensions is a real skin. */
+export function hasDecorativeDeckFascia(values:FasciaChoices):boolean{
+  return !/pressure/i.test(String(values.deckingType))||resolveFasciaMaterial(values)!==text(values.deckingMaterial)||
+    Number(values.fasciaThicknessIn)>0||Number(values.fasciaFaceIn)>0;
+}
+export function hasDecorativeStairFascia(values:FasciaChoices):boolean{
+  if(values.stairStringerFascia===false||values.stairStringerFascia==='false')return false;
+  return !/pressure/i.test(String(values.deckingType))||resolveStairSideFasciaMaterial(values)!==text(values.deckingMaterial)||
+    Number(values.stairFasciaThicknessIn)>0||Number(values.stairFasciaFaceIn)>0||
+    ((!values.stairFasciaMaterial||values.stairFasciaMaterial==='match-fascia')&&hasDecorativeDeckFascia(values));
+}
