@@ -56,7 +56,7 @@ approx(concrete.planSiteConcrete(withAreas([reverse])).totalAreaSqFt,120);
 
 // The new site-plan landing option uses actual stair direction/width and never buys a duplicate pad.
 const stairValues={...values,stairCount:1,stairEdgeIndex:1,stairOffset:4,stairWidth:4,deckHeight:3,
- stairLandingSurface:'bare-ground',stairLandingDepthFt:4,stairLandingThicknessIn:5};
+ stairLandingSurface:'bare-ground',stairLandingDepthFt:4,stairLandingThicknessIn:5,stairLandingAllowancePercent:5};
 const pads=concrete.siteConcreteStairLandings(stairValues);
 assert.equal(pads.length,1);
 const pad=pads[0],drawnPad=area('Shared landing',pad.points,5,pad.elevationFt);

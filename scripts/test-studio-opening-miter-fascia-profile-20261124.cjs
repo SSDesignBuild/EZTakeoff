@@ -171,7 +171,7 @@ assert.ok(skirt3d.includes('side.courses.map')&&
 const frame=read('src/components/visual3d/RenaissanceExtrusions.tsx');
 for(const token of ["outlineWithRibs(w,h,t,'header')",'corners.forEach','recess',
  'makeContinuousFormedTrussGeometry','renaissanceFormedProfileContour',
- 'renaissanceTrussTailDepthFt','new THREE.Float32BufferAttribute(xyz,3)',
+ 'buildRenaissanceTrussCutMesh','new THREE.Float32BufferAttribute(positions,3)',
  'const innerCorners:Array<[number,number]>=corners.map','outer.holes.push(inner)']){
  assert.ok(frame.includes(token),'Renaissance formed member missing '+token);
 }

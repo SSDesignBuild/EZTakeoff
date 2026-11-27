@@ -107,7 +107,7 @@ function ProductPhoto({photo,name,fallback}:{photo?:PhotoReference;name:string;f
     {fallback&&<small className="photo-source-text">Manufacturer gallery linked in product details</small>}
   </div>;
   return <div ref={container} className="manufacturer-photo">
-    <img src={photo.url} loading="lazy" alt={name+' installed manufacturer product photograph'}
+    <img src={photo.url} loading="lazy" alt={name+' installed project photograph'}
       referrerPolicy="no-referrer"
       onLoad={()=>{loaded.current=true;cancelTimeout();}}
       onError={()=>{cancelTimeout();setFailed(true);}}/>

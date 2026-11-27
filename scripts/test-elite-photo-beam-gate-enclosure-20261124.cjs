@@ -119,7 +119,9 @@ assert.ok(post.includes('const innerCorners:Array<[number,number]>=corners.map')
  'Wall gauge must be preserved around recessed post silhouette');
 assert.ok(cover3D.includes('renaissance-tapered-post-base-skirt'));
 const workflow=read('docs/DEVELOPMENT_WORKFLOW.md');
-assert.ok(workflow.includes('MUST **perform the actual requested source-code changes'),
-  'Persistent workflow must require implementation/deployment, never explanation-only');
-assert.ok(workflow.includes('Netlify as the sole automatic CI/build system'));
+assert.ok(workflow.includes('Implement the authorized work, verify it, package it') &&
+  workflow.includes("PowerShell run normal Git/GitHub CLI synchronization and Netlify deployment on the owner's computer"),
+  'Persistent workflow must implement the work and deliver the owner-run source/build release');
+assert.ok(workflow.includes('Netlify is the only automatic CI provider') &&
+  workflow.includes('workflow_dispatch') && workflow.includes('one ready-to-copy PowerShell block'));
 console.log('PASS photo-based sash/Prime/SD post; exact 4-frame beam-underside window+stock; continuous skirting gate header; no Lumino, no duplicate stair-entry rail and action-first workflow');

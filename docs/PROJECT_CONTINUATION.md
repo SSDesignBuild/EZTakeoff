@@ -1,33 +1,28 @@
 # EZTakeoff current checkpoint
 
-## Active release — November 26, 2026
+## November 26, 2026 — R2 candidate
 
-Repository: `SSDesignBuild/EZTakeoff`. Production: https://eztakeoff.netlify.app. Netlify site: `afb809fb-cc3e-4b69-ae1a-1e8d5fd8c764`.
+Repository: `SSDesignBuild/EZTakeoff`. Production: https://eztakeoff.netlify.app.
+Netlify site: `afb809fb-cc3e-4b69-ae1a-1e8d5fd8c764`.
 
-The owner authorized completing the remaining Studio release and requires a downloadable source-and-build ZIP after each build. Candidate branch: `feat/studio-zip-release-20261126`, based on production/main `5847f65b9f2225bb18d781d19f39ee1d2e15fefb`. Recovered source commits `1b7802696fb6bc1f2b7c18c8b49ce319b6b14954` and `5b0b89868e515456d1e6f6b51f4eba684b29418b` are preserved locally. This release incorporates their source and the final cover-removal export correction. Use the PR's actual HEAD and Netlify published deployment to establish current status; do not infer publication from this document.
+The verified starting source is main `68725e7f607ab4cbf81b5d29d6211f9fcf8c0a90`, published by Ready Git deployment `6b08aadd779e4240d73c1504`. All 191 source files in the supplied baseline matched that Git tree. This R2 package contains additional working-source changes; it is not that production commit and is not published merely because the ZIP exists.
 
-At reconciliation, main and published Ready deployment `6b0742429b45f7cb67b50ff1` both pointed at the baseline above. No feature PR existed. The isolated checkout is `/workspace/scratch/9d4c092ee58b/EZTakeoff`; original recovered work remains in `/workspace/scratch/59bc4f27c74e/EZTakeoff`.
+The owner permanently uses complete source-and-build ZIP releases with one PowerShell block. `Release-EZTakeoff.py` in the archive performs normal Git/GitHub CLI synchronization and Netlify verification on the owner's computer. Do not use GitHub Create Tree, connector file writes, manual deployment uploads, or GitHub Actions. The proposed branch is `release/geometry-cad-lighting-20261126-r2`. Main must still equal the expected baseline before a new merge.
 
-## Implemented scope
+## Implemented batch
 
-- Horizontal bottom finish catalog changes main decking, individual picture-frame/breaker courses, stairs, fascia, risers, drink board, railing style/color, cover style/frame/roof/ceiling, screen/sunroom finishes, and independent concrete patterns/colors/borders while keeping the 3D scene visible. Inactive selections stay saved; camera and Day/Evening are view state.
-- Compatible TimberTech post, cap, stair and in-deck lights share actual placement and quantities. Fans/can lights are generic design allowances. Removing a cover retains saved enclosure choices without suppressing open-deck rails/lights or exporting inactive enclosure/privacy/door materials. Unsupported drink-board previews are explained; legacy selections resolve consistently with the renderer.
-- Studio exposes materials and opens an independent editable Admin Takeoff copy with exact geometry, customer, finishes, cover/enclosure, concrete and lighting context. Existing Admin drafts, original consultations, photos and imported pricing remain intact. Detailed selections are retained in exported scope notes.
-- Concrete callouts avoid collisions; crowded edge dimensions remain complete in paginated slab schedules. Long names, stock notes, quantities, Unicode text and job/slab titles continue across export pages.
-- `scripts/package-build-checkpoint.py` creates a source/build ZIP with `START_HERE.md`, `CHECKPOINT.json`, `FILE_MAP.md`, `VERIFICATION.md` and file hashes. Read the checkpoint first and only relevant files afterward. The archive records its own source and supplied release evidence.
+- Renaissance decorative ends now use a straight upper edge, an ogee-cut underside, and fixed-height longitudinal grooves. Original part illustrations and reference photography guide the visual approximation. This is not verified factory CAD. The exposed length respects the cover/header; post/trim clearance follows the whole footprint beneath the roof.
+- Removed the supplemental sunroom floor patch and its takeoff. Shared physical deck strips, including narrow perimeter rips, determine visible boards and field cuts.
+- Side picture-frame and breaker courses receive actual flat pressure-treated nailers, 1.5 inches thick, sized/ripped from 2x6/8/10/12 stock. Geometry, cut ordering and CAD use the same pieces, including multiple courses, reversed/concave/angled outlines and lower tiers.
+- S&S defaults: 18-inch diameter x 12-inch deep footings, 3 eighty-pound bags per standard footing; stair landing 4 x 4 feet x 4 inches, 12 bags with an explicit editable 25% ordering allowance. Custom dimensions/yield remain editable and existing explicit values persist. These are company estimating defaults, not a statewide code claim.
+- Screen/sunroom quick actions open and focus their settings with feedback. Reopening unchanged settings preserves revision/pricing. Added two owner-authorized, sanitized railing reference photos.
+- Symmetric canopy lighting, all enabled fixture lenses illuminated in Evening, optional fan lights, and stair-top guard posts clear enclosure walls while preserving selected stair guards.
+- Deck construction sheets share model geometry and edited material orders. New vector PDF and native inch-based DXF include dimensions, footing/setout, framing/nailers, decking/stairs, elevation/details, connection keys and schedules. Existing Admin exports and Studio handoff remain.
 
-## Verification and release gates
+## Verification and next action
 
-Prior recovered evidence: 39 regression suites plus TypeScript/Vite; actual concrete/material/combined PDFs (4/6/12 pages), all combined pages visually reviewed; browser finish, responsive, camera, lighting and persistence checks. Current focused regression additionally demonstrates that removing a cover suppresses stale Elite/Lumino/Dolce/privacy/door export scope while saved choices restore intact; it fails against the old bridge code.
+Read the archive's `VERIFICATION.md` and `CHECKPOINT.json` for the exact completed gate and evidence. Independent DXF audits and PDF rendering validate exported files. Actual S-curve triangle coordinates were rendered and numerically audited offline. Browser end-to-end/WebGL review was unavailable in this environment; do not describe it as passed. Production is unchanged until the owner runs the supplied PowerShell release block. The helper requires exact-head Ready preview, pinned PR merge and matching published Ready main, then writes `release-result.json` and prints `SYNC COMPLETE`.
 
-The fresh final canonical gate passed all 39 suites plus TypeScript/Vite on November 26. The final built-app browser workflows passed finish controls, responsive layouts at 1440/1024/390 px, reload persistence, concrete finishes, independent Takeoff edits, original design/draft preservation and actual concrete/material/combined PDF downloads. Full QA is outside the repository under `/workspace/scratch/9d4c092ee58b/qa`; the ZIP includes the concise evidence, not private QA media.
+Future exact solid/STEP work remains separate: evaluate Replicad/OpenCascade.js in a lazy worker with CadQuery reference solids. No browser solid engine or application STEP export is claimed in R2. Structural connections still require approved project details.
 
-**Publishing is blocked:** automatic approval review rejected the first attempted GitHub source-blob upload, interpreting the ZIP request as insufficient authorization to share source to the public repository. Zero uploads were verified; no remote branch, PR or deployment was changed. GitHub admin/push access is available, so reconnecting GitHub is not the remedy. Main and published Ready production were rechecked at `5847f65b9f2225bb18d781d19f39ee1d2e15fefb` / `6b0742429b45f7cb67b50ff1`.
-
-Next: after explicit user authorization to publish this tested source to public `SSDesignBuild/EZTakeoff` and deploy production, upload programmatically from files without printing source/encoded assets; require a Ready Netlify preview for the exact remote head; merge pinned to that head; verify published Ready production equals merged main; update the ZIP. Do not retry the blocked upload through another route before authorization. The archive and this local checkpoint preserve all completed work.
-
-## Persistent safeguards
-
-Netlify alone runs automatic CI: `npm run assets:sync && npm test && npm run build`; GitHub Actions stays manual-only. Preserve Admin service tabs, shared geometry, cut optimization, customer privacy and approved stock lengths. Manufacturer acceptance: `LIVE_STUDIO_CATALOG_20261125.md` and `SIKA_CONCRETE_CATALOG_20261125.md`. Concrete relief, uncalibrated colors and undimensioned details remain illustrative; do not invent factory BOMs, engineering approval or prices.
-
-Follow the revised `DEVELOPMENT_WORKFLOW.md`: no Create Tree; small individual text writes or authorized file-based Git; preserve the ZIP before publication. Do not reload old chats, full commits/logs or encoded asset bundles. This workflow-only archive refresh did not change application code, rebuild, publish, or re-run application QA. Keep this checkpoint under 700 words. Keep QA media and customer data out of source and ZIPs. Providing an archive reduces repeated retrieval; it does not change ChatGPT context limits or establish a platform repair.
+Resume from this checkpoint and the latest ZIP; compare live main/published state. Do not recursively load previous conversations. Preserve Admin Takeoff, Design Studio, shared geometry, stock optimization, customer data and external pricing. Keep this checkpoint below 700 words. Raw customer media, factory source drawings and private QA stay outside published source.

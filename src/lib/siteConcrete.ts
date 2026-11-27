@@ -1,12 +1,14 @@
 import { buildDeckModel, buildLowerTierDeckModel, type DeckModel } from './deckModel';
 import { stairFlightFrame } from './stairRailVisualGeometry';
-import { landingSurface, planStairLanding, LANDING_CONCRETE_WASTE_FACTOR,
+import { landingSurface, planStairLandingForValues,
   type StairLandingPlan } from './stairConcreteLanding';
 import type { DeckPoint } from './types';
 import { resolveConcreteAppearance,type ConcreteAppearanceSelection } from './sikaConcreteCatalog';
 import { clipDeckFace,subtractDeckFace,deckFaceArea,type DeckFacePoint } from './deckSurfaceClipping';
 
 type SiteValues=Record<string,string|number|boolean>;
+/** Existing drawn-slab allowance stays independent of S&S stair-pad ordering. */
+const SITE_CONCRETE_WASTE_FACTOR=1.05;
 export interface SiteConcreteArea extends ConcreteAppearanceSelection {
   id:string;
   name:string;
@@ -293,8 +295,7 @@ function modelLandings(model:DeckModel,values:SiteValues,tier:'main'|'lower'):Si
     if(placement.edgeIndex===null)return [];
     const frame=stairFlightFrame(model,placement,[0,0]);
     if(!frame)return [];
-    const landing=planStairLanding(frame.widthFt,Number(values.stairLandingDepthFt??4),
-      Number(values.stairLandingThicknessIn??5));
+    const landing=planStairLandingForValues(frame.widthFt,values);
     if(!landing)return [];
     const treads=Math.max(1,model.stairTreadsPerRun);
     const run=treads*Math.max(.65,model.stairRunFt/treads);
@@ -332,7 +333,7 @@ export function planSiteConcrete(values:SiteValues):SiteConcretePlan{
         ...(appearance.borderWidthIn?[appearance.border.sourceUrl,appearance.borderColor.sourceUrl]:[])])),
       visualization:'Manufacturer-reference pattern illustration; approximate screen colors and surface relief.'};
     return {...area,areaSqFt,perimeterFt,volumeCuFt,volumeCuYd,
-      wasteAdjustedCuYd:volumeCuYd*LANDING_CONCRETE_WASTE_FACTOR,
+      wasteAdjustedCuYd:volumeCuYd*SITE_CONCRETE_WASTE_FACTOR,
       fieldFinishAreaSqFt:decorative.fieldAreaSqFt,borderFinishAreaSqFt:decorative.borderAreaSqFt,
       borderLengthFt:decorative.borderLengthFt,finish};
   });
@@ -370,7 +371,7 @@ export function planSiteConcrete(values:SiteValues):SiteConcretePlan{
   const totalVolumeCuFt=areas.reduce((sum,area)=>sum+area.volumeCuFt,0);
   const canQuantify=validationIssues.length===0;
   return {areas,totalAreaSqFt,totalVolumeCuFt,totalVolumeCuYd:totalVolumeCuFt/27,
-    orderVolumeCuYd:canQuantify?totalVolumeCuFt/27*LANDING_CONCRETE_WASTE_FACTOR:0,
+    orderVolumeCuYd:canQuantify?totalVolumeCuFt/27*SITE_CONCRETE_WASTE_FACTOR:0,
     canQuantify,validationIssues,finishWarnings};
 }
 

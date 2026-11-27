@@ -1,6 +1,9 @@
 import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, LockedPostPoint } from './types';
 import { ExactSupportPost, parseExactPostLayouts, validateExactPostLayout } from './exactPostLayouts';
 import { stockBoardSegments } from './finishStockGeometry';
+import { surfaceStrips } from './deckSurfaceLayout';
+import { planDeckFinishSupport, type DeckFinishSupportPlan } from './deckFinishSupport';
+export { DECK_BOARD_FACE_FT, DECK_GAP_FT } from './deckBoardDimensions';
 
 export interface DeckInputs {
   deckShape?: string | number | boolean;
@@ -38,6 +41,7 @@ export interface DeckInputs {
   postSizeChoice?: string | number | boolean;
   footingDiameterIn?: string | number | boolean;
   footingDepthIn?: string | number | boolean;
+  concreteBag80lbYieldCuFt?: string | number | boolean;
   beamEdits?: string | number | boolean;
   beamCantilever?: string | number | boolean;
   multiTierEnabled?: string | number | boolean;
@@ -147,6 +151,8 @@ export interface DeckModel {
   footingTubeStockIn: number;
   footingTubeCount: number;
   footingBagsPerPost: number;
+  footingVolumeCuFt: number;
+  concreteBag80lbYieldCuFt: number;
   postLocations: { id: string; reference: string; beamIndex: number | null; x: number; y: number; locked: boolean }[];
   postLayoutIssues: string[];
   postEngineeringNotes: string[];
@@ -159,6 +165,7 @@ export interface DeckModel {
   blockingCount: number;
   blockingLf: number;
   blockingBoardCount: number;
+  finishSupport: DeckFinishSupportPlan;
   pictureFrameCount: number;
   pictureFrameHouseSide: boolean;
   pictureFrameSegments: DeckEdgeSegment[];
@@ -216,10 +223,6 @@ const DEFAULT_SHAPE: DeckPoint[] = [
 ];
 const STOCK_LENGTHS = [8, 10, 12, 16, 20];
 const BOARD_STOCK_LENGTHS = [8, 12, 16, 20];
-/** Installed decking face and gap shared with the Admin Takeoff and 3D. */
-export const DECK_BOARD_FACE_FT = 5.5 / 12;
-export const DECK_GAP_FT = 0.125 / 12;
-const EFFECTIVE_COVERAGE = DECK_BOARD_FACE_FT + DECK_GAP_FT;
 const JOIST_SPACING = 1;
 const BEAM_TARGET_SPACING = 10;
 const POST_MAX_SPACING = 7.5;
@@ -394,7 +397,7 @@ function edgeSegments(points: DeckPoint[]): DeckEdgeSegment[] {
   });
 }
 
-function scanlineIntersections(points: DeckPoint[], axis: 'horizontal' | 'vertical', position: number) {
+export function scanlineIntersections(points: DeckPoint[], axis: 'horizontal' | 'vertical', position: number) {
   const intersections: number[] = [];
   for (let index = 0; index < points.length; index += 1) {
     const current = points[index];
@@ -574,12 +577,8 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   // A single/double/triple breaker board is one split location with 1, 2, or 3 adjacent deck boards.
   // Do not create multiple split locations when the user chooses double or triple.
   const breakerBoardPositions = breakerBoardCount > 0 ? [round2((boardRun === 'width' ? minX : minY) + fieldRunLength / 2)] : [];
-  const boardLengths: number[] = [];
-  if (boardRun === 'width') {
-    for (let y = minY + EFFECTIVE_COVERAGE / 2; y < maxY; y += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'horizontal', y).forEach((pair) => boardStockSegments(pair.length, breakerBoardPositions.map((x) => x - pair.start)).forEach((len) => boardLengths.push(len)));
-  } else {
-    for (let x = minX + EFFECTIVE_COVERAGE / 2; x < maxX; x += EFFECTIVE_COVERAGE) scanlineIntersections(points, 'vertical', x).forEach((pair) => boardStockSegments(pair.length, breakerBoardPositions.map((y) => y - pair.start)).forEach((len) => boardLengths.push(len)));
-  }
+  const boardLengths = surfaceStrips({points,boardRun,minX,maxX,minY,maxY,
+    pictureFrameSegments,pictureFrameCount,breakerBoardPositions,breakerBoardCount}).map(piece=>piece.lengthFt);
   const boardGroups = accumulateGroups(boardLengths);
   const borderGroups = inputs.borderSameBoard ? accumulateGroups(pictureFrameSegments.map((segment) => segment.length)) : [];
 
@@ -634,17 +633,9 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
     ? requestedJoistSize : automaticJoistSize;
 
   const baseJoistAxisPositions = generateJoistPositions(joistDirection === 'vertical' ? minX : minY, joistDirection === 'vertical' ? maxX : maxY);
-  // Picture-frame support joists need to sit just inside the double band/rim boards,
-  // not centered on top of the band boards in the drawing. The physical support
-  // location is 2 in inboard from the inside face of the double rim pack
-  // (roughly 3 in thick), so use a 5 in offset from the deck perimeter.
-  const pictureFrameSupportOffsetFt = 5 / 12;
-  const breakerBoardSupportOffsetFt = 2 / 12;
-  const supportJoistPositions = [
-    ...(pictureFrameCount > 0 ? (joistDirection === 'vertical' ? [minX + pictureFrameSupportOffsetFt, maxX - pictureFrameSupportOffsetFt] : [minY + pictureFrameSupportOffsetFt, maxY - pictureFrameSupportOffsetFt]) : []),
-    ...breakerBoardPositions.flatMap((pos) => breakerBoardCount > 0 ? [pos - breakerBoardSupportOffsetFt, pos + breakerBoardSupportOffsetFt] : []),
-  ].filter((value) => value > (joistDirection === 'vertical' ? minX : minY) + 0.05 && value < (joistDirection === 'vertical' ? maxX : maxY) - 0.05);
-  const joistAxisPositions = uniqueSorted([...baseJoistAxisPositions, ...supportJoistPositions]);
+  // Continuous flat nailers provide finish backing. Do not invent upright
+  // joists at fixed 5-in / 2-in offsets as a proxy for that physical lumber.
+  const joistAxisPositions = baseJoistAxisPositions;
   const joistLengthsRaw: number[] = [];
   if (joistDirection === 'vertical') {
     joistAxisPositions.forEach((x) => scanlineIntersections(points, 'vertical', x).forEach((pair) => joistLengthsRaw.push(pair.length)));
@@ -765,25 +756,24 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const bandSegments = accumulateGroups([...segments.map((segment) => segment.length), ...segments.map((segment) => segment.length)]);
   const doubleBandLf = round2(polygonPerimeter(points) * 2);
   const blockingRows = Math.max(0, pictureFrameCount) + Math.max(0, breakerBoardCount);
-  const pictureFrameSupportSegments = pictureFrameSegments.filter((segment) => (joistDirection === 'vertical' ? segment.orientation === 'vertical' : segment.orientation === 'horizontal')); // picture-frame boards running parallel with joists need 1 ft O.C. support blocking
-  const pictureFrameBlockingLf = round2(pictureFrameSupportSegments.reduce((sum, segment) => sum + Math.max(0, Math.floor(segment.length)) * JOIST_SPACING, 0) * Math.max(0, pictureFrameCount));
-  const breakerBlockingLf = round2(breakerBoardPositions.reduce((sum, pos) => sum + (boardRun === 'width'
-    ? scanlineIntersections(points, 'vertical', pos).reduce((acc, pair) => acc + Math.max(0, Math.floor(pair.end - pair.start)) * JOIST_SPACING, 0)
-    : scanlineIntersections(points, 'horizontal', pos).reduce((acc, pair) => acc + Math.max(0, Math.floor(pair.end - pair.start)) * JOIST_SPACING, 0)), 0) * Math.max(0, breakerBoardCount));
-  const blockingLf = round2(pictureFrameBlockingLf + breakerBlockingLf);
-  const blockingCount = Math.max(0, Math.round(blockingLf / JOIST_SPACING));
-  const blockingBoardCount = Math.max(0, Math.ceil(blockingLf / 12));
+  const finishSupport=planDeckFinishSupport({points,edgeSegments:segments,joistDirection,
+    joistPositions:joistAxisPositions,pictureFrameSegments,pictureFrameCount,breakerBoardCount,breakerBoardPositions});
+  const blockingLf = round2(finishSupport.totalLinearFt);
+  const blockingCount = finishSupport.pieces.length;
+  const blockingBoardCount = finishSupport.stock.reduce((sum,stock)=>sum+stock.quantity,0);
   const joistTapeLf = round2(joistLengthsRaw.reduce((sum, length) => sum + length, 0) + doubleBandLf / 2);
   const joistHangers = joistCount * 2;
   const angledJoistHangers = segments.filter((segment) => segment.orientation === 'angled').reduce((sum, segment) => sum + Math.max(1, Math.ceil(segment.length / JOIST_SPACING)), 0);
   const rafterTies = joistCount * Math.max(1, beamLines.length);
   const postLength = chooseStockLength(Number(inputs.deckHeight ?? 8) + 2, [8, 10, 12, 16]);
   const postSize: DeckModel['postSize'] = String(inputs.postSizeChoice ?? '6x6') === '8x8' ? '8x8' : '6x6';
-  const footingDiameterIn = clamp(Number(inputs.footingDiameterIn ?? 12) || 12, 8, 48);
-  const footingDepthIn = clamp(Number(inputs.footingDepthIn ?? 24) || 24, 12, 96);
+  const footingDiameterIn = clamp(Number(inputs.footingDiameterIn ?? 18) || 18, 8, 48);
+  const footingDepthIn = clamp(Number(inputs.footingDepthIn ?? 12) || 12, 12, 96);
   const footingTubeStockIn = footingDepthIn <= 48 ? 48 : 96;
   const footingTubeCount = Math.ceil(postCount / Math.max(1, Math.floor(footingTubeStockIn / footingDepthIn)));
-  const footingBagsPerPost = Math.ceil((Math.PI * Math.pow(footingDiameterIn / 24, 2) * (footingDepthIn / 12)) / 0.6);
+  const concreteBag80lbYieldCuFt=clamp(Number(inputs.concreteBag80lbYieldCuFt??.60)||.60,.1,1);
+  const footingVolumeCuFt=Math.PI*Math.pow(footingDiameterIn/24,2)*(footingDepthIn/12);
+  const footingBagsPerPost = Math.ceil(footingVolumeCuFt/concreteBag80lbYieldCuFt-1e-9);
   const concreteBags = postCount * footingBagsPerPost;
   const postBases = postCount;
   const concreteAnchors = postCount;
@@ -792,7 +782,8 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const stairRiseFt = Number(inputs.stairRise ?? 0) > 0 ? Number(inputs.stairRise ?? 0) : Number(inputs.deckHeight ?? 0);
   const plannedStairRisers = stairRiseFt > 0 ? Math.ceil((stairRiseFt * 12) / 7.5) : 0;
   const plannedStairTreadsPerRun = plannedStairRisers > 0 ? Math.max(plannedStairRisers - 1, 1) : 0;
-  const plannedStairRunFt = round2(plannedStairTreadsPerRun * (11 / 12));
+  // Keep physical tread geometry exact; display formatting alone rounds.
+  const plannedStairRunFt = plannedStairTreadsPerRun * (11 / 12);
 
   const stairEdgeIndexValue = Number(inputs.stairEdgeIndex ?? -1);
   const stairEdge = stairCountInput > 0 && stairEdgeIndexValue >= 0 && stairEdgeIndexValue < segments.length ? segments[stairEdgeIndexValue] : null;
@@ -858,9 +849,11 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const fasciaPieces = useFascia ? Math.ceil(fasciaLf / 12) : 0;
 
   const topRailSegments = stairPlacements.reduce((coverage, placement) => deriveTopRailSegments(coverage, placement), railCoverage);
-  const topRailRun = round2(topRailSegments.reduce((sum, item) => sum + (item.end - item.start), 0));
-  const stairRailRun = stairCount > 0 && stairRailSideCount > 0 ? round2(stairRunFt * stairRailSideCount) : 0;
-  const railingRun = round2(Number(inputs.perimeterRailingFt ?? 0) || (topRailRun + stairRailRun));
+  // Preserve exact shared geometry here; format quantities only at display.
+  // Rounding each flight used to undercount a 77-inch run across selected sides.
+  const topRailRun = topRailSegments.reduce((sum, item) => sum + (item.end - item.start), 0);
+  const stairRailRun = stairCount > 0 && stairRailSideCount > 0 ? stairRunFt * stairRailSideCount : 0;
+  const railingRun = Number(inputs.perimeterRailingFt ?? 0) || (topRailRun + stairRailRun);
   let railingSections6 = 0;
   let railingSections8 = 0;
   topRailSegments.forEach((segment) => {
@@ -903,7 +896,7 @@ export function buildDeckModel(inputs: DeckInputs): DeckModel {
   const deckFastenerBoxes = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? Math.ceil(deckFastenerCount / 365) : Math.ceil(deckFastenerCount / 1750);
   const fastenerType = String(inputs.deckingType ?? 'composite') === 'pressure-treated' ? 'top screws' : 'hidden camo screws';
 
-  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, automaticJoistSize, joistStockLength, joistLengthGroups, beamLines, angledBeamLines, beamMemberSize, automaticBeamSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, postSize, footingDiameterIn, footingDepthIn, footingTubeStockIn, footingTubeCount, footingBagsPerPost, postLocations, postLayoutIssues, postEngineeringNotes, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, pictureFrameCount, pictureFrameHouseSide, pictureFrameSegments, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, angledJoistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaHouseSide, fasciaSegments, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), houseEdgeIndices, stairPlacement, stairPlacements };
+  return { points, area: round2(polygonArea(points)), perimeter: round2(polygonPerimeter(points)), width, depth, minX, minY, maxX, maxY, attachment, isFreestanding, boardRun, joistDirection, deckingDirection, boardGroups, borderGroups, exposedPerimeter, houseContactLength, joistSpacingFt: JOIST_SPACING, joistCount, joistPositions: joistAxisPositions, supportSpans, joistSize, automaticJoistSize, joistStockLength, joistLengthGroups, beamLines, angledBeamLines, beamMemberSize, automaticBeamSize, beamBoardGroups: beamBoardGroupsMerged, beamSegmentsCount, postCount, postSize, footingDiameterIn, footingDepthIn, footingTubeStockIn, footingTubeCount, footingBagsPerPost, footingVolumeCuFt, concreteBag80lbYieldCuFt, postLocations, postLayoutIssues, postEngineeringNotes, lockedPosts, beamEdits, postLength, doubleBandLf, doubleBandGroups: bandSegments, blockingRows, blockingCount, blockingLf, blockingBoardCount, finishSupport, pictureFrameCount, pictureFrameHouseSide, pictureFrameSegments, breakerBoardCount, breakerBoardPositions, requiredFieldBoardBreaks, joistTapeLf, joistHangers, angledJoistHangers, rafterTies, carriageBolts, lateralLoadBrackets, sdsCorners, deckFastenerCount, deckFastenerBoxes, fastenerType, concreteBags, postBases, concreteAnchors, fasciaHouseSide, fasciaSegments, fasciaLf, fasciaPieces, stairCount, stairRiseFt, stairRisers, stairTreadsPerRun, stairRunFt, stairTreadGroups, stairStringers, stairStringerBoardCount, stairStringerLength, stairStringerCutLength, stairRailingLeft, stairRailingRight, stairRailSideCount, railingRun, railingSections6, railingSections8, railingPosts, edgeSegments: segments, exposedSegments, railCoverage, manualRailingEdges: Array.from(new Set(railCoverage.map((item) => item.edgeIndex))).sort((a,b)=>a-b), houseEdgeIndices, stairPlacement, stairPlacements };
 }
 
 

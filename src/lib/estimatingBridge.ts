@@ -4,11 +4,10 @@ import type { ConsultationProject, EstimateResponse, EstimateTier } from './cons
 import type { MaterialItem } from './types';
 import { renaissanceReferenceIssues } from './renaissanceGuidance';
 import { effectivePcaKickPlateIn } from './pcaScreenDoorGeometry';
-import { planStairLanding, landingSurface } from './stairConcreteLanding';
+import { planStairLandingForValues, landingSurface } from './stairConcreteLanding';
 import { planRenaissanceCoverWalls } from './renaissanceCoverWallLayout';
 import { eliteSunroomTakeoff,currentEliteSunroomSettings,
  eliteWallSections } from './eliteSunroomStudio';
-import { planEliteDeckFloorClosure } from './eliteDeckFloorClosure';
 import { planSiteConcrete, type SiteConcreteAreaPlan } from './siteConcrete';
 import { siteConcreteFinishMaterials } from './siteConcreteFinishMaterials';
 import { planLightingAddons,lightingEstimateValues,type LightingAddonPlan } from './lightingAddons';
@@ -54,9 +53,6 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
   const elite=screenStyle==='elite-add-a-room'
     ?eliteSunroomTakeoff(project,eliteWalls):null;
   const eliteSettings=currentEliteSunroomSettings(project);
-  const eliteFloorClosure=screenStyle==='elite-add-a-room'
-    ?planEliteDeckFloorClosure(deck,eliteWalls,eliteSettings.roomSystem,
-      project.values.deckingType):null;
   const eliteWindowSelections=Object.fromEntries(actualCoverWalls.map(wall=>[
     'elite'+wall.id.charAt(0).toUpperCase()+wall.id.slice(1)+'SectionsJson',
     JSON.stringify(eliteWallSections(project,wall)),
@@ -64,10 +60,8 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
 
   const stairLandings=landingSurface(project.values.stairLandingSurface)==='bare-ground'
     ?[...deck.stairPlacements,...(lowerDeck?.stairPlacements??[])].filter(placement=>placement.start&&placement.end).map(placement=>
-      planStairLanding(Math.hypot(placement.end!.x-placement.start!.x,
-        placement.end!.y-placement.start!.y),
-        Number(project.values.stairLandingDepthFt??4),
-        Number(project.values.stairLandingThicknessIn??5))):[];
+      planStairLandingForValues(Math.hypot(placement.end!.x-placement.start!.x,
+        placement.end!.y-placement.start!.y),project.values)):[];
   const validLandings=stairLandings.filter((p):p is NonNullable<typeof p>=>p!==null);
   const landingBags=validLandings.reduce((sum,p)=>sum+p.bags80lb,0);
   const blockers=[...(estimate.validationIssues??[]),...siteConcrete.validationIssues,...siteConcrete.finishWarnings,...lighting.issues];
@@ -109,8 +103,6 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
       blockers.push('2-inch non-thermal Add-A-Room paired with clear insulated glazing does not create a thermally broken system; confirm clip/glass compatibility and use classification.');
     if(elite?.sections.some(section=>section.doorType==='slider'))
       blockers.push('Legacy sliding-glass door selected; it is NOT the specified Elite Prime Full View single outswing door. Verify the actual door unit and adapter.');
-    if(eliteFloorClosure?.notes.some(s=>s.includes('exceed purchasable')))
-      blockers.push(...eliteFloorClosure.notes);
   }
   if(screenStyle==='lumino-sunroom'){
     blockers.push('Lumino glazing, insulated knee-wall profiles, window glass specifications, framing, flashing, thermal ratings and exact supplier takeoff are NOT verified by the design visual. Obtain a vendor-approved sunroom BOM and project engineering.');
@@ -193,31 +185,20 @@ export function createEstimateHandoff(project:ConsultationProject):EstimateHando
           ' cu yd before allowance; top elevation '+area.elevationFt+' ft').join(' | '),
       }]:[]),
       ...siteConcreteFinishMaterials(siteConcrete),
-      ...(eliteFloorClosure?.stock??[]).map(board=>({
-        name:'Interior deck closure board at Elite sunroom wall',
-        category:'Sales sunroom floor transition — additional decking stock',
-        quantity:board.quantity,unit:'boards',
-        stockRecommendation:board.stockLengthFt+' ft '+String(project.values.deckingType??'composite')+
-          ' boards; matching '+String(project.values.deckingMaterial??'selected field decking'),
-        notes:'Additional physical 5.5-in deck-finish scribe course immediately inside the Elite base receiving channel, with 1/8-in expansion. '+
-          'Optimized cuts total '+(eliteFloorClosure?.totalLinearFt??0).toFixed(2)+
-          ' lf across the selected sunroom walls; reuse compatible field/picture-frame offcuts when supported. '+
-          'Verify door threshold clearances, moisture movement, exact stock and backed seams.',
-      })),
       ...(landingBags>0?[{
       name:'80-lb bagged concrete — on-site stair landing pads',
       category:'Sales stair landing — supplemental concrete',quantity:landingBags,
-      unit:'bags',stockRecommendation:'80-lb concrete mix; nominal 0.60 cu ft yield per bag',
+      unit:'bags',stockRecommendation:'80-lb concrete mix; '+(validLandings[0]?.bagYieldCuFt??.6).toFixed(2)+' cu ft yield per bag',
       notes:validLandings.map((p,i)=>
         'Pad '+(i+1)+': '+p.widthFt.toFixed(2)+' ft × '+p.depthFt.toFixed(2)+
-        ' ft × '+p.thicknessIn+' in; '+p.bags80lb+' bags incl. 5% allowance').join(' | ')+
+        ' ft × '+p.thicknessIn+' in; '+p.volumeCuFt.toFixed(3)+' cu ft actual volume; '+p.bags80lb+
+        ' bags incl. '+p.orderAllowancePercent+'% S&S ordering allowance').join(' | ')+
         '. Review subbase, reinforcement, disposal, forms and local specifications separately.',
     }]:[])],blockers,
     assumptions:[...estimate.orderNotes,...(elite?.estimate.orderNotes??[]),...lighting.notes,
       ...(siteConcrete.areas.length?['Site concrete quantities use the saved polygon boundaries and selected slab thicknesses. The volume includes a 5% allowance; reinforcement, subbase, excavation and drainage are separate scope.']:[]),
       ...(siteConcrete.areas.some(area=>area.finish.stampId!=='plain'||area.finish.colorId!=='natural'||area.borderFinishAreaSqFt>0)
-        ?['Decorative concrete field and border surface quantities partition the existing slab. Pattern references are SikaStamp / Butterfield; selected colors are SikaColor-200 surface hardener. Screen color, stamp relief and layout are approximations; physical samples, release/sealer system and installer tool requirements remain to be specified.']:[]),
-      ...(eliteFloorClosure?.notes??[])],
+        ?['Decorative concrete field and border surface quantities partition the existing slab. Pattern references are SikaStamp / Butterfield; selected colors are SikaColor-200 surface hardener. Screen color, stamp relief and layout are approximations; physical samples, release/sealer system and installer tool requirements remain to be specified.']:[])],
   };
 }
 const isRecord=(p:unknown):p is Record<string,unknown>=>!!p&&typeof p==='object'&&!Array.isArray(p);

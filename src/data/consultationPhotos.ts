@@ -1,6 +1,10 @@
 /** Verified installed-product photographs. Never use a rendering of a different brand as a stand-in. */
 export type PhotoReference={url:string;source:string;credit:string;qualifier?:string};
 export const railingPhotos:Record<string,PhotoReference>={
+  'sns-wood-pickets':{url:'/assets/ss-railing/ss-wood-picket-railing.webp',source:'',
+    credit:'S&S Design Build · completed project',qualifier:'Pressure-treated wood pickets'},
+  'sns-wood-round':{url:'/assets/ss-railing/ss-wood-round-baluster-railing.webp',source:'',
+    credit:'S&S Design Build · completed project',qualifier:'Wood frame with round black aluminum balusters'},
   'tt-ire-classic':{
     url:'https://dev.timbertech-europe.com/images/tt/products/railing/impression-rail-express/TTAZ-Brownstone-ImpressionRailExpress-Black.jpg',
     source:'https://www.timbertech.com/product/impressionrail-express/',

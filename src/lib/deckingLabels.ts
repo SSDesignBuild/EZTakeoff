@@ -1,8 +1,6 @@
 import { DeckModel,boardStockSegments } from './deckModel';
+import { surfaceStrips } from './deckSurfaceLayout';
 
-const DECK_BOARD_FACE = 5.5 / 12;
-const DECK_GAP = 0.125 / 12;
-const EFFECTIVE_COVERAGE = DECK_BOARD_FACE + DECK_GAP;
 export const PICTURE_FRAME_OVERHANG_ALLOWANCE_FT = 2 / 12;
 
 export interface DeckingLabelGroup {
@@ -81,22 +79,10 @@ export function deriveDeckingLabelPlan(deck: DeckModel): DeckingLabelPlan {
   const pictureFrameLabels: Record<string, string> = {};
   const breakerLabels: Record<string, string> = {};
 
-  const fieldLengths: number[] = [];
-  if (deck.boardRun === 'width') {
-    for (let y = deck.minY + EFFECTIVE_COVERAGE / 2; y < deck.maxY; y += EFFECTIVE_COVERAGE) {
-      scanlineIntersections(deck.points, 'horizontal', y).forEach((pair) => {
-        const splits = deck.breakerBoardPositions.map((x) => x - pair.start);
-        boardStockSegments(pair.end - pair.start, splits).forEach((length) => fieldLengths.push(length));
-      });
-    }
-  } else {
-    for (let x = deck.minX + EFFECTIVE_COVERAGE / 2; x < deck.maxX; x += EFFECTIVE_COVERAGE) {
-      scanlineIntersections(deck.points, 'vertical', x).forEach((pair) => {
-        const splits = deck.breakerBoardPositions.map((y) => y - pair.start);
-        boardStockSegments(pair.end - pair.start, splits).forEach((length) => fieldLengths.push(length));
-      });
-    }
-  }
+  // The exact installed field layout includes narrow perimeter rips and
+  // excludes real picture-frame/breaker footprints. Use it for purchasing
+  // as well as 3D so an enclosure never needs an extra floor patch board.
+  const fieldLengths = surfaceStrips(deck).map(piece=>piece.lengthFt);
 
   groupedLengths(fieldLengths).forEach(({ cutLength, count }) => {
     const label = alphaLabel(cursor++);

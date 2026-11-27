@@ -70,7 +70,7 @@ assert.ok(render.includes("product.family==='full-trusses'")&&
 assert.ok(render.includes('RenaissanceCurvedTrussEnd'),'Contempo and Classico need sculpted tail contour');
 assert.ok(!render.includes("Math.ceil(depth/7)+1"),'remove sideways generic full-truss array');
 assert.ok(!render.includes("radius={.075}"),'remove cylinder proxy truss geometry');
-assert.ok(extrude.includes('renaissanceTrussTailDepthFt'),'Decorative tail must follow the same bounded manufacturer cap trace as one-piece trusses');
+assert.ok(extrude.includes('buildRenaissanceTrussCutMesh'),'Decorative tail must follow the same bounded manufacturer cap trace as one-piece trusses');
 assert.ok(extrude.includes('ExtrudeGeometry'),'contour must be a 3D mesh');
 assert.ok(!render.includes('roofWidthFt:width,eaveFt,'),
   '3D roofline inputs must refer to the actual eaveY variable');

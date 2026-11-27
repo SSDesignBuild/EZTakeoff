@@ -8,8 +8,8 @@ import type { P2 } from './Primitives';
 import type { GutterRun } from '../../lib/renaissanceGutterGeometry';
 import { architecturalGutterOutlineFt,miterAlongFt } from '../../lib/renaissanceGutterGeometry';
 import { renaissanceFormedProfileContour,type RenaissanceFormedMember } from '../../lib/renaissanceFactoryProfiles';
-import { renaissanceTrussTailDepthFt,renaissanceTrussTailTopDropFt,
- renaissanceTrussTailLowerDropFt,type RenaissanceTrussEndStyle } from '../../lib/renaissanceTrussSilhouette';
+import type { RenaissanceTrussEndStyle } from '../../lib/renaissanceTrussSilhouette';
+import { buildRenaissanceTrussCutMesh } from '../../lib/renaissanceTrussCutGeometry';
 import type { DownspoutLayout } from '../../lib/renaissanceDownspoutRouting';
 
 /**
@@ -383,51 +383,11 @@ export function RenaissanceTruss({from,to,color}:{
  * are presentation interpolation, not a factory die.
  */
 function makeContinuousFormedTrussGeometry(length:number,width:number,
- height:number,rise:number,endStyle:RenaissanceTrussEndStyle){
- const divisions=Math.max(64,Math.ceil(length/.14));
- const stations=[...new Set([0,length,
-  ...Array.from({length:divisions+1},(_,i)=>length*i/divisions)])]
-  .sort((a,b)=>a-b);
- const wall=inchToFoot(RENAISSANCE_TRUSS.wallIn);
- const rings=(inner:boolean)=>{
-  return stations.map(z=>{
-   // Unlike a flat-roofed cutout, the source cast cap rolls its top
-   // DOWN and then turns its underside through the reverse-S/scallop.
-   // The two contours are traced independently; a single central depth
-   // wedge would be the fake finicky curve reported in the user video.
-   const outerTop=height/2+rise*z/length-
-     renaissanceTrussTailTopDropFt(z,length,height,endStyle);
-   const outerBottom=height/2+rise*z/length-
-     renaissanceTrussTailLowerDropFt(z,length,height,endStyle);
-   const gauge=inner?wall:0;
-   const ringDepth=Math.max(.018,
-     Math.min(outerTop-outerBottom,
-       renaissanceTrussTailDepthFt(z,length,height,endStyle))-2*gauge);
-   const bottom=outerBottom+gauge;
-   const mid=bottom+ringDepth/2;
-   return renaissanceFormedProfileContour(
-    Math.max(.03,width-2*gauge),ringDepth,'truss')
-    .map(([x,y]):[number,number,number]=>[x,y+mid,z]);
-  });
- };
- const outside=rings(false),inside=rings(true);
- const n=outside[0].length,xyz:number[]=[];
- const tri=(a:number[],b:number[],c:number[])=>
-  xyz.push(...a,...b,...c);
- const quad=(a:number[],b:number[],c:number[],d:number[])=>{
-  tri(a,b,c);tri(a,c,d);
- };
- for(let i=1;i<stations.length;i++)for(let j=0;j<n;j++){
-  const k=(j+1)%n;
-  quad(outside[i-1][j],outside[i-1][k],outside[i][k],outside[i][j]);
-  quad(inside[i][j],inside[i][k],inside[i-1][k],inside[i-1][j]);
- }
- for(const i of [0,stations.length-1])for(let j=0;j<n;j++){
-  const k=(j+1)%n;
-  quad(outside[i][j],inside[i][j],inside[i][k],outside[i][k]);
- }
+ height:number,rise:number,endStyle:RenaissanceTrussEndStyle,availableTailFt?:number){
+ const {positions}=buildRenaissanceTrussCutMesh({length,width,height,rise,
+  wall:inchToFoot(RENAISSANCE_TRUSS.wallIn),style:endStyle,availableTailFt});
  const mesh=new THREE.BufferGeometry();
- mesh.setAttribute('position',new THREE.Float32BufferAttribute(xyz,3));
+ mesh.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
  mesh.computeVertexNormals();
  return mesh;
 }
@@ -440,9 +400,9 @@ function makeContinuousFormedTrussGeometry(length:number,width:number,
  * `rear` and `nose` refer to the physical truss centerline stations. The
  * upper surface stays collinear with roof pitch even in raised-truss mode.
  */
-export function RenaissanceContinuousProjectionTruss({rear,nose,color,endStyle}:{
+export function RenaissanceContinuousProjectionTruss({rear,nose,color,endStyle,availableTailFt}:{
   rear:[number,number,number];nose:[number,number,number];color:string;
-  endStyle:RenaissanceTrussEndStyle;
+  endStyle:RenaissanceTrussEndStyle;availableTailFt?:number;
 }){
   const length=nose[2]-rear[2];
   const rise=nose[1]-rear[1];
@@ -453,9 +413,9 @@ export function RenaissanceContinuousProjectionTruss({rear,nose,color,endStyle}:
     // Factory truss is ONE unbroken 2x6 hollow extrusion from rear beam
     // through the front header into a reference-shaped cast nose. A separate
     // tail cannot float in front of the main member.
-    const g=makeContinuousFormedTrussGeometry(length,width,height,rise,endStyle);
+    const g=makeContinuousFormedTrussGeometry(length,width,height,rise,endStyle,availableTailFt);
     return g;
-  },[length,rise,width,height,endStyle]);
+  },[length,rise,width,height,endStyle,availableTailFt]);
   useEffect(()=>()=>{geometry?.dispose();},[geometry]);
   if(!geometry)return null;
   return <mesh name={'continuous-'+endStyle+'-renaissance-truss'}
@@ -506,46 +466,20 @@ export function RenaissanceShadeTube({from,to,color}:{
  * The upper edge follows the selected canopy; the tail stops at its front
  * overhang. Extrusion thickness is the actual 2-inch visual member width.
  */
-export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPerFt=0,color,endStyle='curved',profileStyle='fresco-s'}:{
+export function RenaissanceCurvedTrussEnd({x,frontZ,topY,projectionFt,pitchInPerFt=0,color,endStyle='curved',profileStyle='contempo-s'}:{
   x:number;frontZ:number;topY:number;projectionFt:number;pitchInPerFt?:number;color:string;
   endStyle?:'straight'|'curved';
-  profileStyle?:'fresco-s'|'aria-scallop';
+  profileStyle?:Exclude<RenaissanceTrussEndStyle,'straight'>;
 }){
-  // Tail begins at the outside header face; curved end is a visually distinct
-  // reverse S-inflection rather than a single rounded edge. It is NOT a
-  // manufacturer dimensioned CAD cut.
-  const front=Math.max(.06,Math.min(1.25,projectionFt));
-  const pitch=pitchInPerFt/12;
-  const geometry=useMemo(()=>{
-    const top=(z:number)=>-pitch*z;
-    const shape=new THREE.Shape();
-    shape.moveTo(0,top(0));
-    const style=endStyle==='straight'?'straight':profileStyle;
-    // The cast tip ends LOWER than the bearing truss. The top itself
-    // curves downward in the supplied Renaissance perspective drawing.
-    // Use the same profile as the full member, not an unrelated 3-lobe S.
-    for(let i=1;i<=48;i++){
-      const distance=front*i/48;
-      const drop=renaissanceTrussTailTopDropFt(distance,front,
-        inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn),style);
-      shape.lineTo(distance,top(distance)-drop);
-    }
-    for(let i=48;i>=0;i--){
-      const distance=front*i/48;
-      const drop=renaissanceTrussTailLowerDropFt(distance,front,
-        inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn),style);
-      shape.lineTo(distance,top(distance)-drop);
-    }
-    shape.closePath();
-    const g=new THREE.ExtrudeGeometry(shape,{
-      depth:inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn),
-      steps:1,bevelEnabled:false,curveSegments:12,
-    });
-    g.translate(0,0,-inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn)/2);
-    g.rotateY(-Math.PI/2);g.computeVertexNormals();
-    return g;
-  },[front,pitch,endStyle,profileStyle]);
-  return <mesh geometry={geometry} position={[x,topY,frontZ]} castShadow receiveShadow>
+  const front=Math.max(.001,projectionFt),pitch=pitchInPerFt/12;
+  const height=inchToFoot(RENAISSANCE_TRUSS.outsideHeightIn);
+  const width=inchToFoot(RENAISSANCE_TRUSS.outsideWidthIn);
+  const geometry=useMemo(()=>makeContinuousFormedTrussGeometry(front,width,height,
+    -pitch*front,endStyle==='straight'?'straight':profileStyle,front),
+    [front,pitch,endStyle,profileStyle,width,height]);
+  useEffect(()=>()=>geometry.dispose(),[geometry]);
+  return <mesh name={'renaissance-decorative-end-'+profileStyle} geometry={geometry}
+    position={[x,topY-height/2,frontZ]} castShadow receiveShadow>
     <meshStandardMaterial color={color} side={THREE.DoubleSide} metalness={.4} roughness={.3}/>
   </mesh>;
 }

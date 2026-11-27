@@ -11,6 +11,7 @@ import { planRenaissanceDownspout } from '../../lib/renaissanceDownspoutRouting'
 import { actualPostWidthFt } from '../../lib/visualStructure';
 import { planRenaissanceCoverWalls } from '../../lib/renaissanceCoverWallLayout';
 import { renaissanceVisiblePostTopFt } from '../../lib/renaissancePostClearance';
+import { planRenaissanceTrussEndFit, renaissancePostRoofFootprintFt } from '../../lib/renaissanceCoverFit';
 import { planPcaDoorOnWall,effectivePcaKickPlateIn, type PcaDoorModel,type PcaPetDoor,type ScreenDoorWall } from '../../lib/pcaScreenDoorGeometry';
 import { PcaScreenDoor3D } from './PcaScreenDoor3D';
 import { RenaissancePrivacyWall3D } from './RenaissancePrivacyWall3D';
@@ -216,6 +217,9 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const headerLeft=Math.min(left,frameLeft),headerRight=Math.max(right,frameRight);
   const roofBackEdge=theoreticalBack-plan.rearOverhangFt;
   const front=theoreticalFront+plan.frontOverhangFt;
+  const trussEndFit=planRenaissanceTrussEndFit({roofFrontZFt:front,headerCenterZFt:frameFront,
+    headerDepthFt:inchToFoot(profile.headerDepthIn)});
+  const exposedTrussTailFt=trussEndFit.availableTailFt;
   const roofMidZ=(roofBackEdge+front)/2;
   const powder=getCoverFinish(project.coverColor);
   const screenPowder=getCoverFinish(project.coverScreenColor&&project.coverScreenColor!=='match'
@@ -240,7 +244,8 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
   const slopeRise=roofRearY-roofFrontY;
   const gableRise=plan.ridgeTopFt-plan.backTopFt;
   const isSolid=product.family==='solid-studio'||product.family==='solid-truss-ends'||product.family==='full-trusses';
-  const accentEnd=project.coverAccentEnd??(['Contempo','Classico'].includes(project.coverFamily)?'curved':'straight');
+  const requestedAccentEnd=project.coverAccentEnd??(['Contempo','Classico'].includes(project.coverFamily)?'curved':'straight');
+  const accentEnd=trussEndFit.hasExposedTail?requestedAccentEnd:'straight';
   const isTranslucent=product.family==='translucent';
   const isLattice=product.family==='lattice';
   const isLouvered=product.family==='louvered';
@@ -293,7 +298,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         xFt:x,zFt:z,headerCrownFt:structuralHeaderCrownY,
         roofRearZFt:roofBackEdge,roofFrontZFt:front,
         roofRearCenterFt:roofRearY,roofFrontCenterFt:roofFrontY,
-        roofPanelThicknessFt, gable:shape==='gable',
+        roofPanelThicknessFt,postWidthFt:renaissancePostRoofFootprintFt(profile.postOutsideIn,profile.postCapOutsideIn), gable:shape==='gable',
         midXFt:xMid,roofWidthFt:width,
         eaveCenterFt:eaveY,gableRiseFt:gableRise,
       }):structuralHeaderCrownY;
@@ -427,7 +432,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       </group>}
     {/* Contempo: the source system is a solid roof with sculpted decorative
         truss ends at 2-ft visual stations; it is NOT a full truss pergola. */}
-    {product.family==='solid-truss-ends'&&
+    {product.family==='solid-truss-ends'&&trussEndFit.hasExposedTail&&
       plan.projectionTrussStationsFt.map((station,i)=>{
         const x=xMid+station;
         const roofAtFront=roofLineAtX({
@@ -437,8 +442,8 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
         });
         // Start the decorative tail at the OUTSIDE face of the front header.
         // Its silhouette must never protrude into the screened room.
-        const outsideFaceZ=frameFront+inchToFoot(profile.headerDepthIn)/2+.025;
-        const visibleOverhang=Math.max(.06,front-outsideFaceZ);
+        const outsideFaceZ=trussEndFit.decorativeStartZFt;
+        const visibleOverhang=trussEndFit.decorativeLengthFt;
         return <RenaissanceCurvedTrussEnd key={'contempo-end-'+i}
           x={x} frontZ={outsideFaceZ}
           topY={roofAtFront-(shape==='studio'?(outsideFaceZ-frameFront)*plan.pitchInPerFt/12:0)-
@@ -473,7 +478,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           key={'classico-continuous-projection-truss-'+i}
           rear={[x,yBack-drop,roofBackEdge]}
           nose={[x,yFront-drop,front]}
-          color={powder} endStyle={accentEnd==='curved'?'classico-s':'straight'}/>;
+          availableTailFt={exposedTrussTailFt} color={powder} endStyle={accentEnd==='curved'?'classico-s':'straight'}/>;
       })}
     {/* Fresco: correctly oriented translucent polycarbonate sheets captured by
         aluminum projection trusses and snap-cover channels, not glass or rods. */}
@@ -505,7 +510,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           <RenaissanceContinuousProjectionTruss
             rear={[x,roofRearY-.24+trussLift,roofBackEdge]}
             nose={[x,roofFrontY-.24+trussLift,front]}
-            color={powder} endStyle={accentEnd==='curved'?'fresco-s':'straight'}/>
+            availableTailFt={exposedTrussTailFt} color={powder} endStyle={accentEnd==='curved'?'fresco-s':'straight'}/>
           <SlopedBeam start={[x,roofRearY+.115+trussLift,roofBackEdge]}
             end={[x,roofFrontY+.115+trussLift,front]}
             thickness={.07} depth={.09} color={powder}/>
@@ -524,7 +529,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
           <RenaissanceContinuousProjectionTruss
             rear={[x,roofRearY-.25+trussLift,roofBackEdge]}
             nose={[x,roofFrontY-.25+trussLift,front]}
-            color={powder} endStyle={accentEnd==='curved'?'aria-scallop':'straight'}/>
+            availableTailFt={exposedTrussTailFt} color={powder} endStyle={accentEnd==='curved'?'aria-scallop':'straight'}/>
         </group>;
       })}
       {Array.from({length:latticeCount},(_,i)=>{

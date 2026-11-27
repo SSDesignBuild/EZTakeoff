@@ -1,49 +1,28 @@
 /**
- * Image-traced *presentation* silhouette of the Renaissance cast truss ends.
- *
- * Fresco 2025 structural parts p4 "TRUSS CURVED END CAP" and
- * Aria 2025 p3 "TRUSS SCALLOP END CAP" were inspected visually.
- * The molded cap in BOTH pictures curves DOWNWARD at the exposed nose:
- * its TOP bends downward; its UNDERSIDE first scoops up and then drops
- * again. The earlier single-boundary model kept an impossible straight
- * roof top through the cast nose, creating a sharp decorative wedge.
- *
- * Trace contains top and lower outline values independently, as ratios
- * of the measured 6in beam height; [u,upperDrop,lowerDrop].
- * u=0 starts at the full structural 6in section; u=1 is the exposed tip.
- * These sampled, smoothed points match the visible perspective outline
- * and are NOT factory mold dimensions / fabrication CAD. The manufacturer
- * sheets omit the actual cast tip length, radii and side-view dimensions.
+ * Visual ogee end cut, checked against the owner's curved/straight sample
+ * photo and the Fresco p4 / Aria p3 parts sheets on 2026-11-26.
+ * The upright showroom sample must be read in its installed orientation:
+ * the top stays on the roof line, while the underside rises through a broad
+ * reverse curve to the rounded tip. Longitudinal extrusion grooves remain
+ * at their full-section heights and terminate at this cut; they do not bend
+ * or squeeze with a deformed section. The former downturned top was wrong.
+ * Stations and tail length are visual approximations, NOT fabrication CAD.
  */
 export type RenaissanceTrussEndStyle=
- 'straight'|'fresco-s'|'aria-scallop'|'classico-s';
+ 'straight'|'fresco-s'|'aria-scallop'|'classico-s'|'contempo-s';
 type Section=[number,number,number];
+// [progress from full-depth body to nose, upper drop, lower drop] / 6in.
+// Broad central shoulder between two turns, as visible in the supplied cap.
+const ogee:Section[]=[
+ [0,0,1],[.06,0,.82],[.16,0,.60],[.28,0,.46],
+ [.42,0,.41],[.56,0,.385],[.68,0,.34],[.79,0,.27],
+ [.88,0,.19],[.95,0,.105],[1,0,.045],
+];
 export const RENAISSANCE_END_REFERENCE={
- 'fresco-s':{
-  tailIn:12.6,
-  samples:[
-   [0,0,1],[.12,.00,.98],[.23,.03,.91],[.38,.10,.77],
-   [.49,.16,.64],[.58,.23,.58],[.67,.33,.60],
-   [.75,.42,.69],[.83,.50,.79],[.92,.55,.85],[1,.57,.92],
-  ] as Section[],
- },
- 'aria-scallop':{
-  tailIn:12.6,
-  samples:[
-   [0,0,1],[.14,.01,.98],[.30,.05,.86],[.46,.12,.73],
-   [.61,.20,.63],[.76,.35,.69],[.90,.47,.81],[1,.55,.88],
-  ] as Section[],
- },
- 'classico-s':{
-  tailIn:12.6,
-  // Classico full trusses use the 2025 curved cast-tip family; do not
-  // substitute a short loose brace between its tip and main beam.
-  samples:[
-   [0,0,1],[.12,.00,.98],[.23,.03,.91],[.38,.10,.77],
-   [.49,.16,.64],[.58,.23,.58],[.67,.33,.60],
-   [.75,.42,.69],[.83,.50,.79],[.92,.55,.85],[1,.57,.92],
-  ] as Section[],
- },
+ 'fresco-s':{tailIn:9,samples:ogee},
+ 'aria-scallop':{tailIn:9,samples:ogee.map(p=>[...p] as Section)},
+ 'classico-s':{tailIn:9,samples:ogee.map(p=>[...p] as Section)},
+ 'contempo-s':{tailIn:9,samples:ogee.map(p=>[...p] as Section)},
 } as const;
 const clamp=(n:number)=>Math.min(1,Math.max(0,n));
 /** Continuous, shape-preserving C1 cubic for factory illustration trace.
@@ -86,7 +65,7 @@ const sample=(progress:number,style:RenaissanceTrussEndStyle):Section=>{
  if(style==='straight')return [clamp(progress),0,1];
  const u=clamp(progress),pts=RENAISSANCE_END_REFERENCE[style].samples;
  const top=traceCoordinate(pts,u,1),lower=traceCoordinate(pts,u,2);
- return [u,top,Math.max(top+.13,lower)];
+ return [u,top,Math.max(top+.035,lower)];
 };
 export function referenceTrussTailDepthRatio(
  progress:number,style:RenaissanceTrussEndStyle,
@@ -94,13 +73,33 @@ export function referenceTrussTailDepthRatio(
  const [,top,lower]=sample(progress,style);
  return lower-top;
 }
+export function renaissanceTrussTailLengthFt(lengthFt:number,
+ style:RenaissanceTrussEndStyle,availableTailFt?:number):number{
+ if(style==='straight')return 0;
+ return Math.max(.001,Math.min(RENAISSANCE_END_REFERENCE[style].tailIn/12,
+  Math.max(.001,lengthFt-Math.min(.02,lengthFt*.1)),availableTailFt??lengthFt));
+}
 const tailFraction=(stationFt:number,lengthFt:number,
  style:RenaissanceTrussEndStyle):number=>{
  if(style==='straight')return 0;
- const tailFt=Math.min(RENAISSANCE_END_REFERENCE[style].tailIn/12,
-  Math.max(.16,lengthFt*.35));
- return clamp((stationFt-(lengthFt-tailFt))/Math.max(.001,tailFt));
+ const tailFt=renaissanceTrussTailLengthFt(lengthFt,style);
+ return clamp((stationFt-(lengthFt-tailFt))/tailFt);
 };
+/** Longitudinal cut station at a fixed original section height. The inverse
+ * avoids scaling the rebates to the shrinking silhouette. */
+export function renaissanceTrussEndStationFt(dropRatio:number,lengthFt:number,
+ style:RenaissanceTrussEndStyle,availableTailFt?:number):number{
+ if(style==='straight')return lengthFt;
+ const d=clamp(dropRatio),tail=renaissanceTrussTailLengthFt(lengthFt,style,availableTailFt);
+ if(d<=sample(1,style)[2])return lengthFt;
+ if(d>=1)return lengthFt-tail;
+ let lo=0,hi=1;
+ for(let i=0;i<35;i++){
+  const mid=(lo+hi)/2;
+  if(sample(mid,style)[2]>d)lo=mid;else hi=mid;
+ }
+ return lengthFt-tail+tail*(lo+hi)/2;
+}
 export function renaissanceTrussTailTopDropFt(
  stationFt:number,lengthFt:number,fullDepthFt:number,
  style:RenaissanceTrussEndStyle,

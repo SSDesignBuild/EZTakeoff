@@ -4,7 +4,7 @@ import type { DeckModel, StairPlacement } from '../../lib/deckModel';
 import type { ConsultationProject } from '../../lib/consultationProject';
 import { Block, type P2 } from './Primitives';
 import { planStairFasciaCoverage,planStairStringerFaceStations,type StairSideFasciaPoint } from '../../lib/stairFasciaGeometry';
-import { planStairLanding,landingSurface } from '../../lib/stairConcreteLanding';
+import { planStairLandingForValues,landingSurface } from '../../lib/stairConcreteLanding';
 import { stairFlightFrame } from '../../lib/stairRailVisualGeometry';
 
 const riseFor=(model:DeckModel,height:number)=>height/Math.max(1,model.stairRisers);
@@ -100,8 +100,7 @@ function Flight({placement,model,center,height,values,texture,fasciaTexture,rise
   const treadDepth=Math.max(.65,model.stairRunFt/treads);
   const run=treads*treadDepth;
   const landing=landingSurface(values.stairLandingSurface)==='bare-ground'
-    ?planStairLanding(width,Number(values.stairLandingDepthFt??4),
-      Number(values.stairLandingThicknessIn??5)):null;
+    ?planStairLandingForValues(width,values):null;
   // Two individual 5.5-inch boards separated by 1/8 inch on an 11-inch tread.
   const boardFaceFt=5.5/12,boardGapFt=.125/12;
   const fasciaRisers=values.stairRiserStyle==='fascia'||

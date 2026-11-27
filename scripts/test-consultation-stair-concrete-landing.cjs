@@ -7,21 +7,23 @@ const planner=load('src/lib/stairConcreteLanding');
 assert.equal(planner.landingSurface(undefined),'unknown');
 assert.equal(planner.landingSurface('existing'),'existing');
 assert.equal(planner.landingSurface('bare-ground'),'bare-ground');
-const normal=planner.planStairLanding(4,4,5);
-assert.ok(normal);assert.equal(normal.volumeCuFt,20/3);
-assert.equal(normal.bags80lb,12,'4x4x5 inches with nominal .6 cu ft 80-lb bags and 5% allowance should require 12 bags');
-assert.equal(planner.planStairLanding(4,4,4).bags80lb,10,
- 'A 4-inch pad has a different concrete order; never blindly order 12 bags');
-assert.equal(planner.planStairLanding(6,4,5).bags80lb,18,
- 'A 6-foot stair width expands the actual landing rather than using a 4-foot template');
+const normal=planner.planStairLanding(4);
+assert.ok(normal);assert.equal(normal.thicknessIn,4);assert.equal(normal.volumeCuFt,16/3);
+assert.equal(normal.bags80lb,12,'S&S 4x4x4 default has an explicit 25% order allowance and .6 cu ft bag yield');
+assert.equal(planner.planStairLanding(4,4,4,5).bags80lb,10,
+ 'A custom 5% allowance still follows actual volume');
+assert.equal(planner.planStairLanding(4,4,5,5).bags80lb,12,
+ 'Explicit legacy 5-inch thickness and 5% allowance remain valid');
+assert.equal(planner.planStairLanding(6,4,4).bags80lb,17,
+ 'A 6-foot stair width expands actual landing volume; bag count is never fixed');
 for(const invalid of [[0,4,5],[4,-1,5],[4,4,3],[4,4,NaN],[4,4,13]]){
  assert.equal(planner.planStairLanding(...invalid),null);
 }
 assert.deepEqual(planner.planStairLandings([4,6],{stairLandingSurface:'existing'}),[]);
 assert.deepEqual(planner.planStairLandings([4,6],{}),[]);
-assert.deepEqual(planner.planStairLandings([4,6],{stairLandingSurface:'bare-ground'}).map(x=>x.bags80lb),[12,18]);
+assert.deepEqual(planner.planStairLandings([4,6],{stairLandingSurface:'bare-ground'}).map(x=>x.bags80lb),[12,17]);
 const render=read('src/components/visual3d/DeckStairAssembly3D.tsx');
-assert.ok(render.includes('planStairLanding(width')&&render.includes('stairLandingSurface')&&render.includes('run+landing.depthFt/2')&&render.includes('automatic-dimensioned-concrete-stair-landing'));
+assert.ok(render.includes('planStairLandingForValues(width')&&render.includes('stairLandingSurface')&&render.includes('run+landing.depthFt/2')&&render.includes('automatic-dimensioned-concrete-stair-landing'));
 const ui=read('src/components/ConsultationStudio.tsx')+read('src/components/ConsultationDetailsPanel.tsx');
 assert.ok(ui.includes('stairLandingSurface')&&ui.includes('stairLandingDepthFt')&&ui.includes('stairLandingThicknessIn'));
 const bridge=read('src/lib/estimatingBridge.ts');

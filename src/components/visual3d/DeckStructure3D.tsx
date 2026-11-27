@@ -1,5 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
+import * as THREE from 'three';
 import type { DeckModel } from '../../lib/deckModel';
+import type { DeckFinishSupportPiece } from '../../lib/deckFinishSupport';
 import { Beam, Block, type P2 } from './Primitives';
 import { actualPostWidthFt, rimPlyCenterlines } from '../../lib/visualStructure';
 
@@ -19,6 +21,24 @@ const edgeClip=(points:Point[],vertical:boolean,station:number):number[]=>{
 const joistDepth=(size:string)=>size==='2x12'?11.25/12:size==='2x10'?9.25/12:7.25/12;
 const beamDepth=(size:string)=>size==='2x12'?11.25/12:size==='PSL'?11.875/12:9.25/12;
 const cm=(n:number)=>Number(n.toFixed(4));
+function FlatFinishNailer({piece,center,top}:{piece:DeckFinishSupportPiece;center:P2;top:number}){
+  const geometry=useMemo(()=>{
+    const shape=new THREE.Shape();
+    piece.corners.forEach((point,index)=>{
+      const x=point.x-center[0],z=point.y-center[1];
+      if(index===0)shape.moveTo(x,-z);else shape.lineTo(x,-z);
+    });
+    shape.closePath();
+    const mesh=new THREE.ExtrudeGeometry(shape,{depth:piece.thicknessFt,bevelEnabled:false,steps:1});
+    mesh.rotateX(-Math.PI/2);
+    return mesh;
+  },[piece,center]);
+  useEffect(()=>()=>geometry.dispose(),[geometry]);
+  return <mesh name={'flat-finish-support-'+piece.id} geometry={geometry}
+    position={[0,top-piece.thicknessFt,0]} castShadow receiveShadow>
+    <meshStandardMaterial color="#b6976d" roughness={.82}/>
+  </mesh>;
+}
 export function DeckStructure3D({model,center,height}:{
   model:DeckModel;center:P2;height:number;
 }){
@@ -45,6 +65,10 @@ export function DeckStructure3D({model,center,height}:{
     return all;
   },[model.points,model.joistPositions,vertical,center]);
   return <group name="actual-framing-joists-double-beams-notched-posts">
+    <group name="continuous-flat-picture-frame-and-breaker-nailers">
+      {model.finishSupport.pieces.map(piece=><FlatFinishNailer key={piece.id}
+        piece={piece} center={center} top={joistTop}/>)}
+    </group>
     {joists.map(joist=><Beam key={joist.key} start={joist.a} end={joist.b}
       height={joistTop-joistD/2} thickness={joistD} depth={1.5/12} color="#aa8560"/>)}
     {model.edgeSegments.map(edge=><group key={'rim-'+edge.index}>

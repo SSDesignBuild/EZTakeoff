@@ -13,9 +13,7 @@ import { DeckStairAssembly3D } from './DeckStairAssembly3D';
 import { DeckSkirting3D } from './DeckSkirting3D';
 import { ManufacturerRailing3D } from './ManufacturerRailing3D';
 import { RenaissanceCover3D } from './RenaissanceCover3D';
-import { planRenaissanceCoverWalls } from '../../lib/renaissanceCoverWallLayout';
-import { currentEliteSunroomSettings } from '../../lib/eliteSunroomStudio';
-import { planEliteDeckFloorClosure } from '../../lib/eliteDeckFloorClosure';
+import { stairEnclosureClearanceWalls } from '../../lib/stairEnclosureClearance';
 import { lightingCapPostKeys,lightingScreenIntegrated } from '../../lib/lightingAddons';
 
 /** Loads first-party Netlify-cached manufacturer photographs, not generated hue. */
@@ -288,45 +286,26 @@ export function ManufacturerDeck3D({model,project,center,deckHeight,covered=true
   const stairName=project.values.stairTreadStyle==='match'||!project.values.stairTreadStyle
     ?project.values.deckingMaterial:project.values.stairTreadStyle;
   const {map:stairMap}=useManufacturerTexture(stairName);
-  const {map:closureMap}=useManufacturerTexture(covered&&!lowerTier&&
-    project.coverScreenStyle==='elite-add-a-room'?project.values.deckingMaterial:null);
-  const eliteFloorClosure=useMemo(()=>{
-    if(!covered||lowerTier||project.coverScreenStyle!=='elite-add-a-room')
-      return {pieces:[],totalLinearFt:0,stock:[],notes:[]};
-    const enclosure=planRenaissanceCoverWalls(model,project,center,deckHeight);
-    const applicable=enclosure.measuredRuns.filter(wall=>
-      !(project.coverPrivacyWallGaps?.[wall.id]??0));
-    return planEliteDeckFloorClosure(model,applicable,
-      currentEliteSunroomSettings(project).roomSystem,project.values.deckingType);
-  },[model,project,center,deckHeight,covered,lowerTier]);
   const riserStyle=String(project.values.stairRiserStyle??'auto');
   const riserName=riserStyle==='fascia'||(riserStyle==='auto'&&project.values.deckingType!=='pressure-treated')
     ?fasciaName:riserStyle==='auto'||riserStyle==='match'
       ?String(project.values.deckingMaterial):riserStyle;
   const {map:riserMap}=useManufacturerTexture(riserName);
   const screenIntegrated=covered&&lightingScreenIntegrated(project);
+  const enclosureWalls=useMemo(()=>covered&&!lowerTier?
+    stairEnclosureClearanceWalls(model,project,center,deckHeight):[],[model,project,center,deckHeight,covered,lowerTier]);
   const capLightPosts=useMemo(()=>lightingCapPostKeys(model,project.values,center,deckHeight,
-    screenIntegrated,lowerTier?'lower':'main'),[model,project.values,center,deckHeight,screenIntegrated,lowerTier]);
+    screenIntegrated,lowerTier?'lower':'main',enclosureWalls),[model,project.values,center,deckHeight,screenIntegrated,lowerTier,enclosureWalls]);
   return <group name="manufacturer-visualized-deck">
     <DeckStructure3D model={model} center={center} height={deckHeight}/>
     <PolygonSubstrate model={model} center={center} deckHeight={deckHeight}/>
     <VisibleDeckBoards model={model} center={center} height={deckHeight} boardName={project.values.deckingMaterial}/>
     <BorderBoards model={model} center={center} deckHeight={deckHeight} maps={borderMaps} colors={borderColors}/>
-    {/* Physically installed matching deck boards at the inside face of the
-        Elite sunroom sill. These are real 16/20-ft or PT stock cuts in the
-        estimator handoff, not a dark substrate patch painted over the gap. */}
-    <group name="real-finish-decking-board-against-elite-sunroom-walls">
-      {eliteFloorClosure.pieces.map((piece,i)=>
-        <DeckTrimBeam key={'elite-interior-floor-closure-'+piece.wallId+'-'+i}
-          start={piece.from} end={piece.to}
-          height={deckHeight+.020} widthFt={piece.widthFt}
-          texture={closureMap} color="#9a968f"/>)}
-    </group>
     <BreakerBoards model={model} center={center} height={deckHeight} maps={breakerMaps} colors={breakerColors}/>
     <DeckFascia model={model} center={center} height={deckHeight} texture={fasciaMap}/>
     <DeckSkirting3D model={model} center={center} height={deckHeight} values={project.values} texture={skirtMap} lowerTier={lowerTier}/>
     <ManufacturerRailing3D model={model} values={project.values} center={center}
-      deckHeight={deckHeight} screenIntegrated={screenIntegrated} lightCapPostKeys={capLightPosts}/>
+      deckHeight={deckHeight} screenIntegrated={screenIntegrated} lightCapPostKeys={capLightPosts} enclosureWalls={enclosureWalls}/>
     <DeckStairAssembly3D model={model} center={center} height={deckHeight} values={project.values}
       texture={stairMap} fasciaTexture={stairFasciaMap}
       riserTexture={riserMap} skirtTexture={skirtMap}/>

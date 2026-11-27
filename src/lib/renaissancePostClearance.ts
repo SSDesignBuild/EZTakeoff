@@ -11,7 +11,7 @@ export interface RenaissanceRoofPostClearance {
  xFt:number;zFt:number;headerCrownFt:number;
  roofRearZFt:number;roofFrontZFt:number;
  roofRearCenterFt:number;roofFrontCenterFt:number;
- roofPanelThicknessFt:number;
+ roofPanelThicknessFt:number;postWidthFt?:number;
  gable:boolean;midXFt:number;roofWidthFt:number;
  eaveCenterFt:number;gableRiseFt:number;
 }
@@ -31,6 +31,10 @@ export function renaissanceRoofPanelUndersideAtPost(p:RenaissanceRoofPostClearan
 /** The cap ends at least 1/8in BELOW the panel underside, including
  * the matching aluminum post cap and its physical thickness. */
 export function renaissanceVisiblePostTopFt(p:RenaissanceRoofPostClearance):number{
- const safe=renaissanceRoofPanelUndersideAtPost(p)-.125/12;
+ const half=Math.max(0,p.postWidthFt??0)/2;
+ // Check the complete cap footprint. Checking just its center lets the
+ // downhill corner of a wide post pierce a pitched/gable roof.
+ const safe=Math.min(...[-half,half].flatMap(dx=>[-half,half].map(dz=>
+  renaissanceRoofPanelUndersideAtPost({...p,xFt:p.xFt+dx,zFt:p.zFt+dz}))))-.125/12;
  return Math.min(p.headerCrownFt,safe);
 }

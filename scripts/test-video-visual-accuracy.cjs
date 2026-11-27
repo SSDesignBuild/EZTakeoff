@@ -143,14 +143,14 @@ assert.ok(render.includes('headerLeft')&&render.includes('headerRight')&&
   render.includes('start={[span.startFt,frameFront]}')&&
   render.includes('planSideConnectedHeader'),
   'Headers must reach the roof edge in segments clipped to sides of continuous posts');
-assert.ok(render.includes('outsideFaceZ=frameFront+') &&
+assert.ok(render.includes('outsideFaceZ=trussEndFit.decorativeStartZFt') &&
+  render.includes("product.family==='solid-truss-ends'&&trussEndFit.hasExposedTail") &&
   render.includes('frontZ={outsideFaceZ}') &&
   render.includes('fresco-front-polycarbonate-end-cap-'),
   'Contempo tails stay outside beam, Fresco panels receive front end closure');
-assert.ok(downspout.includes('renaissanceTrussTailTopDropFt(distance,front,') &&
-  downspout.includes('renaissanceTrussTailLowerDropFt(distance,front,') &&
-  downspout.includes('makeContinuousFormedTrussGeometry(length,width,height,rise,endStyle)'),
-  'Factory cast cap must shape both upper and lower S boundaries, not a fake roof-straight decorative wedge');
+assert.ok(downspout.includes('buildRenaissanceTrussCutMesh') &&
+  downspout.includes('makeContinuousFormedTrussGeometry(length,width,height,rise,endStyle,availableTailFt)'),
+  'Full trusses and decorative ends must use the same constant-section ogee-cut geometry');
 assert.ok(stair.includes('fasciaGeo') &&
   stair.includes('g.rotateY(-Math.PI/2)') &&
   stair.includes('position={[x,0,0]} castShadow receiveShadow'),
@@ -281,7 +281,7 @@ const stairRiserSource=read('src/components/visual3d/DeckStairAssembly3D.tsx');
 assert.ok(stairRiserSource.includes('stepHeight-rise/2+.04')&&
   stairRiserSource.includes('(i+1)*treadDepth-.004'),
   'Stair riser must cover stringer plumb cuts without covering tread nosing');
-const visualGeometry=read('src/lib/visualGeometry.ts');
+const visualGeometry=read('src/lib/visualGeometry.ts')+read('src/lib/deckSurfaceLayout.ts');
 assert.ok(visualGeometry.includes('subtractDeckFace(poly,frame.corners,margin)')&&
   visualGeometry.includes('mergeDeckFaces(pieces)')&&
   visualGeometry.includes('planMiteredPictureFrames'),

@@ -41,14 +41,14 @@ const end=load('src/lib/renaissanceTrussSilhouette');
 for(const style of ['fresco-s','classico-s','aria-scallop']){
  const samples=Array.from({length:100},(_,i)=>
   end.renaissanceTrussTailDepthFt(10+i*.02,12,.5,style));
- assert.ok(samples.every(d=>Number.isFinite(d)&&d>.04&&d<=.5+.0001),
+ assert.ok(samples.every(d=>Number.isFinite(d)&&d>.015&&d<=.5+.0001),
   'Reference-shaped 2x6 ornamental tip cannot self-overrun real extrusion envelope');
  assert.ok(samples[0]>samples[samples.length-1],
   'Cast nose must transition from full 6in section to its bounded terminal width');
 const topTip=end.renaissanceTrussTailTopDropFt(12,12,.5,style);
 const bottomTip=end.renaissanceTrussTailLowerDropFt(12,12,.5,style);
-assert.ok(topTip>.20&&bottomTip>topTip+.05,
- 'Factory illustrated S has a visibly DOWN-TURNED top and separate low rounded nose, not a straight roof top with an inverted wedge');
+assert.equal(topTip,0,'Installed top edge follows the roof datum through the ogee end cut');
+assert.ok(bottomTip>.015&&bottomTip<.04,'Photo-derived thin ogee nose must not turn down into a deep hanging lobe');
 // A user-rejected random/finicky S cannot have flat kinks at control
 // stations. Both visible boundaries must remain smooth (C1) across every
 // manufacturer-traced reference station, including the reversed lower S.
@@ -87,8 +87,8 @@ assert.ok(classicoSource.includes('endStyle={accentEnd===\'curved\'?\'aria-scall
 const sectionSource=read('src/components/visual3d/RenaissanceExtrusions.tsx');
 assert.ok(sectionSource.includes("outlineWithRibs(w,h,t,'header')"));
 assert.ok(sectionSource.includes('renaissanceFormedProfileContour('));
-assert.ok(sectionSource.includes('makeContinuousFormedTrussGeometry(length,width,height,rise,endStyle)'));
-assert.ok(sectionSource.includes('renaissanceTrussTailDepthFt'));
+assert.ok(sectionSource.includes('makeContinuousFormedTrussGeometry(length,width,height,rise,endStyle,availableTailFt)'));
+assert.ok(sectionSource.includes('buildRenaissanceTrussCutMesh'));
 assert.ok(!sectionSource.includes('s.bezierCurveTo('),
  'No ad hoc S-shaped THREE.Path Bézier control points in factory truss');
 assert.ok(end.renaissanceTrussContactOverlapFt({

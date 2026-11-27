@@ -1269,42 +1269,15 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
                   return <rect key={`joist-h-${idx}-${pairIdx}`} x={Math.min(x1, x2)} y={y - 3} width={Math.max(0, Math.abs(x2 - x1))} height={6} className="joist-rect" onClick={() => setInspect({ title: `Joist ${idx + 1}`, detail: `${deck.joistSize} joist at 12 in O.C.` })} />;
                 }))}
 
-            {false && showFraming && pictureFrameCount > 0 && pictureFrameSegments
-              .filter((segment) => deck.joistDirection === 'vertical' ? segment.orientation === 'vertical' : segment.orientation === 'horizontal')
-              .map((segment, segIdx) => {
-                const inset = inwardNormal(segment, deck.points);
-                const span = segment.length;
-                const blockDistances = Array.from({ length: Math.max(1, Math.floor(span)) }, (_, i) => Math.min(span - 0.15, i + 0.5)).filter((d) => d > 0.15 && d < span - 0.15);
-                return <g key={`blocking-${segIdx}`}>{Array.from({ length: pictureFrameCount }, (_, course) => {
-                  // Blocking supports only the unsupported picture-frame run.
-                  // Keep it clear of the band board and short of the first joist
-                  // so the framing diagram does not show blocking overlapping
-                  // either member.
-                  const inner = 0.56 + course * 0.48;
-                  const outer = 0.92 + course * 0.48;
-                  return blockDistances.map((distance, idx) => {
-                    const pt = pointAlong(segment, distance);
-                    const a = toSvg(pt.x + inset.x * inner, pt.y + inset.y * inner);
-                    const b = toSvg(pt.x + inset.x * outer, pt.y + inset.y * outer);
-                    return <line key={`${course}-${idx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line" />;
-                  });
-                })}</g>;
-              })}
-
-            {false && showFraming && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => (
-              deck.boardRun === 'width'
-                ? scanlineIntersections(deck.points, 'vertical', pos).flatMap((pair, pairIdx) => Array.from({ length: Math.max(1, Math.floor(pair.end - pair.start)) }, (_, blockIdx) => {
-                    const y = Math.min(pair.end - 0.15, pair.start + blockIdx + 0.5);
-                    const a = toSvg(pos - 0.34, y);
-                    const b = toSvg(pos + 0.34, y);
-                    return <line key={`breaker-block-v-${idx}-${pairIdx}-${blockIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line required-blocking" />;
-                  }))
-                : scanlineIntersections(deck.points, 'horizontal', pos).flatMap((pair, pairIdx) => Array.from({ length: Math.max(1, Math.floor(pair.end - pair.start)) }, (_, blockIdx) => {
-                    const x = Math.min(pair.end - 0.15, pair.start + blockIdx + 0.5);
-                    const a = toSvg(x, pos - 0.34);
-                    const b = toSvg(x, pos + 0.34);
-                    return <line key={`breaker-block-h-${idx}-${pairIdx}-${blockIdx}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="blocking-line required-blocking" />;
-                  }))
+            {showFraming && deck.finishSupport.pieces.map(piece=>(
+              <polygon key={'flat-nailer-'+piece.id}
+                points={piece.corners.map(point=>{const p=toSvg(point.x,point.y);return p.x+','+p.y;}).join(' ')}
+                fill="#dfc89d" stroke="#92754f" strokeWidth={1}
+                data-finish-support={piece.id}
+                onClick={()=>setInspect({title:piece.id+' · flat '+piece.nominalSize+' nailer',
+                  detail:piece.lengthFt.toFixed(3)+' ft cut × '+(piece.widthFt*12).toFixed(3)+' in rip; 1.5 in vertical thickness. Wide face horizontal.'})}>
+                <title>{piece.id}: {piece.nominalSize} continuous flat finish support</title>
+              </polygon>
             ))}
 
             {onValuesChange && showRailing && deck.edgeSegments.map((segment) => {
