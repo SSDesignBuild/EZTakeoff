@@ -112,10 +112,11 @@ export function planDrinkRailPieces(level:LevelRailRun[],stairs:StairRailVisualR
  for(const run of stairs){
   const from=run.posts[0],to=run.posts[run.posts.length-1];if(!from||!to)continue;
   const direction=unit([to[0]-from[0],to[2]-from[2]]);
-  const landing:RailPoint=[from[0]+direction[0]*run.insetFt,from[1]+topOffsetFt,
-    from[2]+direction[1]*run.insetFt];
+  const returnFt=run.landingReturnFt??run.insetFt;
+  const landing:RailPoint=[from[0]+direction[0]*returnFt,from[1]+topOffsetFt,
+    from[2]+direction[1]*returnFt];
   const start:RailPoint=[from[0],from[1]+topOffsetFt,from[2]];
-  paths.push({id:'stair-landing-'+run.placementIndex+'-'+run.side,kind:'landing',edgeIndex:run.edgeIndex,from:start,to:landing});
+  if(returnFt>1e-6)paths.push({id:'stair-landing-'+run.placementIndex+'-'+run.side,kind:'landing',edgeIndex:run.edgeIndex,from:start,to:landing});
   const supports:RailPoint[]=[landing,...run.posts.slice(1).map(p=>
     [p[0],p[1]+topOffsetFt,p[2]] as RailPoint)];
   let first=0,part=0;

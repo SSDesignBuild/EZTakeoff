@@ -2,7 +2,7 @@ import type { DeckEdgeSegment, MaterialItem } from './types';
 import { planSkirtingGateFace } from './skirtingGateFace';
 import { supportedFinishCoursePieces,MAX_FINISH_CUT_FT } from './finishStockGeometry';
 
-export type SkirtCut = { id: string; edgeIndex: number; material: 'finish' | '2x4'; lengthFt: number; location: string };
+export type SkirtCut = { id: string; edgeIndex: number; material: 'finish' | '2x4' | '2x6' | '2x8' | '2x10' | '2x12'; lengthFt: number; location: string };
 export type SkirtOpening = {
   edgeIndex: number; offset: number; width: number;
   kind: 'opening' | 'removable' | 'hinged-gate';

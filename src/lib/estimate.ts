@@ -732,7 +732,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     const lowerPostStock = optimizeRepeatedCuts(lowerDeck.postCount, lowerPostCutFt, [8, 10, 12, 16]);
     materials.push(
       toMaterial(`${lowerDeck.postSize} wood posts`, 'Structure', lowerPostStock.stockCount, 'boards', `${lowerPostStock.stockLength} ft stock`, framingWoodGrade, `Lower tier: ${lowerDeck.postCount} post(s) cut to about ${feetAndInches(lowerPostStock.cutLength)} each`),
-      toMaterial('Concrete mix', 'Structure', lowerDeck.concreteBags, 'bags', '80 lb bags', undefined, `Lower tier: ${lowerDeck.footingBagsPerPost} bags per ${lowerDeck.footingDiameterIn} in diameter × ${lowerDeck.footingDepthIn} in deep round footing, approximately 0.6 cu ft yield per bag; site verification required`),
+      toMaterial('Concrete mix', 'Structure', lowerDeck.concreteBags, 'bags', '80 lb bags', undefined, `Lower tier: ${lowerDeck.footingBagsPerPost} bags per ${lowerDeck.footingDiameterIn} in diameter × ${lowerDeck.footingDepthIn} in deep round footing, ${lowerDeck.concreteBag80lbYieldCuFt.toFixed(2)} cu ft yield per bag; site verification required`),
       toMaterial(`${lowerDeck.footingDiameterIn} in x ${lowerDeck.footingTubeStockIn} in Sonotubes`, 'Structure', lowerDeck.footingTubeCount, 'tubes', `${Math.max(1, Math.floor(lowerDeck.footingTubeStockIn / lowerDeck.footingDepthIn))} footing cuts per tube`, undefined, `Lower tier: ${lowerDeck.postCount} round footing(s), ${lowerDeck.footingDepthIn} in concrete depth; confirm tube use and embedment`),
       toMaterial('Post brackets', 'Hardware', lowerDeck.postBases, 'ea', `Compatible with ${lowerDeck.postSize} posts`, undefined, 'Lower tier approved post base at each footing'),
       toMaterial('Concrete submersible J Anchors', 'Hardware', lowerDeck.concreteAnchors, 'ea', '1 per post bracket', undefined, 'Lower tier concrete anchor for post base bracket'),
@@ -767,7 +767,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
 
   materials.push(
     toMaterial(`${deck.postSize} wood posts`, 'Structure', structuralPostStock.stockCount, 'boards', `${structuralPostStock.stockLength} ft stock`, framingWoodGrade, `${deck.postCount} post(s) cut to about ${feetAndInches(structuralPostStock.cutLength)} each after subtracting ${deck.joistSize} joist height from ${feetAndInches(deckHeightFt)} deck height · ${structuralPostStock.perStock} cut(s) per stock board${deck.lockedPosts.length ? ` · ${deck.lockedPosts.length} post position(s) manually locked` : ''}`),
-    toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', undefined, `${deck.footingBagsPerPost} bags per ${deck.footingDiameterIn} in diameter × ${deck.footingDepthIn} in deep round footing, approximately 0.6 cu ft yield per bag; verify soil and frost depth`),
+    toMaterial('Concrete mix', 'Structure', deck.concreteBags, 'bags', '80 lb bags', undefined, `${deck.footingBagsPerPost} bags per ${deck.footingDiameterIn} in diameter × ${deck.footingDepthIn} in deep round footing, ${deck.concreteBag80lbYieldCuFt.toFixed(2)} cu ft yield per bag; verify soil and frost depth`),
     toMaterial(`${deck.footingDiameterIn} in x ${deck.footingTubeStockIn} in Sonotubes`, 'Structure', deck.footingTubeCount, 'tubes', `${Math.max(1, Math.floor(deck.footingTubeStockIn / deck.footingDepthIn))} footing cuts per tube`, undefined, `${deck.postCount} round footing(s) at ${deck.footingDepthIn} in concrete depth; verify tube use and embedment`),
     toMaterial('Post brackets', 'Hardware', deck.postBases, 'ea', `Compatible with ${deck.postSize} posts`, undefined, 'Approved post base bracket at each footing'),
     toMaterial('Concrete submersible J Anchors', 'Hardware', deck.concreteAnchors, 'ea', '1 per post bracket', undefined, 'Concrete anchor for post base bracket'),
@@ -1001,6 +1001,29 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
         refs.slice(0,10).join(', ')));
     }
   }
+  // Share the existing length/kerf optimizer across compatible main/lower
+  // nailer cuts. The rendered cuts are the purchase authority, not a lf ratio.
+  const supportModels=[{id:'M',model:deck},...(lowerDeck?[{id:'L',model:lowerDeck}]:[])];
+  const finishSupportIssues=supportModels.flatMap(tier=>tier.model.finishSupport.issues.map(issue=>tier.id+' finish support: '+issue));
+  const supportPieces=supportModels.flatMap(tier=>tier.model.finishSupport.pieces.map(piece=>({...piece,id:tier.id+'-'+piece.id})));
+  for(const size of [...new Set(supportPieces.map(piece=>piece.nominalSize))]){
+    const cuts=supportPieces.filter(piece=>piece.nominalSize===size).map(piece=>({
+      id:piece.id,edgeIndex:-1,material:piece.nominalSize,lengthFt:piece.lengthFt,
+      location:piece.sourceIds.join(', ')+'; rip '+(piece.widthFt*12).toFixed(3)+' in',
+    }));
+    const optimized=packSkirtCuts(cuts,[8,12,16,20]);
+    finishSupportIssues.push(...optimized.issues);
+    for(const length of [...new Set(optimized.stock.map(board=>board.stockLengthFt))]){
+      const boards=optimized.stock.filter(board=>board.stockLengthFt===length);
+      const scheduled=boards.flatMap(board=>board.cuts);
+      materials.push(toMaterial(size+' pressure-treated flat finish support nailers','Structure',
+        boards.length,'boards',length+' ft stock',undefined,
+        'Wide face horizontal; 1.5 in vertical thickness. Continuous side picture-frame / breaker backing, clear of upright joists and double rims. '+
+        scheduled.map(cut=>cut.id+': '+cut.lengthFt.toFixed(3)+' ft, '+cut.location).join('; ')+
+        '. Includes 1/8 in saw kerf and 1/4 in end trim. Attachment and splice detail by selected framing design.',
+        scheduled.map(cut=>cut.id).join(', ')));
+    }
+  }
   materials.push(...gatePlan.materials);
   return {
     summary: [
@@ -1019,6 +1042,7 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
     materials: consolidateMaterials(materials).filter((item) => item.quantity > 0),
     validationIssues: [
       ...deck.postLayoutIssues.map((issue) => 'Main deck: ' + issue),
+      ...finishSupportIssues,
       ...woodDrinkRailIssues,
       ...stairFinishIssues,
       ...finishStockIssues,
@@ -1041,7 +1065,9 @@ function estimateDeck(inputs: EstimateInputs): EstimateResult {
       deck.beamLines.some((beam) => beam.postMode === 'manual') ? 'Manual post coordinates are authoritative for drawing, footing, post-base, anchor and structural bolt counts; engineer review required.' : 'Automatic post spacing is a preliminary layout only.',
       'Main deck support references: ' + deck.postLocations.map((post) => post.reference + ' at X ' + feetAndInches(post.x) + ', Y ' + feetAndInches(post.y)).join('; '),
       ...deck.postEngineeringNotes,
-      `Concrete volume assumes full-depth round piers and 0.6 cu ft per 80 lb bag; final footing design, soil bearing and frost depth require field/engineer approval.`,
+      ...deck.finishSupport.notes,
+      ...(lowerDeck?lowerDeck.finishSupport.notes.map(note=>'Lower tier: '+note):[]),
+      `Concrete volume assumes full-depth round piers and ${deck.concreteBag80lbYieldCuFt.toFixed(2)} cu ft per 80 lb bag; final footing design, soil bearing and frost depth require field/engineer approval.`,
       ...(skirtingPlan.enabled ? skirtingPlan.notes : []),
       ...gatePlan.notes,
       ...(stairSkirtingPlan.enabled ? stairSkirtingPlan.notes : []),

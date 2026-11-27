@@ -7,6 +7,35 @@ export const deckFaceArea=(poly:readonly DeckFacePoint[])=>Math.abs(poly.reduce(
   const q=poly[(i+1)%poly.length];return sum+p[0]*q[1]-q[0]*p[1];
 },0))/2;
 
+/** Convex pieces of a simple (possibly concave) footprint. This is a clipping
+ * aid, not a replacement hull that would fill an L-shaped deck's recess. */
+export function triangulateDeckFace(input:readonly DeckFacePoint[]):DeckFacePoint[][]{
+  const points=input.filter((p,i)=>i===0||Math.hypot(p[0]-input[i-1][0],p[1]-input[i-1][1])>EPS)
+    .map(p=>[p[0],p[1]] as DeckFacePoint);
+  if(points.length>2&&Math.hypot(points[0][0]-points[points.length-1][0],points[0][1]-points[points.length-1][1])<EPS)points.pop();
+  const turn=(a:DeckFacePoint,b:DeckFacePoint,c:DeckFacePoint)=>
+    (b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+  if(points.reduce((sum,p,i)=>sum+cross(p,points[(i+1)%points.length]),0)<0)points.reverse();
+  for(let i=points.length-1;i>=0&&points.length>3;i--){
+    if(Math.abs(turn(points[(i+points.length-1)%points.length],points[i],points[(i+1)%points.length]))<EPS)points.splice(i,1);
+  }
+  const triangles:DeckFacePoint[][]=[];
+  while(points.length>3){
+    let found=false;
+    for(let i=0;i<points.length;i++){
+      const before=(i+points.length-1)%points.length,after=(i+1)%points.length;
+      const a=points[before],b=points[i],c=points[after];
+      if(turn(a,b,c)<=EPS)continue;
+      if(points.some((p,j)=>j!==before&&j!==i&&j!==after&&
+        turn(a,b,p)>=-EPS&&turn(b,c,p)>=-EPS&&turn(c,a,p)>=-EPS))continue;
+      triangles.push([a,b,c]);points.splice(i,1);found=true;break;
+    }
+    if(!found)return [];
+  }
+  if(points.length===3&&deckFaceArea(points)>EPS)triangles.push(points);
+  return triangles;
+}
+
 export function clipDeckFace(poly:readonly DeckFacePoint[],a:DeckFacePoint,
   b:DeckFacePoint,keepLeft:boolean,clearanceFt=0):DeckFacePoint[]{
   if(poly.length<3)return [];

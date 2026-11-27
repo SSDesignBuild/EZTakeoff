@@ -170,8 +170,11 @@ for(const stairCount of [0,1])for(const [coverScreenStyle,coverScreenRailTreatme
  if(integrated){
   assert.ok(coveredPlan.placedCounts.post<removedPlan.placedCounts.post);
   if(stairCount===0)assert.equal(coveredPlan.placedCounts.post+coveredPlan.placedCounts['post-cap'],0);
- }else assert.deepEqual(coveredPlan.fixtures,removedPlan.fixtures,
-  'Independent inside/outside screens retain the deck railing fixtures while the cover exists');
+ }else {
+  assert.ok(removedPlan.fixtures.every(f=>coveredPlan.fixtures.some(c=>c.id===f.id&&JSON.stringify(c)===JSON.stringify(f))),
+   'Independent inside/outside screens retain every deck railing fixture while separate stair posts clear the wall');
+  if(stairCount===0)assert.deepEqual(coveredPlan.fixtures,removedPlan.fixtures);
+ }
  assert.deepEqual(planLightingAddons({...uncovered,coverFamily:'Moderno'}).fixtures,coveredPlan.fixtures,
   'Restoring the cover reuses the exact retained enclosure and lighting configuration');
  assert.equal(JSON.stringify(enclosed),before,'Planning must not mutate a saved design');

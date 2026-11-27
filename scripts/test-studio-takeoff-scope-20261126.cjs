@@ -52,8 +52,9 @@ assert.ok(!roomNotes.includes('Screen room selection:'),'The retired screen choi
 assert.deepEqual(bridge.consultationTakeoffScopeNotes({...room,coverFamily:'none'}),[],
   'Saved dormant cover and enclosure selections are not represented as installed after cover removal');
 // Removing a cover preserves choices for restoration, but neither the external
-// estimator nor the editable Admin copy may order the dormant room or its floor
-// closure, report its conflicts, or describe its door/privacy walls as installed.
+// estimator nor the editable Admin copy may order the dormant room, report
+// its conflicts, or describe its door/privacy walls as installed. Enclosure
+// choices never introduce a supplemental deck-board patch, covered or not.
 const openDeck={...room,kind:'deck',coverFamily:'none',coverScreenStyle:'none',
   coverPrivacyWallGaps:{},coverDoorEnabled:false};
 const openHandoff=createEstimateHandoff(openDeck);
@@ -61,9 +62,9 @@ for(const screenStyle of ['elite-add-a-room','lumino-sunroom','dolce-open-view',
   const covered={...room,coverScreenStyle:screenStyle,coverDoorEnabled:true,
     coverDoorSide:'front',coverPrivacyWallGaps:{front:2,left:0,right:0,rear:0}};
   const coveredHandoff=createEstimateHandoff(covered);
-  if(screenStyle==='elite-add-a-room')assert.ok(coveredHandoff.materials.some(item=>
+  assert.ok(!coveredHandoff.materials.some(item=>
     item.name==='Interior deck closure board at Elite sunroom wall'),
-    'The covered fixture must include a real enclosure floor-closure quantity');
+    'Enclosures use the same physical deck layout without a supplemental closure board');
   const uncovered={...covered,coverFamily:'none'};
   const saved=JSON.stringify(uncovered),handoff=createEstimateHandoff(uncovered);
   assert.deepEqual(handoff.materials,openHandoff.materials,

@@ -4,7 +4,8 @@ import type {MaterialItem} from './types';
 import {getRailVisualProduct,getDeckVisualProduct,getCoverVisualProduct,type RailVisualProduct} from '../data/visualCatalog';
 import {lightingProducts,getLightingProduct,GENERIC_FAN_PLACEMENT_REFERENCE,type LightingCategory,type AddonCategory,type LightingProduct} from '../data/lightingCatalog';
 import {planLevelRailingRuns,railingSurfaceInsetFt,railPointKey} from './railingLayout';
-import {planStairRailingRuns,stairFlightFrame} from './stairRailVisualGeometry';
+import {planStairRailingRuns,stairFlightFrame,type StairRailClearanceWall} from './stairRailVisualGeometry';
+import {stairEnclosureClearanceWalls} from './stairEnclosureClearance';
 import {parseDeckGates} from './deckGates';
 import {resolveFasciaMaterial} from './deckTrimSelection';
 import {surfaceStrips} from './visualGeometry';
@@ -20,7 +21,7 @@ export interface LightingSettings {
   lightingPostPattern:'all'|'alternating';lightingPostCapPattern:'all'|'alternating';
   lightingStairFixture:string;lightingStairPattern:'all'|'alternating';lightingStairPerRiser:1|2;
   lightingDeckFixture:string;lightingDeckSpacingFt:number;lightingTier:'all'|LightingTier;
-  patioFanCount:number;patioFanLayout:'centered'|'front'|'rear';patioFanFinish:'black'|'white';patioFanMount:'standard'|'low-profile';
+  patioFanCount:number;patioFanLayout:'centered'|'front'|'rear';patioFanFinish:'black'|'white';patioFanMount:'standard'|'low-profile';patioFanLight:boolean;
   patioCanLightCount:number;patioCanLightLayout:'grid'|'perimeter';patioCanLightFinish:'black'|'white';
 }
 export interface LightingOption {id:string;label:string;enabled:boolean;reason?:string}
@@ -31,11 +32,60 @@ export interface LightingFixture {
   geometryFidelity:'published-envelope'|'mounting-symbol'|'generic-concept';
   sourceUrl?:string;postKey?:string;flightIndex?:number;riserIndex?:number;
   mountStyle?:'standard'|'low-profile';
+  /** The saved integrated-light option belongs to this fan, not a second fixture. */
+  hasLight?:boolean;
 }
 export interface LightingAddonPlan {
   settings:LightingSettings;fixtures:LightingFixture[];materials:MaterialItem[];
   requestedCounts:Record<AddonCategory,number>;placedCounts:Record<AddonCategory,number>;
   issues:string[];notes:string[];
+}
+export interface LightingPreviewSource {
+  fixtureIds:string[];category:AddonCategory;position:LightingPoint;intensity:number;distance:number;
+}
+export const fixtureHasLight=(fixture:LightingFixture)=>fixture.category!=='fan'||fixture.hasLight===true;
+/** Every selected lamp contributes to the evening preview. Nearby sources
+ * merge only when the shader light budget is reached; no fixture is sampled
+ * away. Ceiling sources reach the deck instead of using the short riser range.
+ * These are display intensities, not a photometric/electrical calculation. */
+export function planLightingPreviewSources(fixtures:readonly LightingFixture[],maxSources=20):LightingPreviewSource[]{
+  const sources=fixtures.filter(fixtureHasLight).map(f=>{
+    const overhead=f.category==='can-light'||f.category==='fan';
+    const position:LightingPoint=[...f.position];
+    if(f.category==='fan')position[1]-=f.sizeFt[1]+.18;
+    else if(f.category==='can-light'){
+      position[0]+=.09*Math.sin(f.rotation[2]);position[1]-=.09*Math.cos(f.rotation[0])*Math.cos(f.rotation[2]);
+      position[2]-=.09*Math.sin(f.rotation[0]);
+    }else if(f.category==='deck')position[1]+=.15;
+    else if(f.category==='post-cap')position[1]+=.02;
+    else {
+      // Recessed riser housings sit inside the board. The light source must
+      // sit beyond the visible lens, on the same outward normal as its mesh.
+      const projection=f.sizeFt[2]/2+.06;
+      position[0]+=Math.sin(f.rotation[1])*projection;position[2]+=Math.cos(f.rotation[1])*projection;
+      position[1]-=.04;
+    }
+    return {fixtureIds:[f.id],category:f.category,position,
+      intensity:overhead?(f.category==='fan'?70:85):f.category==='stair'?2.8:3.5,
+      distance:overhead?Math.max(16,f.position[1]+4):f.category==='stair'?3.8:6};
+  });
+  const budget=Math.max(1,Math.floor(maxSources));
+  while(sources.length>budget){
+    let ai=0,bi=1,best=Infinity;
+    for(let a=0;a<sources.length;a++)for(let b=a+1;b<sources.length;b++){
+      const first=sources[a],second=sources[b];
+      const distance=Math.hypot(...first.position.map((n,i)=>n-second.position[i]));
+      const cost=distance+(first.category===second.category?0:1000);
+      if(cost<best){best=cost;ai=a;bi=b;}
+    }
+    const a=sources[ai],b=sources[bi],intensity=a.intensity+b.intensity;
+    const position=a.position.map((n,i)=>(n*a.intensity+b.position[i]*b.intensity)/intensity) as LightingPoint;
+    sources[ai]={fixtureIds:[...a.fixtureIds,...b.fixtureIds],category:a.category,position,intensity,
+      distance:Math.max(a.distance+Math.hypot(...a.position.map((n,i)=>n-position[i])),
+        b.distance+Math.hypot(...b.position.map((n,i)=>n-position[i])))};
+    sources.splice(bi,1);
+  }
+  return sources;
 }
 const finite=(value:unknown,fallback:number)=>Number.isFinite(Number(value))?Number(value):fallback;
 const limit=(value:unknown,fallback:number,min:number,max:number)=>Math.min(max,Math.max(min,finite(value,fallback)));
@@ -55,6 +105,7 @@ export function readLightingSettings(values:Values):LightingSettings {
     patioFanLayout:values.patioFanLayout==='front'||values.patioFanLayout==='rear'?values.patioFanLayout:'centered',
     patioFanFinish:values.patioFanFinish==='white'?'white':'black',
     patioFanMount:values.patioFanMount==='low-profile'?'low-profile':'standard',
+    patioFanLight:values.patioFanLight===true||values.patioFanLight==='true',
     patioCanLightCount:Math.round(limit(values.patioCanLightCount,0,0,24)),
     patioCanLightLayout:values.patioCanLightLayout==='perimeter'?'perimeter':'grid',
     patioCanLightFinish:values.patioCanLightFinish==='black'?'black':'white',
@@ -144,7 +195,8 @@ export function lightingScreenIntegrated(project:ConsultationProject):boolean {
 }
 interface RailStation {point:LightingPoint;key:string;normal:V2;baseY:number;postWidthFt:number}
 /** Exact same run, opening, inset and post station authorities as the rail meshes. */
-export function lightingRailStations(model:DeckModel,values:Values,center:V2,deckHeight:number,screenIntegrated=false):RailStation[]{
+export function lightingRailStations(model:DeckModel,values:Values,center:V2,deckHeight:number,screenIntegrated=false,
+ enclosureWalls:readonly StairRailClearanceWall[]=[]):RailStation[]{
   const style=railStyle(values),postWidth=style.postWidthIn/12,metal=style.family==='metal';
   const topWidth=style.geometry.includes('drink')?5.5/12:style.topWidthIn/12;
   const inset=railingSurfaceInsetFt(postWidth,topWidth);
@@ -156,7 +208,7 @@ export function lightingRailStations(model:DeckModel,values:Values,center:V2,dec
     return [{edgeIndex:edge.index,startFt:start,endFt:start+width}];
   });
   const levels=screenIntegrated?[]:planLevelRailingRuns(model,center,deckHeight,postWidth,topWidth,metal?7.1:6,model.railCoverage,openings);
-  const stairs=planStairRailingRuns(model,center,deckHeight,postWidth,metal?7.1:6,inset);
+  const stairs=planStairRailingRuns(model,center,deckHeight,postWidth,metal?7.1:6,inset,enclosureWalls);
   const winding=model.points.reduce((s,p,i)=>{const n=model.points[(i+1)%model.points.length];return s+p.x*n.y-n.x*p.y;},0)>=0?1:-1;
   const stations=new Map<string,RailStation>();
   const add=(point:LightingPoint,normal:V2,baseY:number)=>{
@@ -180,10 +232,10 @@ export function lightingRailStations(model:DeckModel,values:Values,center:V2,dec
 const tierSelected=(settings:LightingSettings,tier:LightingTier)=>settings.lightingTier==='all'||settings.lightingTier===tier;
 const patterned=<T,>(items:T[],choice:'all'|'alternating')=>choice==='alternating'?items.filter((_,i)=>i%2===0):items;
 export function lightingCapPostKeys(model:DeckModel,values:Values,center:V2,deckHeight:number,
-  screenIntegrated=false,tier:LightingTier='main'):Set<string>{
+  screenIntegrated=false,tier:LightingTier='main',enclosureWalls:readonly StairRailClearanceWall[]=[]):Set<string>{
   const settings=readLightingSettings(values),product=getLightingProduct(settings.lightingPostCapFixture);
   if(!tierSelected(settings,tier)||!product||product.category!=='post-cap'||compatibility(values,product))return new Set();
-  return new Set(patterned(lightingRailStations(model,values,center,deckHeight,screenIntegrated),settings.lightingPostCapPattern).map(p=>p.key));
+  return new Set(patterned(lightingRailStations(model,values,center,deckHeight,screenIntegrated,enclosureWalls),settings.lightingPostCapPattern).map(p=>p.key));
 }
 const finishes:Record<string,string>={black:'#25282b','matte-black':'#25282b',white:'#e6e4de',
   'matte-white':'#e6e4de','dark-bronze':'#514133','architectural-bronze':'#514133','matte-espresso':'#3e2e24'};
@@ -214,6 +266,57 @@ function inPolygon(point:V2,polygon:readonly V2[]):boolean {
 function containsDisc(point:V2,radius:number,polygon:readonly V2[]):boolean {
   return Array.from({length:12},(_,i)=>[point[0]+Math.cos(i*Math.PI/6)*radius,point[1]+Math.sin(i*Math.PI/6)*radius] as V2)
     .every(p=>inPolygon(p,polygon));
+}
+export interface CeilingLightBounds {left:number;right:number;rear:number;front:number}
+/** Plan complete, centred rows before testing obstructions. Moving a mirrored
+ * pair together keeps a fan or truss from leaving a ragged partial grid.
+ * Three cans begin as a centred row; four begin as a two-by-two rectangle.
+ * Alternate balanced rows can surround a central fan without placing a can
+ * inside its blade sweep. No random/dense-grid fallback changes the symmetry. */
+export function planCanLightStations(count:number,layout:'grid'|'perimeter',bounds:CeilingLightBounds,
+ canPlace:(point:V2)=>boolean=()=>true):V2[]{
+  const {left,right,rear,front}=bounds,w=right-left,d=front-rear;
+  if(w<=.5||d<=.5||count<1)return [];
+  const requested=Math.min(24,Math.floor(count)),wide=w>=d;
+  const rowPlans=(n:number):number[][]=>{
+    const preferred:Record<number,number[]>={1:[1],2:[2],3:[3],4:[2,2],5:[2,1,2],6:[3,3],7:[2,3,2],8:Math.max(w,d)/Math.min(w,d)>1.65?[4,4]:[3,2,3]};
+    const choices:number[][]=[];
+    if(preferred[n])choices.push(preferred[n]);
+    const rows=Array.from({length:Math.min(n,6)},(_,i)=>i+1)
+      .sort((a,b)=>Math.abs(n/a/a-Math.max(w,d)/Math.min(w,d))-Math.abs(n/b/b-Math.max(w,d)/Math.min(w,d)));
+    for(const total of rows){
+      const base=Math.floor(n/total),row=Array(total).fill(base) as number[];
+      let remaining=n-base*total;
+      if(total%2&&remaining%2){row[Math.floor(total/2)]++;remaining--;}
+      for(let pair=0;remaining>=2&&pair<Math.floor(total/2);pair++,remaining-=2){row[pair]++;row[total-1-pair]++;}
+      // An odd count in two rows is a centred triangle/paired row, never
+      // a partly filled row whose last light sits to one side.
+      if(remaining)row[Math.floor((total-1)/2)]++;
+      if(!choices.some(existing=>existing.join(',')===row.join(',')))choices.push(row);
+    }
+    return choices;
+  };
+  for(let target=requested;target>0;target--){
+    for(const rows of rowPlans(target))for(const longAcross of [wide,!wide]){
+      const normalized=rows.flatMap((inRow,row)=>Array.from({length:inRow},(_,col)=>{
+        const x=layout==='perimeter'&&inRow>1?(col/(inRow-1)-.5)*.84:(col+.5)/inRow-.5;
+        const z=layout==='perimeter'&&rows.length>1?(row/(rows.length-1)-.5)*.84:(row+.5)/rows.length-.5;
+        return [x,z] as V2;
+      }));
+      for(const sx of [1,1.15,1.3,.85,1.45,.7])for(const sz of [1,1.15,1.3,.85,1.45,.7]){
+        // A single row may sit on either side of a central fan; complete
+        // multi-row layouts always remain centred on the room.
+        for(const shift of rows.length===1?[0,-.24,.24,-.36,.36]:[0]){
+          const points=normalized.map(([x,z])=>longAcross
+            ?[(left+right)/2+x*sx*w,(rear+front)/2+(z*sz+shift)*d] as V2
+            :[(left+right)/2+(z*sz+shift)*w,(rear+front)/2+x*sx*d] as V2);
+          if(points.every((p,i)=>p[0]>=left+.17&&p[0]<=right-.17&&p[1]>=rear+.17&&p[1]<=front-.17&&
+            canPlace(p)&&points.slice(0,i).every(q=>Math.hypot(q[0]-p[0],q[1]-p[1])>=.6)))return points;
+        }
+      }
+    }
+  }
+  return [];
 }
 /** The saved deck-light spacing is snapped onto actual visible plank
  * centerlines. Cut seams, picture-frame voids and joist centers are avoided. */
@@ -277,7 +380,8 @@ export function planLightingAddons(project:ConsultationProject,center:V2=[0,0]):
   for(const entry of tiers){
     if(!tierSelected(settings,entry.tier))continue;
     const {model,tier,height:deckY,integrated}=entry;
-    const stations=lightingRailStations(model,values,center,deckY,integrated);
+    const enclosureWalls=tier==='main'?stairEnclosureClearanceWalls(model,project,center,deckY):[];
+    const stations=lightingRailStations(model,values,center,deckY,integrated,enclosureWalls);
     const guardHeight=limit(values.railingHeightIn,36,36,42)/12;
     const faceStations=patterned(stations,settings.lightingPostPattern),capStations=patterned(stations,settings.lightingPostCapPattern);
     if(settings.lightingPostFixture!=='none')requestedCounts.post+=faceStations.length;
@@ -396,40 +500,15 @@ export function planLightingAddons(project:ConsultationProject,center:V2=[0,0]):
       }
       fanSites.forEach(([x,z],i)=>{
         const y=soffit(x,z)-(isClassico?RENAISSANCE_TRUSS.outsideHeightIn/12:0);
-        fixtures.push({id:'main-patio-fan-'+i,category:'fan',productId:'generic-patio-fan-52',
-          label:'Generic 52-inch outdoor patio fan',tier:'main',position:[x,y,z],rotation:rotationAt(x),
+        fixtures.push({id:'main-patio-fan-'+i,category:'fan',productId:settings.patioFanLight?'generic-patio-fan-52-with-light':'generic-patio-fan-52',
+          label:'Generic 52-inch outdoor patio fan'+(settings.patioFanLight?' with integrated light':''),tier:'main',position:[x,y,z],rotation:rotationAt(x),
           sizeFt:[fanDiameter,fanDrop,fanDiameter],finish:settings.patioFanFinish,mounting:'ceiling',
-          mountStyle:settings.patioFanMount,geometryFidelity:'generic-concept'});
+          mountStyle:settings.patioFanMount,hasLight:settings.patioFanLight,geometryFidelity:'generic-concept'});
       });
-      const lightSites:V2[]=[],count=settings.patioCanLightCount,canRadius=4/24;
-      const candidates:V2[]=[];
-      if(usableW>.5&&usableD>.5&&count){
-        if(settings.patioCanLightLayout==='perimeter'){
-          const w=Math.max(.1,usableW-1),d=Math.max(.1,usableD-1),perimeter=2*(w+d);
-          for(let i=0;i<count;i++){
-            let station=perimeter*(i+.5)/count;
-            if(station<w)candidates.push([left+.5+station,rear+.5]);
-            else if((station-=w)<d)candidates.push([right-.5,rear+.5+station]);
-            else if((station-=d)<w)candidates.push([right-.5-station,front-.5]);
-            else candidates.push([left+.5,front-.5-(station-w)]);
-          }
-        }else {
-          const cols=Math.max(1,Math.ceil(Math.sqrt(count*usableW/Math.max(.5,usableD)))),rows=Math.ceil(count/cols);
-          for(let row=0;row<rows;row++)for(let col=0;col<Math.min(cols,count-row*cols);col++)
-            candidates.push([left+usableW*(col+.5)/cols,rear+usableD*(row+.5)/rows]);
-        }
-        // Dense alternate sites preserve the requested quantity when a
-        // primary grid position meets a real truss or fan blade envelope.
-        for(let row=0;row<8;row++)for(let col=0;col<10;col++)
-          candidates.push([left+usableW*(col+.5)/10,rear+usableD*(row+.5)/8]);
-        for(const p of candidates){
-          if(lightSites.length>=count)break;
-          if(!containsDisc(p,canRadius,footprint)||fanSites.some(f=>Math.hypot(f[0]-p[0],f[1]-p[1])<fanRadius+.3))continue;
-          if(isClassico&&trusses.some(x=>Math.abs(x-p[0])<canRadius+RENAISSANCE_TRUSS.outsideWidthIn/24+.04))continue;
-          if(lightSites.some(q=>Math.hypot(q[0]-p[0],q[1]-p[1])<.6))continue;
-          lightSites.push(p);
-        }
-      }
+      const count=settings.patioCanLightCount,canRadius=4/24;
+      const lightSites=planCanLightStations(count,settings.patioCanLightLayout,{left,right,rear,front},p=>
+        containsDisc(p,canRadius,footprint)&&fanSites.every(f=>Math.hypot(f[0]-p[0],f[1]-p[1])>=fanRadius+.3)&&
+        (!isClassico||trusses.every(x=>Math.abs(x-p[0])>=canRadius+RENAISSANCE_TRUSS.outsideWidthIn/24+.04)));
       lightSites.forEach(([x,z],i)=>fixtures.push({id:'main-can-light-'+i,category:'can-light',productId:'generic-recessed-can-4',
         label:'Generic 4-inch recessed patio can light',tier:'main',position:[x,soffit(x,z),z],rotation:rotationAt(x),
         sizeFt:[4/12,.08,4/12],finish:settings.patioCanLightFinish,mounting:'ceiling',geometryFidelity:'generic-concept'}));
@@ -444,7 +523,7 @@ export function planLightingAddons(project:ConsultationProject,center:V2=[0,0]):
     name:fixture.label,category:fixture.category==='fan'?'Patio fans':'Outdoor lighting',quantity:count,unit:'ea',color:fixture.finish,
     stockRecommendation:fixture.sourceUrl?'Confirm current manufacturer order code and installation accessories':'Generic fixture allowance — final manufacturer/model to be selected',
     notes:(fixture.sourceUrl?'Manufacturer reference: '+fixture.sourceUrl+'. ':'')+
-      (fixture.category==='fan'?'Generic '+fixture.mountStyle+' mount shown with '+Math.round(fixture.sizeFt[1]*12)+'-inch visualization drop; final model dimensions must be confirmed. ':'')+
+      (fixture.category==='fan'?'Generic '+fixture.mountStyle+' mount shown with '+Math.round(fixture.sizeFt[1]*12)+'-inch visualization drop; '+(fixture.hasLight?'integrated light included in each fan allowance; ':'fan without integrated light; ')+'final model dimensions must be confirmed. ':'')+
       (fixture.geometryFidelity==='mounting-symbol'?'3D shows the verified mounting location; the published source does not dimension the housing. ':'')+
       'Quantity equals the saved, placed fixtures in the 3D plan. Electrical supply, wiring, approved mounting and controls are separate scope.',
   }));

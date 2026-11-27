@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { exportCanvasAsPng, exportCanvasesAsPdf, svgElementToExportCanvases, svgElementToCanvas } from '../lib/export';
 import { MaterialItem } from '../lib/types';
 import { renderMaterialExportPages,stackMaterialExportPages } from '../lib/materialExport';
+import { ConstructionCadPanel } from './ConstructionCadPanel';
 
 interface MaterialTableProps {
   items: MaterialItem[];
@@ -124,6 +126,7 @@ async function renderCombinedSkirtingSheet(cards: Element[]) {
 }
 
 export function MaterialTable({ items, values, onValuesChange, validationIssues = [],orderNotes = [] }: MaterialTableProps) {
+  const { serviceSlug } = useParams();
   const tableRef = useRef<HTMLDivElement | null>(null);
   const [customDraft, setCustomDraft] = useState(customDefaults);
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -403,7 +406,7 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
     const root = document.getElementById('service-export-root');
     // Include the deck plan and every configured skirting/railing elevation.
     // All these SVGs are driven by the same geometry as the supplier cuts.
-    const drawings = Array.from(root?.querySelectorAll('svg:not([data-export-skirting])') ?? []) as SVGSVGElement[];
+    const drawings = Array.from(root?.querySelectorAll('svg:not([data-export-skirting]):not([data-construction-cad])') ?? []) as SVGSVGElement[];
     const skirtingCards = Array.from(root?.querySelectorAll('[data-export-skirt-card="true"]') ?? []);
     if (!drawings.length && !skirtingCards.length) return;
     const layoutTitle = projectExportTitle('S&S Design Build · Layout', values);
@@ -438,6 +441,7 @@ export function MaterialTable({ items, values, onValuesChange, validationIssues 
         <strong>Material export blocked — correct drawing errors</strong>
         {validationIssues.map((issue, index) => <p key={index}>{issue}</p>)}
       </div>}
+      {serviceSlug === 'decks' && <ConstructionCadPanel values={values} items={displayItems} computedItems={items} issues={validationIssues} blocked={hasBlockingIssues} />}
       <div className="material-header-grid compact-grid-4">
         {infoFields.map((field) => field.type === 'select' ? (
           <label key={field.key} className="form-field compact-form-field">

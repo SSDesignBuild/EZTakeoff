@@ -94,9 +94,10 @@ export function ManufacturerStairRailing3D({model,center,deckHeight,style,color,
        const bottomFrom=at(from,.38),bottomTo=at(to,.38);
        const first=run.posts[0],last=run.posts[run.posts.length-1];
        const horizontal=Math.hypot(last[0]-first[0],last[2]-first[2]);
-       const landing:StairRailPoint3D=[first[0]+(last[0]-first[0])*run.insetFt/horizontal,
-         first[1],first[2]+(last[2]-first[2])*run.insetFt/horizontal];
-       const landingFraction=i===0?run.insetFt/Math.max(.001,len):0;
+       const returnFt=run.landingReturnFt??run.insetFt;
+       const landing:StairRailPoint3D=[first[0]+(last[0]-first[0])*returnFt/horizontal,
+         first[1],first[2]+(last[2]-first[2])*returnFt/horizontal];
+       const landingFraction=i===0?returnFt/Math.max(.001,len):0;
        const balusterCount=Math.max(2,Math.ceil(len/(wooden?.42:metallic?.39:.43)));
        const interpolate=(fraction:number):StairRailPoint3D=>[
         from[0]+(to[0]-from[0])*fraction,

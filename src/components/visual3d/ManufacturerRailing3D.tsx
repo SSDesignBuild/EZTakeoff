@@ -4,7 +4,7 @@ import { Beam, Block, Rod, type P2, type P3 } from './Primitives';
 import { parseDeckGates } from '../../lib/deckGates';
 import { ManufacturerStairRailing3D } from './ManufacturerStairRailing3D';
 import { planLevelRailingRuns,planDrinkRailPieces,railingEdgePoint,railingSurfaceInsetFt,railPointKey,resolveDrinkRailMaterial } from '../../lib/railingLayout';
-import { planStairRailingRuns } from '../../lib/stairRailVisualGeometry';
+import { planStairRailingRuns,type StairRailClearanceWall } from '../../lib/stairRailVisualGeometry';
 import { DrinkRailBoards3D } from './DrinkRailBoards3D';
 
 type Values=Record<string,string|number|boolean>;
@@ -21,10 +21,11 @@ function resolveStyle(values:Values):RailVisualProduct {
   const profile=values.railingTopProfile==='modern'?'tt-ire-modern':values.railingTopProfile==='drink'?'tt-ire-drink':'tt-ire-classic';
   return getRailVisualProduct(profile);
 }
-export function ManufacturerRailing3D({model,values,center,deckHeight,screenIntegrated=false,lightCapPostKeys}:{
+export function ManufacturerRailing3D({model,values,center,deckHeight,screenIntegrated=false,lightCapPostKeys,enclosureWalls=[]}:{
   model:DeckModel;values:Values;center:P2;deckHeight:number;
   screenIntegrated?:boolean;
   lightCapPostKeys?:ReadonlySet<string>;
+  enclosureWalls?:readonly StairRailClearanceWall[];
 }){
   const selectedStyle=resolveStyle(values);
   const requestedPost=Number(String(values.railingPostSize??'3x3').split('x')[0]);
@@ -56,7 +57,7 @@ export function ManufacturerRailing3D({model,values,center,deckHeight,screenInte
   // Only explicit stair openings or individually configured railing gates
   // can remove railing sections. The screen door remains independent.
   const inset=railingSurfaceInsetFt(postWidth,drink?5.5/12:topWidth);
-  const stairs=planStairRailingRuns(model,center,deckHeight,postWidth,metallic?7.1:6,inset);
+  const stairs=planStairRailingRuns(model,center,deckHeight,postWidth,metallic?7.1:6,inset,enclosureWalls);
   const visibleRails=screenIntegrated?[]:planLevelRailingRuns(model,center,deckHeight,postWidth,
     drink?5.5/12:topWidth,metallic?7.1:6,model.railCoverage,gateOpenings);
   const startCoords=(edge:typeof model.edgeSegments[number],position:number):P2=>

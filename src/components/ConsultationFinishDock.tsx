@@ -418,6 +418,11 @@ export function ConsultationFinishDock({project,onChange,onRequestDetails}:Consu
           <option value="standard">Standard · 12-inch preview drop</option>
           <option value="low-profile">Low profile · 8-inch preview drop</option>
         </select></label>}
+        {fan&&<label className="finish-dock-inline-setting">Light <select aria-label="Fan integrated light"
+          disabled={!enabled} value={values.patioFanLight===true||values.patioFanLight==='true'?'yes':'no'}
+          onChange={event=>updateValues({patioFanLight:event.target.value==='yes'},'Fan integrated light updated')}>
+          <option value="no">Fan only</option><option value="yes">With integrated light</option>
+        </select></label>}
         {!enabled&&Number(values[countKey])>0&&<button type="button" className="finish-dock-text-button"
           onClick={()=>updateValues({[countKey]:0},'Incompatible overhead add-on removed')}>Remove saved {fan?'fans':'lights'}</button>}
       </div>;
@@ -479,8 +484,8 @@ export function ConsultationFinishDock({project,onChange,onRequestDetails}:Consu
     {label:'Stairs',action:()=>requestDetails('stairs')},
     {label:'Railing',action:()=>installedTabs.some(tab=>tab.category==='railing')?openCategory('railing'):requestDetails('railing')},
     {label:'Patio cover',action:()=>openCategory('cover')},
-    {label:'Screen room',action:()=>installedTabs.some(tab=>tab.category==='screen')?openCategory('screen'):requestDetails('screen')},
-    {label:'Sunroom',action:()=>installedTabs.some(tab=>tab.category==='sunroom')?openCategory('sunroom'):requestDetails('sunroom')},
+    {label:'Screen room',action:()=>requestDetails('screen')},
+    {label:'Sunroom',action:()=>requestDetails('sunroom')},
     {label:'Concrete area',action:()=>areas.length?openCategory('concrete'):requestDetails('concrete')},
     {label:'Lighting & add-ons',action:()=>openCategory('add-ons')},
   ];

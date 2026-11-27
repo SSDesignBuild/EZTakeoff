@@ -8,6 +8,11 @@ export interface StairRailVisualRun{
  runFt:number;widthFt:number;panels:StairRailVisualPanel[];
  posts:StairRailPoint3D[];
  postBaseYs:number[];insetFt:number;slopedLengthFt:number;
+ /** The level return ends at the deck nosing; a post moved onto a tread has none. */
+ landingReturnFt?:number;
+}
+export interface StairRailClearanceWall {
+ from:readonly [number,number];to:readonly [number,number];halfDepthFt:number;
 }
 /** Shared outward frame for actual 3D stair stringers and matching rail runs. */
 export function stairFlightFrame(model:DeckModel,placement:StairPlacement,
@@ -30,7 +35,8 @@ export function stairFlightFrame(model:DeckModel,placement:StairPlacement,
 export function planStairRailingRuns(model:DeckModel,
  center:readonly [number,number],deckHeightFt:number,
  postOutsideWidthFt=3.5/12,maxBayFt=6,
- insetFt=(postOutsideWidthFt+.06)*Math.SQRT2/2+.5/12):StairRailVisualRun[]{
+ insetFt=(postOutsideWidthFt+.06)*Math.SQRT2/2+.5/12,
+ enclosureWalls:readonly StairRailClearanceWall[]=[]):StairRailVisualRun[]{
  if(model.stairCount<=0||model.stairTreadsPerRun<=0||model.stairRunFt<=.01)return [];
  const runs:StairRailVisualRun[]=[];
  const rise=deckHeightFt/Math.max(1,model.stairRisers);
@@ -43,6 +49,49 @@ export function planStairRailingRuns(model:DeckModel,
   const frame=stairFlightFrame(model,placement,center);
   if(!frame)continue;
   const runFt=model.stairRunFt;
+  const treadDepth=runFt/Math.max(1,model.stairTreadsPerRun);
+  const inset=Math.min(insetFt,frame.widthFt/3);
+  const baseHalf=(postOutsideWidthFt+.06)/2;
+  const projectedHalf=baseHalf*(Math.abs(frame.outwardX)+Math.abs(frame.outwardZ));
+  const clearHalf=Math.max(projectedHalf,inset-.5/12),clearGap=.5/12;
+  let firstStation=-inset;
+  for(const sign of [-1,1]){
+   const cross=sign*(frame.widthFt/2-inset);
+   const origin:[number,number]=[frame.originX+Math.cos(frame.yaw)*cross,
+    frame.originZ-Math.sin(frame.yaw)*cross];
+   for(const wall of enclosureWalls){
+    const dx=wall.to[0]-wall.from[0],dz=wall.to[1]-wall.from[1],length=Math.hypot(dx,dz);
+    if(length<.01)continue;
+    const tangent=[dx/length,dz/length],normal=[-tangent[1],tangent[0]];
+    let enter=-Infinity,leave=Infinity;
+    for(const [axis,min,max]of [[tangent,-clearHalf,length+clearHalf],
+     [normal,-wall.halfDepthFt-clearHalf,wall.halfDepthFt+clearHalf]] as const){
+     const offset=(origin[0]-wall.from[0])*axis[0]+(origin[1]-wall.from[1])*axis[1];
+     const direction=frame.outwardX*axis[0]+frame.outwardZ*axis[1];
+     if(Math.abs(direction)<1e-8){if(offset<min||offset>max){enter=Infinity;break;}}
+     else {
+      const a=(min-offset)/direction,b=(max-offset)/direction;
+      enter=Math.max(enter,Math.min(a,b));leave=Math.min(leave,Math.max(a,b));
+     }
+    }
+    // Only the top-landing enclosure can affect this rail. A wall farther
+    // along the flight must not drag a post across several stair treads.
+    if(enter<=leave&&leave>=-inset&&enter<=treadDepth&&leave<runFt-inset)
+     firstStation=Math.max(firstStation,leave+clearGap);
+   }
+  }
+  if(firstStation>-projectedHalf-.02){
+   // A relocated top post seats fully on the first available tread. It
+   // must never hang across the drop between the deck and that tread.
+   const tread=Math.max(0,Math.floor(firstStation/treadDepth));
+   const near=tread*treadDepth+projectedHalf+.02;
+   const far=(tread+1)*treadDepth-projectedHalf-.02;
+   firstStation=Math.max(firstStation,near);
+   if(firstStation>far)firstStation=(tread+1)*treadDepth+projectedHalf+.02;
+  }
+  const finalStation=runFt-inset;
+  if(firstStation>=finalStation-.05)firstStation=-inset;
+  const landingReturnFt=Math.max(0,-firstStation);
   for(const [side,sign,defaultEnabled]of sides){
    // The stored placement is authoritative, including independently
    // configured additional stair flights. A screen room must never
@@ -50,36 +99,35 @@ export function planStairRailingRuns(model:DeckModel,
    const enabled=side==='left'
      ?placement.left??defaultEnabled:placement.right??defaultEnabled;
    if(!enabled)continue;
-   const inset=Math.min(insetFt,frame.widthFt/3);
-   const slopedLengthFt=inset+Math.hypot(runFt-inset,descent);
+   const pitch=descent/Math.max(.001,finalStation);
+   const slopedLengthFt=landingReturnFt+Math.hypot(finalStation-Math.max(0,firstStation),
+    descent-pitch*Math.max(0,firstStation));
    const count=Math.max(1,Math.ceil(slopedLengthFt/Math.max(.5,maxBayFt)));
    const cross=sign*(frame.widthFt/2-inset);
-   const at=(fraction:number):StairRailPoint3D=>{
-    const t=Math.max(0,Math.min(1,fraction)),z=-inset+runFt*t;
+   const at=(z:number):StairRailPoint3D=>{
     return [frame.originX+Math.cos(frame.yaw)*cross+Math.sin(frame.yaw)*z,
       deckHeightFt-descent*Math.max(0,z)/Math.max(.001,runFt-inset),
       frame.originZ-Math.sin(frame.yaw)*cross+Math.cos(frame.yaw)*z];
    };
-   const treadDepth=runFt/Math.max(1,model.stairTreadsPerRun);
    const stations=Array.from({length:count+1},(_,j)=>{
-    if(j===0)return -inset;
-    if(j===count)return runFt-inset;
+    if(j===0)return firstStation;
+    if(j===count)return finalStation;
     // Put an intermediate base at a tread centre, never astride a riser.
-    const desired=-inset+runFt*j/count;
+    const desired=firstStation+(finalStation-firstStation)*j/count;
     return (Math.floor(desired/treadDepth)+.5)*treadDepth;
    });
-   const posts=stations.map(z=>at((z+inset)/runFt));
+   const posts=stations.map(at);
    const postBaseYs=posts.map((_,j)=>{
-    if(j===0)return deckHeightFt+.0625;
     const z=stations[j];
+    if(z<=0)return deckHeightFt+.0625;
     const tread=Math.max(1,Math.min(model.stairTreadsPerRun,Math.ceil(z/treadDepth)));
     return deckHeightFt-rise*tread+.1025;
    });
    runs.push({placementIndex:i,edgeIndex:placement.edgeIndex,side,
-    runFt,widthFt:frame.widthFt,posts,postBaseYs,insetFt:inset,slopedLengthFt,
+    runFt,widthFt:frame.widthFt,posts,postBaseYs,insetFt:inset,landingReturnFt,slopedLengthFt,
     panels:Array.from({length:count},(_,j)=>({
-     startFt:stations[j]+inset,endFt:stations[j+1]+inset,
-     lengthFt:j===0?inset+Math.hypot(stations[j+1],posts[j+1][1]-posts[j][1]):
+     startFt:stations[j]-firstStation,endFt:stations[j+1]-firstStation,
+     lengthFt:j===0?landingReturnFt+Math.hypot(stations[j+1]-Math.max(0,firstStation),posts[j+1][1]-posts[j][1]):
        Math.hypot(stations[j+1]-stations[j],posts[j+1][1]-posts[j][1]),
      from:posts[j],to:posts[j+1],
     }))});
@@ -96,7 +144,8 @@ export function stairRailDatumAt(run:StairRailVisualRun,x:number,z:number){
  const length=Math.hypot(b[0]-a[0],b[2]-a[2]);
  if(length<1e-8)return a[1];
  const station=((x-a[0])*(b[0]-a[0])+(z-a[2])*(b[2]-a[2]))/length;
- return a[1]+(b[1]-a[1])*Math.max(0,station-run.insetFt)/Math.max(.001,length-run.insetFt);
+ const landing=run.landingReturnFt??run.insetFt;
+ return a[1]+(b[1]-a[1])*Math.max(0,station-landing)/Math.max(.001,length-landing);
 }
 /** A concealed post is cut to the underside of the drink board across its
  * complete footprint, not to the board height at only the post centre. */

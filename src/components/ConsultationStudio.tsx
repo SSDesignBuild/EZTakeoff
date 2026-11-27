@@ -1,3 +1,4 @@
+import { enclosureQuickAction } from '../lib/consultationEnclosureAction';
 import { lazy, Suspense, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { DeckDesigner } from './DeckDesigner';
@@ -77,6 +78,16 @@ function ConsultationEditor({project,onChange,saveError}:{project:ConsultationPr
   const [expandedView,setExpandedView]=useState(false);
   const [fitRequest,setFitRequest]=useState(0);
   const [inspectorSection,setInspectorSection]=useState<ConsultationDetailSection|null>(null);
+  const [detailsFocusRequest,setDetailsFocusRequest]=useState(0);
+  useEffect(()=>{
+    if(!inspectorSection||!detailsFocusRequest)return;
+    const frame=window.requestAnimationFrame(()=>{
+      const panel=document.getElementById('studio-detail-options');
+      panel?.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+      panel?.focus({preventScroll:true});
+    });
+    return ()=>window.cancelAnimationFrame(frame);
+  },[inspectorSection,detailsFocusRequest]);
   const [layoutMode,setLayoutMode]=useState<'points'|'stairs'|'railing'|'concrete'>('points');
   const [renderBusy,setRenderBusy]=useState(false);
   const [viewportHeight,setViewportHeight]=useState(500);
@@ -146,11 +157,18 @@ function ConsultationEditor({project,onChange,saveError}:{project:ConsultationPr
     setLayoutMode(mode);changeStep('layout');
   };
   const requestDetails=(section:string)=>{
+    if(section==='screen'||section==='sunroom'){
+      const action=enclosureQuickAction(project,section);
+      if(Object.keys(action.patch).length)onChange(action.patch);
+      setInspectorSection(action.section);setNotice(action.message);
+      setDetailsFocusRequest(value=>value+1);return;
+    }
     if(section==='concrete'){editLayout('concrete');return;}
     if(section==='stairs'&&totalStairs===0){editLayout('stairs');return;}
     if(section==='railing'&&model.railingRun+model.stairRailSideCount+
       (lowerModel?.railingRun??0)+(lowerModel?.stairRailSideCount??0)===0){editLayout('railing');return;}
     setInspectorSection(finishDockDetailSection(project,section));
+    setDetailsFocusRequest(value=>value+1);
   };
   return <div className="consultation-studio">
     <div className="consultation-titlebar">

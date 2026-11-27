@@ -27,7 +27,7 @@ export function ConsultationDetailsPanel({project,onChange,section,onSectionChan
   const model=useMemo(()=>buildDeckModel(project.values),[project.values]);
   const setValue=(key:string,value:string|number|boolean)=>onChange({values:{...project.values,[key]:value}});
   const updateValues=(updater:(current:ConsultationProject['values'])=>ConsultationProject['values'])=>onChange({values:updater(project.values)});
-  return <aside className="studio-inspector" aria-label="Detailed design options">
+  return <aside id="studio-detail-options" tabIndex={-1} className="studio-inspector" aria-label="Detailed design options" style={{scrollMarginTop:24}}>
     <header className="studio-inspector-heading"><div><span className="eyebrow">Design details</span><h3>Make it yours</h3></div>
       <button type="button" className="ghost-btn small-btn" aria-label="Close detailed options" onClick={onClose}>Close ×</button>
     </header>
@@ -55,6 +55,9 @@ export function ConsultationDetailsPanel({project,onChange,section,onSectionChan
             </select>
           </label>
           {project.values.stairLandingSurface==='bare-ground'&&<>
+            <label>Concrete pad width (ft)<input type="number" min={4} max={30} step={.5}
+              value={number(project.values.stairLandingWidthFt,4)}
+              onChange={e=>setValue('stairLandingWidthFt',Number(e.target.value))}/></label>
             <label>Concrete pad depth (ft)
               <input type="number" min={3} max={20} step={.5}
                 value={number(project.values.stairLandingDepthFt,4)}
@@ -62,10 +65,16 @@ export function ConsultationDetailsPanel({project,onChange,section,onSectionChan
             </label>
             <label>Concrete pad thickness (in)
               <input type="number" min={4} max={12} step={1}
-                value={number(project.values.stairLandingThicknessIn,5)}
+                value={number(project.values.stairLandingThicknessIn,4)}
                 onChange={e=>setValue('stairLandingThicknessIn',Number(e.target.value))}/>
             </label>
-            <small className="consultation-visual-note">One pad per drawn stair flight; minimum 4-foot width or the stair width, whichever is greater. 80-lb concrete bag quantities derive from actual volume with a 5% handling allowance and 0.60 cu ft nominal yield. Site grade, base, landings, footings and code approval require field review.</small>
+            <label>Concrete ordering allowance (%)<input type="number" min={0} max={100} step={1}
+              value={number(project.values.stairLandingAllowancePercent,25)}
+              onChange={e=>setValue('stairLandingAllowancePercent',Number(e.target.value))}/></label>
+            <label>80-lb bag yield (cu ft)<input type="number" min={.1} max={1} step={.01}
+              value={number(project.values.concreteBag80lbYieldCuFt,.6)}
+              onChange={e=>setValue('concreteBag80lbYieldCuFt',Number(e.target.value))}/></label>
+            <small className="consultation-visual-note">S&amp;S standard: 4′ × 4′ × 4″ per stair flight, enlarged for wider stairs. Pad width cannot be narrower than the stair. The 25% ordering allowance gives 12 bags at the standard size. Quantities use the configured volume, allowance and bag yield; verify site requirements.</small>
           </>}
           <label>Tread material<select value={String(project.values.stairTreadStyle??'match')}
             onChange={(e)=>setValue('stairTreadStyle',e.target.value)}>

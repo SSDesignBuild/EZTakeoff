@@ -1,7 +1,7 @@
 import {useEffect,useMemo} from 'react';
 import * as THREE from 'three';
 import type {ConsultationProject} from '../../lib/consultationProject';
-import {lightingFinishColor,planLightingAddons,type LightingFixture,type LightingPoint} from '../../lib/lightingAddons';
+import {lightingFinishColor,planLightingAddons,planLightingPreviewSources,type LightingFixture,type LightingPoint} from '../../lib/lightingAddons';
 
 function Housing({size,color,position=[0,0,0]}:{size:LightingPoint;color:string;position?:LightingPoint}){
   return <mesh position={position} castShadow receiveShadow>
@@ -12,7 +12,7 @@ function Lens({size,position,on}:{size:LightingPoint;position:LightingPoint;on:b
   return <mesh position={position}>
     <boxGeometry args={size}/>
     <meshStandardMaterial color={on?'#fff0cd':'#e8e0c9'} emissive={on?'#ffd78a':'#000000'}
-      emissiveIntensity={on?1.8:0} roughness={.4} toneMapped={false}/>
+      emissiveIntensity={on?3.2:0} roughness={.4} toneMapped={false}/>
   </mesh>;
 }
 /** The official product photographs show oval hoods, not rectangular boxes.
@@ -40,11 +40,11 @@ function OvalFixture({size,color,on}:{size:LightingPoint;color:string;on:boolean
     </mesh>
     <mesh geometry={lens}>
       <meshStandardMaterial color={on?'#fff0cd':'#e8e0c9'} emissive={on?'#ffd78a':'#000000'}
-        emissiveIntensity={on?1.8:0} roughness={.4} toneMapped={false} side={2}/>
+        emissiveIntensity={on?3.2:0} roughness={.4} toneMapped={false} side={2}/>
     </mesh>
   </>;
 }
-function PatioFan({fixture}:{fixture:LightingFixture}){
+function PatioFan({fixture,on}:{fixture:LightingFixture;on:boolean}){
   const [diameter,drop]=fixture.sizeFt,color=lightingFinishColor(fixture.finish),radius=diameter/2;
   const bladeTip=Math.sqrt(radius*radius-.16*.16);
   // This is the explicitly labeled generic 52-inch design allowance, not
@@ -64,6 +64,11 @@ function PatioFan({fixture}:{fixture:LightingFixture}){
         <boxGeometry args={[bladeTip-.22,.035,.32]}/><meshStandardMaterial color={color} metalness={.2} roughness={.7}/>
       </mesh>
     </group>)}
+    {fixture.hasLight&&<mesh name="optional-integrated-fan-light" position={[0,-drop-.145,0]}>
+      <sphereGeometry args={[.21,24,12,0,Math.PI*2,Math.PI/2,Math.PI/2]}/>
+      <meshStandardMaterial color={on?'#fff4d5':'#ece8df'} emissive={on?'#ffdc9b':'#000000'}
+        emissiveIntensity={on?3.2:0} toneMapped={false} roughness={.4}/>
+    </mesh>}
   </group>;
 }
 function CeilingLight({fixture,on}:{fixture:LightingFixture;on:boolean}){
@@ -75,7 +80,7 @@ function CeilingLight({fixture,on}:{fixture:LightingFixture;on:boolean}){
     <mesh position={[0,-.009,0]} rotation={[-Math.PI/2,0,0]}>
       <circleGeometry args={[radius*.78,20]}/>
       <meshStandardMaterial side={2} color={on?'#fff4d5':'#ece8df'} emissive={on?'#ffdc9b':'#000000'}
-        emissiveIntensity={on?2:0} toneMapped={false}/>
+        emissiveIntensity={on?3.2:0} toneMapped={false}/>
     </mesh>
   </group>;
 }
@@ -116,17 +121,14 @@ export function LightingAddons3D({project,center,lightingPreview=false}:{
   project:ConsultationProject;center:readonly [number,number];lightingPreview?:boolean;
 }){
   const plan=useMemo(()=>planLightingAddons(project,center),[project,center]);
-  const illuminated=plan.fixtures.filter(f=>f.category!=='fan');
-  // A bounded set of unshadowed preview lights keeps interaction responsive.
-  // This preview is not a lumen, wattage, wiring or illumination calculation.
-  const glowSites=illuminated.filter((_,i)=>i%Math.max(1,Math.ceil(illuminated.length/6))===0).slice(0,6);
+  const glowSites=useMemo(()=>planLightingPreviewSources(plan.fixtures),[plan.fixtures]);
   return <group name="saved-outdoor-lighting-and-patio-addons">
-    {plan.fixtures.map(f=>f.category==='fan'?<PatioFan key={f.id} fixture={f}/>:
+    {plan.fixtures.map(f=>f.category==='fan'?<PatioFan key={f.id} fixture={f} on={lightingPreview}/>:
       f.category==='can-light'?<CeilingLight key={f.id} fixture={f} on={lightingPreview}/>:
       f.category==='deck'?<DeckLight key={f.id} fixture={f} on={lightingPreview}/>:
       <RailOrRiserLight key={f.id} fixture={f} on={lightingPreview}/>)}
-    {lightingPreview&&glowSites.map(f=><pointLight key={'preview-glow-'+f.id}
-      position={[f.position[0],f.position[1]+(f.category==='deck'?.15:-.18),f.position[2]]}
-      color="#ffe0a3" intensity={3.5} distance={6} decay={2} castShadow={false}/>)}
+    {lightingPreview&&glowSites.map(f=><pointLight key={'preview-glow-'+f.fixtureIds.join('-')}
+      name={'evening-illumination-'+f.category} position={f.position}
+      color="#ffe0a3" intensity={f.intensity} distance={f.distance} decay={2} castShadow={false}/>)}
   </group>;
 }

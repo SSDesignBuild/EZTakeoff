@@ -107,26 +107,13 @@ for(const label of ['selected-stair-guard-',
 assert.ok(read('src/components/visual3d/DeckStairAssembly3D.tsx')
  .includes('stairFlightFrame(model,placement,center)'));
 
-const {planEliteDeckFloorClosure}=load('src/lib/eliteDeckFloorClosure');
-const wall={id:'right',from:[7.3,-5.5],to:[7.3,5.5],
- widthFt:11,bottomY:5.12,topFrom:12,topTo:11};
-const closure=planEliteDeckFloorClosure(model,[wall],'3-thermal','composite');
-assert.ok(closure.pieces.length>0,'No open black floor gap at inside sunroom wall');
-assert.ok(closure.totalLinearFt>10.8&&closure.totalLinearFt<=11);
-assert.ok(closure.stock.length>0);
-assert.ok(closure.stock.every(s=>[16,20].includes(s.stockLengthFt)),
- 'Composite/PVC supplier closure board cuts MUST be 16 or 20ft stock only');
-const inner=closure.pieces[0].from;
-assert.ok(inner[0]<wall.from[0],
- 'Closing board must be INSIDE the right-side wall, not under outside skirting');
-const pt=planEliteDeckFloorClosure(model,[wall],'2-nonthermal','pressure-treated');
-assert.ok(pt.stock.every(s=>[8,12,16,20].includes(s.stockLengthFt)));
+// The Nov 26 correction retires the arbitrary extra wall-parallel patch.
+// The ordinary clipped field and picture-frame layout supplies the floor.
 const floorRenderer=read('src/components/visual3d/ManufacturerDeck3D.tsx');
-assert.ok(floorRenderer.includes('real-finish-decking-board-against-elite-sunroom-walls'));
-assert.ok(floorRenderer.includes('planEliteDeckFloorClosure('));
+assert.ok(floorRenderer.includes('<VisibleDeckBoards')&&floorRenderer.includes('<BorderBoards'));
+assert.ok(!floorRenderer.includes('planEliteDeckFloorClosure')&&
+ !floorRenderer.includes('real-finish-decking-board-against-elite-sunroom-walls'));
 const bridge=read('src/lib/estimatingBridge.ts');
-assert.ok(bridge.includes('planEliteDeckFloorClosure')&&
- bridge.includes('Interior deck closure board at Elite sunroom wall')&&
- bridge.includes('eliteFloorClosure?.stock'),
- 'Every extra floor closure board must be counted in Sales Estimator');
-console.log('PASS Prime realistic smaller glass and visible hardware, roof-clipped post, selected stair guards on both sides, and stock-counted sunroom floor board');
+assert.ok(!bridge.includes('planEliteDeckFloorClosure')&&
+ !bridge.includes('Interior deck closure board at Elite sunroom wall'));
+console.log('PASS Prime glazing/hardware, roof-clipped post, selected stair guards, and ordinary deck floor without supplemental wall patch');
