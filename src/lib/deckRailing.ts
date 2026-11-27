@@ -1,3 +1,4 @@
+import {resolveBoardDimensions} from './deckProductDimensions';
 import type { buildDeckModel } from './deckModel';
 import type { MaterialItem } from './types';
 import { packSkirtCuts, type SkirtCut } from './deckSkirting';
@@ -63,7 +64,8 @@ export function buildTimberTechIRE(deck:Deck,inputs:Inputs,tierName='Main deck')
   const panels:RailPanel[]=[];
   const requestedPost=Number(postSize.split('x')[0]);
   const postWidth=([2,3,4].includes(requestedPost)?requestedPost:3)/12;
-  const topWidth=profile==='drink'?5.5/12:profile==='modern'?2.25/12:2.5/12;
+  const drinkDimensions=resolveBoardDimensions(resolveDrinkRailMaterial(inputs));
+  const topWidth=profile==='drink'?drinkDimensions.faceIn/12:profile==='modern'?2.25/12:2.5/12;
   const deckHeight=Number(inputs.deckHeight??0);
   const gates=parseDeckGates(inputs.deckGateEntries).flatMap(gate=>{
     const edge=deck.edgeSegments.find(e=>e.index===gate.edgeIndex);if(!edge)return [];
@@ -130,7 +132,7 @@ export function buildTimberTechIRE(deck:Deck,inputs:Inputs,tierName='Main deck')
     if(/(?:Terrain\+?|Prime\+?|ReliaBoard|Trex Enhance)/i.test(board))
       issues.push('Selected drink-rail board ('+board+') may be scalloped and is not an approved full-profile square-shouldered board.');
     notes.push('TimberTech Drink Rail requires full-profile square-shouldered boards; verify exact board SKU and the compatible insert/fastening kit.');
-    const drinkPieces=planDrinkRailPieces(levelRuns,stairRuns,5.5/12,heightIn/12+.075+.093/2);
+    const drinkPieces=planDrinkRailPieces(levelRuns,stairRuns,drinkDimensions.faceIn/12,heightIn/12+.0285+drinkDimensions.thicknessIn/12);
     const drinkCuts:SkirtCut[]=drinkPieces.map((piece,i)=>({
       id:'IR-DRINK-'+(i+1),edgeIndex:piece.edgeIndex,material:'finish',
       lengthFt:piece.lengthFt,location:piece.id+' mitered/pitched drink-rail board'

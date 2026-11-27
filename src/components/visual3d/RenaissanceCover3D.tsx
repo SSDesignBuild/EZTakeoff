@@ -365,7 +365,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
       {studioPanels.modules.map((panel,i)=><mesh key={'studio-insulated-panel-'+i}
         position={[left+panel.centerFt,roofY,roofMidZ]}
         rotation={[Math.atan2(slopeRise,depth),0,0]} castShadow receiveShadow>
-        <boxGeometry args={[panel.widthFt,roofPanelThicknessFt,depth]}/>
+        <boxGeometry args={[panel.widthFt,roofPanelThicknessFt,Math.hypot(depth,slopeRise)]}/>
         <RenaissancePanelMaterials roof={project.coverRoofColor??'White'}
           ceiling={project.coverCeilingFinish??'White'}/>
       </mesh>)}
@@ -558,7 +558,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     </>}
     {['dolce-open-view','dolce-standard'].includes(project.coverScreenStyle??'none')&&<group name="Dolce-integrated-screen-room-with-actual-access">
       {coverWallRuns.filter(wall=>!privacyGap(wall.id)).map(wall=><DolceScreenWall key={'Dolce-wall-'+wall.id} {...wall}
-        bottom={deckHeight+.12}
+        bottom={deckHeight}
         openView={project.coverScreenStyle==='dolce-open-view'}
         finish={screenPowder} center={[xMid,zMid]}
         treatment={project.coverScreenRailTreatment??'integrated-kick'}
@@ -591,7 +591,7 @@ export function RenaissanceCover3D({model,project,center,deckHeight}:{
     {coverWallRuns.filter(wall=>privacyGap(wall.id)>0).map(wall=>
       <RenaissancePrivacyWall3D key={'privacy-wall-'+wall.id}
         {...wall} gapIn={privacyGap(wall.id)}
-        bottom={deckHeight+.12} color={powder}/>)}
+        bottom={deckHeight} color={powder}/>)}
     {isSolid&&plan.gable&&['dolce-open-view','dolce-standard'].includes(project.coverScreenStyle??'none')&&
       !privacyGap('front')&&
       <DolceGableInfill leftX={frameLeft} rightX={frameRight} z={frameFront}

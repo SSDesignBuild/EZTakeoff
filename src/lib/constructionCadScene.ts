@@ -4,8 +4,12 @@
 export interface CadPoint { x: number; y: number }
 export type CadLayer = 'OUTLINE' | 'FOOTINGS' | 'POSTS' | 'BEAMS' | 'JOISTS' |
   'FINISH_SUPPORT' | 'DECKING' | 'STAIRS' | 'LANDING' | 'RAILING' | 'HIDDEN' |
-  'CENTER' | 'DIMENSIONS' | 'TAGS' | 'NOTES' | 'TITLE';
-interface CadBase { layer: CadLayer; width?: number }
+  'CENTER' | 'DIMENSIONS' | 'TAGS' | 'NOTES' | 'TITLE' | 'RIMS' | 'HARDWARE' |
+  'SECTION' | 'HATCH' | 'DECK_JOINT';
+export interface CadBase { layer: CadLayer; width?: number;
+  /** Stable assembly IDs survive preview, PDF and DXF export. */
+  sourcePartId?: string; sourceConnectionId?: string;
+  graphicRole?: 'part-outline' | 'part-fragment' | 'part-tag' | 'connection-location' | 'connection-tag' | 'section' }
 export interface CadLine extends CadBase { type: 'line'; a: CadPoint; b: CadPoint }
 export interface CadPolyline extends CadBase { type: 'polyline'; points: CadPoint[]; closed?: boolean }
 export interface CadCircle extends CadBase { type: 'circle'; center: CadPoint; radius: number }
@@ -17,23 +21,36 @@ export interface CadInsert extends CadBase { type: 'insert'; name: string; at: C
 export type CadPrimitive = CadLine | CadPolyline | CadCircle | CadText;
 export type CadEntity = CadPrimitive | CadDimension | CadInsert;
 export interface CadBlock { name: string; entities: CadPrimitive[] }
+export interface CadView { id: string; projection: 'plan' | 'elevation' | 'profile';
+  /** Plan: paper = originPaper + (model - modelOrigin) * pointsPerFt.
+   * Elevation/profile Y is reflected; axis describes the horizontal station. */
+  originPaper: CadPoint; modelOrigin: CadPoint; pointsPerFt: number;
+  axis?: 'x' | 'y' | 'station'; partIds: string[]; connectionIds: string[];
+  stationAxis?: { origin: CadPoint; direction: CadPoint };
+  clip?: { minX: number; minY: number; maxX: number; maxY: number } }
 export interface ConstructionSheet { id: string; title: string; scale: number;
-  width: number; height: number; entities: CadEntity[] }
+  width: number; height: number; entities: CadEntity[]; views?: CadView[] }
 export interface ConstructionDrawingSet { sheets: ConstructionSheet[]; blocks: CadBlock[];
   title: string; revision: string; issues: string[]; warnings: string[];
+  /** Complete user values; title blocks use bounded display copies only. */
+  projectMetadata?: { jobName: string; address: string; phone: string; revision: string };
+  assemblyPartIds?: string[]; assemblyConnectionIds?: string[];
   modelFacts: { tier: string; postCount: number; footingDiameterIn: number;
     footingDepthIn: number; concreteBags: number; stairCount: number;
     landings: { widthFt: number; depthFt: number; thicknessIn: number; bags80lb: number }[] }[] }
 
 export const CAD_SHEET_WIDTH = 17 * 72;
 export const CAD_SHEET_HEIGHT = 11 * 72;
-export const CAD_LAYERS: Record<CadLayer, { color: number; width: number; dashed?: boolean }> = {
+export const CAD_LAYERS: Record<CadLayer, { color: number; width: number; dashed?: boolean; dashPattern?: number[] }> = {
   OUTLINE: { color: 7, width: 1.1 }, FOOTINGS: { color: 4, width: .7 },
   POSTS: { color: 7, width: 1.2 }, BEAMS: { color: 1, width: 1.3 },
   JOISTS: { color: 7, width: .6 }, FINISH_SUPPORT: { color: 3, width: .75 },
   DECKING: { color: 8, width: .35 }, STAIRS: { color: 7, width: .7 },
   LANDING: { color: 4, width: .8 }, RAILING: { color: 6, width: 1 },
-  HIDDEN: { color: 8, width: .4, dashed: true }, CENTER: { color: 8, width: .35, dashed: true },
+  HIDDEN: { color: 8, width: .4, dashed: true, dashPattern: [4, 3] },
+  CENTER: { color: 8, width: .3, dashed: true, dashPattern: [10, 3, 2, 3] },
+  RIMS: { color: 7, width: .8 }, HARDWARE: { color: 2, width: .85 },
+  SECTION: { color: 7, width: 1.2 }, HATCH: { color: 8, width: .2 }, DECK_JOINT: { color: 8, width: .55 },
   DIMENSIONS: { color: 7, width: .4 }, TAGS: { color: 7, width: .5 },
   NOTES: { color: 7, width: .4 }, TITLE: { color: 7, width: .8 },
 };
@@ -127,7 +144,7 @@ export function constructionSheetSvg(sheet: ConstructionSheet, blocks: CadBlock[
   const n = (x: number) => Number(x.toFixed(5));
   const shapes = sheetPrimitives(sheet, blocks).map(e => {
     const style = CAD_LAYERS[e.layer], stroke = e.layer === 'HIDDEN' || e.layer === 'DECKING' ? '#64748b' : '#172332';
-    const attrs = `fill="none" stroke="${stroke}" stroke-width="${e.width ?? style.width}"${style.dashed ? ' stroke-dasharray="4 3"' : ''}`;
+    const attrs = `fill="none" stroke="${stroke}" stroke-width="${e.width ?? style.width}"${style.dashed ? ` stroke-dasharray="${(style.dashPattern ?? [4, 3]).join(' ')}"` : ''}${e.sourcePartId ? ` data-part-id="${xml(e.sourcePartId)}"` : ''}${e.sourceConnectionId ? ` data-connection-id="${xml(e.sourceConnectionId)}"` : ''}`;
     if (e.type === 'line') return `<line x1="${n(e.a.x)}" y1="${n(e.a.y)}" x2="${n(e.b.x)}" y2="${n(e.b.y)}" ${attrs}/>`;
     if (e.type === 'polyline') return `<${e.closed ? 'polygon' : 'polyline'} points="${e.points.map(p => `${n(p.x)},${n(p.y)}`).join(' ')}" ${attrs}/>`;
     if (e.type === 'circle') return `<circle cx="${n(e.center.x)}" cy="${n(e.center.y)}" r="${n(e.radius)}" ${attrs}/>`;

@@ -1,12 +1,17 @@
 import { useMemo, useState } from 'react';
 import { buildDeckModel, buildLowerTierDeckModel } from '../lib/deckModel';
 import { buildTimberTechIRE } from '../lib/deckRailing';
+import { constructionDeckRailModel } from '../lib/constructionRailing';
+import type { ConsultationProject } from '../lib/consultationProject';
 
 type Inputs = Record<string, string | number | boolean>;
 const ft=(n:number)=>n.toFixed(2).replace(/\.00$/,'')+' ft';
-function RailingTierElevation({values,lower=false}: {values:Inputs;lower?:boolean}) {
+function RailingTierElevation({values,lower=false,project}: {values:Inputs;lower?:boolean;project?:ConsultationProject}) {
   const [current,setCurrent]=useState(0);
-  const model=useMemo(()=>lower?buildLowerTierDeckModel(values):buildDeckModel(values),[lower,values]);
+  const model=useMemo(()=>{
+    const raw=lower?buildLowerTierDeckModel(values):buildDeckModel(values);
+    return raw?constructionDeckRailModel(raw,project,lower):null;
+  },[lower,values,project]);
   const plan=useMemo(()=>model?buildTimberTechIRE(model,values,lower?'Lower tier':'Main deck'):null,[model,values,lower]);
   if(!model||!plan||!plan.enabled)return null;
   const selected=plan.panels[Math.min(current,plan.panels.length-1)];
@@ -76,8 +81,8 @@ function RailingTierElevation({values,lower=false}: {values:Inputs;lower?:boolea
     {plan.notes.map((note,index)=><p key={index} className="muted" style={{fontSize:12}}>{note}</p>)}
   </section>;
 }
-export function DeckRailingElevation({values}:{values:Inputs}){
+export function DeckRailingElevation({values,project}:{values:Inputs;project?:ConsultationProject}){
   if(values.railingSystem!=='timbertech-ire')return null;
-  return <><RailingTierElevation values={values}/>
-    {(values.multiTierEnabled===true||String(values.multiTierEnabled)==='true')&&<RailingTierElevation values={values} lower/>}</>;
+  return <><RailingTierElevation values={values} project={project}/>
+    {(values.multiTierEnabled===true||String(values.multiTierEnabled)==='true')&&<RailingTierElevation values={values} lower project={project}/>}</>;
 }

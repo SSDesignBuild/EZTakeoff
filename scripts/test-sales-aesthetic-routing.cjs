@@ -24,6 +24,7 @@ const {surfaceStrips,breakerVisualStrips,VISIBLE_BOARD_WIDTH_FT,VISIBLE_BOARD_GA
   =load('src/lib/visualGeometry');
 const trim=load('src/lib/deckTrimSelection');
 const {calculateEstimate}=load('src/lib/estimate');
+const {buildConstructionAssembly}=load('src/lib/constructionAssembly');
 const {deckVisualProducts}=load('src/data/visualCatalog');
 const {planStraightStairFascia}=load('src/lib/stairFasciaGeometry');
 const {planRenaissanceDownspout}=load('src/lib/renaissanceDownspoutRouting');
@@ -85,7 +86,12 @@ for(let i=0;i<3;i++){
 const stairFascia=e.materials.find(x=>x.name==='Stair side fascia board');
 assert.ok(stairFascia,'Contrasting side fascia needs separate material quantity');
 assert.ok(stairFascia.notes.includes(styles[1]));
-assert.ok(stairFascia.notes.includes('straight continuous diagonal'));
+const fasciaParts=buildConstructionAssembly(swatch).parts.filter(part=>part.kind==='stair-fascia');
+const fasciaCutIds=new Set(stairFascia.cutPlan?.boards.flatMap(board=>board.cuts.map(cut=>cut.id))??[]);
+assert.ok(fasciaParts.length>0&&fasciaParts.every(part=>part.material===styles[1]&&part.profile.length===4),
+  'Selected straight fascia retains independent material and actual four-corner diagonal cut profiles');
+assert.ok(fasciaParts.every(part=>fasciaCutIds.has(part.id)),
+  'Every independently selected stair-fascia profile is preserved in the purchase cutting list');
 const stairs=e.materials.find(x=>x.name==='2x12 stringers');
 assert.ok(stairs&&stairs.quantity>=2,'Structural notched stringers remain independently ordered');
 const contour=planStraightStairFascia({treadDepthFt:11/12,treads:7,riseFt:5/8,heightFt:5});
@@ -141,7 +147,7 @@ assert.ok(manuf.includes('fasciaTexture={stairFasciaMap}'));
 assert.ok(stair.includes('planStairFasciaCoverage')&&stair.includes('makeStairFinishGeometry')&&
  !stair.includes("straightFasciaGeo:geo"),
   'Finish fascia must be generated independently, not cloned from the structural stringer');
-assert.ok(stair.includes('map={fasciaTexture}')&&stair.includes('toneMapped={false}'),
+assert.ok(stair.includes('texture={fasciaTexture}')&&stair.includes('map={texture}')&&stair.includes('toneMapped={false}'),
   'Stair fascia must use the selected independent manufacturer texture');
 assert.ok(cover.includes('planRenaissanceDownspout')&&cover.includes('deckSupportPosts'));
 assert.ok(ext.includes('ExtrudeGeometry(profile')&&ext.includes('layout.elbows.flatMap')&&ext.includes('QuadraticBezierCurve3'),

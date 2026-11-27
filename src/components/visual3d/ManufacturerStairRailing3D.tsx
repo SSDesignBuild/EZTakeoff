@@ -1,3 +1,4 @@
+import {constructionStairRailBay} from '../../lib/constructionRailing';
 import {useEffect,useMemo} from 'react';
 import * as THREE from 'three';
 import type {DeckModel} from '../../lib/deckModel';
@@ -87,32 +88,24 @@ export function ManufacturerStairRailing3D({model,center,deckHeight,style,color,
    {runs.map(run=><group key={'stair-rail-'+run.placementIndex+'-'+run.side}
       name={'selected-stair-guard-'+run.side+'-edge-'+run.edgeIndex}>
      {run.panels.map((panel,i)=>{
-       const {from,to}=panel;
-       const len=panel.endFt-panel.startFt;
+       const bay=constructionStairRailBay(run,panel,postWidth);
+       const {from,to}=bay;
+       const len=bay.clearSpanFt;
        const upper=drink?height+.0285-topThick/2:height-.13;
        const topFrom=at(from,upper),topTo=at(to,upper);
        const bottomFrom=at(from,.38),bottomTo=at(to,.38);
-       const first=run.posts[0],last=run.posts[run.posts.length-1];
-       const horizontal=Math.hypot(last[0]-first[0],last[2]-first[2]);
-       const returnFt=run.landingReturnFt??run.insetFt;
-       const landing:StairRailPoint3D=[first[0]+(last[0]-first[0])*returnFt/horizontal,
-         first[1],first[2]+(last[2]-first[2])*returnFt/horizontal];
-       const landingFraction=i===0?returnFt/Math.max(.001,len):0;
+       const landing=bay.bend;
        const balusterCount=Math.max(2,Math.ceil(len/(wooden?.42:metallic?.39:.43)));
-       const interpolate=(fraction:number):StairRailPoint3D=>[
-        from[0]+(to[0]-from[0])*fraction,
-        from[1]+(to[1]-from[1])*Math.max(0,(fraction-landingFraction)/(1-landingFraction)),
-        from[2]+(to[2]-from[2])*fraction,
-       ];
+       const interpolate=bay.at;
        return <group key={'selected-stair-rail-bay-'+i}>
          {/* Rails follow the pitch of the actual treads and stringers.
              The same manufacturer style and finish drives deck-level and
              stair railing; never draw a horizontal guard across the stair
              entry opening at the top of this run. */}
-         <SlopedBeam start={topFrom} end={topTo} bend={i===0?at(landing,upper):undefined}
+         <SlopedBeam start={topFrom} end={topTo} bend={landing?at(landing,upper):undefined}
            thickness={topThick} depth={topWidth} color={color}/>
-         <SlopedBeam start={bottomFrom} end={bottomTo} bend={i===0?at(landing,.38):undefined}
-           thickness={wooden?.24:.10} depth={wooden?.24:.13} color={color}/>
+         <SlopedBeam start={bottomFrom} end={bottomTo} bend={landing?at(landing,.38):undefined}
+           thickness={wooden?1.5/12:.10} depth={wooden?3.5/12:.13} color={color}/>
          {style.geometry==='ire-classic'&&<SlopedBeam
            start={at(from,height+.01)} end={at(to,height+.01)}
            thickness={.055} depth={topWidth+.04} color={color}/>}
@@ -121,7 +114,7 @@ export function ManufacturerStairRailing3D({model,center,deckHeight,style,color,
            thickness={.048} depth={topWidth+.02} color={color}/>}
 
          {wooden&&<SlopedBeam start={at(from,height-.32)}
-           end={at(to,height-.32)} thickness={.17}
+           end={at(to,height-.32)} thickness={1.5/12}
            depth={3.5/12} color={color}/>}
          {(style.family==='pvc'||style.family==='composite'||style.family==='vinyl')&&
            <SlopedBeam start={at(from,height-.27)} end={at(to,height-.27)}
@@ -156,8 +149,8 @@ export function ManufacturerStairRailing3D({model,center,deckHeight,style,color,
                <Block key={'stair-square-baluster-'+j}
                  name="selected-slope-stair-picket"
                  position={at(p,(height+.29)/2)}
-                 size={[wooden?.12:metallic?.048:.12,
-                   Math.max(.2,height-.79),wooden?.12:metallic?.048:.12]}
+                 size={[wooden?1.5/12:metallic?.048:.12,
+                   Math.max(.2,height-.79),wooden?1.5/12:metallic?.048:.12]}
                  color={balusterColor} metalness={metal}/>;
            })}
        </group>;

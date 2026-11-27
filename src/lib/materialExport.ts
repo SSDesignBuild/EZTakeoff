@@ -1,4 +1,5 @@
 import type { MaterialItem } from './types';
+import { materialDrawingLabel } from './materialCutPlan';
 
 type Values=Record<string,string|number|boolean>;
 type Measure=(text:string)=>number;
@@ -38,9 +39,10 @@ export function renderMaterialExportPages(title:string,values:Values,grouped:Rec
   const bottom=height-48;
   const wrap=(value:string,column:number)=>wrapMaterialExportText(value,widths[column]-16,text=>ctx.measureText(text).width);
   const labelsFor=(row:MaterialItem)=>{
-    if(!row.layoutLabel?.trim())return [];
+    const label=materialDrawingLabel(row);
+    if(!label.trim())return [];
     ctx.font='14px Arial';
-    const lines=wrapMaterialExportText('Drawing labels: '+row.layoutLabel,tableWidth-16,text=>ctx.measureText(text).width);
+    const lines=wrapMaterialExportText('Use / drawing reference: '+label,tableWidth-16,text=>ctx.measureText(text).width);
     ctx.font='16px Arial';return lines;
   };
   const cellsFor=(row:MaterialItem)=>[row.name,row.stockRecommendation||'—',materialExportQuantity(row.quantity),

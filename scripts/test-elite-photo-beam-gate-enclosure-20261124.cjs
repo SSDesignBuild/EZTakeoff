@@ -76,8 +76,13 @@ assert.ok(Math.abs(lastCourse.depthFt-expectedDepth)<.015,
 assert.ok(!side.finishCuts.some(c=>c.location.includes('fixed upper infill above access gate')),
  'Do not order independent patch stock above horizontal access gate');
 const gateRenderer=read('src/components/visual3d/DeckSkirting3D.tsx');
-assert.ok(gateRenderer.includes("const gateBottom=top-leastGrade+.18-.012"));
-assert.ok(gateRenderer.includes('side.courses.map'));
+assert.ok(gateRenderer.includes('buildConstructionSkirting')&&gateRenderer.includes('assembly.parts.map'),
+ 'The renderer consumes the physical cut inventory, including the continuous ripped header');
+const physicalHeader=side.physicalMembers.find(member=>member.cutId===side.finishCuts.find(cut=>
+ cut.placement?.role==='horizontal-finish'&&cut.placement.row===partialRow&&
+ cut.placement.startFt<=gateOffset+.0001&&cut.placement.endFt>=gateOffset+gateWidth-.0001)?.id);
+assert.ok(physicalHeader,'The actual rendered profile retains the full-width header course');
+assert.ok(Math.abs(physicalHeader.faceFt-expectedDepth)<.015);
 const select=read('src/components/ConsultationVisualPickers.tsx');
 const cover3D=read('src/components/visual3d/RenaissanceCover3D.tsx');
 assert.ok(!select.includes('<option value="lumino-sunroom">'));

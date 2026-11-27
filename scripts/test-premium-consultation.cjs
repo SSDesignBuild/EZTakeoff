@@ -69,10 +69,11 @@ const framing=read('src/components/visual3d/DeckStructure3D.tsx');
 assert.ok(framing.includes('model.beamLines')&&framing.includes('model.joistPositions'));
 assert.ok(framing.includes('thickness={beamD}')&&framing.includes('beamTop'));
 const stringers=read('src/components/visual3d/DeckStairAssembly3D.tsx');
-assert.ok(stringers.includes('ExtrudeGeometry')&&stringers.includes('stairStringerFascia'));
+assert.ok(stringers.includes('ExtrudeGeometry')&&stringers.includes('hasDecorativeStairFascia'));
 assert.ok(!stringers.includes('radius={.10}'));
 const skirt3d=read('src/components/visual3d/DeckSkirting3D.tsx');
-assert.ok(skirt3d.includes('buildDeckSkirting')&&skirt3d.includes('side.courses')&&skirt3d.includes('side.finish'));
+assert.ok(skirt3d.includes('buildConstructionSkirting')&&skirt3d.includes('assembly.parts.map'));
+assert.ok(read('src/lib/constructionSkirting.ts').includes('side.physicalMembers'));
 const cover=read('src/components/visual3d/RenaissanceCover3D.tsx');
 for(const part of ['wide-insert','DolceScreenRun','fresco-polycarbonate'])
   assert.ok(cover.includes(part),'Cover module missing '+part);

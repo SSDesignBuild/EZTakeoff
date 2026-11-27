@@ -1,28 +1,32 @@
 # EZTakeoff current checkpoint
 
-## November 26, 2026 — R2 candidate
+## November 26, 2026 — R3 installer CAD candidate
 
 Repository: `SSDesignBuild/EZTakeoff`. Production: https://eztakeoff.netlify.app.
 Netlify site: `afb809fb-cc3e-4b69-ae1a-1e8d5fd8c764`.
 
-The verified starting source is main `68725e7f607ab4cbf81b5d29d6211f9fcf8c0a90`, published by Ready Git deployment `6b08aadd779e4240d73c1504`. All 191 source files in the supplied baseline matched that Git tree. This R2 package contains additional working-source changes; it is not that production commit and is not published merely because the ZIP exists.
+Verified starting main is `d1830c11ff31731547b4a0cbc4fb1e8b64792e8f`, merged through PR #40. Current published Ready Git deployment is `6b08ca7298e6795bc2077558`, published November 26 at 6:11 p.m. CST. All 210 portable R2 source files matched that Git tree. R3 is a new candidate; its ZIP/build do not establish publication.
 
-The owner permanently uses complete source-and-build ZIP releases with one PowerShell block. `Release-EZTakeoff.py` in the archive performs normal Git/GitHub CLI synchronization and Netlify verification on the owner's computer. Do not use GitHub Create Tree, connector file writes, manual deployment uploads, or GitHub Actions. The proposed branch is `release/geometry-cad-lighting-20261126-r2`. Main must still equal the expected baseline before a new merge.
+## Permanent release workflow
 
-## Implemented batch
+Deliver grouped, thoroughly tested changes as a complete source-and-build ZIP with one owner-run PowerShell block. The included `Release-EZTakeoff.py` uses normal Git/GitHub CLI synchronization, exact Git-built Netlify preview verification, pinned PR merge, then published-main verification. No connector source writes, Create Tree, manual deployment, force push or automatic GitHub Actions. Proposed R3 branch: `release/installer-cad-20261126-r3`. Its expected main is the verified R2 commit above. A request to build/fix authorizes implementation and testing; do not repeat permission questions.
 
-- Renaissance decorative ends now use a straight upper edge, an ogee-cut underside, and fixed-height longitudinal grooves. Original part illustrations and reference photography guide the visual approximation. This is not verified factory CAD. The exposed length respects the cover/header; post/trim clearance follows the whole footprint beneath the roof.
-- Removed the supplemental sunroom floor patch and its takeoff. Shared physical deck strips, including narrow perimeter rips, determine visible boards and field cuts.
-- Side picture-frame and breaker courses receive actual flat pressure-treated nailers, 1.5 inches thick, sized/ripped from 2x6/8/10/12 stock. Geometry, cut ordering and CAD use the same pieces, including multiple courses, reversed/concave/angled outlines and lower tiers.
-- S&S defaults: 18-inch diameter x 12-inch deep footings, 3 eighty-pound bags per standard footing; stair landing 4 x 4 feet x 4 inches, 12 bags with an explicit editable 25% ordering allowance. Custom dimensions/yield remain editable and existing explicit values persist. These are company estimating defaults, not a statewide code claim.
-- Screen/sunroom quick actions open and focus their settings with feedback. Reopening unchanged settings preserves revision/pricing. Added two owner-authorized, sanitized railing reference photos.
-- Symmetric canopy lighting, all enabled fixture lenses illuminated in Evening, optional fan lights, and stair-top guard posts clear enclosure walls while preserving selected stair guards.
-- Deck construction sheets share model geometry and edited material orders. New vector PDF and native inch-based DXF include dimensions, footing/setout, framing/nailers, decking/stairs, elevation/details, connection keys and schedules. Existing Admin exports and Studio handoff remain.
+## R3 changes
 
-## Verification and next action
+- `ConstructionAssembly` records individual installed parts, dressed footprints, cut lengths, elevations, source IDs, connection anchors and hardware quantities. CAD consumes the shared physical planners used by 3D and takeoff.
+- Joists now fit inside actual rim plies; finish surfaces rest on framing; beam plies have real dressed widths; fascia and picture frames use actual offsets. Manufacturer board dimensions determine courses, edge rips and stair tread/nosing fit. Explicit measured overrides remain available.
+- Picture-frame/breaker intersections and bearing anchors were independently corrected. Hardware counts use actual board/support and joist/beam contacts. Purchasing allowances and saved order edits remain separate from installed geometry.
+- Physical stairs, railing components, skirting, gate members and lower tiers have indexed plans, elevations/details and cut references. Representative kit profiles and unresolved post-end/notch details are explicitly marked; no manufacturer drilling pattern is invented.
+- Scaled 17 x 11-inch vector PDF, native 1:1-inch DXF with named locked paper layouts, and a deck parts/connections CSV. Printed dimension labels round to 1/16 inch; CSV coordinates retain six decimal inch places and DXF values nine. DXF drawing groups are arranged by sheet; CSV retains assembly coordinates.
+- Studio project context reaches CAD, so enclosed-deck plans suppress the same level rails as 3D and retain selected stair rails. Elite wall/cover/fixture setout sheets use actual clear post-face openings and sloped wall heads. They are not factory glazing/extrusion shop-cut certification.
+- Video repairs: nonoverlapping Prime door joints; sloped, seated Elite receivers/H heads below the roof and outside cover posts; no painted-over glass or added floor patch. Concise material rows retain expandable cut references, optimizer assignments, kerf and offcuts.
 
-Read the archive's `VERIFICATION.md` and `CHECKPOINT.json` for the exact completed gate and evidence. Independent DXF audits and PDF rendering validate exported files. Actual S-curve triangle coordinates were rendered and numerically audited offline. Browser end-to-end/WebGL review was unavailable in this environment; do not describe it as passed. Production is unchanged until the owner runs the supplied PowerShell release block. The helper requires exact-head Ready preview, pinned PR merge and matching published Ready main, then writes `release-result.json` and prints `SYNC COMPLETE`.
+R2 improvements remain: reference-guided S-curve, removal of the supplemental deck board, flat picture-frame/breaker support lumber, S&S concrete defaults, enclosure quick-action navigation, owner railing photos, symmetric/all-on evening lights and optional fan lights.
 
-Future exact solid/STEP work remains separate: evaluate Replicad/OpenCascade.js in a lazy worker with CadQuery reference solids. No browser solid engine or application STEP export is claimed in R2. Structural connections still require approved project details.
+## Verification and continuation
 
-Resume from this checkpoint and the latest ZIP; compare live main/published state. Do not recursively load previous conversations. Preserve Admin Takeoff, Design Studio, shared geometry, stock optimization, customer data and external pricing. Keep this checkpoint below 700 words. Raw customer media, factory source drawings and private QA stay outside published source.
+Read this archive's `VERIFICATION.md`, `CHECKPOINT.json` and `source/docs/CAD_ENGINEERING_R3.md` for completed checks and limits. The canonical gate remains `npm run assets:sync && npm test && npm run build`. Independent ezdxf/PDF and CadQuery/OpenCascade checks validate synthetic exports and solids; actual Three.js mesh checks cover enclosure clearance. Local browser end-to-end/WebGL review was unavailable and must not be described as passed.
+
+No browser CAD kernel or application STEP exporter is included. CadQuery STEP examples are offline QA only. Unknown manufacturer internals, structural spans, soil/footing design and post/beam connection engineering require the approved job details.
+
+Resume from this checkpoint and the latest verified ZIP/Git main/published deployment. Do not recursively reload prior conversations. Keep Admin Takeoff, Studio, stock optimization, customer data and pricing intact. Raw customer videos and original manufacturer drawings remain outside source. After owner release, independently verify PR/head/main/published deploy, record `release-result.json`, and update this checkpoint. Keep this entry below 700 words.

@@ -5,11 +5,12 @@ const path = require('node:path');
 const ts = require('typescript');
 const cache = new Map();
 function loadTs(filename) {
-  const full = path.resolve(__dirname, '..', filename.endsWith('.ts') ? filename : filename + '.ts');
+  const full = path.resolve(__dirname, '..', filename.endsWith('.ts') || filename.endsWith('.json') ? filename : filename + '.ts');
+  if (full.endsWith('.json')) return JSON.parse(fs.readFileSync(full, 'utf8'));
   if (cache.has(full)) return cache.get(full).exports;
   const mod = { exports: {} };
   cache.set(full, mod);
-  const js = ts.transpileModule(fs.readFileSync(full, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  const js = ts.transpileModule(fs.readFileSync(full, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true, resolveJsonModule: true } }).outputText;
   new Function('require', 'module', 'exports', js)((request) => request.startsWith('.') ? loadTs(path.resolve(path.dirname(full), request)) : require(request), mod, mod.exports);
   return mod.exports;
 }

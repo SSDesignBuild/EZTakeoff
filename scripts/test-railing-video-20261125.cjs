@@ -60,7 +60,7 @@ for(const run of stair){
   const cross=(p[0]-f.originX)*across[0]+(p[2]-f.originZ)*across[1];
   assert.ok(Math.abs(cross)+(postWidth+.06)/2<=f.widthFt/2+.000001,'Stair base fully within actual tread width');
   assert.ok(Number.isFinite(run.postBaseYs[j]));
-  if(j===0)assert.equal(run.postBaseYs[j],4.0625,'Top post seats on deck board, not empty space');
+  if(j===0)assert.equal(run.postBaseYs[j],4,'Top post seats on measured finished deck surface');
  }
  assert.ok(run.slopedLengthFt>run.runFt,'Sloped rail stock uses true length');
  assert.ok(Math.abs(run.panels.reduce((sum,p)=>sum+p.lengthFt,0)-run.slopedLengthFt)<1e-8,

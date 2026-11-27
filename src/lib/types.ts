@@ -7,6 +7,24 @@ export interface MaterialItem {
   color?: string;
   notes?: string;
   layoutLabel?: string;
+  /** Full optimizer output, separate from concise supplier notes. Layout labels
+   * stay unchanged because existing saved order edits use them in row keys. */
+  cutPlan?: MaterialCutPlan;
+}
+
+export interface MaterialCutPlan {
+  label: string;
+  kerfIn: number;
+  trimIn: number;
+  boards: {
+    stockLengthFt: number;
+    remainderIn: number;
+    /** Per-board values preserve independently configured tier cut plans
+     * when compatible purchasing rows are merged in Stock order view. */
+    kerfIn?: number;
+    trimIn?: number;
+    cuts: { id: string; lengthFt: number; location: string }[];
+  }[];
 }
 
 export interface EstimateResult {

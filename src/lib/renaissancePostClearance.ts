@@ -16,17 +16,22 @@ export interface RenaissanceRoofPostClearance {
  eaveCenterFt:number;gableRiseFt:number;
 }
 export function renaissanceRoofPanelUndersideAtPost(p:RenaissanceRoofPostClearance):number{
- const clamp=(n:number)=>Math.min(1,Math.max(0,n));
  if(p.gable){
-  const offset=clamp(Math.abs(p.xFt-p.midXFt)/Math.max(.01,p.roofWidthFt/2));
+  const halfWidth=Math.max(.01,p.roofWidthFt/2);
+  // Extend the cut plane over a column's outboard half at a zero-overhang
+  // eave. Clamping to the roof edge leaves that half square above the slope.
+  const offset=Math.abs(p.xFt-p.midXFt)/halfWidth;
   const center=p.eaveCenterFt+p.gableRiseFt*(1-offset);
-  return center-p.roofPanelThicknessFt/2;
+  // The catalog panel thickness is normal to the roof. A vertical line
+  // through a rotated panel reaches its underside at t/(2*cos(pitch)).
+  return center-p.roofPanelThicknessFt/2*Math.hypot(1,p.gableRiseFt/halfWidth);
  }
- const zt=clamp((p.zFt-p.roofRearZFt)/
-   Math.max(.01,p.roofFrontZFt-p.roofRearZFt));
+ const run=Math.max(.01,p.roofFrontZFt-p.roofRearZFt);
+ const rise=p.roofFrontCenterFt-p.roofRearCenterFt;
+ const zt=(p.zFt-p.roofRearZFt)/run;
  const center=p.roofRearCenterFt+
-   (p.roofFrontCenterFt-p.roofRearCenterFt)*zt;
- return center-p.roofPanelThicknessFt/2;
+   rise*zt;
+ return center-p.roofPanelThicknessFt/2*Math.hypot(1,rise/run);
 }
 /** The cap ends at least 1/8in BELOW the panel underside, including
  * the matching aluminum post cap and its physical thickness. */

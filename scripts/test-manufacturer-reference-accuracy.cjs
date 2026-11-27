@@ -28,13 +28,13 @@ for(const width of [3,4,6,10]){
  assert.ok(xs[0]-1.5/12>=-width/2-1e-8,'left stringer projects entirely under fascia');
  assert.ok(xs.at(-1)<=width/2+1e-8,'right stringer projects entirely under fascia');
 }
-assert.ok(stair.includes('planStairStringerFaceStations')&&stair.includes('fasciaOutline'),
+assert.ok(stair.includes('planConstructionStair')&&source('src/lib/constructionStairs.ts').includes('planStairStringerFaceStations')&&stair.includes('planStairFasciaCoverage'),
  'Structural stringer and decorative fascia must be separate geometries');
 const {planMiteredPictureFrames}=load('src/lib/deckMiterGeometry');
 const pts=[{x:0,y:0},{x:25,y:0},{x:25,y:12},{x:0,y:12}],segs=pts.map((p,i)=>({index:i,start:p,end:pts[(i+1)%4]}));
 const strips=planMiteredPictureFrames(pts,segs,1);
 assert.equal(strips.length,4);
-const expected=-(.076/2+.75/12);
+const expected=-(.75/12+.75/12);
 const front=strips.find(x=>x.edgeIndex===0);
 assert.ok(front);
 assert.ok(Math.abs(front.corners[0][1]-expected)<1e-6,'outside border extends beyond fascia by 3/4in');

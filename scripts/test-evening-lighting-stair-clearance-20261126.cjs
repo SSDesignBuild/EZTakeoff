@@ -128,9 +128,9 @@ for(const coverScreenStyle of ['none','elite-add-a-room','dolce-standard','dolce
   if(station>0){
    const tread=Math.ceil(station/treadDepth);
    assert.ok(station-half>=(tread-1)*treadDepth&&station+half<=tread*treadDepth,'Moved post base stays wholly on one tread');
-   assert.ok(near(run.postBaseYs[0],4-4/model.stairRisers*tread+.1025));
+   assert.ok(near(run.postBaseYs[0],4-4/model.stairRisers*tread));
    assert.equal(run.landingReturnFt,0);
-  }else{assert.ok(station+half<0);assert.equal(run.postBaseYs[0],4.0625);}
+  }else{assert.ok(station+half<0);assert.equal(run.postBaseYs[0],4);}
   assert.ok(near(stairRailDatumAt(run,first[0],first[2]),first[1]));
  }
  const capPieces=planDrinkRailPieces([],runs);

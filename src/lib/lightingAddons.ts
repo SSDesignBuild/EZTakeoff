@@ -1,9 +1,10 @@
+import {resolveBoardDimensions} from './deckProductDimensions';
 import {buildDeckModel,buildLowerTierDeckModel,type DeckModel} from './deckModel';
 import type {ConsultationProject} from './consultationProject';
 import type {MaterialItem} from './types';
 import {getRailVisualProduct,getDeckVisualProduct,getCoverVisualProduct,type RailVisualProduct} from '../data/visualCatalog';
 import {lightingProducts,getLightingProduct,GENERIC_FAN_PLACEMENT_REFERENCE,type LightingCategory,type AddonCategory,type LightingProduct} from '../data/lightingCatalog';
-import {planLevelRailingRuns,railingSurfaceInsetFt,railPointKey} from './railingLayout';
+import {planLevelRailingRuns,railingSurfaceInsetFt,railPointKey,resolveDrinkRailMaterial} from './railingLayout';
 import {planStairRailingRuns,stairFlightFrame,type StairRailClearanceWall} from './stairRailVisualGeometry';
 import {stairEnclosureClearanceWalls} from './stairEnclosureClearance';
 import {parseDeckGates} from './deckGates';
@@ -198,7 +199,7 @@ interface RailStation {point:LightingPoint;key:string;normal:V2;baseY:number;pos
 export function lightingRailStations(model:DeckModel,values:Values,center:V2,deckHeight:number,screenIntegrated=false,
  enclosureWalls:readonly StairRailClearanceWall[]=[]):RailStation[]{
   const style=railStyle(values),postWidth=style.postWidthIn/12,metal=style.family==='metal';
-  const topWidth=style.geometry.includes('drink')?5.5/12:style.topWidthIn/12;
+  const topWidth=style.geometry.includes('drink')?resolveBoardDimensions(resolveDrinkRailMaterial(values)).faceIn/12:style.topWidthIn/12;
   const inset=railingSurfaceInsetFt(postWidth,topWidth);
   const openings=parseDeckGates(values.deckGateEntries).flatMap(gate=>{
     const edge=model.edgeSegments.find(e=>e.index===gate.edgeIndex);if(!edge)return [];
@@ -220,7 +221,7 @@ export function lightingRailStations(model:DeckModel,values:Values,center:V2,dec
   };
   levels.forEach(run=>{
     const dx=run.to[0]-run.from[0],dz=run.to[2]-run.from[2],len=Math.hypot(dx,dz);
-    run.posts.forEach(p=>add(p,[-dz/len*winding,dx/len*winding],deckHeight+.0625));
+    run.posts.forEach(p=>add(p,[-dz/len*winding,dx/len*winding],deckHeight));
   });
   stairs.forEach(run=>{
     const frame=stairFlightFrame(model,model.stairPlacements[run.placementIndex],center);if(!frame)return;

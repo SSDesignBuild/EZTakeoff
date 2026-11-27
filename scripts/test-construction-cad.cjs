@@ -5,10 +5,11 @@ const path = require('node:path');
 const ts = require('typescript');
 const cache = new Map();
 function loadTs(file) {
+  if (file.endsWith('.json')) return JSON.parse(fs.readFileSync(file, 'utf8'));
   const full = path.resolve(__dirname, '..', file.endsWith('.ts') ? file : file + '.ts');
   if (cache.has(full)) return cache.get(full).exports;
   const entry = { exports: {} }; cache.set(full, entry);
-  const js = ts.transpileModule(fs.readFileSync(full, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+  const js = ts.transpileModule(fs.readFileSync(full, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true, resolveJsonModule: true } }).outputText;
   new Function('require', 'module', 'exports', js)(request => request.startsWith('.') ? loadTs(path.resolve(path.dirname(full), request)) : require(request), entry, entry.exports);
   return entry.exports;
 }

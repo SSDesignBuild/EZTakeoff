@@ -39,7 +39,8 @@ assert.ok(renaissanceVisiblePostTopFt({...roof,roofFrontCenterFt:9.7})<=roof.hea
 const gable={...roof,gable:true,xFt:5,midXFt:0,roofWidthFt:14,
  eaveCenterFt:8.9,gableRiseFt:1.25};
 const gableUnder=renaissanceRoofPanelUndersideAtPost(gable);
-assert.ok(Math.abs(gableUnder-(8.9+1.25*(1-5/7)-.125))<.0001);
+assert.ok(Math.abs(gableUnder-(8.9+1.25*(1-5/7)-.125*Math.hypot(1,1.25/7)))<.0001,
+ 'The panel thickness is measured normal to its actual roof pitch');
 assert.ok(renaissanceVisiblePostTopFt(gable)<gableUnder);
 const cover=read('src/components/visual3d/RenaissanceCover3D.tsx');
 assert.ok(cover.includes('renaissanceVisiblePostTopFt({')&&
@@ -47,10 +48,13 @@ assert.ok(cover.includes('renaissanceVisiblePostTopFt({')&&
 assert.ok(!cover.includes('position={[x,topY-.008,z]}'));
 
 const elite3d=read('src/components/visual3d/EliteAddARoomWall3D.tsx');
-assert.ok(elite3d.includes('bottomRail=.78'), 'Door should have a real ~9in opaque lower rail');
-assert.ok(elite3d.includes('leafStile=.30'), 'Prime should have real extruded vertical stiles');
-assert.ok(elite3d.includes('glassBottom=.12+bottomRail')&&
- elite3d.includes('glassCenterY'));
+const {planElitePrimeDoor}=load('src/lib/elitePrimeDoorGeometry');
+const photoDoor=planElitePrimeDoor(3,3/12);
+assert.ok(Math.abs(photoDoor.bottomRail.size[1]-.78)<1e-8,
+ 'Door should have a real ~9in opaque lower rail');
+assert.ok(Math.abs(photoDoor.leftStile.size[0]-.30)<1e-8,
+ 'Prime should have real extruded vertical stiles');
+assert.ok(Math.abs(photoDoor.glassBottom-.90)<1e-8&&elite3d.includes('glassCenterY'));
 assert.ok(elite3d.includes("[-1,1].map((face,i)=><group key={'prime-lock-face-'"),
  'Hardware must be visible from either room interior or outside camera');
 for(const m of ['keyed-entry-hardware-handle','deadbolt',

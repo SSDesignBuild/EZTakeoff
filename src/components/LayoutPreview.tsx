@@ -4,15 +4,19 @@ import { surfaceStrips, type SurfaceStrip } from '../lib/visualGeometry';
 import { planMiteredPictureFrames,splitMiteredPictureFrames,planVisiblePictureFrameMiterSeams,openPictureFrameMiterGaps } from '../lib/deckMiterGeometry';
 import type { DeckFacePoint } from '../lib/deckSurfaceClipping';
 import { buildDeckModel, buildLowerTierDeckModel } from '../lib/deckModel';
+import { constructionDeckRailModel } from '../lib/constructionRailing';
+import type { ConsultationProject } from '../lib/consultationProject';
 import { buildPatioPanelLayout, serializeFanSelections, shiftFanSelection } from '../lib/patioLayout';
 import { parseGableSections, parseSections, parseSunroomSections } from '../lib/sectioning';
 import { isSunroomWindowKind,sunroomDoorWidthFeet,sunroomDoorLeftFeet,
   sunroomSpansExcludingDoor,sunroomUprightOffsetsExcludingDoor,
   sunroomHasTransom,sunroomKickHeightFt } from '../lib/sunroomSectionGeometry';
-import { deckingLabelForLength, deriveDeckingLabelPlan, PICTURE_FRAME_OVERHANG_ALLOWANCE_FT } from '../lib/deckingLabels';
+import { deckingLabelForLength, deriveDeckingLabelPlan } from '../lib/deckingLabels';
+import { planPhysicalDeckBoards, type PhysicalDeckBoard } from '../lib/deckPhysicalFinish';
 import { DeckEdgeSegment, DeckPoint, DeckRailCoverage, SectionConfig } from '../lib/types';
 
 interface LayoutPreviewProps {
+  project?: ConsultationProject;
   serviceSlug: string;
   values: Record<string, string | number | boolean>;
   onValuesChange?: React.Dispatch<React.SetStateAction<Record<string, string | number | boolean>>>;
@@ -419,52 +423,6 @@ function boardStripPolygonTrim(
   return `${p1.x},${p1.y} ${p2.x},${p2.y} ${p3.x},${p3.y} ${p4.x},${p4.y}`;
 }
 
-function breakerCourseOffsets(count: number, widthFt: number) {
-  return Array.from({ length: count }, (_, i) => (i - (count - 1) / 2) * widthFt);
-}
-
-function pointsMatch(a: DeckPoint, b: DeckPoint, tolerance = 0.01) {
-  return Math.abs(a.x - b.x) <= tolerance && Math.abs(a.y - b.y) <= tolerance;
-}
-
-function mergeCollinearDeckSegments(segments: DeckEdgeSegment[]) {
-  if (segments.length <= 1) return segments;
-  const merged: DeckEdgeSegment[] = [];
-  segments.forEach((segment) => {
-    const previous = merged[merged.length - 1];
-    const canMerge = previous
-      && previous.orientation === segment.orientation
-      && pointsMatch(previous.end, segment.start)
-      && (segment.orientation === 'horizontal'
-        ? Math.abs(previous.start.y - segment.end.y) < 0.01
-        : segment.orientation === 'vertical'
-          ? Math.abs(previous.start.x - segment.end.x) < 0.01
-          : false);
-    if (!canMerge) {
-      merged.push({ ...segment });
-      return;
-    }
-    merged[merged.length - 1] = { ...previous, end: segment.end, length: previous.length + segment.length };
-  });
-  if (merged.length > 1) {
-    const first = merged[0];
-    const last = merged[merged.length - 1];
-    const canWrap = first.orientation === last.orientation
-      && pointsMatch(last.end, first.start)
-      && (first.orientation === 'horizontal'
-        ? Math.abs(first.start.y - last.start.y) < 0.01
-        : first.orientation === 'vertical'
-          ? Math.abs(first.start.x - last.start.x) < 0.01
-          : false);
-    if (canWrap) {
-      merged[0] = { ...first, start: last.start, length: first.length + last.length };
-      merged.pop();
-    }
-  }
-  return merged;
-}
-
-
 function symmetricPostOffsets(length: number, maxSection = 8) {
   const sectionCount = Math.max(1, Math.ceil(length / maxSection));
   return Array.from({ length: Math.max(0, sectionCount - 1) }, (_, index) => ((index + 1) * length) / sectionCount);
@@ -678,9 +636,10 @@ function serializeRailCoverage(items: DeckRailCoverage[]) {
   return JSON.stringify(items.map((item) => ({ ...item, start: Math.round(item.start * 12) / 12, end: Math.round(item.end * 12) / 12 })).sort((a, b) => a.edgeIndex - b.edgeIndex || a.start - b.start));
 }
 
-function DeckPreview({ values, onValuesChange }: { values: Record<string, string | number | boolean>; onValuesChange?: React.Dispatch<React.SetStateAction<Record<string, string | number | boolean>>> }) {
-  const deck = buildDeckModel(values);
-  const lowerDeck = buildLowerTierDeckModel(values);
+function DeckPreview({ values, onValuesChange, project }: { values: Record<string, string | number | boolean>; project?: ConsultationProject; onValuesChange?: React.Dispatch<React.SetStateAction<Record<string, string | number | boolean>>> }) {
+  const deck = constructionDeckRailModel(buildDeckModel(values), project);
+  const rawLowerDeck = buildLowerTierDeckModel(values);
+  const lowerDeck = rawLowerDeck ? constructionDeckRailModel(rawLowerDeck, project, true) : null;
   const decksForBounds = lowerDeck ? [deck, lowerDeck] : [deck];
   const deckingMaterial = String(values.deckingMaterial ?? (String(values.deckingType ?? 'composite') === 'pressure-treated' ? 'Pressure treated 5/4x6' : 'Composite / PVC decking'));
   const useSubfloorDecking = String(values.deckingSurface ?? 'deck-boards') === 'subfloor';
@@ -757,9 +716,9 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
   const lowerFieldFaces=useMemo(()=>lowerDeck?surfaceStrips(lowerDeck):[],[lowerDeck]);
   const installedFrameFaces=(model:typeof deck)=>openPictureFrameMiterGaps(
     splitMiteredPictureFrames(planMiteredPictureFrames(model.points,
-      model.pictureFrameSegments,model.pictureFrameCount)),
+      model.pictureFrameSegments,model.pictureFrameCount,model.pictureFrameFaceFts,.125/12,model.fasciaThicknessFt)),
     planVisiblePictureFrameMiterSeams(model.points,model.pictureFrameSegments,
-      model.pictureFrameCount,model.houseEdgeIndices,model.pictureFrameHouseSide));
+      model.pictureFrameCount,model.houseEdgeIndices,model.pictureFrameHouseSide,model.pictureFrameFaceFts,model.fasciaThicknessFt));
   const frameFaces=useMemo(()=>installedFrameFaces(deck),[deck]);
   const lowerFrameFaces=useMemo(()=>lowerDeck?installedFrameFaces(lowerDeck):[],[lowerDeck]);
   const facePoints=(points:readonly DeckFacePoint[])=>points.map(([x,y])=>{
@@ -771,84 +730,21 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
     :[[piece.x-piece.widthFt/2,piece.startFt],[piece.x+piece.widthFt/2,piece.startFt],
       [piece.x+piece.widthFt/2,piece.endFt],[piece.x-piece.widthFt/2,piece.endFt]]));
 
-  const boardRuns = deck.boardRun === 'width'
-    ? Array.from({ length: Math.max(1, Math.floor(deck.depth / 0.47)) }, (_, i) => deck.minY + 0.22 + i * 0.47)
-    : Array.from({ length: Math.max(1, Math.floor(deck.width / 0.47)) }, (_, i) => deck.minX + 0.22 + i * 0.47);
+  const physicalBoards = useMemo(() => planPhysicalDeckBoards(deck), [deck]);
+  const lowerPhysicalBoards = useMemo(() => lowerDeck ? planPhysicalDeckBoards(lowerDeck) : [], [lowerDeck]);
+  const breakerFaces = physicalBoards.filter(p => p.kind === 'breaker');
+  const lowerBreakerFaces = lowerPhysicalBoards.filter(p => p.kind === 'breaker');
   const subfloorSheets = useSubfloorDecking ? subfloorSheetsForDeck(deck) : [];
   const lowerSubfloorSheets = useSubfloorDecking && lowerDeck ? subfloorSheetsForDeck(lowerDeck) : [];
   const joistRuns = deck.joistPositions;
-  const pictureFrameCount = Math.max(0, Math.round(Number(values.pictureFrameCount ?? deck.pictureFrameCount ?? 0)));
-  const breakerBoardCount = Math.max(0, Math.round(Number(values.breakerBoardCount ?? deck.breakerBoardCount ?? 0)));
-  const breakerPositions = deck.breakerBoardPositions;
-  const pictureFrameSegments = mergeCollinearDeckSegments(deck.pictureFrameSegments);
-  const pictureFrameBoardWidthPx = scale * (5.5/12);
-  const pictureFrameTrimPx = pictureFrameCount * pictureFrameBoardWidthPx;
   const cleanBandPointString = useMemo(() => closedPointString(deck.points, toSvg), [deck.points, toSvg]);
-  const pointTouchesPictureFrame = (point: DeckPoint) => pictureFrameCount > 0 && pictureFrameSegments.some((segment) => pointOnSegment(point, segment, 0.06));
-  const fieldBoardLabelAnchors = useMemo(() => {
-    if (!showBoardLabels) return [] as { label: string; x: number; y: number }[];
-    const anchors: { label: string; x: number; y: number }[] = [];
-    const splitMarks = (start: number, end: number, marks: number[]) => {
-      const local = marks.filter((mark) => mark > start + 0.05 && mark < end - 0.05).sort((a, b) => a - b);
-      const segments = [start, ...local, end];
-      const parts: { start: number; end: number }[] = [];
-      for (let i = 1; i < segments.length; i += 1) parts.push({ start: segments[i - 1], end: segments[i] });
-      return parts;
-    };
-    if (deck.boardRun === 'width') {
-      boardRuns.forEach((y) => scanlineIntersections(deck.points, 'horizontal', y).forEach((pair) => splitMarks(pair.start, pair.end, breakerPositions).forEach((segment) => {
-        const label = deckingLabelForLength(deckingLabelPlan, 'field', 0, segment.end - segment.start);
-        if (!label) return;
-        anchors.push({ label, ...toSvg((segment.start + segment.end) / 2, y) });
-      })));
-    } else {
-      boardRuns.forEach((x) => scanlineIntersections(deck.points, 'vertical', x).forEach((pair) => splitMarks(pair.start, pair.end, breakerPositions).forEach((segment) => {
-        const label = deckingLabelForLength(deckingLabelPlan, 'field', 0, segment.end - segment.start);
-        if (!label) return;
-        anchors.push({ label, ...toSvg(x, (segment.start + segment.end) / 2) });
-      })));
-    }
-    return anchors;
-  }, [showBoardLabels, deck.boardRun, boardRuns, deck.points, breakerPositions, deckingLabelPlan, toSvg]);
-  const pictureFrameLabelAnchors = useMemo(() => {
-    if (!showBoardLabels || !pictureFrameCount || !pictureFrameSegments.length) return [] as { label: string; x: number; y: number }[];
-    return pictureFrameSegments.flatMap((segment) => {
-      const center = pointAlong(segment, segment.length / 2);
-      const base = toSvg(center.x, center.y);
-      const inward = inwardNormal(segment, deck.points);
-      const normalA = toSvg(center.x + inward.x, center.y + inward.y);
-      const normal = svgUnitVector(base, normalA);
-      return Array.from({ length: pictureFrameCount }, (_, course) => {
-        const label = deckingLabelForLength(deckingLabelPlan, 'picture-frame', course, segment.length + PICTURE_FRAME_OVERHANG_ALLOWANCE_FT);
-        if (!label) return null;
-        return {
-          label,
-          x: base.x + normal.x * ((course + 0.5) * pictureFrameBoardWidthPx),
-          y: base.y + normal.y * ((course + 0.5) * pictureFrameBoardWidthPx),
-        };
-      }).filter(Boolean) as { label: string; x: number; y: number }[];
-    });
-  }, [showBoardLabels, pictureFrameCount, pictureFrameSegments, toSvg, deck.points, deckingLabelPlan, pictureFrameBoardWidthPx]);
-  const breakerLabelAnchors = useMemo(() => {
-    if (!showBoardLabels || !breakerBoardCount || !breakerPositions.length) return [] as { label: string; x: number; y: number }[];
-    const boardWidthFt = 0.47;
-    return breakerCourseOffsets(breakerBoardCount, boardWidthFt).flatMap((offset, course) => {
-      if (deck.boardRun === 'width') {
-        const x = breakerPositions[0] + offset;
-        return scanlineIntersections(deck.points, 'vertical', x).map((pair) => {
-          const label = deckingLabelForLength(deckingLabelPlan, 'breaker', course, pair.end - pair.start);
-          if (!label) return null;
-          return { label, ...toSvg(x, (pair.start + pair.end) / 2) };
-        }).filter(Boolean) as { label: string; x: number; y: number }[];
-      }
-      const y = breakerPositions[0] + offset;
-      return scanlineIntersections(deck.points, 'horizontal', y).map((pair) => {
-        const label = deckingLabelForLength(deckingLabelPlan, 'breaker', course, pair.end - pair.start);
-        if (!label) return null;
-        return { label, ...toSvg((pair.start + pair.end) / 2, y) };
-      }).filter(Boolean) as { label: string; x: number; y: number }[];
-    });
-  }, [showBoardLabels, breakerBoardCount, breakerPositions, deckingLabelPlan, deck.boardRun, deck.points, toSvg]);
+  const partLabelAnchors = (kind: PhysicalDeckBoard['kind']) => !showBoardLabels ? [] : physicalBoards.filter(p => p.kind === kind).flatMap(piece => {
+    const label = deckingLabelForLength(deckingLabelPlan, kind === 'field-board' ? 'field' : kind, piece.course, piece.lengthFt);
+    return label ? [{ label, ...toSvg((piece.from.x + piece.to.x) / 2, (piece.from.y + piece.to.y) / 2) }] : [];
+  });
+  const fieldBoardLabelAnchors = partLabelAnchors('field-board');
+  const pictureFrameLabelAnchors = partLabelAnchors('picture-frame');
+  const breakerLabelAnchors = partLabelAnchors('breaker');
   const railingSegments = railSegmentsForDeck(deck);
   const editableCoverage = useMemo(() => parseRailCoverageValue(values.railCoverage), [values.railCoverage]);
   const railingInsetFt = 0.78;
@@ -1074,6 +970,9 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
         className={`picture-frame-board lower-tier-board course-${piece.course+1}`}
         onClick={()=>setInspect({title:`Lower-tier picture frame course ${piece.course+1}`,
           detail:`Side ${piece.edgeIndex+1}: actual miter-cut board, with the same 1/8-inch joints and stock splices as the 3D model.`})}/>)}
+      {showBoards && !useSubfloorDecking && lowerBreakerFaces.map(piece => <polygon
+        key={'lower-' + piece.id} points={facePoints(piece.footprint.map(p => [p.x, p.y] as const))}
+        className={`breaker-board-strip lower-tier-board course-${piece.course + 1}`}/>)}
       {showFraming && lowerDeck.beamLines.map((beam, beamIdx) => <g key={`lower-beam-${beamIdx}`}>{beam.segments.map((segment, segIdx) => {
         const lowerVerticalBeam = lowerDeck.joistDirection === 'horizontal';
         const p1 = lowerVerticalBeam ? toSvg(beam.y, segment.startX) : toSvg(segment.startX, beam.y);
@@ -1152,29 +1051,10 @@ function DeckPreview({ values, onValuesChange }: { values: Record<string, string
               onClick={()=>setInspect({title:`Picture frame board ${piece.course+1}`,detail:
                 'Actual miter-cut course with 1/8-inch corner joints and stock splices, shared with the 3D model.'})}/>)}
 
-            {showBoards && !useSubfloorDecking && breakerBoardCount > 0 && breakerPositions.map((pos, idx) => {
-              const boardWidthFt = 0.47;
-              const boardWidthPx = Math.max(10, scale * boardWidthFt);
-              return deck.boardRun === 'width'
-                ? breakerCourseOffsets(breakerBoardCount, boardWidthFt).flatMap((offset, course) => scanlineIntersections(deck.points, 'vertical', pos + offset).map((pair, pairIdx) => {
-                    const startPoint = { x: pos + offset, y: pair.start };
-                    const endPoint = { x: pos + offset, y: pair.end };
-                    const a = toSvg(startPoint.x, startPoint.y);
-                    const b = toSvg(endPoint.x, endPoint.y);
-                    const startTrim = pointTouchesPictureFrame(startPoint) ? pictureFrameTrimPx : 0;
-                    const endTrim = pointTouchesPictureFrame(endPoint) ? pictureFrameTrimPx : 0;
-                    return <polygon key={`breaker-v-${idx}-${course}-${pairIdx}`} points={boardStripPolygonTrim(a, b, boardWidthPx, startTrim, endTrim)} className={`breaker-board-strip course-${course + 1}`} />;
-                  }))
-                : breakerCourseOffsets(breakerBoardCount, boardWidthFt).flatMap((offset, course) => scanlineIntersections(deck.points, 'horizontal', pos + offset).map((pair, pairIdx) => {
-                    const startPoint = { x: pair.start, y: pos + offset };
-                    const endPoint = { x: pair.end, y: pos + offset };
-                    const a = toSvg(startPoint.x, startPoint.y);
-                    const b = toSvg(endPoint.x, endPoint.y);
-                    const startTrim = pointTouchesPictureFrame(startPoint) ? pictureFrameTrimPx : 0;
-                    const endTrim = pointTouchesPictureFrame(endPoint) ? pictureFrameTrimPx : 0;
-                    return <polygon key={`breaker-h-${idx}-${course}-${pairIdx}`} points={boardStripPolygonTrim(a, b, boardWidthPx, startTrim, endTrim)} className={`breaker-board-strip course-${course + 1}`} />;
-                  }));
-            })}
+            {showBoards && !useSubfloorDecking && breakerFaces.map(piece => <polygon
+              key={piece.id} points={facePoints(piece.footprint.map(p => [p.x, p.y] as const))}
+              className={`breaker-board-strip course-${piece.course + 1}`}
+              onClick={() => setInspect({ title: `Breaker board ${piece.course + 1}`, detail: `${feetAndInches(piece.lengthFt)} installed cut; ${(piece.widthFt * 12).toFixed(2)} in face. Same clipped part as CAD, Studio and stock planning.` })}/>)}
 
             {showBoardLabels && !useSubfloorDecking && fieldBoardLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-field-${idx}`))}
             {showBoardLabels && !useSubfloorDecking && pictureFrameLabelAnchors.map((item, idx) => renderBoardTag(item.label, item.x, item.y, `board-tag-pf-${idx}`))}
@@ -2642,4 +2522,4 @@ function FlatPanPreview({ values }: { values: Record<string, string | number | b
   );
 }
 
-export function LayoutPreview({ serviceSlug, values, onValuesChange }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'flat-pans') return <FlatPanPreview values={values} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; if (serviceSlug === 'renaissance-screen-rooms') return <ScreenPreview values={values} renaissance />; if (serviceSlug === 'wooden-structures') return <WoodenStructurePreview values={values} />; return <SunroomPreview values={values} />; }
+export function LayoutPreview({ serviceSlug, values, onValuesChange, project }: LayoutPreviewProps) { if (serviceSlug === 'decks') return <DeckPreview values={values} onValuesChange={onValuesChange} project={project} />; if (serviceSlug === 'flat-pans') return <FlatPanPreview values={values} />; if (serviceSlug === 'patio-covers') return <PatioPreview values={values} onValuesChange={onValuesChange} />; if (serviceSlug === 'screen-rooms') return <ScreenPreview values={values} renaissance={false} />; if (serviceSlug === 'renaissance-screen-rooms') return <ScreenPreview values={values} renaissance />; if (serviceSlug === 'wooden-structures') return <WoodenStructurePreview values={values} />; return <SunroomPreview values={values} />; }

@@ -41,10 +41,10 @@ assert.equal(mergeDeckFaces([
 // picture frame. Its remaining width must be installed as a ripped board.
 for(const boardRun of ['width','projection'])for(const count of [1,2,3]){
   const model=make(rect,{boardRun,pictureFrameCount:count});
-  const frames=planMiteredPictureFrames(model.points,model.pictureFrameSegments,count);
+  const frames=planMiteredPictureFrames(model.points,model.pictureFrameSegments,count,model.pictureFrameFaceFts,DECK_GAP_FT,model.fasciaThicknessFt);
   const strips=surfaceStrips(model);
-  const runX=boardRun==='width',fieldEnd=(runX?12:16)+(.076/2+.75/12)
-    -(count*(5.5/12)+(count-1)*DECK_GAP_FT)-DECK_GAP_FT;
+  const runX=boardRun==='width',fieldEnd=(runX?12:16)+(model.fasciaThicknessFt+.75/12)
+    -(model.pictureFrameFaceFts.slice(0,count).reduce((sum,face)=>sum+face,0)+(count-1)*DECK_GAP_FT)-DECK_GAP_FT;
   const midRun=runX?8:6;
   const across= strips.filter(p=>p.startFt<=midRun&&p.endFt>=midRun);
   const installedEnd=Math.max(...across.map(p=>(runX?p.z:p.x)+p.widthFt/2));

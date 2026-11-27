@@ -11,6 +11,7 @@ import { MetricCard } from './MetricCard';
 import { SiteConcretePlanSheet } from './SiteConcretePlanSheet';
 import type { ServiceField } from '../data/services';
 import type { EstimateResult } from '../lib/types';
+import type { ConsultationProject } from '../lib/consultationProject';
 
 type Values = Record<string, string | number | boolean>;
 type ChangeValues = Dispatch<SetStateAction<Values>>;
@@ -21,6 +22,7 @@ interface Props {
   estimate: EstimateResult;
   visibleFields: ServiceField[];
   initialStep?:StepId;
+  project?: ConsultationProject;
   studioContext?:{title:string;revision:number;returnHref:string;coverFamily:string};
 }
 
@@ -43,17 +45,17 @@ const sections: Record<Exclude<StepId, 'layout' | 'review'>, { title: string; no
   ],
   finishes: [
     { title: '1 · Decking selection', note: 'Choose stock family, product/profile and surface before laying out decorative boards.',
-      keys: ['deckingSurface', 'deckingType', 'deckingMaterial', 'lowerDeckingType'] },
+      keys: ['deckingSurface', 'deckingType', 'deckingMaterial', 'deckBoardFaceIn', 'deckBoardThicknessIn', 'lowerDeckingType'] },
     { title: '2 · Border and breaker boards', note: 'Picture framing can include or exclude the house edge. Composite/PVC stock remains limited to 16/20 ft.',
       keys: ['pictureFrameCount', 'pictureFrameHouseSide', 'pictureFrameMaterial', 'pictureFrameMaterial2', 'pictureFrameMaterial3', 'borderSameBoard', 'lowerPictureFrameCount', 'lowerPictureFrameHouseSide', 'breakerBoardCount', 'breakerBoardMaterial', 'breakerBoardMaterial2', 'breakerBoardMaterial3'] },
     { title: '3 · Fascia, trim & skirting', note: 'Select fascia finish and fastening method; configure skirting side elevations below.',
-      keys: ['fasciaMaterial', 'trimFastenerChoice',
+      keys: ['fasciaMaterial', 'fasciaThicknessIn', 'trimFastenerChoice',
         'skirtingEnabled', 'skirtingStairsEnabled', 'skirtingMaterial', 'skirtingColor', 'skirtingOrientation', 'skirtingFaceIn', 'skirtingGapIn', 'skirtingKerfIn', 'skirtingTrimIn', 'skirtingGradeConfirmed',
         'lowerSkirtingEnabled', 'lowerSkirtingStairsEnabled', 'lowerSkirtingMaterial', 'lowerSkirtingColor', 'lowerSkirtingOrientation', 'lowerSkirtingFaceIn', 'lowerSkirtingGapIn', 'lowerSkirtingGradeConfirmed'] },
   ],
   'stairs-railing': [
     { title: '1 · Stair geometry and railing', note: 'Place stairs in the drawing step, then set widths, rises and left/right railing.',
-      keys: ['stairCount', 'stairWidth', 'stairRise', 'stairTreadStyle', 'stairRiserStyle', 'stairFasciaStyle', 'stairFasciaMaterial', 'stairRailingLeft', 'stairRailingRight', 'lowerStairRailingLeft', 'lowerStairRailingRight'] },
+      keys: ['stairCount', 'stairWidth', 'stairRise', 'stairTreadStyle', 'stairTreadThicknessIn', 'stairRiserStyle', 'stairFasciaStyle', 'stairFasciaMaterial', 'stairRailingLeft', 'stairRailingRight', 'lowerStairRailingLeft', 'lowerStairRailingRight'] },
     { title: '2 · Railing system', note: 'Choose standard or TimberTech and configure compatible profiles, infill and posts.',
       keys: ['railingType', 'lowerRailingType', 'spindleType', 'railingSystem', 'railingTopProfile', 'railingColor', 'railingInfill', 'railingHeightIn', 'railingPostSize', 'railingPostTermination', 'railingPostCap', 'railingManufacturerConfirmed'] },
     { title: '3 · Drink rail and railing lumber', note: 'Pressure-treated wood drink rails can use 5/4×6, 2×6, 2×8, 2×10 or 2×12 stock.',
@@ -66,7 +68,7 @@ const goTop = () => {
   if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
-export function DeckWorkspaceFlow({ values, onValuesChange, estimate, visibleFields,initialStep,studioContext }: Props) {
+export function DeckWorkspaceFlow({ values, onValuesChange, estimate, visibleFields,initialStep,studioContext,project }: Props) {
   const [step, setStep] = useState<StepId>(initialStep??'structure');
   const stepIndex = steps.findIndex((item) => item.id === step);
   const active = steps[stepIndex];
@@ -147,7 +149,7 @@ export function DeckWorkspaceFlow({ values, onValuesChange, estimate, visibleFie
       })}
       {step === 'finishes' && hasSkirting && <DeckSkirtingEditor values={values} onValuesChange={onValuesChange}/>}
       {step === 'stairs-railing' && <>
-        <DeckRailingElevation values={values}/>
+        <DeckRailingElevation values={values} project={project}/>
         <DeckGateEditor values={values} onValuesChange={onValuesChange}/>
       </>}
 
@@ -162,14 +164,17 @@ export function DeckWorkspaceFlow({ values, onValuesChange, estimate, visibleFie
         <div className="deck-workflow-metrics metrics-grid">{estimate.summary.map((metric) => <MetricCard key={metric.label} label={metric.label} value={metric.value}/>)}</div>
         <div className="deck-workflow-review-intro">
           <h4>Customer, extra materials & supplier order</h4>
-          <p className="muted">Complete the client information and any additional items, then review the printable plan and elevations beneath the material list.</p>
+          <p className="muted">Review the installer CAD sheets, then complete the client information and purchase order. Expand a cutting list for individual stock-board assignments.</p>
         </div>
-        <MaterialTable items={estimate.materials} values={values} onValuesChange={onValuesChange} validationIssues={estimate.validationIssues ?? []} orderNotes={estimate.orderNotes}/>
-        <LayoutPreview serviceSlug="decks" values={values} onValuesChange={onValuesChange}/>
+        <MaterialTable items={estimate.materials} values={values} onValuesChange={onValuesChange} validationIssues={estimate.validationIssues ?? []} orderNotes={estimate.orderNotes} project={project}/>
+        <details className="content-card"><summary style={{ cursor: 'pointer', fontWeight: 600 }}>Interactive framing editor</summary>
+          <p className="muted">Use this editing view to adjust the layout. Export scaled installation sheets from Installer CAD drawings above.</p>
+          <LayoutPreview serviceSlug="decks" values={values} onValuesChange={onValuesChange} project={project}/>
+        </details>
         <SiteConcretePlanSheet values={values}/>
         <div className="deck-workflow-export-elevations">
           {hasSkirting && <DeckSkirtingEditor values={values} onValuesChange={onValuesChange}/>}
-          <DeckRailingElevation values={values}/>
+          <DeckRailingElevation values={values} project={project}/>
         </div>
         {!!estimate.orderNotes.length && <article className="content-card order-notes-card">
           <div className="section-heading"><p className="eyebrow">Scope output</p><h3>Assumptions and engineer notes</h3></div>

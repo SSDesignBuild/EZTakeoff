@@ -33,9 +33,11 @@ function intersect(a:{start:V2;tangent:V2},b:{start:V2;tangent:V2}):V2|null{
  * Ends adjacent to unframed house sides remain square.
  */
 export function planMiteredPictureFrames(points:DeckPoint[],segments:DeckEdgeSegment[],
-  count:number,boardFaceFt=5.5/12,gapFt=.125/12):MiterFrameStrip[]{
+  count:number,boardFaceFt:number|readonly number[]=5.5/12,gapFt=.125/12,
+  fasciaThicknessFt=.75/12,overhangFt=.75/12):MiterFrameStrip[]{
   const result:MiterFrameStrip[]=[];
-  if(points.length<3||!Number.isFinite(boardFaceFt)||boardFaceFt<=0||
+  const widths=typeof boardFaceFt==='number'?[boardFaceFt,boardFaceFt,boardFaceFt]:boardFaceFt;
+  if(points.length<3||!widths.length||widths.some(width=>!Number.isFinite(width)||width<=0)||
     !Number.isFinite(gapFt)||gapFt<0||Math.abs(signedArea(points))<.001)return result;
   const selected=new Set(segments.map(s=>s.index));
   const sign=signedArea(points)>=0?1:-1;
@@ -45,14 +47,11 @@ export function planMiteredPictureFrames(points:DeckPoint[],segments:DeckEdgeSeg
     const previous=(edge+points.length-1)%points.length;
     const next=(edge+1)%points.length;
     for(let course=0;course<stations;course++){
-      // The board must project 3/4in OUTSIDE the fascia's exterior face.
-      // Fascia depth is 0.076ft and centered on the deck rim edge.
-      // Previous +0.045ft pointed INWARD and hid the overhang entirely.
-      const FASCIA_DEPTH_FT=.076;
-      const BORDER_OVERHANG_FT=.75/12;
-      const outer=-(FASCIA_DEPTH_FT/2+BORDER_OVERHANG_FT)
-        +course*(boardFaceFt+gapFt);
-      const inner=outer+boardFaceFt;
+      // Fascia is installed OUTSIDE the structural rim. Its actual selected
+      // thickness plus the measured overhang sets the finished outer face.
+      const outer=-(fasciaThicknessFt+overhangFt)
+        +widths.slice(0,course).reduce((sum,width)=>sum+width+gapFt,0);
+      const inner=outer+(widths[course]??widths[0]);
       const at=(offset:number,first:boolean):V2=>{
         const e=shiftedEdge(points,edge,offset,sign);
         if(!e) return [points[edge].x,points[edge].y];
@@ -107,12 +106,13 @@ export function openPictureFrameMiterGaps(strips:MiterFrameStrip[],
  */
 export function splitMiteredPictureFrames(
  strips:MiterFrameStrip[],gapFt=FINISH_SEAM_GAP_FT,
+ maxCutFt?:number,
 ):MiterFrameStrip[]{
  return strips.flatMap(strip=>{
   const [a,b,c,d]=strip.corners;
   const outer=length(minus(b,a)),inner=length(minus(c,d));
   const span=Math.max(outer,inner);
-  const lengths=stockBoardSegments(span);
+  const lengths=stockBoardSegments(span,[],maxCutFt);
   if(lengths.length<=1)return [strip];
   const lerp=(p:V2,q:V2,t:number):V2=>[
    p[0]+(q[0]-p[0])*t,p[1]+(q[1]-p[1])*t,
@@ -146,12 +146,14 @@ export interface PictureFrameMiterSeam {
 export function planVisiblePictureFrameMiterSeams(
   points:DeckPoint[],selectedEdges:DeckEdgeSegment[],count:number,
   houseEdgeIndices:readonly number[]=[],includeHouseSide=false,
+  boardFaceFt:number|readonly number[]=5.5/12,
+  fasciaThicknessFt=.75/12,
 ):PictureFrameMiterSeam[]{
   if(points.length<3||count<=0)return [];
   const selected=new Set(selectedEdges.map(edge=>edge.index)
     .filter(index=>includeHouseSide||!houseEdgeIndices.includes(index)));
   const strips=planMiteredPictureFrames(points,
-    selectedEdges.filter(edge=>selected.has(edge.index)),count);
+    selectedEdges.filter(edge=>selected.has(edge.index)),count,boardFaceFt,.125/12,fasciaThicknessFt);
   return strips.filter(strip=>
     selected.has(strip.edgeIndex)&&selected.has((strip.edgeIndex+1)%points.length))
    .map(strip=>({

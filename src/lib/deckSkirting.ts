@@ -1,8 +1,10 @@
 import type { DeckEdgeSegment, MaterialItem } from './types';
 import { planSkirtingGateFace } from './skirtingGateFace';
 import { supportedFinishCoursePieces,MAX_FINISH_CUT_FT } from './finishStockGeometry';
+import { physicalPerimeterSkirt,skirtFastenerSummary,SKIRT_FRAME_DEPTH_FT,type SkirtPhysicalMember,type SkirtCutPlacement } from './skirtingPhysicalLayout';
+import { resolveBoardDimensions } from './deckProductDimensions';
 
-export type SkirtCut = { id: string; edgeIndex: number; material: 'finish' | '2x4' | '2x6' | '2x8' | '2x10' | '2x12'; lengthFt: number; location: string };
+export type SkirtCut = { id: string; edgeIndex: number; material: 'finish' | '2x4' | '2x6' | '2x8' | '2x10' | '2x12'; lengthFt: number; location: string;placement?:SkirtCutPlacement };
 export type SkirtOpening = {
   edgeIndex: number; offset: number; width: number;
   kind: 'opening' | 'removable' | 'hinged-gate';
@@ -19,6 +21,9 @@ export type SkirtSide = {
   courses: SkirtCourse[]; topRails: { start: number; end: number }[];
   bottomRails: { start: number; end: number }[];
   finishCuts: SkirtCut[]; framingCuts: SkirtCut[];
+  physicalMembers?:SkirtPhysicalMember[];
+  frameStartFt?:number;frameEndFt?:number;
+  frameCornerNeedsReview?:boolean;
 };
 export type CutStock = { stockLengthFt: number; cuts: SkirtCut[]; remainderIn: number };
 export type SkirtPlan = {
@@ -54,7 +59,7 @@ export function packSkirtCuts(cuts: SkirtCut[], lengthsFt: number[], kerfIn = 0.
   if(!sorted.length)return {stock:[] as CutStock[],issues};
   const consume=(bin:CutStock,cut:SkirtCut)=>{
     bin.cuts.push(cut);
-    bin.remainderIn=p3(bin.remainderIn-cut.lengthFt*12-kerfIn);
+    bin.remainderIn=bin.remainderIn-cut.lengthFt*12-kerfIn;
   };
   const plans: CutStock[][]=[];
   // Evaluate every available single-length purchasing option. This prevents
@@ -129,7 +134,13 @@ export function buildDeckSkirting(
   const openingRaw=parseJson(inputs[key('skirtingOpenings')]);
   const openValues=Array.isArray(openingRaw)?openingRaw as SkirtOpening[]:[];
   const allowed=new Set(exposed.map((edge)=>edge.index));
-  const defaultHeight=Math.max(0,deckHeightFt-(rimDepthIn+1)/12);
+  const customLower=prefix&&(inputs.lowerUseCustomSettings===true||inputs.lowerUseCustomSettings==='true');
+  const boardKey=(name:string)=>customLower?key(name):name;
+  const board=resolveBoardDimensions(inputs[boardKey('deckingMaterial')]??inputs.deckingMaterial,{
+    faceIn:Number(inputs[boardKey('deckBoardFaceIn')]??inputs.deckBoardFaceIn),
+    thicknessIn:Number(inputs[boardKey('deckBoardThicknessIn')]??inputs.deckBoardThicknessIn)});
+  const topElevation=deckHeightFt-(rimDepthIn+board.thicknessIn)/12;
+  const defaultHeight=Math.max(0,topElevation);
   const sides:SkirtSide[]=[];
   for(const edgeIndex of [...new Set(selected)]) {
     const edge=edges.find((e)=>e.index===edgeIndex);
@@ -168,14 +179,16 @@ export function buildDeckSkirting(
     // Maintain S&S standard: vertical 2x4 framing at 24 inches on center plus every jamb/corner.
     const rawStuds=uniq([...Array.from({length:Math.floor(length/2)+1},(_,i)=>i*2),length,
       ...exclude.flatMap((o)=>[o.offset,o.offset+o.width])]);
-    const verticals:SkirtVertical[]=rawStuds.filter((x)=>!exclude.some((o)=>x>o.offset+0.001&&x<o.offset+o.width-0.001))
+    const verticals:SkirtVertical[]=rawStuds.filter((x)=>!exclude.some((o)=>
+      (x>o.offset+0.001&&x<o.offset+o.width-0.001)||
+      [o.offset,o.offset+o.width].some(jamb=>Math.abs(x-jamb)>.001&&Math.abs(x-jamb)<1.5/12+.001)))
       .map((station)=>({station,heightFt:p3(at(station)),role:exclude.some((o)=>Math.abs(station-o.offset)<0.001||Math.abs(station-o.offset-o.width)<0.001)?'jamb' as const:'stud' as const}));
     const finish:SkirtVertical[]=[], courses:SkirtCourse[]=[];
     const finishCuts:SkirtCut[]=[],framingCuts:SkirtCut[]=[];
-    const addCut=(material:'finish'|'2x4',lengthFt:number,location:string)=>{
+    const addCut=(material:'finish'|'2x4',lengthFt:number,location:string,placement?:SkirtCutPlacement)=>{
       if(lengthFt<=0.001)return;
       const arr=material==='finish'?finishCuts:framingCuts;
-      arr.push({id:tierId+'SK'+(edgeIndex+1)+'-'+material.toUpperCase()+'-'+(arr.length+1),edgeIndex,material,lengthFt:p3(lengthFt),location});
+      arr.push({id:tierId+'SK'+(edgeIndex+1)+'-'+material.toUpperCase()+'-'+(arr.length+1),edgeIndex,material,lengthFt:p3(lengthFt),location,placement});
     };
     // Split long continuous framing over 24-inch stud stations. A framing
     // joint is supported by a stud; a finish board is never silently spliced.
@@ -183,35 +196,39 @@ export function buildDeckSkirting(
       let from=start;
       while(end-from>0.001){
         const maxLength=16; // leave room for trimming and saw kerf from 20 ft stock
-        if(end-from<=maxLength){ addCut('2x4',end-from,label+' from '+p3(from)+' to '+p3(end)+' ft');break; }
+        if(end-from<=maxLength){ addCut('2x4',end-from,label+' from '+p3(from)+' to '+p3(end)+' ft',
+          {role:label.includes('top rail')?'top-rail':'bottom-rail',startFt:from,endFt:end});break; }
         const stud=rawStuds.filter((x)=>x>from+1&&x<=Math.min(end,from+maxLength)).sort((a,b)=>b-a)[0];
         if(stud===undefined){issues.push('Side '+(edgeIndex+1)+': no stud supports a long horizontal 2x4 joint.');break;}
-        addCut('2x4',stud-from,label+' from '+p3(from)+' to '+p3(stud)+' ft (splice over stud)');
+        addCut('2x4',stud-from,label+' from '+p3(from)+' to '+p3(stud)+' ft (splice over stud)',
+          {role:label.includes('top rail')?'top-rail':'bottom-rail',startFt:from,endFt:stud});
         from=stud;
       }
     };
     topRails.forEach((r)=>cutContinuousRail(r.start,r.end,'side '+(edgeIndex+1)+' top rail'));
     bottomRails.forEach((r)=>cutContinuousRail(r.start,r.end,'side '+(edgeIndex+1)+' ground-contact bottom rail'));
-    verticals.forEach((p)=>addCut('2x4',p.heightFt,'side '+(edgeIndex+1)+' vertical '+p.role+' at '+p3(p.station)+' ft'));
+    verticals.forEach((p)=>addCut('2x4',p.heightFt,'side '+(edgeIndex+1)+' vertical '+p.role+' at '+p3(p.station)+' ft',
+      {role:'stud',stationFt:p.station}));
     // A hinged skirting gate needs its own complete leaf framing and finish;
     // the opening-only schedule previously omitted the gate panel entirely.
     clippedOpenings.filter(o=>o.kind==='hinged-gate').forEach(o=>{
+      const openingIndex=clippedOpenings.indexOf(o);
       const maxLeaf=Math.max(.3,Math.min(at(o.offset),at(o.offset+o.width))-.18);
       const leafHeight=Math.max(.3,Math.min(maxLeaf,o.heightFt??maxLeaf));
       // Use the smallest measured grade at either jamb, consistently with the
       // 3D bottom clearance. A sloped side must not produce phantom upper boards.
       const upperInfill=Math.max(0,maxLeaf-leafHeight);
       const leafWidth=Math.max(.2,o.width-.08);
-      addCut('2x4',leafWidth,'hinged access leaf upper rail');
-      addCut('2x4',leafWidth,'hinged access leaf lower rail');
-      addCut('2x4',leafHeight,'hinged access leaf left stile');
-      addCut('2x4',leafHeight,'hinged access leaf right stile');
+      addCut('2x4',leafWidth,'hinged access leaf upper rail',{role:'gate-top',openingIndex});
+      addCut('2x4',leafWidth,'hinged access leaf lower rail',{role:'gate-bottom',openingIndex});
+      addCut('2x4',leafHeight,'hinged access leaf left stile',{role:'gate-left',openingIndex});
+      addCut('2x4',leafHeight,'hinged access leaf right stile',{role:'gate-right',openingIndex});
       if(upperInfill>.12)
-        addCut('2x4',leafWidth,'fixed skirting header above short access gate');
+        addCut('2x4',leafWidth,'fixed skirting header above short access gate',{role:'gate-header',openingIndex});
       const leafBoards=planSkirtingGateFace(leafWidth,leafHeight,orientation,faceIn,gapIn);
       leafBoards.forEach((board,i)=>addCut('finish',board.cutLengthFt,
         'hinged access gate finish board '+(i+1)+
-        ' (rip face '+p3(board.faceFt*12)+' in)'));
+        ' (rip face '+p3(board.faceFt*12)+' in)',{role:'gate-finish',openingIndex,boardIndex:i,faceFt:board.faceFt}));
       if(upperInfill>.12 && orientation==='vertical'){
         // Upper pieces follow the surrounding wall's original board stations,
         // not a separately centered decorative infill patch.
@@ -221,7 +238,8 @@ export function buildDeckSkirting(
           if(cutEnd-cutStart>.001)
             addCut('finish',upperInfill,
               'upper continuous-wall aligned vertical skirting at '+p3(cutStart)+
-              ' ft (rip face '+p3((cutEnd-cutStart)*12)+' in)');
+              ' ft (rip face '+p3((cutEnd-cutStart)*12)+' in)',
+              {role:'upper-finish',openingIndex,startFt:cutStart,endFt:cutEnd,faceFt:cutEnd-cutStart});
         }
       }
       // Horizontal upper rows are counted once as the full-wall courses.
@@ -236,7 +254,8 @@ export function buildDeckSkirting(
           if(next<=x+0.00001)continue;
           const height=Math.max(at(x),at(next)); // Cut sufficient length to rip the sloped bottom edge.
           finish.push({station:p3(x),heightFt:p3(height),role:'finish'});
-          addCut('finish',height,'side '+(edgeIndex+1)+' board at '+p3(x)+' ft (finish width '+p3((next-x)*12)+' in)');
+          addCut('finish',height,'side '+(edgeIndex+1)+' board at '+p3(x)+' ft (finish width '+p3((next-x)*12)+' in)',
+            {role:'vertical-finish',startFt:x,endFt:next,faceFt:next-x});
         }
       }
     } else {
@@ -296,12 +315,43 @@ export function buildDeckSkirting(
             addCut('finish',b-a,
               'side '+(edgeIndex+1)+' horizontal course '+(row+1)+
               ' piece '+(part+1)+' from '+p3(a)+' to '+p3(b)+' ft'+
-              (piece.jointAtFt!==undefined?' (supported seam at '+piece.jointAtFt+' ft)':''));
+              (piece.jointAtFt!==undefined?' (supported seam at '+piece.jointAtFt+' ft)':''),
+              {role:'horizontal-finish',startFt:a,endFt:b,row,faceFt:depth});
           });
         }
       }
     }
-    sides.push({edgeIndex,lengthFt:length,startHeightFt,endHeightFt,openings:clippedOpenings,verticals,finish,courses,topRails,bottomRails,finishCuts,framingCuts});
+    const side:SkirtSide={edgeIndex,lengthFt:length,startHeightFt,endHeightFt,openings:clippedOpenings,verticals,finish,courses,topRails,bottomRails,finishCuts,framingCuts};
+    const tangent=[(edge.end.x-edge.start.x)/length,(edge.end.y-edge.start.y)/length];
+    const parallel=(other:DeckEdgeSegment)=>Math.abs(tangent[0]*(other.end.x-other.start.x)/other.length+
+      tangent[1]*(other.end.y-other.start.y)/other.length);
+    const endTrim=(point:typeof edge.start)=>edges.some(other=>other.index<edge.index&&selected.includes(other.index)&&
+      [other.start,other.end].some(p=>Math.hypot(p.x-point.x,p.y-point.y)<.001)&&
+      parallel(other)<.001)?SKIRT_FRAME_DEPTH_FT:0;
+    side.frameStartFt=endTrim(edge.start);side.frameEndFt=length-endTrim(edge.end);
+    side.frameCornerNeedsReview=edges.some(other=>other.index!==edge.index&&selected.includes(other.index)&&
+      [edge.start,edge.end].some(p=>[other.start,other.end].some(q=>Math.hypot(p.x-q.x,p.y-q.y)<.001))&&
+      parallel(other)>.001&&parallel(other)<.999);
+    if(side.frameCornerNeedsReview)issues.push('Side '+(edgeIndex+1)+
+      ': angled skirting-support corner needs a field-confirmed miter/return; straight-stock support envelopes are representative.');
+    side.physicalMembers=physicalPerimeterSkirt(side,opts,topElevation);
+    const installed=new Map(side.physicalMembers.map(member=>[member.cutId,member]));
+    side.finishCuts=finishCuts.filter(cut=>installed.has(cut.id));
+    side.framingCuts=framingCuts.filter(cut=>installed.has(cut.id));
+    for(const cut of [...side.finishCuts,...side.framingCuts])cut.lengthFt=installed.get(cut.id)!.cutLengthFt;
+    side.courses=side.finishCuts.filter(cut=>cut.placement?.role==='horizontal-finish').map(cut=>{
+      const member=installed.get(cut.id)!;
+      return {row:cut.placement!.row!,start:Math.min(...member.profile.map(p=>p[0])),
+        end:Math.max(...member.profile.map(p=>p[0])),depthFt:member.faceFt};
+    });
+    side.finish=side.physicalMembers.filter(member=>member.role==='vertical-finish').map(member=>({
+      station:Math.min(...member.profile.map(p=>p[0])),heightFt:member.cutLengthFt,role:'finish' as const}));
+    side.verticals=side.physicalMembers.filter(member=>member.role==='stud').map(member=>{
+      const cut=side.framingCuts.find(c=>c.id===member.cutId);
+      const role=verticals.find(v=>Math.abs(v.station-(cut?.placement?.stationFt??NaN))<.001)?.role??'stud';
+      return {station:member.axis[0][0],heightFt:member.cutLengthFt,role};
+    });
+    sides.push(side);
   }
   const finishCuts=sides.flatMap((side)=>side.finishCuts);
   const frameCuts=sides.flatMap((side)=>side.framingCuts);
@@ -351,17 +401,14 @@ export function buildDeckSkirting(
       quantity:tallGates,unit:'ea',stockRecommendation:'Exterior cane bolt for gate over 4 ft',
       notes:'One cane bolt per tall skirting gate. Confirm actual securing surface.'});
   }
-  const joinCount=sides.reduce((sum,s)=>sum+s.verticals.length*2+s.bottomRails.length*2+s.topRails.length*2,0);
+  const physicalFasteners=skirtFastenerSummary(sides,orientation);
   // Two exterior 3-inch structural framing screws per 2x4 connection.
   // The estimator combines this with the main framing screw box order,
   // rather than treating a connection location as a purchasable product.
-  const frameScrews=joinCount*2;
+  const frameScrews=physicalFasteners.frameScrews;
   // An installed vertical board needs two attachments at each horizontal rail.
   // For horizontal courses, count two attachments at every intersecting 24in stud.
-  const faceFasteners=orientation==='vertical'
-    ? sides.reduce((sum,s)=>sum+s.finish.length*4,0)
-    : sides.reduce((sum,s)=>sum+s.courses.reduce((courseSum,course)=>
-        courseSum+2*Math.max(2,s.verticals.filter((v)=>v.station>=course.start-0.001&&v.station<=course.end+0.001).length),0),0);
+  const faceFasteners=physicalFasteners.finishFasteners;
   // 1x5 KDAT finish gets exterior 2-inch finish nails. Synthetic skirting
   // remains on manufacturer-approved screws instead of an unsuitable nail.
   const finishNails=material==='kdat'?faceFasteners:0;
